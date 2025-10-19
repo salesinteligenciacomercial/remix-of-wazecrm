@@ -10,8 +10,8 @@ export default function IA() {
       color: "bg-blue-500",
     },
     {
-      name: "IA Vendedor",
-      description: "Sugere abordagens e scripts de fechamento",
+      name: "IA Vendedora",
+      description: "Conduz follow-ups e estratégias de fechamento",
       icon: Sparkles,
       color: "bg-purple-500",
     },
@@ -23,9 +23,27 @@ export default function IA() {
     },
     {
       name: "IA Analista",
-      description: "Analisa conversas e sugere melhorias",
+      description: "Analisa conversas e gera insights de performance",
       icon: TrendingUp,
       color: "bg-orange-500",
+    },
+    {
+      name: "IA de Suporte",
+      description: "Responde dúvidas frequentes automaticamente",
+      icon: Bot,
+      color: "bg-cyan-500",
+    },
+    {
+      name: "IA de Qualificação",
+      description: "Pontua leads por prontidão de compra",
+      icon: TrendingUp,
+      color: "bg-pink-500",
+    },
+    {
+      name: "IA de Agendamento",
+      description: "Sugere e confirma horários automaticamente",
+      icon: Bot,
+      color: "bg-indigo-500",
     },
   ];
 

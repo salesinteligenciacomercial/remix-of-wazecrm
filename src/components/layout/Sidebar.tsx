@@ -16,11 +16,13 @@ import { useToast } from "@/hooks/use-toast";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Leads & Kanban", href: "/kanban", icon: Users },
+  { name: "Leads", href: "/leads", icon: Users },
+  { name: "Kanban", href: "/kanban", icon: LayoutDashboard },
   { name: "Conversas", href: "/conversas", icon: MessageSquare },
   { name: "Agenda", href: "/agenda", icon: Calendar },
   { name: "IA & Automação", href: "/ia", icon: Bot },
   { name: "Relatórios", href: "/relatorios", icon: BarChart3 },
+  { name: "Configurações", href: "/configuracoes", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -73,15 +75,7 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-sidebar-border p-4 space-y-2">
-        <Button
-          variant="ghost"
-          className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-          onClick={() => navigate("/settings")}
-        >
-          <Settings className="mr-3 h-5 w-5" />
-          Configurações
-        </Button>
+      <div className="border-t border-sidebar-border p-4">
         <Button
           variant="ghost"
           className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
