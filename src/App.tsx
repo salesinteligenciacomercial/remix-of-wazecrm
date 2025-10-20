@@ -9,6 +9,7 @@ import Leads from "./pages/Leads";
 import Kanban from "./pages/Kanban";
 import Conversas from "./pages/Conversas";
 import Agenda from "./pages/Agenda";
+import Tarefas from "./pages/Tarefas";
 import IA from "./pages/IA";
 import Relatorios from "./pages/Relatorios";
 import Configuracoes from "./pages/Configuracoes";
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/kanban" element={<Kanban />} />
             <Route path="/conversas" element={<Conversas />} />
             <Route path="/agenda" element={<Agenda />} />
+            <Route path="/tarefas" element={<Tarefas />} />
             <Route path="/ia" element={<IA />} />
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/configuracoes" element={<Configuracoes />} />
