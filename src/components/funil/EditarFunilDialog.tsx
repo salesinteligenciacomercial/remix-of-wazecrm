@@ -93,6 +93,31 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
     setEtapas(etapas.map(e => e.id === id ? { ...e, cor: novaCor } : e));
   };
 
+  const excluirFunil = async () => {
+    if (!confirm("Tem certeza que deseja excluir este funil? Todas as etapas e leads associados serão perdidos!")) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from("funis")
+        .delete()
+        .eq("id", funilId);
+
+      if (error) throw error;
+
+      toast.success("Funil excluído com sucesso!");
+      setOpen(false);
+      onFunilUpdated();
+    } catch (error) {
+      console.error("Erro ao excluir funil:", error);
+      toast.error("Erro ao excluir funil");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -134,18 +159,17 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
         const etapa = etapas[i];
         
         if (etapa.id.startsWith("novo-")) {
-          // Nova etapa - criar
-          await supabase.functions.invoke("api-funil-vendas", {
-            body: {
-              action: "criar_etapa",
-              data: {
-                nome: etapa.nome,
-                funil_id: funilId,
-                posicao: i,
-                cor: etapa.cor
-              }
-            }
-          });
+          // Nova etapa - criar diretamente
+          const { error: etapaError } = await supabase
+            .from("etapas")
+            .insert({
+              nome: etapa.nome,
+              funil_id: funilId,
+              posicao: i,
+              cor: etapa.cor
+            });
+          
+          if (etapaError) throw etapaError;
         } else {
           // Etapa existente - atualizar
           await supabase
@@ -253,6 +277,15 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
           </div>
 
           <div className="flex gap-2 pt-4 border-t">
+            <Button 
+              type="button" 
+              variant="destructive" 
+              onClick={excluirFunil}
+              disabled={loading}
+              className="flex-1"
+            >
+              Excluir Funil
+            </Button>
             <Button 
               type="button" 
               variant="outline" 

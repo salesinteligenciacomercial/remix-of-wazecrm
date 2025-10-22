@@ -82,20 +82,37 @@ const Kanban = () => {
     const leadId = active.id as string;
     const newEtapaId = over.id as string;
 
-    setLeads((leads) => leads.map((lead) => lead.id === leadId ? { ...lead, etapa_id: newEtapaId } : lead));
+    // Verificar se o lead já está na etapa de destino
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead || lead.etapa_id === newEtapaId) {
+      return; // Não fazer nada se já está na mesma etapa
+    }
 
+    // Verificar se o destino é realmente uma etapa válida
+    const etapaDestino = etapas.find(e => e.id === newEtapaId);
+    if (!etapaDestino) {
+      toast.error("Etapa de destino inválida");
+      return;
+    }
+
+    // Atualizar localmente primeiro
+    setLeads((leads) => 
+      leads.map((l) => l.id === leadId ? { ...l, etapa_id: newEtapaId } : l)
+    );
+
+    // Atualizar no banco
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return toast.error("Não autenticado");
+      const { error } = await supabase
+        .from("leads")
+        .update({ etapa_id: newEtapaId })
+        .eq("id", leadId);
 
-      await supabase.functions.invoke("api-funil-vendas", {
-        body: { action: "mover_lead", data: { lead_id: leadId, nova_etapa_id: newEtapaId } }
-      });
-
-      toast.success("Lead movido!");
+      if (error) throw error;
+      toast.success("Lead movido com sucesso!");
     } catch (error) {
+      console.error("Erro ao mover lead:", error);
       toast.error("Erro ao mover lead");
-      carregarDados();
+      carregarDados(); // Recarregar em caso de erro
     }
   };
 
@@ -176,7 +193,7 @@ const Kanban = () => {
                       </div>
                     </div>
                   </div>
-                  <SortableContext id={etapa.id} items={leads.filter(l => l.etapa_id === etapa.id)} strategy={verticalListSortingStrategy}>
+                  <SortableContext id={etapa.id} items={leads.filter(l => l.etapa_id === etapa.id).map(l => l.id)} strategy={verticalListSortingStrategy}>
                     <div className="bg-secondary/20 p-4 rounded-b-lg min-h-[500px]">
                       {leads.filter(l => l.etapa_id === etapa.id).map((lead) => (
                         <LeadCard key={lead.id} lead={lead} onDelete={async (id) => {

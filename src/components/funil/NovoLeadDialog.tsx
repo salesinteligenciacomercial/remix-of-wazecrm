@@ -69,8 +69,13 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
       return;
     }
 
-    if (!formData.funil_id || !formData.etapa_id) {
-      toast.error("Selecione um funil e uma etapa");
+    if (!formData.funil_id) {
+      toast.error("Selecione um funil");
+      return;
+    }
+
+    if (!formData.etapa_id) {
+      toast.error("Selecione uma etapa");
       return;
     }
 
