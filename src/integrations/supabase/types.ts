@@ -56,11 +56,87 @@ export type Database = {
         }
         Relationships: []
       }
+      etapas: {
+        Row: {
+          atualizado_em: string | null
+          cor: string | null
+          criado_em: string | null
+          funil_id: string | null
+          id: string
+          nome: string
+          posicao: number | null
+        }
+        Insert: {
+          atualizado_em?: string | null
+          cor?: string | null
+          criado_em?: string | null
+          funil_id?: string | null
+          id?: string
+          nome: string
+          posicao?: number | null
+        }
+        Update: {
+          atualizado_em?: string | null
+          cor?: string | null
+          criado_em?: string | null
+          funil_id?: string | null
+          id?: string
+          nome?: string
+          posicao?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "etapas_funil_id_fkey"
+            columns: ["funil_id"]
+            isOneToOne: false
+            referencedRelation: "funis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funis: {
+        Row: {
+          atualizado_em: string | null
+          criado_em: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          owner_id: string | null
+        }
+        Insert: {
+          atualizado_em?: string | null
+          criado_em?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          owner_id?: string | null
+        }
+        Update: {
+          atualizado_em?: string | null
+          criado_em?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          owner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funis_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           company: string | null
+          cpf: string | null
           created_at: string | null
           email: string | null
+          etapa_id: string | null
+          funil_id: string | null
           id: string
           name: string
           notes: string | null
@@ -69,13 +145,17 @@ export type Database = {
           source: string | null
           stage: string | null
           status: string | null
+          telefone: string | null
           updated_at: string | null
           value: number | null
         }
         Insert: {
           company?: string | null
+          cpf?: string | null
           created_at?: string | null
           email?: string | null
+          etapa_id?: string | null
+          funil_id?: string | null
           id?: string
           name: string
           notes?: string | null
@@ -84,13 +164,17 @@ export type Database = {
           source?: string | null
           stage?: string | null
           status?: string | null
+          telefone?: string | null
           updated_at?: string | null
           value?: number | null
         }
         Update: {
           company?: string | null
+          cpf?: string | null
           created_at?: string | null
           email?: string | null
+          etapa_id?: string | null
+          funil_id?: string | null
           id?: string
           name?: string
           notes?: string | null
@@ -99,10 +183,25 @@ export type Database = {
           source?: string | null
           stage?: string | null
           status?: string | null
+          telefone?: string | null
           updated_at?: string | null
           value?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_etapa"
+            columns: ["etapa_id"]
+            isOneToOne: false
+            referencedRelation: "etapas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_funil"
+            columns: ["funil_id"]
+            isOneToOne: false
+            referencedRelation: "funis"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "leads_owner_id_fkey"
             columns: ["owner_id"]

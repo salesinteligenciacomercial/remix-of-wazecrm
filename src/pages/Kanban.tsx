@@ -1,166 +1,188 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { DndContext, DragEndEvent, closestCorners } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, DollarSign, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { LeadCard } from "@/components/funil/LeadCard";
+import { NovoLeadDialog } from "@/components/funil/NovoLeadDialog";
 import { toast } from "sonner";
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { SortableContext, useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 interface Lead {
   id: string;
+  nome: string;
   name: string;
   company?: string;
-  value: number;
-  stage: string;
-  phone?: string;
+  value?: number;
+  telefone?: string;
   email?: string;
+  cpf?: string;
+  source?: string;
+  notes?: string;
+  etapa_id?: string;
+  funil_id?: string;
 }
 
-interface Stage {
+interface Etapa {
   id: string;
-  name: string;
-  color: string;
+  nome: string;
+  posicao: number;
+  cor: string;
+  funil_id: string;
 }
 
-const initialStages: Stage[] = [
-  { id: "new", name: "Novo", color: "bg-blue-500" },
-  { id: "contact", name: "Contato Feito", color: "bg-yellow-500" },
-  { id: "proposal", name: "Proposta Enviada", color: "bg-purple-500" },
-  { id: "negotiation", name: "Negociação", color: "bg-orange-500" },
-  { id: "won", name: "Ganho", color: "bg-green-500" },
-  { id: "lost", name: "Perdido", color: "bg-red-500" },
-];
-
-const STORAGE_KEY = "crm_kanban_leads";
-const STAGES_KEY = "crm_stages";
-
-function LeadCard({ lead, onDelete }: { lead: Lead; onDelete: (id: string) => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <Card className="mb-3 cursor-move hover:shadow-md transition-shadow">
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <CardTitle className="text-sm font-semibold">{lead.name}</CardTitle>
-              {lead.company && <p className="text-xs text-muted-foreground mt-1">{lead.company}</p>}
-            </div>
-            <Button variant="ghost" size="icon" className="h-6 w-6 -mt-1" onClick={(e) => { e.stopPropagation(); onDelete(lead.id); }}>
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="pb-3">
-          <div className="flex items-center gap-2 text-sm">
-            <DollarSign className="h-4 w-4 text-green-600" />
-            <span className="font-semibold text-green-600">
-              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(lead.value || 0)}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+interface Funil {
+  id: string;
+  nome: string;
+  descricao?: string;
 }
 
-export default function Kanban() {
+const Kanban = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [stages, setStages] = useState<Stage[]>(initialStages);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [newLeadOpen, setNewLeadOpen] = useState(false);
-  const [newLead, setNewLead] = useState({ name: "", company: "", value: "", stage: "new" });
-
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const [etapas, setEtapas] = useState<Etapa[]>([]);
+  const [funis, setFunis] = useState<Funil[]>([]);
+  const [selectedFunil, setSelectedFunil] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [novoFunilNome, setNovoFunilNome] = useState("");
+  const [dialogNovoFunil, setDialogNovoFunil] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) setLeads(JSON.parse(saved));
+    carregarDados();
   }, []);
 
-  const saveLeads = (updated: Lead[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    setLeads(updated);
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      
+      const { data: funisData } = await supabase.from("funis").select("*").order("criado_em");
+      setFunis(funisData || []);
+      
+      if (!selectedFunil && funisData && funisData.length > 0) {
+        setSelectedFunil(funisData[0].id);
+      }
+
+      const { data: etapasData } = await supabase.from("etapas").select("*").order("posicao");
+      setEtapas(etapasData || []);
+
+      const { data: leadsData } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+      setLeads((leadsData || []).map(lead => ({ ...lead, name: lead.nome || lead.name })));
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error);
+      toast.error("Erro ao carregar dados do funil");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveId(null);
-    if (!over || !stages.some((s) => s.id === over.id)) return;
-    
-    const updatedLeads = leads.map((lead) => lead.id === active.id ? { ...lead, stage: over.id as string } : lead);
-    saveLeads(updatedLeads);
-    toast.success("Lead movido!");
+    if (!over) return;
+
+    const leadId = active.id as string;
+    const newEtapaId = over.id as string;
+
+    setLeads((leads) => leads.map((lead) => lead.id === leadId ? { ...lead, etapa_id: newEtapaId } : lead));
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return toast.error("Não autenticado");
+
+      await supabase.functions.invoke("api-funil-vendas", {
+        body: { action: "mover_lead", data: { lead_id: leadId, nova_etapa_id: newEtapaId } }
+      });
+
+      toast.success("Lead movido!");
+    } catch (error) {
+      toast.error("Erro ao mover lead");
+      carregarDados();
+    }
   };
 
-  const handleCreateLead = () => {
-    if (!newLead.name.trim()) return toast.error("Nome obrigatório");
-    const lead: Lead = { id: Date.now().toString(), name: newLead.name, company: newLead.company, value: parseFloat(newLead.value) || 0, stage: newLead.stage };
-    saveLeads([...leads, lead]);
-    setNewLeadOpen(false);
-    setNewLead({ name: "", company: "", value: "", stage: "new" });
-    toast.success("Lead criado!");
+  const criarNovoFunil = async () => {
+    if (!novoFunilNome.trim()) return;
+
+    try {
+      await supabase.functions.invoke("api-funil-vendas", {
+        body: { action: "criar_funil", data: { nome: novoFunilNome } }
+      });
+
+      toast.success("Funil criado!");
+      setNovoFunilNome("");
+      setDialogNovoFunil(false);
+      carregarDados();
+    } catch (error) {
+      toast.error("Erro ao criar funil");
+    }
   };
 
-  const getLeadsByStage = (stageId: string) => leads.filter((l) => l.stage === stageId);
-  const getStageValue = (stageId: string) => getLeadsByStage(stageId).reduce((sum, l) => sum + (l.value || 0), 0);
-  const activeLead = activeId ? leads.find((l) => l.id === activeId) : null;
+  const etapasFiltradas = etapas.filter((etapa) => etapa.funil_id === selectedFunil);
+
+  if (loading) return <div className="flex items-center justify-center h-screen"><p>Carregando...</p></div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto p-6">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Funil de Vendas</h1>
-          <p className="text-muted-foreground">Arraste e solte leads entre os estágios</p>
+          <h1 className="text-3xl font-bold">Funil de Vendas</h1>
+          <p className="text-muted-foreground">Gerencie seus leads</p>
         </div>
-        <Dialog open={newLeadOpen} onOpenChange={setNewLeadOpen}>
+        <Dialog open={dialogNovoFunil} onOpenChange={setDialogNovoFunil}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Novo Lead</Button>
+            <Button variant="outline"><Plus className="mr-2 h-4 w-4" />Novo Funil</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Criar Novo Lead</DialogTitle></DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div><Label>Nome *</Label><Input value={newLead.name} onChange={(e) => setNewLead({ ...newLead, name: e.target.value })} /></div>
-              <div><Label>Empresa</Label><Input value={newLead.company} onChange={(e) => setNewLead({ ...newLead, company: e.target.value })} /></div>
-              <div><Label>Valor</Label><Input type="number" value={newLead.value} onChange={(e) => setNewLead({ ...newLead, value: e.target.value })} /></div>
-              <Button onClick={handleCreateLead} className="w-full">Criar Lead</Button>
+            <DialogHeader><DialogTitle>Criar Novo Funil</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <div><Label>Nome do Funil</Label><Input value={novoFunilNome} onChange={(e) => setNovoFunilNome(e.target.value)} /></div>
+              <Button onClick={criarNovoFunil} className="w-full">Criar</Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      <DndContext sensors={sensors} onDragStart={(e) => setActiveId(e.active.id as string)} onDragEnd={handleDragEnd}>
-        <div className="grid gap-4 overflow-x-auto pb-4" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(300px, 1fr))` }}>
-          {stages.map((stage) => (
-            <SortableContext key={stage.id} id={stage.id} items={getLeadsByStage(stage.id).map((l) => l.id)}>
-              <Card className="h-full">
-                <CardHeader className={`${stage.color} text-white`}>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{stage.name}</span>
-                    <span className="text-sm font-normal">{getLeadsByStage(stage.id).length}</span>
-                  </CardTitle>
-                  <p className="text-sm text-white/90">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(getStageValue(stage.id))}</p>
-                </CardHeader>
-                <CardContent className="pt-4 min-h-[200px]">
-                  {getLeadsByStage(stage.id).map((lead) => <LeadCard key={lead.id} lead={lead} onDelete={(id) => saveLeads(leads.filter((l) => l.id !== id))} />)}
-                  {getLeadsByStage(stage.id).length === 0 && <p className="text-sm text-muted-foreground text-center py-8">Arraste leads para cá</p>}
-                </CardContent>
-              </Card>
-            </SortableContext>
-          ))}
+      {funis.length > 0 && (
+        <div className="mb-6">
+          <Label>Funil</Label>
+          <select value={selectedFunil} onChange={(e) => setSelectedFunil(e.target.value)} className="w-full max-w-xs p-2 border rounded-md mt-2">
+            {funis.map((funil) => <option key={funil.id} value={funil.id}>{funil.nome}</option>)}
+          </select>
         </div>
-        <DragOverlay>{activeLead && <Card className="w-[280px] opacity-90"><CardHeader className="pb-3"><CardTitle className="text-sm">{activeLead.name}</CardTitle></CardHeader></Card>}</DragOverlay>
-      </DndContext>
+      )}
+
+      {funis.length === 0 ? (
+        <div className="text-center py-12">
+          <Button onClick={() => setDialogNovoFunil(true)}><Plus className="mr-2" />Criar Primeiro Funil</Button>
+        </div>
+      ) : (
+        <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {etapasFiltradas.map((etapa) => (
+              <div key={etapa.id}>
+                <div className="text-white p-3 rounded-t-lg" style={{ backgroundColor: etapa.cor }}>
+                  <h3 className="font-semibold">{etapa.nome}</h3>
+                  <span className="text-sm">{leads.filter(l => l.etapa_id === etapa.id).length} leads</span>
+                </div>
+                <SortableContext id={etapa.id} items={leads.filter(l => l.etapa_id === etapa.id)} strategy={verticalListSortingStrategy}>
+                  <div className="bg-secondary/20 p-4 rounded-b-lg min-h-[500px]">
+                    <NovoLeadDialog etapaId={etapa.id} funilId={selectedFunil} onLeadCreated={carregarDados} />
+                    {leads.filter(l => l.etapa_id === etapa.id).map((lead) => (
+                      <LeadCard key={lead.id} lead={lead} onDelete={async (id) => {
+                        await supabase.functions.invoke("api-funil-vendas", { body: { action: "deletar_lead", data: { lead_id: id } } });
+                        carregarDados();
+                      }} />
+                    ))}
+                  </div>
+                </SortableContext>
+              </div>
+            ))}
+          </div>
+        </DndContext>
+      )}
     </div>
   );
-}
+};
+
+export default Kanban;
