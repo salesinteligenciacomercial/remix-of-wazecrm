@@ -30,10 +30,10 @@
 **Node 2: HTTP Request (N8n → CEUSIA CRM)**
 - **Método**: POST
 - **URL**: `https://dteppsfseusqixuppglh.supabase.co/functions/v1/webhook-conversas`
+- **Authentication**: None ⚠️ **IMPORTANTE: Não use autenticação**
 - **Headers**:
   ```
   Content-Type: application/json
-  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0ZXBwc2ZzZXVzcWl4dXBwZ2xoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA4MzY0OTgsImV4cCI6MjA3NjQxMjQ5OH0.eEz5cyfwi5chae1U9S0Yt1FBwglyuVnm_Fzg9HVrV_Q
   ```
 - **Body (JSON)**:
   ```json
@@ -45,6 +45,8 @@
     "nome_contato": "{{ $json.nome_contato }}"
   }
   ```
+
+> **📌 ATENÇÃO**: Este webhook é **público** e não requer Bearer Token ou API Key. Se você receber erro 401, certifique-se de remover qualquer header de `Authorization` do seu nó HTTP Request no N8n.
 
 ---
 
@@ -66,12 +68,11 @@ Evolution API → Webhook Trigger → OpenAI → HTTP Request → CEUSIA CRM
 
 ### Teste 1: Enviar mensagem via N8n manualmente
 
-Use o seguinte comando cURL para testar:
+Use o seguinte comando cURL para testar (sem autenticação):
 
 ```bash
 curl -X POST https://dteppsfseusqixuppglh.supabase.co/functions/v1/webhook-conversas \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0ZXBwc2ZzZXVzcWl4dXBwZ2xoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA4MzY0OTgsImV4cCI6MjA3NjQxMjQ5OH0.eEz5cyfwi5chae1U9S0Yt1FBwglyuVnm_Fzg9HVrV_Q" \
   -d '{
     "numero": "5511999999999",
     "mensagem": "Olá! Teste de integração",
@@ -116,7 +117,8 @@ curl -X POST https://dteppsfseusqixuppglh.supabase.co/functions/v1/webhook-conve
 
 - ✅ RLS habilitado na tabela `conversas`
 - ✅ CORS configurado na Edge Function
-- ✅ Autenticação via Bearer Token
+- ✅ Webhook público (sem autenticação JWT) para aceitar chamadas externas do N8n
+- ⚠️ **Importante**: O webhook é público por design para aceitar mensagens do N8n. Implemente validações adicionais se necessário.
 
 ---
 

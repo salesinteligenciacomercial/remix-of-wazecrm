@@ -1,1 +1,4 @@
 project_id = "dteppsfseusqixuppglh"
+
+[functions.webhook-conversas]
+verify_jwt = false
