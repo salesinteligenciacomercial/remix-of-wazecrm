@@ -1,165 +1,256 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DndContext, DragEndEvent, closestCorners } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { Plus, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, User, Calendar as CalendarIcon } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { TaskCard } from "@/components/tarefas/TaskCard";
+import { NovaTarefaDialog } from "@/components/tarefas/NovaTarefaDialog";
+import { toast } from "sonner";
 
 interface Task {
   id: string;
   title: string;
   description: string | null;
-  status: string;
   priority: string;
   assignee_id: string | null;
   assignee_name?: string;
   due_date: string | null;
   lead_id: string | null;
   lead_name?: string;
-  created_at: string;
+  column_id?: string | null;
+  board_id?: string | null;
 }
 
-const columns = [
-  { id: "pendente", title: "Pendente", color: "bg-yellow-500" },
-  { id: "em_andamento", title: "Em Andamento", color: "bg-blue-500" },
-  { id: "concluida", title: "Concluída", color: "bg-green-500" },
-];
+interface Column {
+  id: string;
+  nome: string;
+  posicao: number;
+  cor: string;
+  board_id: string;
+}
+
+interface Board {
+  id: string;
+  nome: string;
+  descricao?: string;
+}
 
 export default function Tarefas() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const { toast } = useToast();
+  const [columns, setColumns] = useState<Column[]>([]);
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [selectedBoard, setSelectedBoard] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [novoBoardNome, setNovoBoardNome] = useState("");
+  const [dialogNovoBoard, setDialogNovoBoard] = useState(false);
 
   useEffect(() => {
-    fetchTasks();
+    carregarDados();
   }, []);
 
-  const fetchTasks = async () => {
-    const { data, error } = await supabase
-      .from("tasks")
-      .select(`
-        *,
-        assignee:profiles!tasks_assignee_id_fkey(full_name),
-        lead:leads!tasks_lead_id_fkey(name)
-      `)
-      .order("created_at", { ascending: false });
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      
+      const { data: boardsData } = await supabase.from("task_boards").select("*").order("criado_em");
+      setBoards(boardsData || []);
+      
+      if (!selectedBoard && boardsData && boardsData.length > 0) {
+        setSelectedBoard(boardsData[0].id);
+      }
 
-    if (error) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao carregar tarefas",
-        description: error.message,
-      });
-    } else {
-      const formattedTasks = (data || []).map((task: any) => ({
+      const { data: columnsData } = await supabase.from("task_columns").select("*").order("posicao");
+      setColumns(columnsData || []);
+
+      const { data: tasksData } = await supabase
+        .from("tasks")
+        .select(`
+          *,
+          assignee:profiles!tasks_assignee_id_fkey(full_name),
+          lead:leads!tasks_lead_id_fkey(name)
+        `)
+        .order("created_at", { ascending: false });
+
+      const formattedTasks = (tasksData || []).map((task: any) => ({
         ...task,
         assignee_name: task.assignee?.full_name,
         lead_name: task.lead?.name,
       }));
       setTasks(formattedTasks);
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error);
+      toast.error("Erro ao carregar dados das tarefas");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    const colors: Record<string, string> = {
-      baixa: "bg-gray-500",
-      media: "bg-yellow-500",
-      alta: "bg-orange-500",
-      urgente: "bg-red-500",
-    };
-    return colors[priority] || "bg-gray-500";
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const taskId = active.id as string;
+    const newColumnId = over.id as string;
+
+    setTasks((tasks) => 
+      tasks.map((task) => 
+        task.id === taskId ? { ...task, column_id: newColumnId } : task
+      )
+    );
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return toast.error("Não autenticado");
+
+      await supabase.functions.invoke("api-tarefas", {
+        body: { action: "mover_tarefa", data: { task_id: taskId, nova_coluna_id: newColumnId } }
+      });
+
+      toast.success("Tarefa movida!");
+    } catch (error) {
+      toast.error("Erro ao mover tarefa");
+      carregarDados();
+    }
   };
 
-  const getTasksByStatus = (status: string) => {
-    return tasks.filter((task) => task.status === status);
+  const criarNovoBoard = async () => {
+    if (!novoBoardNome.trim()) return;
+
+    try {
+      await supabase.functions.invoke("api-tarefas", {
+        body: { action: "criar_board", data: { nome: novoBoardNome } }
+      });
+
+      toast.success("Quadro criado!");
+      setNovoBoardNome("");
+      setDialogNovoBoard(false);
+      carregarDados();
+    } catch (error) {
+      toast.error("Erro ao criar quadro");
+    }
   };
+
+  const columnsFiltradas = columns.filter((column) => column.board_id === selectedBoard);
+
+  if (loading) return <div className="flex items-center justify-center h-screen"><p>Carregando...</p></div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto p-6">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Tarefas</h1>
-          <p className="text-muted-foreground">
-            Gerencie todas as tarefas da equipe
+          <h1 className="text-3xl font-bold">Tarefas (Trello Style)</h1>
+          <p className="text-muted-foreground">Gerencie suas tarefas em quadros Kanban</p>
+        </div>
+        <div className="flex gap-2">
+          <Dialog open={dialogNovoBoard} onOpenChange={setDialogNovoBoard}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Quadro
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Criar Novo Quadro</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Nome do Quadro</Label>
+                  <Input 
+                    value={novoBoardNome} 
+                    onChange={(e) => setNovoBoardNome(e.target.value)} 
+                    placeholder="Ex: Projeto Q1 2024"
+                  />
+                </div>
+                <Button onClick={criarNovoBoard} className="w-full">
+                  Criar
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      {boards.length > 0 && (
+        <div className="mb-6">
+          <Label>Quadro</Label>
+          <select 
+            value={selectedBoard} 
+            onChange={(e) => setSelectedBoard(e.target.value)} 
+            className="w-full max-w-xs p-2 border rounded-md mt-2"
+          >
+            {boards.map((board) => (
+              <option key={board.id} value={board.id}>
+                {board.nome}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {boards.length === 0 ? (
+        <div className="text-center py-12">
+          <Button onClick={() => setDialogNovoBoard(true)}>
+            <Plus className="mr-2" />
+            Criar Primeiro Quadro
+          </Button>
+        </div>
+      ) : columnsFiltradas.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground mb-4">Nenhuma coluna criada ainda</p>
+          <p className="text-sm text-muted-foreground">
+            Crie colunas como "A Fazer", "Em Progresso", "Concluído"
           </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Tarefa
-        </Button>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-3">
-        {columns.map((column) => (
-          <div key={column.id} className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className={`h-3 w-3 rounded-full ${column.color}`} />
-              <h3 className="font-semibold text-foreground">
-                {column.title}
-              </h3>
-              <Badge variant="outline" className="ml-auto">
-                {getTasksByStatus(column.id).length}
-              </Badge>
-            </div>
-
-            <div className="space-y-3">
-              {getTasksByStatus(column.id).map((task) => (
-                <Card
-                  key={task.id}
-                  className="transition-all hover:shadow-lg cursor-pointer"
+      ) : (
+        <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {columnsFiltradas.map((column) => (
+              <div key={column.id}>
+                <div 
+                  className="text-white p-3 rounded-t-lg" 
+                  style={{ backgroundColor: column.cor }}
                 >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-base font-medium">
-                        {task.title}
-                      </CardTitle>
-                      <Badge className={getPriorityColor(task.priority)}>
-                        {task.priority}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {task.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {task.description}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      {task.assignee_name && (
-                        <div className="flex items-center gap-1">
-                          <User className="h-3 w-3" />
-                          {task.assignee_name}
-                        </div>
-                      )}
-                      {task.due_date && (
-                        <div className="flex items-center gap-1">
-                          <CalendarIcon className="h-3 w-3" />
-                          {new Date(task.due_date).toLocaleDateString("pt-BR")}
-                        </div>
-                      )}
-                    </div>
-                    {task.lead_name && (
-                      <div className="text-xs">
-                        <Badge variant="outline">Lead: {task.lead_name}</Badge>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-
-              {getTasksByStatus(column.id).length === 0 && (
-                <Card className="border-dashed">
-                  <CardContent className="flex items-center justify-center py-8">
-                    <p className="text-sm text-muted-foreground">
-                      Nenhuma tarefa
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+                  <h3 className="font-semibold">{column.nome}</h3>
+                  <span className="text-sm">
+                    {tasks.filter(t => t.column_id === column.id).length} tarefas
+                  </span>
+                </div>
+                <SortableContext 
+                  id={column.id} 
+                  items={tasks.filter(t => t.column_id === column.id)} 
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="bg-secondary/20 p-4 rounded-b-lg min-h-[500px]">
+                    <NovaTarefaDialog 
+                      columnId={column.id} 
+                      boardId={selectedBoard} 
+                      onTaskCreated={carregarDados} 
+                    />
+                    {tasks.filter(t => t.column_id === column.id).map((task) => (
+                      <TaskCard 
+                        key={task.id} 
+                        task={task} 
+                        onDelete={async (id) => {
+                          await supabase.functions.invoke("api-tarefas", { 
+                            body: { action: "deletar_tarefa", data: { task_id: id } } 
+                          });
+                          carregarDados();
+                        }} 
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </DndContext>
+      )}
     </div>
   );
 }

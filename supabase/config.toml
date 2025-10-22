@@ -2,3 +2,9 @@ project_id = "dteppsfseusqixuppglh"
 
 [functions.webhook-conversas]
 verify_jwt = false
+
+[functions.api-funil-vendas]
+verify_jwt = true
+
+[functions.api-tarefas]
+verify_jwt = true

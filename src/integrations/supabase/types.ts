@@ -244,9 +244,84 @@ export type Database = {
         }
         Relationships: []
       }
+      task_boards: {
+        Row: {
+          atualizado_em: string | null
+          criado_em: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          owner_id: string | null
+        }
+        Insert: {
+          atualizado_em?: string | null
+          criado_em?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          owner_id?: string | null
+        }
+        Update: {
+          atualizado_em?: string | null
+          criado_em?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          owner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_boards_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_columns: {
+        Row: {
+          atualizado_em: string | null
+          board_id: string | null
+          cor: string | null
+          criado_em: string | null
+          id: string
+          nome: string
+          posicao: number | null
+        }
+        Insert: {
+          atualizado_em?: string | null
+          board_id?: string | null
+          cor?: string | null
+          criado_em?: string | null
+          id?: string
+          nome: string
+          posicao?: number | null
+        }
+        Update: {
+          atualizado_em?: string | null
+          board_id?: string | null
+          cor?: string | null
+          criado_em?: string | null
+          id?: string
+          nome?: string
+          posicao?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_columns_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "task_boards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           assignee_id: string | null
+          board_id: string | null
+          column_id: string | null
           created_at: string
           description: string | null
           due_date: string | null
@@ -260,6 +335,8 @@ export type Database = {
         }
         Insert: {
           assignee_id?: string | null
+          board_id?: string | null
+          column_id?: string | null
           created_at?: string
           description?: string | null
           due_date?: string | null
@@ -273,6 +350,8 @@ export type Database = {
         }
         Update: {
           assignee_id?: string | null
+          board_id?: string | null
+          column_id?: string | null
           created_at?: string
           description?: string | null
           due_date?: string | null
@@ -290,6 +369,20 @@ export type Database = {
             columns: ["assignee_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "task_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_column_id_fkey"
+            columns: ["column_id"]
+            isOneToOne: false
+            referencedRelation: "task_columns"
             referencedColumns: ["id"]
           },
           {
