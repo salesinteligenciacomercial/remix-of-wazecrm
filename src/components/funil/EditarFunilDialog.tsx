@@ -104,14 +104,17 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
       
       console.log(`✅ Etapa "${etapa.nome}" removida do banco`);
       toast.success("Etapa removida com sucesso");
+      
+      // Recarregar etapas após deletar
+      await carregarEtapas();
+    } else {
+      // Apenas remover localmente se for temporária
+      const novasEtapas = etapas
+        .filter(e => e.id !== etapa.id)
+        .map((e, index) => ({ ...e, posicao: index }));
+      
+      setEtapas(novasEtapas);
     }
-    
-    // Remover da lista local e reordenar posições
-    const novasEtapas = etapas
-      .filter(e => e.id !== etapa.id)
-      .map((e, index) => ({ ...e, posicao: index }));
-    
-    setEtapas(novasEtapas);
   };
 
   const atualizarNomeEtapa = (id: string, novoNome: string) => {
@@ -209,8 +212,7 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
       const { error: funilError } = await supabase
         .from("funis")
         .update({ 
-          nome: nomeFunil,
-          atualizado_em: new Date().toISOString()
+          nome: nomeFunil
         })
         .eq("id", funilId)
         .eq("owner_id", session.user.id);
@@ -254,8 +256,7 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
             .update({
               nome: etapa.nome,
               posicao: i,
-              cor: etapa.cor,
-              atualizado_em: new Date().toISOString()
+              cor: etapa.cor
             })
             .eq("id", etapa.id)
             .eq("funil_id", funilId);

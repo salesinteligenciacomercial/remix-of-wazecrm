@@ -212,42 +212,43 @@ const Kanban = () => {
         </div>
       ) : (
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {etapasFiltradas.map((etapa) => {
+      <div className="flex overflow-x-auto gap-4 pb-4">
+        {etapasFiltradas.map((etapa) => {
               const totalEtapa = calcularTotalEtapa(etapa.id);
               const quantidadeLeads = leads.filter(l => l.etapa_id === etapa.id).length;
               const leadsNaEtapa = leads.filter(l => l.etapa_id === etapa.id);
               
               return (
-                <DroppableColumn
-                  key={etapa.id}
-                  id={etapa.id}
-                  cor={etapa.cor}
-                  nome={etapa.nome}
-                  quantidadeLeads={quantidadeLeads}
-                  totalEtapa={totalEtapa}
-                >
-                  {leadsNaEtapa.map((lead) => (
-                    <LeadCard 
-                      key={lead.id} 
-                      lead={lead} 
-                      onDelete={async (id) => {
-                        const { error } = await supabase.from("leads").delete().eq("id", id);
-                        if (error) {
-                          toast.error("Erro ao deletar lead");
-                          return;
-                        }
-                        toast.success("Lead deletado!");
-                        carregarDados();
-                      }} 
-                    />
-                  ))}
-                  {leadsNaEtapa.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground text-sm">
-                      Arraste leads para cá
-                    </div>
-                  )}
-                </DroppableColumn>
+                <div key={etapa.id} className="min-w-[300px] flex-shrink-0">
+                  <DroppableColumn
+                    id={etapa.id}
+                    cor={etapa.cor}
+                    nome={etapa.nome}
+                    quantidadeLeads={quantidadeLeads}
+                    totalEtapa={totalEtapa}
+                  >
+                    {leadsNaEtapa.map((lead) => (
+                      <LeadCard 
+                        key={lead.id} 
+                        lead={lead} 
+                        onDelete={async (id) => {
+                          const { error } = await supabase.from("leads").delete().eq("id", id);
+                          if (error) {
+                            toast.error("Erro ao deletar lead");
+                            return;
+                          }
+                          toast.success("Lead deletado!");
+                          carregarDados();
+                        }} 
+                      />
+                    ))}
+                    {leadsNaEtapa.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground text-sm">
+                        Arraste leads para cá
+                      </div>
+                    )}
+                  </DroppableColumn>
+                </div>
               );
             })}
           </div>
