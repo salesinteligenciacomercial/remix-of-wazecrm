@@ -22,6 +22,25 @@ serve(async (req) => {
 
     const { numero, mensagem, origem = 'WhatsApp', tipo_mensagem = 'text', midia_url, nome_contato } = body;
 
+    // Validar que os campos não são variáveis N8n não substituídas
+    const hasUnsubstitutedVariables = [numero, mensagem, nome_contato].some(
+      field => field && (field.includes('{{') || field.includes('$json'))
+    );
+
+    if (hasUnsubstitutedVariables) {
+      console.error('❌ Variáveis N8n não substituídas detectadas:', body);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Variáveis não substituídas detectadas. Configure o node "Set" no N8n antes de enviar.',
+          details: 'Use um node Set para mapear: numero, mensagem, nome_contato com valores reais do webhook.'
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
     if (!numero || !mensagem) {
       console.error('❌ Dados incompletos:', body);
       return new Response(

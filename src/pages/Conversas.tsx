@@ -240,9 +240,23 @@ export default function Conversas() {
         return;
       }
 
-      if (data && data.length > 0) {
+      // Filtrar mensagens com variáveis N8n não substituídas
+      const validData = data?.filter(conv => {
+        const hasInvalidVariables = 
+          conv.numero?.includes('{{') || conv.numero?.includes('$json') ||
+          conv.mensagem?.includes('{{') || conv.mensagem?.includes('$json') ||
+          conv.nome_contato?.includes('{{') || conv.nome_contato?.includes('$json');
+        
+        if (hasInvalidVariables) {
+          console.warn('⚠️ Mensagem com variáveis não substituídas ignorada:', conv);
+        }
+        
+        return !hasInvalidVariables;
+      }) || [];
+
+      if (validData && validData.length > 0) {
         // Agrupar mensagens por número
-        const conversasAgrupadas = data.reduce((acc: Record<string, any[]>, conv: any) => {
+        const conversasAgrupadas = validData.reduce((acc: Record<string, any[]>, conv: any) => {
           if (!acc[conv.numero]) {
             acc[conv.numero] = [];
           }

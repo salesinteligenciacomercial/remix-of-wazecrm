@@ -16,21 +16,36 @@
 **Node 1: Webhook Trigger (Evolution API)**
 - Adicione um node "Webhook" no N8n
 - Configure o webhook da Evolution API para enviar para este endpoint
-- Dados esperados:
+- Dados esperados da Evolution API:
   ```json
   {
-    "numero": "5511999999999",
-    "mensagem": "Olá, gostaria de saber mais",
-    "origem": "WhatsApp",
-    "tipo_mensagem": "text",
-    "nome_contato": "João Silva"
+    "data": {
+      "message": {
+        "key": { "remoteJid": "5511999999999@s.whatsapp.net" },
+        "conversation": "Olá, gostaria de saber mais"
+      },
+      "pushName": "João Silva"
+    }
   }
   ```
 
-**Node 2: HTTP Request (N8n → CEUSIA CRM)**
+**Node 2: Set (Mapear Dados da Evolution API)** ⚠️ **CRÍTICO - OBRIGATÓRIO**
+- **Nome**: Mapear Dados Evolution
+- **Campos a configurar**:
+  ```
+  numero = {{$json["data"]["message"]["key"]["remoteJid"]}}
+  mensagem = {{$json["data"]["message"]["conversation"]}}
+  nome_contato = {{$json["data"]["pushName"]}}
+  origem = whatsapp
+  tipo_mensagem = texto
+  ```
+
+> **🔥 IMPORTANTE**: Este node é **obrigatório** para extrair e mapear os dados corretos do webhook da Evolution API. Sem ele, as variáveis não serão substituídas e você receberá erro 400 do Supabase!
+
+**Node 3: HTTP Request (N8n → CEUSIA CRM)**
 - **Método**: POST
 - **URL**: `https://dteppsfseusqixuppglh.supabase.co/functions/v1/webhook-conversas`
-- **Authentication**: None ⚠️ **IMPORTANTE: Não use autenticação**
+- **Authentication**: None
 - **Headers**:
   ```
   Content-Type: application/json
@@ -40,13 +55,16 @@
   {
     "numero": "{{ $json.numero }}",
     "mensagem": "{{ $json.mensagem }}",
-    "origem": "{{ $json.origem || 'WhatsApp' }}",
-    "tipo_mensagem": "{{ $json.tipo_mensagem || 'text' }}",
+    "origem": "{{ $json.origem }}",
+    "tipo_mensagem": "{{ $json.tipo_mensagem }}",
     "nome_contato": "{{ $json.nome_contato }}"
   }
   ```
 
-> **📌 ATENÇÃO**: Este webhook é **público** e não requer Bearer Token ou API Key. Se você receber erro 401, certifique-se de remover qualquer header de `Authorization` do seu nó HTTP Request no N8n.
+> **📌 ATENÇÃO**: 
+> - Este webhook é **público** e não requer autenticação
+> - As variáveis `{{ $json.* }}` agora vêm do node "Set" anterior com dados reais
+> - Se receber erro 400 "variáveis não substituídas", verifique se o node "Set" está conectado corretamente antes deste node
 
 ---
 
