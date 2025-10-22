@@ -68,7 +68,7 @@ const Kanban = () => {
       setEtapas(etapasData || []);
 
       const { data: leadsData } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
-      setLeads((leadsData || []).map(lead => ({ ...lead, name: lead.nome || lead.name })));
+      setLeads((leadsData || []).map(lead => ({ ...lead, nome: lead.name || "", name: lead.name || "" })));
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
       toast.error("Erro ao carregar dados do funil");
