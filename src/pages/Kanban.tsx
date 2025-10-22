@@ -127,20 +127,46 @@ const Kanban = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">Funil de Vendas</h1>
-          <p className="text-muted-foreground">Gerencie seus leads</p>
+          <p className="text-muted-foreground">Gerencie seus leads por etapas</p>
         </div>
-        <Dialog open={dialogNovoFunil} onOpenChange={setDialogNovoFunil}>
-          <DialogTrigger asChild>
-            <Button variant="outline"><Plus className="mr-2 h-4 w-4" />Novo Funil</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Criar Novo Funil</DialogTitle></DialogHeader>
-            <div className="space-y-4">
-              <div><Label>Nome do Funil</Label><Input value={novoFunilNome} onChange={(e) => setNovoFunilNome(e.target.value)} /></div>
-              <Button onClick={criarNovoFunil} className="w-full">Criar</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Dialog open={dialogNovoFunil} onOpenChange={setDialogNovoFunil}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Funil
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Criar Novo Funil</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Nome do Funil</Label>
+                  <Input 
+                    value={novoFunilNome} 
+                    onChange={(e) => setNovoFunilNome(e.target.value)} 
+                    placeholder="Ex: Vendas Produto X"
+                  />
+                </div>
+                <Button onClick={criarNovoFunil} className="w-full">
+                  Criar
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          
+          <NovoLeadDialog 
+            onLeadCreated={carregarDados}
+            triggerButton={
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Lead
+              </Button>
+            }
+          />
+        </div>
       </div>
 
       {funis.length > 0 && (
@@ -167,13 +193,17 @@ const Kanban = () => {
                 </div>
                 <SortableContext id={etapa.id} items={leads.filter(l => l.etapa_id === etapa.id)} strategy={verticalListSortingStrategy}>
                   <div className="bg-secondary/20 p-4 rounded-b-lg min-h-[500px]">
-                    <NovoLeadDialog etapaId={etapa.id} funilId={selectedFunil} onLeadCreated={carregarDados} />
                     {leads.filter(l => l.etapa_id === etapa.id).map((lead) => (
                       <LeadCard key={lead.id} lead={lead} onDelete={async (id) => {
                         await supabase.functions.invoke("api-funil-vendas", { body: { action: "deletar_lead", data: { lead_id: id } } });
                         carregarDados();
                       }} />
                     ))}
+                    {leads.filter(l => l.etapa_id === etapa.id).length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground text-sm">
+                        Nenhum lead nesta etapa
+                      </div>
+                    )}
                   </div>
                 </SortableContext>
               </div>

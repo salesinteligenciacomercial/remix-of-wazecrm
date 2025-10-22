@@ -1,20 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface NovoLeadDialogProps {
-  etapaId: string;
-  funilId: string;
   onLeadCreated: () => void;
+  triggerButton?: React.ReactNode;
 }
 
-export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDialogProps) {
+export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [funis, setFunis] = useState<any[]>([]);
+  const [etapas, setEtapas] = useState<any[]>([]);
+  const [etapasFiltradas, setEtapasFiltradas] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     nome: "",
     telefone: "",
@@ -23,19 +28,60 @@ export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDial
     valor: "",
     company: "",
     source: "",
-    notes: ""
+    notes: "",
+    funil_id: "",
+    etapa_id: ""
   });
+
+  useEffect(() => {
+    if (open) {
+      carregarDados();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (formData.funil_id) {
+      const filtered = etapas.filter(e => e.funil_id === formData.funil_id);
+      setEtapasFiltradas(filtered);
+      if (filtered.length > 0 && !formData.etapa_id) {
+        setFormData(prev => ({ ...prev, etapa_id: filtered[0].id }));
+      }
+    }
+  }, [formData.funil_id, etapas]);
+
+  const carregarDados = async () => {
+    const { data: funisData } = await supabase.from("funis").select("*").order("criado_em");
+    const { data: etapasData } = await supabase.from("etapas").select("*").order("posicao");
+    
+    setFunis(funisData || []);
+    setEtapas(etapasData || []);
+    
+    if (funisData && funisData.length > 0 && !formData.funil_id) {
+      setFormData(prev => ({ ...prev, funil_id: funisData[0].id }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.nome.trim()) {
+      toast.error("Digite o nome do lead");
+      return;
+    }
+
+    if (!formData.funil_id || !formData.etapa_id) {
+      toast.error("Selecione um funil e uma etapa");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const { supabase } = await import("@/integrations/supabase/client");
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
-        throw new Error("Usuário não autenticado");
+        toast.error("Usuário não autenticado");
+        return;
       }
 
       const response = await supabase.functions.invoke("api-funil-vendas", {
@@ -50,8 +96,8 @@ export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDial
             company: formData.company,
             source: formData.source,
             notes: formData.notes,
-            etapa_id: etapaId,
-            funil_id: funilId
+            etapa_id: formData.etapa_id,
+            funil_id: formData.funil_id
           }
         }
       });
@@ -60,6 +106,7 @@ export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDial
         throw response.error;
       }
 
+      toast.success("Lead criado com sucesso!");
       setFormData({
         nome: "",
         telefone: "",
@@ -68,13 +115,15 @@ export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDial
         valor: "",
         company: "",
         source: "",
-        notes: ""
+        notes: "",
+        funil_id: funis.length > 0 ? funis[0].id : "",
+        etapa_id: ""
       });
       setOpen(false);
       onLeadCreated();
     } catch (error) {
       console.error("Erro ao criar lead:", error);
-      alert("Erro ao criar lead. Tente novamente.");
+      toast.error("Erro ao criar lead. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -83,10 +132,12 @@ export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDial
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="ghost" className="w-full">
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Lead
-        </Button>
+        {triggerButton || (
+          <Button size="sm" variant="ghost" className="w-full">
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Lead
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -94,32 +145,73 @@ export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDial
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <Label htmlFor="funil">Funil *</Label>
+            <Select 
+              value={formData.funil_id} 
+              onValueChange={(value) => setFormData({ ...formData, funil_id: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o funil" />
+              </SelectTrigger>
+              <SelectContent>
+                {funis.map((funil) => (
+                  <SelectItem key={funil.id} value={funil.id}>
+                    {funil.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="etapa">Etapa *</Label>
+            <Select 
+              value={formData.etapa_id} 
+              onValueChange={(value) => setFormData({ ...formData, etapa_id: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a etapa" />
+              </SelectTrigger>
+              <SelectContent>
+                {etapasFiltradas.map((etapa) => (
+                  <SelectItem key={etapa.id} value={etapa.id}>
+                    {etapa.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
             <Label htmlFor="nome">Nome *</Label>
             <Input
               id="nome"
               value={formData.nome}
               onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+              placeholder="Nome do lead"
               required
             />
           </div>
 
           <div>
-            <Label htmlFor="telefone">Telefone</Label>
+            <Label htmlFor="telefone">Telefone / WhatsApp</Label>
             <Input
               id="telefone"
               type="tel"
               value={formData.telefone}
               onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+              placeholder="(00) 00000-0000"
             />
           </div>
 
           <div>
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">E-mail</Label>
             <Input
               id="email"
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="email@exemplo.com"
             />
           </div>
 
@@ -129,6 +221,7 @@ export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDial
               id="cpf"
               value={formData.cpf}
               onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+              placeholder="000.000.000-00"
             />
           </div>
 
@@ -138,6 +231,7 @@ export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDial
               id="company"
               value={formData.company}
               onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+              placeholder="Nome da empresa"
             />
           </div>
 
@@ -149,6 +243,7 @@ export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDial
               step="0.01"
               value={formData.valor}
               onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
+              placeholder="0.00"
             />
           </div>
 
@@ -158,7 +253,7 @@ export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDial
               id="source"
               value={formData.source}
               onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-              placeholder="Ex: WhatsApp, Instagram"
+              placeholder="Ex: WhatsApp, Instagram, Indicação"
             />
           </div>
 
@@ -169,10 +264,11 @@ export function NovoLeadDialog({ etapaId, funilId, onLeadCreated }: NovoLeadDial
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
+              placeholder="Informações adicionais sobre o lead"
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1">
               Cancelar
             </Button>
