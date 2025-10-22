@@ -240,18 +240,22 @@ export default function Conversas() {
         return;
       }
 
-      // Filtrar mensagens com variáveis N8n não substituídas
+      // Filtrar mensagens com variáveis N8n não substituídas ou dados inválidos
       const validData = data?.filter(conv => {
         const hasInvalidVariables = 
           conv.numero?.includes('{{') || conv.numero?.includes('$json') ||
           conv.mensagem?.includes('{{') || conv.mensagem?.includes('$json') ||
           conv.nome_contato?.includes('{{') || conv.nome_contato?.includes('$json');
         
-        if (hasInvalidVariables) {
-          console.warn('⚠️ Mensagem com variáveis não substituídas ignorada:', conv);
+        const hasInvalidData =
+          !conv.numero || conv.numero === '=' || conv.numero.trim() === '' ||
+          !conv.mensagem || conv.mensagem === '[object Object]' || conv.mensagem.trim() === '';
+        
+        if (hasInvalidVariables || hasInvalidData) {
+          console.warn('⚠️ Mensagem inválida ignorada:', conv);
         }
         
-        return !hasInvalidVariables;
+        return !hasInvalidVariables && !hasInvalidData;
       }) || [];
 
       if (validData && validData.length > 0) {

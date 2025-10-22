@@ -22,22 +22,35 @@ serve(async (req) => {
 
     const { numero, mensagem, origem = 'WhatsApp', tipo_mensagem = 'text', midia_url, nome_contato } = body;
 
-    // Validar que os campos não são variáveis N8n não substituídas
-    const hasUnsubstitutedVariables = [numero, mensagem, nome_contato].some(
-      field => field && (field.includes('{{') || field.includes('$json'))
-    );
+    // Validar se há variáveis não substituídas ou dados inválidos
+    const hasUnsubstitutedVars = (value: string) => {
+      return value?.includes('{{') || value?.includes('$json') || value?.includes('=$json');
+    };
 
-    if (hasUnsubstitutedVariables) {
+    const isInvalidData = (value: string) => {
+      return !value || value.trim() === '' || value === '=' || value === '[object Object]' || value.startsWith('=');
+    };
+
+    if (hasUnsubstitutedVars(numero) || hasUnsubstitutedVars(mensagem) || hasUnsubstitutedVars(nome_contato || '')) {
       console.error('❌ Variáveis N8n não substituídas detectadas:', body);
       return new Response(
-        JSON.stringify({ 
-          error: 'Variáveis não substituídas detectadas. Configure o node "Set" no N8n antes de enviar.',
-          details: 'Use um node Set para mapear: numero, mensagem, nome_contato com valores reais do webhook.'
+        JSON.stringify({
+          error: 'Variáveis não substituídas detectadas no N8n.',
+          details: 'Configure o node "Set" corretamente. Exemplo: numero deve ser $json.numero (sem = no início)'
         }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    if (isInvalidData(numero) || isInvalidData(mensagem)) {
+      console.error('❌ Dados inválidos recebidos:', body);
+      return new Response(
+        JSON.stringify({
+          error: 'Dados inválidos recebidos.',
+          details: `numero: ${numero}, mensagem: ${mensagem}. Verifique o node Function no N8n.`,
+          fix: 'O node Function deve retornar strings válidas, não objetos ou valores vazios.'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
