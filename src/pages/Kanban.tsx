@@ -3,12 +3,11 @@ import { DndContext, DragEndEvent, closestCorners } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { LeadCard } from "@/components/funil/LeadCard";
 import { NovoLeadDialog } from "@/components/funil/NovoLeadDialog";
+import { NovoFunilDialog } from "@/components/funil/NovoFunilDialog";
 import { toast } from "sonner";
 
 interface Lead {
@@ -46,8 +45,6 @@ const Kanban = () => {
   const [funis, setFunis] = useState<Funil[]>([]);
   const [selectedFunil, setSelectedFunil] = useState<string>("");
   const [loading, setLoading] = useState(true);
-  const [novoFunilNome, setNovoFunilNome] = useState("");
-  const [dialogNovoFunil, setDialogNovoFunil] = useState(false);
 
   useEffect(() => {
     carregarDados();
@@ -101,23 +98,6 @@ const Kanban = () => {
     }
   };
 
-  const criarNovoFunil = async () => {
-    if (!novoFunilNome.trim()) return;
-
-    try {
-      await supabase.functions.invoke("api-funil-vendas", {
-        body: { action: "criar_funil", data: { nome: novoFunilNome } }
-      });
-
-      toast.success("Funil criado!");
-      setNovoFunilNome("");
-      setDialogNovoFunil(false);
-      carregarDados();
-    } catch (error) {
-      toast.error("Erro ao criar funil");
-    }
-  };
-
   const etapasFiltradas = etapas.filter((etapa) => etapa.funil_id === selectedFunil);
 
   if (loading) return <div className="flex items-center justify-center h-screen"><p>Carregando...</p></div>;
@@ -130,32 +110,7 @@ const Kanban = () => {
           <p className="text-muted-foreground">Gerencie seus leads por etapas</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={dialogNovoFunil} onOpenChange={setDialogNovoFunil}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Funil
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Criar Novo Funil</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>Nome do Funil</Label>
-                  <Input 
-                    value={novoFunilNome} 
-                    onChange={(e) => setNovoFunilNome(e.target.value)} 
-                    placeholder="Ex: Vendas Produto X"
-                  />
-                </div>
-                <Button onClick={criarNovoFunil} className="w-full">
-                  Criar
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <NovoFunilDialog onFunilCreated={carregarDados} />
           
           <NovoLeadDialog 
             onLeadCreated={carregarDados}
@@ -180,7 +135,8 @@ const Kanban = () => {
 
       {funis.length === 0 ? (
         <div className="text-center py-12">
-          <Button onClick={() => setDialogNovoFunil(true)}><Plus className="mr-2" />Criar Primeiro Funil</Button>
+          <p className="text-muted-foreground mb-4">Nenhum funil criado ainda</p>
+          <NovoFunilDialog onFunilCreated={carregarDados} />
         </div>
       ) : (
         <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
