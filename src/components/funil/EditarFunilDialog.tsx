@@ -70,19 +70,48 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
     }
 
     if (!etapa.id.startsWith("temp-")) {
-      // Etapa existente - deletar do banco
-      const { error } = await supabase
+      console.log(`🗑️ Removendo etapa "${etapa.nome}" (ID: ${etapa.id})`);
+      
+      // Verificar se há leads nesta etapa
+      const { data: leadsNaEtapa, error: checkError } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("etapa_id", etapa.id)
+        .limit(1);
+      
+      if (checkError) {
+        console.error("Erro ao verificar leads:", checkError);
+        toast.error("Erro ao verificar etapa");
+        return;
+      }
+
+      if (leadsNaEtapa && leadsNaEtapa.length > 0) {
+        toast.error("Não é possível excluir uma etapa que contém leads");
+        return;
+      }
+
+      // Deletar etapa do banco
+      const { error: deleteError } = await supabase
         .from("etapas")
         .delete()
         .eq("id", etapa.id);
       
-      if (error) {
+      if (deleteError) {
+        console.error("Erro ao deletar etapa:", deleteError);
         toast.error("Erro ao remover etapa");
         return;
       }
+      
+      console.log(`✅ Etapa "${etapa.nome}" removida do banco`);
+      toast.success("Etapa removida com sucesso");
     }
     
-    setEtapas(etapas.filter(e => e.id !== etapa.id));
+    // Remover da lista local e reordenar posições
+    const novasEtapas = etapas
+      .filter(e => e.id !== etapa.id)
+      .map((e, index) => ({ ...e, posicao: index }));
+    
+    setEtapas(novasEtapas);
   };
 
   const atualizarNomeEtapa = (id: string, novoNome: string) => {
@@ -94,25 +123,48 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
   };
 
   const excluirFunil = async () => {
-    if (!confirm("Tem certeza que deseja excluir este funil? Todas as etapas e leads associados serão perdidos!")) {
+    if (!confirm("⚠️ ATENÇÃO: Tem certeza que deseja excluir este funil?\n\nTodas as etapas e leads associados serão perdidos permanentemente!")) {
       return;
     }
 
     setLoading(true);
     try {
-      const { error } = await supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Não autenticado");
+        setLoading(false);
+        return;
+      }
+
+      console.log(`🗑️ Excluindo funil "${nomeFunil}" (ID: ${funilId})`);
+
+      // Verificar quantos leads serão afetados
+      const { data: leadsCount } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("funil_id", funilId);
+
+      console.log(`📊 Leads que serão excluídos: ${leadsCount || 0}`);
+
+      // Deletar funil (cascade irá deletar etapas e leads)
+      const { error: deleteError } = await supabase
         .from("funis")
         .delete()
-        .eq("id", funilId);
+        .eq("id", funilId)
+        .eq("owner_id", session.user.id);
 
-      if (error) throw error;
+      if (deleteError) {
+        console.error("❌ Erro ao excluir funil:", deleteError);
+        throw deleteError;
+      }
 
+      console.log("✅ Funil excluído com sucesso");
       toast.success("Funil excluído com sucesso!");
       setOpen(false);
       onFunilUpdated();
-    } catch (error) {
-      console.error("Erro ao excluir funil:", error);
-      toast.error("Erro ao excluir funil");
+    } catch (error: any) {
+      console.error("❌ Erro ao excluir funil:", error);
+      toast.error(`Erro ao excluir funil: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setLoading(false);
     }
@@ -150,13 +202,18 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
       console.log("=== ATUALIZANDO FUNIL ===");
       console.log("Funil ID:", funilId);
       console.log("Novo nome:", nomeFunil);
+      console.log("User ID:", session.user.id);
       console.log("Etapas a processar:", etapas);
 
-      // Atualizar nome do funil
+      // 1. Atualizar nome do funil
       const { error: funilError } = await supabase
         .from("funis")
-        .update({ nome: nomeFunil })
-        .eq("id", funilId);
+        .update({ 
+          nome: nomeFunil,
+          atualizado_em: new Date().toISOString()
+        })
+        .eq("id", funilId)
+        .eq("owner_id", session.user.id);
 
       if (funilError) {
         console.error("❌ Erro ao atualizar nome do funil:", funilError);
@@ -165,14 +222,13 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
 
       console.log("✅ Nome do funil atualizado");
 
-      // Processar etapas
+      // 2. Processar etapas
       for (let i = 0; i < etapas.length; i++) {
         const etapa = etapas[i];
         
         if (etapa.id.startsWith("temp-")) {
-          console.log(`➕ Criando nova etapa: "${etapa.nome}"`);
+          console.log(`➕ Criando nova etapa ${i + 1}: "${etapa.nome}"`);
           
-          // Nova etapa - criar diretamente
           const { data, error: etapaError } = await supabase
             .from("etapas")
             .insert({
@@ -184,36 +240,30 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
             .select();
           
           if (etapaError) {
-            console.error("❌ Erro ao criar etapa:", {
-              erro: etapaError,
-              etapa: {
-                nome: etapa.nome,
-                funil_id: funilId,
-                posicao: i,
-                cor: etapa.cor
-              }
-            });
-            toast.error(`Erro ao criar etapa "${etapa.nome}": ${etapaError.message}`);
+            console.error("❌ Erro ao criar etapa:", etapaError);
+            toast.error(`Erro ao criar etapa "${etapa.nome}"`);
             throw etapaError;
           }
           
           console.log(`✅ Etapa "${etapa.nome}" criada:`, data);
         } else {
-          console.log(`🔄 Atualizando etapa existente: "${etapa.nome}"`);
+          console.log(`🔄 Atualizando etapa ${i + 1}: "${etapa.nome}"`);
           
-          // Etapa existente - atualizar
-          const { error } = await supabase
+          const { error: updateError } = await supabase
             .from("etapas")
             .update({
               nome: etapa.nome,
               posicao: i,
-              cor: etapa.cor
+              cor: etapa.cor,
+              atualizado_em: new Date().toISOString()
             })
-            .eq("id", etapa.id);
+            .eq("id", etapa.id)
+            .eq("funil_id", funilId);
           
-          if (error) {
-            console.error("❌ Erro ao atualizar etapa:", error);
-            throw error;
+          if (updateError) {
+            console.error("❌ Erro ao atualizar etapa:", updateError);
+            toast.error(`Erro ao atualizar etapa "${etapa.nome}"`);
+            throw updateError;
           }
           
           console.log(`✅ Etapa "${etapa.nome}" atualizada`);
@@ -225,8 +275,8 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
       setOpen(false);
       onFunilUpdated();
     } catch (error: any) {
-      console.error("❌ Erro ao atualizar funil:", error);
-      toast.error(`Erro ao atualizar funil: ${error.message || 'Erro desconhecido'}`);
+      console.error("❌ Erro completo ao atualizar funil:", error);
+      toast.error(`Erro ao atualizar: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setLoading(false);
     }
