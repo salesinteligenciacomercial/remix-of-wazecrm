@@ -34,9 +34,12 @@ function transformEvolutionPayload(body: any) {
     const img = data.message.imageMessage;
     mensagem = img.caption || '[Imagem]';
     tipo_mensagem = 'image';
-    // Priorizar base64 quando disponível
-    if (img.base64) {
-      midia_url = `data:${img.mimetype || 'image/jpeg'};base64,${img.base64}`;
+    // Verificar múltiplos locais onde o base64 pode estar
+    const base64Content = data.message.base64 || img.base64;
+    if (base64Content) {
+      // Limpar possíveis prefixos data: que já venham no base64
+      const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
+      midia_url = `data:${img.mimetype || 'image/jpeg'};base64,${cleanBase64}`;
     } else {
       midia_url = img.url || null;
     }
@@ -44,9 +47,11 @@ function transformEvolutionPayload(body: any) {
     const audio = data.message.audioMessage;
     mensagem = '[Áudio]';
     tipo_mensagem = 'audio';
-    // Priorizar base64 quando disponível
-    if (audio.base64) {
-      midia_url = `data:${audio.mimetype || 'audio/ogg'};base64,${audio.base64}`;
+    // Verificar múltiplos locais onde o base64 pode estar
+    const base64Content = data.message.base64 || audio.base64;
+    if (base64Content) {
+      const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
+      midia_url = `data:${audio.mimetype || 'audio/ogg'};base64,${cleanBase64}`;
     } else {
       midia_url = audio.url || null;
     }
@@ -54,9 +59,11 @@ function transformEvolutionPayload(body: any) {
     const video = data.message.videoMessage;
     mensagem = video.caption || '[Vídeo]';
     tipo_mensagem = 'video';
-    // Priorizar base64 quando disponível
-    if (video.base64) {
-      midia_url = `data:${video.mimetype || 'video/mp4'};base64,${video.base64}`;
+    // Verificar múltiplos locais onde o base64 pode estar
+    const base64Content = data.message.base64 || video.base64;
+    if (base64Content) {
+      const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
+      midia_url = `data:${video.mimetype || 'video/mp4'};base64,${cleanBase64}`;
     } else {
       midia_url = video.url || null;
     }
@@ -65,9 +72,11 @@ function transformEvolutionPayload(body: any) {
     arquivo_nome = doc.fileName || 'arquivo';
     mensagem = `[Documento: ${arquivo_nome}]`;
     tipo_mensagem = 'document';
-    // Priorizar base64 quando disponível
-    if (doc.base64) {
-      midia_url = `data:${doc.mimetype || 'application/pdf'};base64,${doc.base64}`;
+    // Verificar múltiplos locais onde o base64 pode estar
+    const base64Content = data.message.base64 || doc.base64;
+    if (base64Content) {
+      const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
+      midia_url = `data:${doc.mimetype || 'application/pdf'};base64,${cleanBase64}`;
     } else {
       midia_url = doc.url || null;
     }

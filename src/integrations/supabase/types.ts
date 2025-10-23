@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       conversas: {
         Row: {
+          arquivo_nome: string | null
           created_at: string | null
           id: string
           mensagem: string
@@ -29,6 +30,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          arquivo_nome?: string | null
           created_at?: string | null
           id?: string
           mensagem: string
@@ -42,6 +44,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          arquivo_nome?: string | null
           created_at?: string | null
           id?: string
           mensagem?: string

@@ -439,6 +439,39 @@ export default function Conversas() {
     toast.success(updated[convId] ? "IA ativada" : "IA desativada");
   };
 
+  // Função auxiliar para download de mídias (data: URIs e URLs normais)
+  const downloadMedia = (url: string, fileName: string) => {
+    try {
+      if (url.startsWith('data:')) {
+        // Converter data: URI para blob e baixar
+        const arr = url.split(',');
+        const mimeMatch = arr[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      } else {
+        // URL normal - abrir em nova aba
+        window.open(url, '_blank');
+      }
+    } catch (error) {
+      console.error('Erro ao baixar mídia:', error);
+      toast.error("Não foi possível baixar o arquivo");
+    }
+  };
+
   const handleSendMessage = async (content?: string, type: Message["type"] = "text") => {
     const messageContent = content || messageInput.trim();
     if (!messageContent || !selectedConv) return;
@@ -900,14 +933,13 @@ export default function Conversas() {
                                 {msg.content && !msg.content.includes('[Imagem]') && (
                                   <p className="text-sm">{msg.content}</p>
                                 )}
-                                <a 
-                                  href={msg.mediaUrl} 
-                                  download={`imagem-${msg.id}.jpg`}
+                                <button 
+                                  onClick={() => downloadMedia(msg.mediaUrl!, `imagem-${msg.id}.jpg`)}
                                   className="text-xs underline opacity-70 hover:opacity-100 flex items-center gap-1"
                                 >
                                   <Download className="h-3 w-3" />
                                   Baixar imagem
-                                </a>
+                                </button>
                               </div>
                             )}
                             
@@ -921,14 +953,13 @@ export default function Conversas() {
                                   <source src={msg.mediaUrl} />
                                   Seu navegador não suporta reprodução de áudio.
                                 </audio>
-                                <a 
-                                  href={msg.mediaUrl} 
-                                  download={`audio-${msg.id}.ogg`}
+                                <button 
+                                  onClick={() => downloadMedia(msg.mediaUrl!, `audio-${msg.id}.ogg`)}
                                   className="text-xs underline opacity-70 hover:opacity-100 flex items-center gap-1"
                                 >
                                   <Download className="h-3 w-3" />
                                   Baixar áudio
-                                </a>
+                                </button>
                               </div>
                             )}
                             
@@ -940,16 +971,13 @@ export default function Conversas() {
                                     {msg.fileName || 'Documento'}
                                   </span>
                                 </div>
-                                <a 
-                                  href={msg.mediaUrl} 
-                                  download={msg.fileName || 'documento.pdf'}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                                <button 
+                                  onClick={() => downloadMedia(msg.mediaUrl!, msg.fileName || 'documento.pdf')}
                                   className="inline-flex items-center gap-2 text-xs bg-background/50 hover:bg-background px-3 py-2 rounded border transition-colors"
                                 >
                                   <Download className="h-3 w-3" />
                                   Baixar arquivo
-                                </a>
+                                </button>
                               </div>
                             )}
 
