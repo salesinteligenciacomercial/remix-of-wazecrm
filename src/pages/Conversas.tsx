@@ -18,7 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 interface Message {
   id: string;
   content: string;
-  type: "text" | "image" | "audio" | "pdf";
+  type: "text" | "image" | "audio" | "pdf" | "video";
   sender: "user" | "contact";
   timestamp: Date;
   delivered: boolean;
@@ -148,6 +148,11 @@ export default function Conversas() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Estados para modais de visualização
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState<{ url: string; name?: string } | null>(null);
 
   // Form states
   const [newQuickTitle, setNewQuickTitle] = useState("");
@@ -289,7 +294,7 @@ export default function Conversas() {
             return {
               id: m.id,
               content: msgContent,
-              type: msgType as "text" | "image" | "audio" | "pdf",
+              type: msgType as "text" | "image" | "audio" | "pdf" | "video",
               sender: m.status === 'Enviada' ? 'user' : 'contact' as "user" | "contact",
               timestamp: new Date(m.created_at),
               delivered: true,
@@ -914,22 +919,24 @@ export default function Conversas() {
                             
                             {msg.type === "image" && msg.mediaUrl && (
                               <div className="space-y-2">
-                                <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer">
-                                  <img
-                                    src={msg.mediaUrl}
-                                    alt="Imagem"
-                                    className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
-                                    style={{ maxHeight: '400px', maxWidth: '300px' }}
-                                    onError={(e) => {
-                                      console.error('Erro ao carregar imagem:', msg.mediaUrl);
-                                      (e.target as HTMLImageElement).style.display = 'none';
-                                      const parent = (e.target as HTMLElement).parentElement?.parentElement;
-                                      if (parent) {
-                                        parent.innerHTML = '<div class="flex items-center gap-2 text-muted-foreground"><svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg><span class="text-xs">Imagem não disponível</span></div>';
-                                      }
-                                    }}
-                                  />
-                                </a>
+                                <img
+                                  src={msg.mediaUrl}
+                                  alt="Imagem"
+                                  className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
+                                  style={{ maxHeight: '400px', maxWidth: '300px' }}
+                                  onClick={() => {
+                                    setSelectedMedia({ url: msg.mediaUrl!, name: `imagem-${msg.id}` });
+                                    setImageModalOpen(true);
+                                  }}
+                                  onError={(e) => {
+                                    console.error('Erro ao carregar imagem:', msg.mediaUrl);
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                    const parent = (e.target as HTMLElement).parentElement;
+                                    if (parent) {
+                                      parent.innerHTML = '<div class="flex items-center gap-2 text-muted-foreground"><svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg><span class="text-xs">Imagem não disponível</span></div>';
+                                    }
+                                  }}
+                                />
                                 {msg.content && !msg.content.includes('[Imagem]') && (
                                   <p className="text-sm">{msg.content}</p>
                                 )}
@@ -971,12 +978,50 @@ export default function Conversas() {
                                     {msg.fileName || 'Documento'}
                                   </span>
                                 </div>
+                                <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => {
+                                      setSelectedMedia({ url: msg.mediaUrl!, name: msg.fileName || 'documento.pdf' });
+                                      setPdfModalOpen(true);
+                                    }}
+                                    className="inline-flex items-center gap-2 text-xs bg-background/50 hover:bg-background px-3 py-2 rounded border transition-colors"
+                                  >
+                                    <FileText className="h-3 w-3" />
+                                    Visualizar
+                                  </button>
+                                  <button 
+                                    onClick={() => downloadMedia(msg.mediaUrl!, msg.fileName || 'documento.pdf')}
+                                    className="inline-flex items-center gap-2 text-xs bg-background/50 hover:bg-background px-3 py-2 rounded border transition-colors"
+                                  >
+                                    <Download className="h-3 w-3" />
+                                    Baixar
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {msg.type === "video" && msg.mediaUrl && (
+                              <div className="space-y-2">
+                                <video
+                                  controls
+                                  className="rounded-lg max-w-full h-auto"
+                                  style={{ maxHeight: '400px', maxWidth: '300px' }}
+                                  onError={(e) => {
+                                    console.error('Erro ao carregar vídeo:', msg.mediaUrl);
+                                  }}
+                                >
+                                  <source src={msg.mediaUrl} />
+                                  Seu navegador não suporta reprodução de vídeo.
+                                </video>
+                                {msg.content && !msg.content.includes('[Vídeo]') && (
+                                  <p className="text-sm">{msg.content}</p>
+                                )}
                                 <button 
-                                  onClick={() => downloadMedia(msg.mediaUrl!, msg.fileName || 'documento.pdf')}
-                                  className="inline-flex items-center gap-2 text-xs bg-background/50 hover:bg-background px-3 py-2 rounded border transition-colors"
+                                  onClick={() => downloadMedia(msg.mediaUrl!, `video-${msg.id}.mp4`)}
+                                  className="text-xs underline opacity-70 hover:opacity-100 flex items-center gap-1"
                                 >
                                   <Download className="h-3 w-3" />
-                                  Baixar arquivo
+                                  Baixar vídeo
                                 </button>
                               </div>
                             )}
@@ -998,6 +1043,12 @@ export default function Conversas() {
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <FileText className="h-4 w-4" />
                                 <span className="text-xs">Documento PDF</span>
+                              </div>
+                            )}
+                            {msg.type === "video" && !msg.mediaUrl && (
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <Video className="h-4 w-4" />
+                                <span className="text-xs">Vídeo anexado</span>
                               </div>
                             )}
 
@@ -1501,6 +1552,54 @@ export default function Conversas() {
           </div>
         )}
       </div>
+      
+      {/* Modal de Visualização de Imagem */}
+      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+          <div className="relative h-full">
+            <img 
+              src={selectedMedia?.url} 
+              alt={selectedMedia?.name || "Imagem"}
+              className="w-full h-full object-contain rounded-lg"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              className="absolute bottom-4 right-4"
+              onClick={() => selectedMedia && downloadMedia(selectedMedia.url, `${selectedMedia.name}.jpg`)}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Baixar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Visualização de PDF */}
+      <Dialog open={pdfModalOpen} onOpenChange={setPdfModalOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] p-2">
+          <DialogHeader className="px-4 pt-2">
+            <DialogTitle>{selectedMedia?.name || 'Documento PDF'}</DialogTitle>
+          </DialogHeader>
+          <div className="h-[75vh] w-full">
+            <iframe 
+              src={selectedMedia?.url} 
+              className="w-full h-full border-0 rounded"
+              title="PDF Viewer"
+            />
+          </div>
+          <div className="px-4 pb-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => selectedMedia && downloadMedia(selectedMedia.url, selectedMedia.name || 'documento.pdf')}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Baixar PDF
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
