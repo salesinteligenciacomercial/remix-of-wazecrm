@@ -832,27 +832,54 @@ export default function Conversas() {
                 <ScrollArea className="flex-1 p-6 bg-[#e5ddd5]" style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d9d9d9' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')" }}>
                   <div className="space-y-2 min-h-[200px]">
                     {selectedConv.messages.length === 0 ? (
-                      <div className="text-center text-gray-600 py-8 text-lg font-medium bg-yellow-100 rounded-lg">
-                        ⚠️ Nenhuma mensagem ainda
+                      <div className="text-center text-muted-foreground py-8">
+                        Nenhuma mensagem ainda
                       </div>
                     ) : (
-                      selectedConv.messages.map((msg, index) => (
+                      selectedConv.messages.map((msg) => (
                         <div
                           key={msg.id}
-                          className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"} mb-2`}
-                          style={{ border: '2px solid red', padding: '8px', minHeight: '50px' }}
+                          className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
                         >
-                        <div
-                          className={`max-w-[65%] rounded-lg px-3 py-2 shadow-sm ${
-                            msg.sender === "user"
-                              ? "bg-[#d9fdd3] text-foreground"
-                              : "bg-white text-foreground"
-                          }`}
-                        >
-                          <p className="text-sm font-bold text-red-600">MSG: {msg.content}</p>
-                          <p className="text-xs">Tipo: {msg.type} | Sender: {msg.sender}</p>
+                          <div
+                            className={`max-w-[65%] rounded-lg px-3 py-2 shadow-sm ${
+                              msg.sender === "user"
+                                ? "bg-[#d9fdd3] text-foreground"
+                                : "bg-white text-foreground"
+                            }`}
+                          >
+                            {msg.type === "text" && <p className="text-sm">{msg.content}</p>}
+                            {msg.type === "image" && (
+                              <div className="space-y-2">
+                                <ImageIcon className="h-8 w-8" />
+                                <p className="text-xs">Imagem anexada</p>
+                              </div>
+                            )}
+                            {msg.type === "audio" && (
+                              <div className="flex items-center gap-2">
+                                <Mic className="h-4 w-4" />
+                                <p className="text-xs">Áudio anexado</p>
+                              </div>
+                            )}
+                            {msg.type === "pdf" && (
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4" />
+                                <p className="text-xs">Documento PDF</p>
+                              </div>
+                            )}
+                            <div className="flex items-center justify-end gap-1 mt-1">
+                              <span className="text-[10px] text-muted-foreground">
+                                {msg.timestamp.toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                              {msg.sender === "user" && (
+                                msg.delivered ? <CheckCheck className="h-3 w-3 text-[#53bdeb]" /> : <Check className="h-3 w-3" />
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
                       ))
                     )}
                     <div ref={messagesEndRef} />
