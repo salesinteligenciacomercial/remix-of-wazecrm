@@ -271,23 +271,37 @@ export default function Conversas() {
         // Converter para formato local
         const novasConversas: Conversation[] = Object.entries(conversasAgrupadas).map(([numero, mensagens]) => {
           const ultima = mensagens[0];
-          return {
-            id: numero,
-            contactName: ultima.nome_contato || numero,
-            channel: (ultima.origem.toLowerCase() === 'whatsapp' ? 'whatsapp' : 
-                     ultima.origem.toLowerCase() === 'instagram' ? 'instagram' : 'facebook') as "whatsapp" | "instagram" | "facebook",
-            lastMessage: ultima.mensagem,
-            unread: mensagens.filter(m => m.status === 'Recebida').length,
-            status: ultima.status === 'Recebida' ? 'waiting' : 'answered' as "waiting" | "answered" | "resolved",
-            messages: [...mensagens].reverse().map(m => ({
+          
+          const messagensFormatadas = [...mensagens].reverse().map(m => {
+            console.log('🔍 Mensagem do banco:', {
               id: m.id,
-              content: m.mensagem,
+              mensagem: m.mensagem,
+              tipo: m.tipo_mensagem,
+              status: m.status
+            });
+            
+            return {
+              id: m.id,
+              content: m.mensagem || '', // Garantir que nunca seja undefined
               type: (m.tipo_mensagem || 'text') as "text" | "image" | "audio" | "pdf",
               sender: m.status === 'Enviada' ? 'user' : 'contact' as "user" | "contact",
               timestamp: new Date(m.created_at),
               delivered: true,
               fileUrl: m.midia_url || undefined,
-            })),
+            };
+          });
+          
+          console.log('📦 Conversa formatada:', numero, messagensFormatadas);
+          
+          return {
+            id: numero,
+            contactName: ultima.nome_contato || numero,
+            channel: (ultima.origem.toLowerCase() === 'whatsapp' ? 'whatsapp' : 
+                     ultima.origem.toLowerCase() === 'instagram' ? 'instagram' : 'facebook') as "whatsapp" | "instagram" | "facebook",
+            lastMessage: ultima.mensagem || '',
+            unread: mensagens.filter(m => m.status === 'Recebida').length,
+            status: ultima.status === 'Recebida' ? 'waiting' : 'answered' as "waiting" | "answered" | "resolved",
+            messages: messagensFormatadas,
             tags: [],
             funnelStage: "Novo",
           };
@@ -831,19 +845,12 @@ export default function Conversas() {
                 {/* Messages */}
                 <ScrollArea className="flex-1 p-6 bg-[#e5ddd5]" style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d9d9d9' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')" }}>
                   <div className="space-y-2 min-h-[200px]">
-                    {selectedConv.messages.length === 0 ? (
+                     {selectedConv.messages.length === 0 ? (
                       <div className="text-center text-muted-foreground py-8">
                         Nenhuma mensagem ainda
                       </div>
                     ) : (
-                      selectedConv.messages.map((msg) => {
-                        console.log('📩 Renderizando mensagem:', {
-                          id: msg.id,
-                          content: msg.content,
-                          type: msg.type,
-                          sender: msg.sender
-                        });
-                        return (
+                      selectedConv.messages.map((msg) => (
                         <div
                           key={msg.id}
                           className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
@@ -855,8 +862,9 @@ export default function Conversas() {
                                 : "bg-white text-foreground"
                             }`}
                           >
-                            {msg.type === "text" && msg.content && <p className="text-sm">{msg.content}</p>}
-                            {msg.type === "text" && !msg.content && <p className="text-sm text-red-500">Conteúdo vazio</p>}
+                            {msg.type === "text" && (
+                              <p className="text-sm whitespace-pre-wrap">{msg.content || 'Mensagem sem conteúdo'}</p>
+                            )}
                             {msg.type === "image" && (
                               <div className="space-y-2">
                                 <ImageIcon className="h-8 w-8" />
@@ -888,8 +896,7 @@ export default function Conversas() {
                             </div>
                           </div>
                         </div>
-                        );
-                      })
+                      ))
                     )}
                     <div ref={messagesEndRef} />
                   </div>
