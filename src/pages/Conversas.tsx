@@ -273,17 +273,19 @@ export default function Conversas() {
           const ultima = mensagens[0];
           
           const messagensFormatadas = [...mensagens].reverse().map(m => {
+            const msgContent = m.mensagem || 'Sem conteúdo';
             console.log('🔍 Mensagem do banco:', {
               id: m.id,
-              mensagem: m.mensagem,
+              mensagem: msgContent,
+              mensagem_original: m.mensagem,
               tipo: m.tipo_mensagem,
               status: m.status
             });
             
             return {
               id: m.id,
-              content: m.mensagem || '', // Garantir que nunca seja undefined
-              type: (m.tipo_mensagem || 'text') as "text" | "image" | "audio" | "pdf",
+              content: msgContent,
+              type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as "text" | "image" | "audio" | "pdf",
               sender: m.status === 'Enviada' ? 'user' : 'contact' as "user" | "contact",
               timestamp: new Date(m.created_at),
               delivered: true,
@@ -291,7 +293,12 @@ export default function Conversas() {
             };
           });
           
-          console.log('📦 Conversa formatada:', numero, messagensFormatadas);
+          console.log('📦 Conversa formatada completa:', {
+            numero,
+            totalMensagens: messagensFormatadas.length,
+            primeiroContent: messagensFormatadas[0]?.content,
+            todasMensagens: messagensFormatadas.map(m => ({ id: m.id, content: m.content }))
+          });
           
           return {
             id: numero,
@@ -849,8 +856,10 @@ export default function Conversas() {
                       <div className="text-center text-muted-foreground py-8">
                         Nenhuma mensagem ainda
                       </div>
-                    ) : (
-                      selectedConv.messages.map((msg) => (
+                     ) : (
+                      selectedConv.messages.map((msg) => {
+                        console.log('🎨 Renderizando mensagem:', { id: msg.id, content: msg.content, type: msg.type });
+                        return (
                         <div
                           key={msg.id}
                           className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
@@ -863,7 +872,7 @@ export default function Conversas() {
                             }`}
                           >
                             {msg.type === "text" && (
-                              <p className="text-sm whitespace-pre-wrap">{msg.content || 'Mensagem sem conteúdo'}</p>
+                              <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
                             )}
                             {msg.type === "image" && (
                               <div className="space-y-2">
@@ -896,7 +905,8 @@ export default function Conversas() {
                             </div>
                           </div>
                         </div>
-                      ))
+                        );
+                      })
                     )}
                     <div ref={messagesEndRef} />
                   </div>
