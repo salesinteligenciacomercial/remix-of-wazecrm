@@ -279,7 +279,7 @@ export default function Conversas() {
             lastMessage: ultima.mensagem,
             unread: mensagens.filter(m => m.status === 'Recebida').length,
             status: ultima.status === 'Recebida' ? 'waiting' : 'answered' as "waiting" | "answered" | "resolved",
-            messages: mensagens.reverse().map(m => ({
+            messages: [...mensagens].reverse().map(m => ({
               id: m.id,
               content: m.mensagem,
               type: (m.tipo_mensagem || 'text') as "text" | "image" | "audio" | "pdf",
