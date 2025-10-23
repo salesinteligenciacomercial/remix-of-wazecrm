@@ -299,11 +299,11 @@ export default function Conversas() {
           novasConversas.forEach(nova => {
             const existingIndex = merged.findIndex(c => c.id === nova.id);
             if (existingIndex >= 0) {
+              // PRIORIZAR mensagens do Supabase, manter metadados do localStorage
               merged[existingIndex] = {
-                ...merged[existingIndex],
-                ...nova,
-                tags: merged[existingIndex].tags || [],
-                funnelStage: merged[existingIndex].funnelStage || "Novo",
+                ...nova, // DADOS DO SUPABASE (mensagens, lastMessage, etc)
+                tags: merged[existingIndex].tags || nova.tags,
+                funnelStage: merged[existingIndex].funnelStage || nova.funnelStage,
                 responsavel: merged[existingIndex].responsavel,
                 produto: merged[existingIndex].produto,
                 valor: merged[existingIndex].valor,
@@ -313,6 +313,15 @@ export default function Conversas() {
               merged.push(nova);
             }
           });
+          
+          // ATUALIZAR selectedConv se ela estiver aberta
+          if (selectedConv) {
+            const updated = merged.find(c => c.id === selectedConv.id);
+            if (updated) {
+              setSelectedConv(updated);
+            }
+          }
+          
           return merged;
         });
       }
