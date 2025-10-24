@@ -178,12 +178,16 @@ export default function Conversas() {
   const usuarios = ["Você", "Ana Costa", "Pedro Lima", "Julia Santos", "Carlos Mendes"];
 
   useEffect(() => {
+    console.log('🚀 Componente Conversas montado');
     loadConversations();
     loadQuickMessages();
     loadReminders();
     loadScheduledMessages();
     loadMeetings();
     loadAiMode();
+    
+    // Carregar conversas do Supabase imediatamente
+    console.log('🔄 Carregando conversas iniciais...');
     loadSupabaseConversations();
 
     // Subscrever para atualizações em tempo real
@@ -197,14 +201,17 @@ export default function Conversas() {
           table: 'conversas'
         },
         (payload) => {
-          console.log('📩 Nova mensagem recebida:', payload);
+          console.log('📩 Nova mensagem recebida via realtime:', payload);
           loadSupabaseConversations();
           toast.success('Nova mensagem recebida do WhatsApp!');
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Status do canal realtime:', status);
+      });
 
     return () => {
+      console.log('🔌 Desconectando canal realtime');
       supabase.removeChannel(channel);
     };
   }, []);
@@ -832,7 +839,22 @@ export default function Conversas() {
       <div className="w-[380px] bg-muted/30 border-r border-border flex flex-col">
         {/* Header */}
         <div className="p-4 bg-background border-b border-border">
-          <h1 className="text-xl font-semibold text-foreground mb-4">Conversas</h1>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-xl font-semibold text-foreground">Conversas</h1>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => {
+                console.log('🔄 Botão Recarregar clicado');
+                loadSupabaseConversations();
+                toast.success('Recarregando conversas...');
+              }}
+              className="gap-2"
+            >
+              <MessageSquare className="h-4 w-4" />
+              Recarregar
+            </Button>
+          </div>
           
           {/* Search */}
           <div className="relative mb-4">
