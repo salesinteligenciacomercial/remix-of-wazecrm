@@ -1,10 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, Sparkles, TrendingUp, Target, Workflow, BarChart3, Send } from "lucide-react";
+import { Bot, Sparkles, TrendingUp, Target, Workflow, BarChart3, Send, Brain, Lightbulb } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FluxoAutomacaoBuilder } from "@/components/fluxos/FluxoAutomacaoBuilder";
 import { IAAgentCard } from "@/components/ia/IAAgentCard";
 import { PainelInsights } from "@/components/ia/PainelInsights";
 import { DisparoEmMassa } from "@/components/campanhas/DisparoEmMassa";
+import { TreinamentoIA } from "@/components/ia/TreinamentoIA";
+import { RecomendacoesIA } from "@/components/ia/RecomendacoesIA";
 import { useState } from "react";
 
 export default function IA() {
@@ -72,10 +74,18 @@ export default function IA() {
       </div>
 
       <Tabs defaultValue="agentes" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="agentes" className="gap-2">
             <Bot className="h-4 w-4" />
-            Agentes de IA
+            Agentes
+          </TabsTrigger>
+          <TabsTrigger value="treinamento" className="gap-2">
+            <Brain className="h-4 w-4" />
+            Treinamento
+          </TabsTrigger>
+          <TabsTrigger value="recomendacoes" className="gap-2">
+            <Lightbulb className="h-4 w-4" />
+            Recomendações
           </TabsTrigger>
           <TabsTrigger value="fluxos" className="gap-2">
             <Workflow className="h-4 w-4" />
@@ -155,6 +165,21 @@ export default function IA() {
 
         <TabsContent value="campanhas" className="space-y-4 mt-6">
           <DisparoEmMassa />
+        </TabsContent>
+
+        <TabsContent value="treinamento" className="space-y-4 mt-6">
+          <TreinamentoIA />
+        </TabsContent>
+
+        <TabsContent value="recomendacoes" className="space-y-4 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recomendações Inteligentes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RecomendacoesIA />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="insights" className="space-y-4 mt-6">

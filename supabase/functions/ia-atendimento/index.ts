@@ -95,6 +95,31 @@ Responda à mensagem do cliente de forma natural e inclua no final da resposta a
     // Remover a ação da resposta final
     const cleanResponse = aiResponse.replace(/\[(QUALIFICAR|AGENDAR|TRANSFERIR_HUMANO|CRIAR_TAREFA)\]/g, '').trim();
 
+    // Registrar no sistema de aprendizado
+    try {
+      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ia-aprendizado`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'record_interaction',
+          data: {
+            company_id: leadData?.company_id,
+            agent_type: 'atendimento',
+            conversation_id: conversationId,
+            lead_id: leadData?.id,
+            input_message: message,
+            ai_response: cleanResponse,
+            context_data: { action, leadData }
+          }
+        })
+      });
+    } catch (e) {
+      console.log('Erro ao registrar aprendizado:', e);
+    }
+
     console.log('✅ IA Atendimento - Resposta gerada:', { action, response: cleanResponse.substring(0, 50) });
 
     return new Response(

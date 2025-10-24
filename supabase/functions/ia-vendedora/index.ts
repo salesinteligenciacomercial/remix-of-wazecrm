@@ -96,6 +96,31 @@ Responda de forma persuasiva mas genuína. Máximo 4 linhas. Inclua ação entre
     const action = actionMatch ? actionMatch[1] : null;
     const cleanResponse = aiResponse.replace(/\[(QUALIFICAR_ORCAMENTO|ENVIAR_PROPOSTA|AGENDAR_REUNIAO|APLICAR_DESCONTO|SOLICITAR_APROVACAO)\]/g, '').trim();
 
+    // Registrar no sistema de aprendizado
+    try {
+      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ia-aprendizado`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'record_interaction',
+          data: {
+            company_id: leadData?.company_id,
+            agent_type: 'vendedora',
+            conversation_id: conversationId,
+            lead_id: leadData?.id,
+            input_message: message,
+            ai_response: cleanResponse,
+            context_data: { action, leadData, productInfo }
+          }
+        })
+      });
+    } catch (e) {
+      console.log('Erro ao registrar aprendizado:', e);
+    }
+
     console.log('✅ IA Vendedora - Resposta:', { action, response: cleanResponse.substring(0, 50) });
 
     return new Response(

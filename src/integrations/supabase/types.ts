@@ -353,6 +353,231 @@ export type Database = {
           },
         ]
       }
+      ia_configurations: {
+        Row: {
+          auto_optimization: boolean | null
+          collaborative_mode: boolean | null
+          company_id: string
+          created_at: string | null
+          custom_prompts: Json | null
+          id: string
+          learning_mode: boolean | null
+          training_preferences: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          auto_optimization?: boolean | null
+          collaborative_mode?: boolean | null
+          company_id: string
+          created_at?: string | null
+          custom_prompts?: Json | null
+          id?: string
+          learning_mode?: boolean | null
+          training_preferences?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          auto_optimization?: boolean | null
+          collaborative_mode?: boolean | null
+          company_id?: string
+          created_at?: string | null
+          custom_prompts?: Json | null
+          id?: string
+          learning_mode?: boolean | null
+          training_preferences?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ia_metrics: {
+        Row: {
+          agent_type: string
+          avg_confidence_score: number | null
+          avg_response_accuracy: number | null
+          company_id: string
+          conversions_assisted: number | null
+          corrections_needed: number | null
+          created_at: string | null
+          id: string
+          learning_progress: number | null
+          metric_date: string | null
+          metrics_data: Json | null
+          successful_interactions: number | null
+          total_interactions: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_type: string
+          avg_confidence_score?: number | null
+          avg_response_accuracy?: number | null
+          company_id: string
+          conversions_assisted?: number | null
+          corrections_needed?: number | null
+          created_at?: string | null
+          id?: string
+          learning_progress?: number | null
+          metric_date?: string | null
+          metrics_data?: Json | null
+          successful_interactions?: number | null
+          total_interactions?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_type?: string
+          avg_confidence_score?: number | null
+          avg_response_accuracy?: number | null
+          company_id?: string
+          conversions_assisted?: number | null
+          corrections_needed?: number | null
+          created_at?: string | null
+          id?: string
+          learning_progress?: number | null
+          metric_date?: string | null
+          metrics_data?: Json | null
+          successful_interactions?: number | null
+          total_interactions?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ia_patterns: {
+        Row: {
+          company_id: string
+          confidence_score: number | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_validated_at: string | null
+          pattern_data: Json
+          pattern_name: string
+          pattern_type: string
+          times_validated: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_validated_at?: string | null
+          pattern_data: Json
+          pattern_name: string
+          pattern_type: string
+          times_validated?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_validated_at?: string | null
+          pattern_data?: Json
+          pattern_name?: string
+          pattern_type?: string
+          times_validated?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ia_recommendations: {
+        Row: {
+          applied_at: string | null
+          applied_by: string | null
+          company_id: string
+          conversation_id: string | null
+          created_at: string | null
+          id: string
+          lead_id: string | null
+          priority: string | null
+          recommendation_data: Json | null
+          recommendation_text: string
+          recommendation_type: string
+          status: string | null
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_by?: string | null
+          company_id: string
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          lead_id?: string | null
+          priority?: string | null
+          recommendation_data?: Json | null
+          recommendation_text: string
+          recommendation_type: string
+          status?: string | null
+        }
+        Update: {
+          applied_at?: string | null
+          applied_by?: string | null
+          company_id?: string
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          lead_id?: string | null
+          priority?: string | null
+          recommendation_data?: Json | null
+          recommendation_text?: string
+          recommendation_type?: string
+          status?: string | null
+        }
+        Relationships: []
+      }
+      ia_training_data: {
+        Row: {
+          agent_type: string
+          ai_response: string
+          company_id: string
+          context_data: Json | null
+          conversation_id: string | null
+          created_at: string | null
+          feedback_score: number | null
+          human_correction: string | null
+          id: string
+          input_message: string
+          lead_id: string | null
+          resulted_in_conversion: boolean | null
+          updated_at: string | null
+          was_corrected: boolean | null
+        }
+        Insert: {
+          agent_type: string
+          ai_response: string
+          company_id: string
+          context_data?: Json | null
+          conversation_id?: string | null
+          created_at?: string | null
+          feedback_score?: number | null
+          human_correction?: string | null
+          id?: string
+          input_message: string
+          lead_id?: string | null
+          resulted_in_conversion?: boolean | null
+          updated_at?: string | null
+          was_corrected?: boolean | null
+        }
+        Update: {
+          agent_type?: string
+          ai_response?: string
+          company_id?: string
+          context_data?: Json | null
+          conversation_id?: string | null
+          created_at?: string | null
+          feedback_score?: number | null
+          human_correction?: string | null
+          id?: string
+          input_message?: string
+          lead_id?: string | null
+          resulted_in_conversion?: boolean | null
+          updated_at?: string | null
+          was_corrected?: boolean | null
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           company: string | null

@@ -94,6 +94,31 @@ Responda de forma clara e helpful. Máximo 5 linhas. Inclua ação entre colchet
     const action = actionMatch ? actionMatch[1] : null;
     const cleanResponse = aiResponse.replace(/\[(TUTORIAL|ABRIR_TICKET|ESCALAR|SOLICITAR_FEEDBACK|OFERECER_UPGRADE)\]/g, '').trim();
 
+    // Registrar no sistema de aprendizado
+    try {
+      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ia-aprendizado`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'record_interaction',
+          data: {
+            company_id: leadData?.company_id,
+            agent_type: 'suporte',
+            conversation_id: conversationId,
+            lead_id: leadData?.id,
+            input_message: message,
+            ai_response: cleanResponse,
+            context_data: { action, leadData, knowledgeBase }
+          }
+        })
+      });
+    } catch (e) {
+      console.log('Erro ao registrar aprendizado:', e);
+    }
+
     console.log('✅ IA Suporte - Resposta:', { action, response: cleanResponse.substring(0, 50) });
 
     return new Response(
