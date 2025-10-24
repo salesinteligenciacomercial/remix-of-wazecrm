@@ -58,51 +58,62 @@ export function TaskCard({ task, onDelete, onUpdate }: TaskCardProps) {
       style={style}
       {...attributes}
       {...listeners}
-      className="mb-3 cursor-grab active:cursor-grabbing transition-all hover:shadow-lg"
+      className="group relative mb-3 cursor-grab active:cursor-grabbing border-0 shadow-card hover:shadow-lg transition-all duration-300 overflow-hidden"
     >
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <CardTitle className="text-base font-medium">{task.title}</CardTitle>
-          <Badge className={getPriorityColor(task.priority)}>
+      <div className="absolute inset-0 bg-gradient-card opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      
+      <CardHeader className="relative pb-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 flex-1">
+            <div className={`h-1 w-1 rounded-full ${getPriorityColor(task.priority)} animate-pulse`} />
+            <CardTitle className="text-base font-semibold text-foreground">{task.title}</CardTitle>
+          </div>
+          <Badge className={`${getPriorityColor(task.priority)} border-0 text-white shadow-sm`}>
             {task.priority}
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-2">
+      
+      <CardContent className="relative space-y-3">
         {task.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
+          <p className="text-sm text-muted-foreground line-clamp-2 bg-muted/30 px-3 py-2 rounded-md">
             {task.description}
           </p>
         )}
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        
+        <div className="flex items-center gap-4 text-xs">
           {task.assignee_name && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5 text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">
               <User className="h-3 w-3" />
-              {task.assignee_name}
+              <span className="font-medium">{task.assignee_name}</span>
             </div>
           )}
           {task.due_date && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5 text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">
               <CalendarIcon className="h-3 w-3" />
-              {new Date(task.due_date).toLocaleDateString("pt-BR")}
+              <span className="font-medium">{new Date(task.due_date).toLocaleDateString("pt-BR")}</span>
             </div>
           )}
         </div>
+        
         {task.lead_name && (
-          <div className="flex items-center justify-between">
-            <Badge variant="outline">Lead: {task.lead_name}</Badge>
+          <div className="flex items-center justify-between pt-2 border-t border-border/50">
+            <Badge variant="outline" className="text-xs border-primary/20 text-primary">
+              Lead: {task.lead_name}
+            </Badge>
             {task.lead_id && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => navigate(`/leads`)}
-                className="h-6 w-6 p-0"
+                className="h-6 w-6 p-0 hover:bg-primary/10 text-primary transition-colors"
               >
                 <ExternalLink className="h-3 w-3" />
               </Button>
             )}
           </div>
         )}
+        
         <div className="flex justify-end gap-1 pt-2">
           <EditarTarefaDialog task={task} onTaskUpdated={onUpdate} />
           <Button
@@ -112,7 +123,7 @@ export function TaskCard({ task, onDelete, onUpdate }: TaskCardProps) {
               e.stopPropagation();
               onDelete(task.id);
             }}
-            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+            className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
           >
             <Trash2 className="h-3 w-3" />
           </Button>

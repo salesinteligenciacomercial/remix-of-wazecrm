@@ -34,31 +34,41 @@ export function Header() {
     .slice(0, 2);
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-40 border-b border-border/40 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 shadow-sm">
       <div className="flex h-16 items-center gap-4 px-6">
         {/* Search */}
-        <div className="flex-1 max-w-md">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="flex-1 max-w-xl">
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground group-hover:text-primary transition-colors" />
             <Input
-              placeholder="Buscar leads, conversas..."
-              className="pl-9"
+              placeholder="Buscar leads, conversas, tarefas..."
+              className="pl-9 border-border/40 bg-muted/30 hover:bg-muted/50 focus:bg-background transition-colors"
             />
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive" />
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="relative hover:bg-muted group transition-all"
+          >
+            <Bell className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive animate-pulse" />
           </Button>
 
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+          <div className="flex items-center gap-3 pl-3 border-l border-border/40">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-medium text-foreground">{userName}</p>
+              <p className="text-xs text-muted-foreground">Administrador</p>
+            </div>
+            <Avatar className="h-9 w-9 ring-2 ring-primary/10 hover:ring-primary/30 transition-all cursor-pointer">
+              <AvatarFallback className="bg-gradient-primary text-primary-foreground text-sm font-semibold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+          </div>
         </div>
       </div>
     </header>
