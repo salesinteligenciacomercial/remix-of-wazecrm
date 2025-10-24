@@ -189,6 +189,12 @@ export default function Conversas() {
     // Carregar conversas do Supabase imediatamente
     console.log('🔄 Carregando conversas iniciais...');
     loadSupabaseConversations();
+    
+    // Recarregar a cada 5 segundos para garantir sincronização
+    const intervalId = setInterval(() => {
+      console.log('⏰ Recarregamento automático...');
+      loadSupabaseConversations();
+    }, 5000);
 
     // Subscrever para atualizações em tempo real
     const channel = supabase
@@ -212,6 +218,7 @@ export default function Conversas() {
 
     return () => {
       console.log('🔌 Desconectando canal realtime');
+      clearInterval(intervalId);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -841,19 +848,25 @@ export default function Conversas() {
         <div className="p-4 bg-background border-b border-border">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-semibold text-foreground">Conversas</h1>
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => {
-                console.log('🔄 Botão Recarregar clicado');
-                loadSupabaseConversations();
-                toast.success('Recarregando conversas...');
-              }}
-              className="gap-2"
-            >
-              <MessageSquare className="h-4 w-4" />
-              Recarregar
-            </Button>
+            <div className="flex gap-2 items-center">
+              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
+                <MessageSquare className="h-3 w-3 mr-1" />
+                {conversations.length} conversas
+              </Badge>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => {
+                  console.log('🔄 Botão Recarregar clicado');
+                  loadSupabaseConversations();
+                  toast.success('Recarregando conversas...');
+                }}
+                className="gap-2"
+              >
+                <MessageSquare className="h-4 w-4" />
+                Recarregar
+              </Button>
+            </div>
           </div>
           
           {/* Search */}
