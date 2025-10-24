@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Phone, Mail, User, Trash2, MessageCircle, Building2, Tag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LeadActionsDialog } from "@/components/leads/LeadActionsDialog";
+import { useNavigate } from "react-router-dom";
 
 interface LeadCardProps {
   lead: {
@@ -19,6 +20,8 @@ interface LeadCardProps {
 }
 
 export function LeadCard({ lead, onDelete }: LeadCardProps) {
+  const navigate = useNavigate();
+  
   const {
     attributes,
     listeners,
@@ -39,10 +42,10 @@ export function LeadCard({ lead, onDelete }: LeadCardProps) {
     cursor: isDragging ? 'grabbing' : 'grab',
   } : undefined;
 
-  const abrirWhatsapp = () => {
+  const abrirConversa = () => {
     if (lead.telefone) {
       const numero = lead.telefone.replace(/\D/g, "");
-      window.open(`https://wa.me/55${numero}`, "_blank");
+      navigate(`/conversas?phone=${numero}&name=${encodeURIComponent(lead.nome)}`);
     }
   };
 
@@ -99,12 +102,12 @@ export function LeadCard({ lead, onDelete }: LeadCardProps) {
               className="h-7 px-2 text-success hover:text-success hover:bg-success/10 transition-all"
               onClick={(e) => {
                 e.stopPropagation();
-                abrirWhatsapp();
+                abrirConversa();
               }}
-              title="Abrir WhatsApp"
+              title="Abrir Conversa"
             >
               <MessageCircle className="h-3.5 w-3.5 mr-1" />
-              <span className="text-xs font-medium">WhatsApp</span>
+              <span className="text-xs font-medium">Conversa</span>
             </Button>
           </div>
         )}

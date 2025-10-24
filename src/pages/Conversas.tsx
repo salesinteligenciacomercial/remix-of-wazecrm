@@ -201,6 +201,43 @@ export default function Conversas() {
     console.log('🔄 Carregando conversas iniciais do Supabase...');
     loadSupabaseConversations();
 
+    // Verificar se veio de um lead (query param)
+    const urlParams = new URLSearchParams(window.location.search);
+    const phoneParam = urlParams.get('phone');
+    const nameParam = urlParams.get('name');
+    
+    if (phoneParam) {
+      // Formatar número com +55
+      const formattedPhone = phoneParam.startsWith('55') ? phoneParam : '55' + phoneParam;
+      
+      // Buscar ou criar conversa com este número
+      setTimeout(() => {
+        const existingConv = conversations.find(c => c.id === formattedPhone || c.phoneNumber === formattedPhone);
+        
+        if (existingConv) {
+          setSelectedConv(existingConv);
+        } else {
+          // Criar nova conversa
+          const newConv: Conversation = {
+            id: formattedPhone,
+            contactName: nameParam || formattedPhone,
+            channel: "whatsapp",
+            status: "waiting",
+            lastMessage: "Nova conversa",
+            unread: 0,
+            messages: [],
+            tags: [],
+            phoneNumber: formattedPhone,
+          };
+          setConversations(prev => [newConv, ...prev]);
+          setSelectedConv(newConv);
+        }
+        
+        // Limpar query params
+        window.history.replaceState({}, '', '/conversas');
+      }, 500);
+    }
+
     // Subscrever para atualizações em tempo real
     const channel = supabase
       .channel('conversas_realtime')
@@ -1028,37 +1065,27 @@ export default function Conversas() {
         {/* Conversations List */}
         <ScrollArea className="flex-1">
           {filteredConversations.map((conv) => (
-            <div
+            <ConversationListItem
               key={conv.id}
-              className={`p-4 border-b border-border cursor-pointer transition-colors hover:bg-muted/50 ${
-                selectedConv?.id === conv.id ? "bg-muted/70" : ""
-              }`}
+              contactName={conv.contactName}
+              channel={conv.channel}
+              lastMessage={conv.lastMessage}
+              timestamp={new Date(conv.messages[conv.messages.length - 1]?.timestamp)}
+              unread={conv.unread}
+              isSelected={selectedConv?.id === conv.id}
+              avatarUrl={conv.avatarUrl}
               onClick={() => {
                 console.log('🔍 Conversa selecionada:', conv.id, 'Mensagens:', conv.messages.length);
                 setSelectedConv(conv);
+                // Marcar mensagens como lidas
+                if (conv.unread > 0) {
+                  const updated = conversations.map(c => 
+                    c.id === conv.id ? { ...c, unread: 0 } : c
+                  );
+                  saveConversations(updated);
+                }
               }}
-            >
-              <div className="flex items-start justify-between mb-1">
-                <div className="flex items-center gap-2">
-                  {getChannelIcon(conv.channel)}
-                  <span className="font-medium text-sm text-foreground">{conv.contactName}</span>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(conv.messages[conv.messages.length - 1]?.timestamp).toLocaleTimeString("pt-BR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  {conv.unread > 0 && (
-                    <Badge className="bg-[#25D366] hover:bg-[#25D366] text-white text-xs h-5 min-w-5 rounded-full flex items-center justify-center">
-                      {conv.unread}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground truncate">{conv.lastMessage}</p>
-            </div>
+            />
           ))}
         </ScrollArea>
       </div>
@@ -1067,59 +1094,16 @@ export default function Conversas() {
       <div className="flex-1 flex flex-col">
         {selectedConv ? (
           <>
-            {/* Chat Header com info do lead */}
-            <div className="bg-background border-b border-border px-6 py-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                    <User className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <h2 className="text-foreground font-medium">{selectedConv.contactName}</h2>
-                    <div className="flex items-center gap-2">
-                      {getChannelIcon(selectedConv.channel)}
-                      <span className="text-xs text-muted-foreground capitalize">{selectedConv.channel}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon">
-                    <Phone className="h-5 w-5" />
-                  </Button>
-                  <Button variant="ghost" size="icon">
-                    <Video className="h-5 w-5" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => setShowInfoPanel(!showInfoPanel)}
-                  >
-                    <Info className="h-5 w-5" />
-                  </Button>
-                </div>
-              </div>
-              {/* Informações do Lead */}
-              <div className="flex items-center gap-4 text-sm">
-                {selectedConv.produto && (
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <FileText className="h-3.5 w-3.5" />
-                    <span>{selectedConv.produto}</span>
-                  </div>
-                )}
-                {selectedConv.valor && (
-                  <div className="flex items-center gap-1 text-success font-medium">
-                    <DollarSign className="h-3.5 w-3.5" />
-                    <span>{selectedConv.valor}</span>
-                  </div>
-                )}
-                {selectedConv.responsavel && (
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <User className="h-3.5 w-3.5" />
-                    <span>{selectedConv.responsavel}</span>
-                  </div>
-                )}
-              </div>
-            </div>
+            <ConversationHeader
+              contactName={selectedConv.contactName}
+              channel={selectedConv.channel}
+              avatarUrl={selectedConv.avatarUrl}
+              produto={selectedConv.produto}
+              valor={selectedConv.valor}
+              responsavel={selectedConv.responsavel}
+              showInfoPanel={showInfoPanel}
+              onToggleInfoPanel={() => setShowInfoPanel(!showInfoPanel)}
+            />
 
             <div className="flex flex-1 overflow-hidden">
               {/* Messages Area */}
@@ -1132,189 +1116,27 @@ export default function Conversas() {
                         Nenhuma mensagem ainda
                       </div>
                      ) : (
-                      selectedConv.messages.map((msg) => {
-                        return (
-                        <div
+                      selectedConv.messages.map((msg) => (
+                        <MessageItem
                           key={msg.id}
-                          className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
-                        >
-                          <div
-                            className={`max-w-[65%] rounded-lg px-3 py-2 shadow-sm ${
-                              msg.sender === "user"
-                                ? "bg-[#d9fdd3] text-foreground"
-                                : "bg-white text-foreground"
-                            }`}
-                          >
-                            {msg.type === "text" && (
-                              <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
-                            )}
-                            
-                            {msg.type === "image" && msg.mediaUrl && (
-                              <div className="space-y-2">
-                                <img
-                                  src={msg.mediaUrl}
-                                  alt="Imagem"
-                                  className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
-                                  style={{ maxHeight: '400px', maxWidth: '300px' }}
-                                  onClick={() => {
-                                    setSelectedMedia({ url: msg.mediaUrl!, name: `imagem-${msg.id}` });
-                                    setImageModalOpen(true);
-                                  }}
-                                  onError={(e) => {
-                                    console.error('Erro ao carregar imagem:', msg.mediaUrl);
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                    const parent = (e.target as HTMLElement).parentElement;
-                                    if (parent) {
-                                      parent.innerHTML = '<div class="flex items-center gap-2 text-muted-foreground"><svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg><span class="text-xs">Imagem não disponível</span></div>';
-                                    }
-                                  }}
-                                />
-                                {msg.content && !msg.content.includes('[Imagem]') && (
-                                  <p className="text-sm">{msg.content}</p>
-                                )}
-                                <button 
-                                  onClick={() => downloadMedia(msg.mediaUrl!, `imagem-${msg.id}.jpg`)}
-                                  className="text-xs underline opacity-70 hover:opacity-100 flex items-center gap-1"
-                                >
-                                  <Download className="h-3 w-3" />
-                                  Baixar imagem
-                                </button>
-                              </div>
-                            )}
-                            
-                            {msg.type === "audio" && msg.mediaUrl && (
-                              <div className="space-y-2 min-w-[250px]">
-                                <div className="flex items-center gap-2">
-                                  <Volume2 className="h-4 w-4" />
-                                  <span className="text-sm font-medium">Mensagem de áudio</span>
-                                </div>
-                                <audio controls className="w-full h-8" style={{ maxWidth: '300px' }}>
-                                  <source src={msg.mediaUrl} />
-                                  Seu navegador não suporta reprodução de áudio.
-                                </audio>
-                                <div className="flex gap-2 flex-wrap">
-                                  <button 
-                                    onClick={() => downloadMedia(msg.mediaUrl!, `audio-${msg.id}.ogg`)}
-                                    className="text-xs underline opacity-70 hover:opacity-100 flex items-center gap-1"
-                                  >
-                                    <Download className="h-3 w-3" />
-                                    Baixar áudio
-                                  </button>
-                                  <button 
-                                    onClick={() => transcreverAudio(msg.id, msg.mediaUrl!)}
-                                    disabled={transcrevendo === msg.id}
-                                    className="text-xs underline opacity-70 hover:opacity-100 flex items-center gap-1 disabled:opacity-30"
-                                  >
-                                    <FileText className="h-3 w-3" />
-                                    {transcrevendo === msg.id ? "Transcrevendo..." : "Transcrever"}
-                                  </button>
-                                </div>
-                                {msg.transcricao && (
-                                  <div className="mt-2 p-2 bg-muted/50 rounded text-xs border border-border">
-                                    <strong className="text-foreground">Transcrição:</strong>
-                                    <p className="mt-1 text-muted-foreground">{msg.transcricao}</p>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            
-                            {msg.type === "pdf" && msg.mediaUrl && (
-                              <div className="space-y-2 min-w-[200px]">
-                                <div className="flex items-center gap-2">
-                                  <FileText className="h-5 w-5" />
-                                  <span className="text-sm font-medium">
-                                    {msg.fileName || 'Documento'}
-                                  </span>
-                                </div>
-                                <div className="flex gap-2">
-                                  <button 
-                                    onClick={() => {
-                                      setSelectedMedia({ url: msg.mediaUrl!, name: msg.fileName || 'documento.pdf' });
-                                      setPdfModalOpen(true);
-                                    }}
-                                    className="inline-flex items-center gap-2 text-xs bg-background/50 hover:bg-background px-3 py-2 rounded border transition-colors"
-                                  >
-                                    <FileText className="h-3 w-3" />
-                                    Visualizar
-                                  </button>
-                                  <button 
-                                    onClick={() => downloadMedia(msg.mediaUrl!, msg.fileName || 'documento.pdf')}
-                                    className="inline-flex items-center gap-2 text-xs bg-background/50 hover:bg-background px-3 py-2 rounded border transition-colors"
-                                  >
-                                    <Download className="h-3 w-3" />
-                                    Baixar
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {msg.type === "video" && msg.mediaUrl && (
-                              <div className="space-y-2">
-                                <video
-                                  controls
-                                  className="rounded-lg max-w-full h-auto"
-                                  style={{ maxHeight: '400px', maxWidth: '300px' }}
-                                  onError={(e) => {
-                                    console.error('Erro ao carregar vídeo:', msg.mediaUrl);
-                                  }}
-                                >
-                                  <source src={msg.mediaUrl} />
-                                  Seu navegador não suporta reprodução de vídeo.
-                                </video>
-                                {msg.content && !msg.content.includes('[Vídeo]') && (
-                                  <p className="text-sm">{msg.content}</p>
-                                )}
-                                <button 
-                                  onClick={() => downloadMedia(msg.mediaUrl!, `video-${msg.id}.mp4`)}
-                                  className="text-xs underline opacity-70 hover:opacity-100 flex items-center gap-1"
-                                >
-                                  <Download className="h-3 w-3" />
-                                  Baixar vídeo
-                                </button>
-                              </div>
-                            )}
-
-                            {/* Fallback para mídias sem URL */}
-                            {msg.type === "image" && !msg.mediaUrl && (
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <ImageIcon className="h-8 w-8" />
-                                <span className="text-xs">Imagem anexada</span>
-                              </div>
-                            )}
-                            {msg.type === "audio" && !msg.mediaUrl && (
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <Mic className="h-4 w-4" />
-                                <span className="text-xs">Áudio anexado</span>
-                              </div>
-                            )}
-                            {msg.type === "pdf" && !msg.mediaUrl && (
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <FileText className="h-4 w-4" />
-                                <span className="text-xs">Documento PDF</span>
-                              </div>
-                            )}
-                            {msg.type === "video" && !msg.mediaUrl && (
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <Video className="h-4 w-4" />
-                                <span className="text-xs">Vídeo anexado</span>
-                              </div>
-                            )}
-
-                            <div className="flex items-center justify-end gap-1 mt-1">
-                              <span className="text-[10px] text-muted-foreground">
-                                {msg.timestamp.toLocaleTimeString("pt-BR", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </span>
-                              {msg.sender === "user" && (
-                                msg.delivered ? <CheckCheck className="h-3 w-3 text-[#53bdeb]" /> : <Check className="h-3 w-3" />
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        );
-                      })
+                          message={msg}
+                          onDownload={downloadMedia}
+                          onTranscribe={transcreverAudio}
+                          onImageClick={(url, name) => {
+                            setSelectedMedia({ url, name });
+                            setImageModalOpen(true);
+                          }}
+                          onPdfClick={(url, name) => {
+                            setSelectedMedia({ url, name });
+                            setPdfModalOpen(true);
+                          }}
+                          isTranscribing={transcrevendo === msg.id}
+                          onReply={handleReply}
+                          onEdit={handleEdit}
+                          onDelete={handleDelete}
+                          onReact={handleReact}
+                        />
+                      ))
                     )}
                     <div ref={messagesEndRef} />
                   </div>
@@ -1322,43 +1144,8 @@ export default function Conversas() {
 
                 {/* Input Area */}
                 <div className="bg-background border-t border-border p-4">
-                  <div className="flex items-center gap-3">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <Paperclip className="h-5 w-5" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Anexar arquivo</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-2">
-                          <Button 
-                            onClick={() => handleFileAttach("image")} 
-                            className="w-full justify-start"
-                            variant="outline"
-                          >
-                            <ImageIcon className="h-4 w-4 mr-2" /> Enviar imagem
-                          </Button>
-                          <Button 
-                            onClick={() => handleFileAttach("audio")} 
-                            className="w-full justify-start"
-                            variant="outline"
-                          >
-                            <Mic className="h-4 w-4 mr-2" /> Enviar áudio
-                          </Button>
-                          <Button 
-                            onClick={() => handleFileAttach("pdf")} 
-                            className="w-full justify-start"
-                            variant="outline"
-                          >
-                            <FileUp className="h-4 w-4 mr-2" /> Enviar documento (PDF)
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-
+                  <div className="flex items-center gap-2">
+                    <MediaUpload onSendMedia={handleSendMedia} />
                     <Input
                       placeholder="Escreva sua mensagem..."
                       value={messageInput}
@@ -1366,6 +1153,7 @@ export default function Conversas() {
                       onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                       className="flex-1"
                     />
+                    <AudioRecorder onSendAudio={handleSendAudio} />
                     <Button 
                       onClick={() => handleSendMessage()} 
                       size="icon"
