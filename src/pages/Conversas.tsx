@@ -246,9 +246,25 @@ export default function Conversas() {
     try {
       console.log('🔄 [SUPABASE] Iniciando carregamento de conversas...');
       
+      // Buscar company_id do usuário autenticado
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .single();
+
+      if (!userRole?.company_id) {
+        console.warn('⚠️ Usuário sem company_id');
+        return;
+      }
+
+      console.log('🏢 Company ID do usuário:', userRole.company_id);
+      
+      // Buscar APENAS conversas da company do usuário
       const { data, error } = await supabase
         .from('conversas')
         .select('*')
+        .eq('company_id', userRole.company_id)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -259,8 +275,14 @@ export default function Conversas() {
       
       console.log('✅ [SUPABASE] Conversas carregadas:', {
         total: data?.length || 0,
+        companyId: userRole.company_id,
         primeiraConversa: data?.[0],
-        todasConversas: data?.map(d => ({ numero: d.numero, mensagem: d.mensagem }))
+        ultimasCinco: data?.slice(0, 5).map(d => ({ 
+          numero: d.numero, 
+          mensagem: d.mensagem, 
+          status: d.status,
+          created_at: d.created_at 
+        }))
       });
 
       // Filtrar mensagens com variáveis N8n não substituídas ou dados inválidos
@@ -627,6 +649,13 @@ export default function Conversas() {
       console.log('✅ Resposta Evolution API:', data);
       toast.success("Mensagem enviada para WhatsApp!");
 
+      // Buscar company_id do usuário
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .single();
+
       // Salvar no Supabase após sucesso
       const { error: dbError } = await supabase.from('conversas').insert([{
         numero: selectedConv.id,
@@ -636,10 +665,14 @@ export default function Conversas() {
         status: 'Enviada',
         tipo_mensagem: type,
         nome_contato: selectedConv.contactName,
+        company_id: userRole?.company_id, // IMPORTANTE: Adicionar company_id
       }]);
 
       if (dbError) {
-        console.error('Erro ao salvar mensagem no banco:', dbError);
+        console.error('❌ Erro ao salvar mensagem no banco:', dbError);
+        toast.error('Erro ao salvar mensagem no histórico');
+      } else {
+        console.log('✅ Mensagem salva no Supabase com company_id:', userRole?.company_id);
       }
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
