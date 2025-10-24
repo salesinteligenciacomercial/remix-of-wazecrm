@@ -28,6 +28,7 @@ interface Message {
   sender: "user" | "contact";
   timestamp: Date;
   delivered: boolean;
+  read?: boolean;
   mediaUrl?: string;
   fileName?: string;
   transcricao?: string;
@@ -294,6 +295,35 @@ export default function Conversas() {
     try {
       console.log('🔄 [SUPABASE] Iniciando carregamento de conversas...');
       
+      // Função para buscar foto do perfil via Evolution API
+      const getProfilePicture = async (numero: string): Promise<string | undefined> => {
+        try {
+          const evolutionUrl = import.meta.env.VITE_EVOLUTION_API_URL || 'https://evo.easysend.app';
+          const instanceName = import.meta.env.VITE_EVOLUTION_INSTANCE || 'easycrm';
+          const apiKey = import.meta.env.VITE_EVOLUTION_API_KEY;
+
+          const response = await fetch(
+            `${evolutionUrl}/chat/fetchProfilePictureUrl/${instanceName}`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': apiKey,
+              },
+              body: JSON.stringify({ number: numero }),
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            return data.profilePictureUrl || undefined;
+          }
+        } catch (error) {
+          console.log('Não foi possível buscar foto do perfil:', numero);
+        }
+        return undefined;
+      };
+      
       // Buscar company_id do usuário autenticado
       const { data: userRole } = await supabase
         .from('user_roles')
@@ -362,55 +392,62 @@ export default function Conversas() {
         }, {});
 
         // Converter para formato local
-        const novasConversas: Conversation[] = Object.entries(conversasAgrupadas).map(([numero, mensagens]) => {
-          const ultima = mensagens[0];
+        const novasConversas: Conversation[] = await Promise.all(
+          Object.entries(conversasAgrupadas).map(async ([numero, mensagens]) => {
+            const ultima = mensagens[0];
+            
+            // Buscar foto do perfil
+            const avatarUrl = await getProfilePicture(numero);
+            
+            const messagensFormatadas = [...mensagens].reverse().map(m => {
+              const msgContent = m.mensagem || 'Sem conteúdo';
+              let msgType = m.tipo_mensagem || 'text';
+              
+              // Normalizar tipos
+              if (msgType === 'texto') msgType = 'text';
+              if (msgType === 'document') msgType = 'pdf';
+              
+              // Extrair nome do arquivo de documentos
+              let fileName: string | undefined;
+              if (msgType === 'pdf' && msgContent.includes('[Documento:')) {
+                fileName = msgContent.match(/\[Documento: (.+)\]/)?.[1];
+              }
+              
+              return {
+                id: m.id,
+                content: msgContent,
+                type: msgType as "text" | "image" | "audio" | "pdf" | "video",
+                sender: m.status === 'Enviada' ? 'user' : 'contact' as "user" | "contact",
+                timestamp: new Date(m.created_at),
+                delivered: true,
+                read: m.status === 'Lida',
+                mediaUrl: m.midia_url || undefined,
+                fileName: fileName,
+              };
+            });
           
-          const messagensFormatadas = [...mensagens].reverse().map(m => {
-            const msgContent = m.mensagem || 'Sem conteúdo';
-            let msgType = m.tipo_mensagem || 'text';
-            
-            // Normalizar tipos
-            if (msgType === 'texto') msgType = 'text';
-            if (msgType === 'document') msgType = 'pdf';
-            
-            // Extrair nome do arquivo de documentos
-            let fileName: string | undefined;
-            if (msgType === 'pdf' && msgContent.includes('[Documento:')) {
-              fileName = msgContent.match(/\[Documento: (.+)\]/)?.[1];
-            }
+            console.log('📦 Conversa formatada completa:', {
+              numero,
+              totalMensagens: messagensFormatadas.length,
+              primeiroContent: messagensFormatadas[0]?.content,
+              todasMensagens: messagensFormatadas.map(m => ({ id: m.id, content: m.content }))
+            });
             
             return {
-              id: m.id,
-              content: msgContent,
-              type: msgType as "text" | "image" | "audio" | "pdf" | "video",
-              sender: m.status === 'Enviada' ? 'user' : 'contact' as "user" | "contact",
-              timestamp: new Date(m.created_at),
-              delivered: true,
-              mediaUrl: m.midia_url || undefined,
-              fileName: fileName,
+              id: numero,
+              contactName: ultima.nome_contato || numero,
+              channel: (ultima.origem.toLowerCase() === 'whatsapp' ? 'whatsapp' : 
+                       ultima.origem.toLowerCase() === 'instagram' ? 'instagram' : 'facebook') as "whatsapp" | "instagram" | "facebook",
+              lastMessage: ultima.mensagem || '',
+              unread: mensagens.filter(m => m.status === 'Recebida').length,
+              status: ultima.status === 'Recebida' ? 'waiting' : 'answered' as "waiting" | "answered" | "resolved",
+              messages: messagensFormatadas,
+              tags: [],
+              funnelStage: "Novo",
+              avatarUrl: avatarUrl,
             };
-          });
-          
-          console.log('📦 Conversa formatada completa:', {
-            numero,
-            totalMensagens: messagensFormatadas.length,
-            primeiroContent: messagensFormatadas[0]?.content,
-            todasMensagens: messagensFormatadas.map(m => ({ id: m.id, content: m.content }))
-          });
-          
-          return {
-            id: numero,
-            contactName: ultima.nome_contato || numero,
-            channel: (ultima.origem.toLowerCase() === 'whatsapp' ? 'whatsapp' : 
-                     ultima.origem.toLowerCase() === 'instagram' ? 'instagram' : 'facebook') as "whatsapp" | "instagram" | "facebook",
-            lastMessage: ultima.mensagem || '',
-            unread: mensagens.filter(m => m.status === 'Recebida').length,
-            status: ultima.status === 'Recebida' ? 'waiting' : 'answered' as "waiting" | "answered" | "resolved",
-            messages: messagensFormatadas,
-            tags: [],
-            funnelStage: "Novo",
-          };
-        });
+          })
+        );
 
         console.log('📱 Novas conversas do Supabase:', novasConversas.length);
         novasConversas.forEach(conv => {
@@ -691,19 +728,163 @@ export default function Conversas() {
 
   const handleSendMedia = async (file: File, caption: string, type: string) => {
     if (!selectedConv) return;
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('numero', selectedConv.id);
-    formData.append('caption', caption);
-    
-    toast.info(`Enviando ${type}...`);
-    handleSendMessage(caption || `[${type.toUpperCase()}]`, type as Message["type"]);
+
+    const formattedPhone = formatPhoneNumber(selectedConv.id);
+
+    // Definir texto correto por tipo
+    const tipoMensagem: { [key: string]: string } = {
+      'image': 'Imagem enviada',
+      'audio': 'Áudio enviado',
+      'pdf': 'Documento enviado',
+      'video': 'Vídeo enviado',
+      'document': 'Documento enviado'
+    };
+
+    try {
+      const evolutionUrl = import.meta.env.VITE_EVOLUTION_API_URL || 'https://evo.easysend.app';
+      const instanceName = import.meta.env.VITE_EVOLUTION_INSTANCE || 'easycrm';
+      const apiKey = import.meta.env.VITE_EVOLUTION_API_KEY;
+
+      // Converter arquivo para base64
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64String = reader.result as string;
+          resolve(base64String.split(',')[1]);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      const mediaMessage = {
+        number: formattedPhone,
+        mediatype: type,
+        mimetype: file.type,
+        caption: caption || '',
+        fileName: file.name,
+        media: base64,
+      };
+
+      const response = await fetch(`${evolutionUrl}/message/sendMedia/${instanceName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey,
+        },
+        body: JSON.stringify(mediaMessage),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao enviar mídia');
+      }
+
+      const newMessage: Message = {
+        id: Date.now().toString(),
+        content: caption || tipoMensagem[type] || 'Arquivo enviado',
+        type: type as "image" | "audio" | "pdf" | "video",
+        sender: "user",
+        timestamp: new Date(),
+        delivered: false,
+        read: false,
+        mediaUrl: URL.createObjectURL(file),
+        fileName: file.name,
+      };
+
+      const updatedConversations = conversations.map((conv) =>
+        conv.id === selectedConv.id
+          ? {
+              ...conv,
+              messages: [...conv.messages, newMessage],
+              lastMessage: tipoMensagem[type] || newMessage.content,
+              status: "answered" as const,
+              unread: 0,
+            }
+          : conv
+      );
+
+      saveConversations(updatedConversations);
+      setSelectedConv({
+        ...selectedConv,
+        messages: [...selectedConv.messages, newMessage],
+      });
+      toast.success(tipoMensagem[type] || "Mídia enviada!");
+    } catch (error) {
+      console.error("Erro ao enviar mídia:", error);
+      toast.error("Erro ao enviar mídia");
+    }
   };
 
   const handleSendAudio = async (audioBlob: Blob) => {
-    const file = new File([audioBlob], `audio-${Date.now()}.ogg`, { type: 'audio/ogg' });
-    await handleSendMedia(file, "", "audio");
+    if (!selectedConv) return;
+
+    const formattedPhone = formatPhoneNumber(selectedConv.id);
+
+    try {
+      const evolutionUrl = import.meta.env.VITE_EVOLUTION_API_URL || 'https://evo.easysend.app';
+      const instanceName = import.meta.env.VITE_EVOLUTION_INSTANCE || 'easycrm';
+      const apiKey = import.meta.env.VITE_EVOLUTION_API_KEY;
+
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64String = reader.result as string;
+          resolve(base64String.split(',')[1]);
+        };
+        reader.readAsDataURL(audioBlob);
+      });
+
+      const audioMessage = {
+        number: formattedPhone,
+        mediatype: 'audio',
+        mimetype: 'audio/ogg; codecs=opus',
+        media: base64,
+      };
+
+      const response = await fetch(`${evolutionUrl}/message/sendMedia/${instanceName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey,
+        },
+        body: JSON.stringify(audioMessage),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao enviar áudio');
+      }
+
+      const newMessage: Message = {
+        id: Date.now().toString(),
+        content: "Áudio enviado",
+        type: "audio",
+        sender: "user",
+        timestamp: new Date(),
+        delivered: false,
+        read: false,
+        mediaUrl: URL.createObjectURL(audioBlob),
+      };
+
+      const updatedConversations = conversations.map((conv) =>
+        conv.id === selectedConv.id
+          ? {
+              ...conv,
+              messages: [...conv.messages, newMessage],
+              lastMessage: "Áudio enviado",
+              status: "answered" as const,
+              unread: 0,
+            }
+          : conv
+      );
+
+      saveConversations(updatedConversations);
+      setSelectedConv({
+        ...selectedConv,
+        messages: [...selectedConv.messages, newMessage],
+      });
+      toast.success("Áudio enviado!");
+    } catch (error) {
+      console.error("Erro ao enviar áudio:", error);
+      toast.error("Erro ao enviar áudio");
+    }
   };
 
   const handleSendMessage = async (content?: string, type: Message["type"] = "text") => {

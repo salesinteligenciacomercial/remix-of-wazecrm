@@ -22,6 +22,7 @@ interface Message {
   sender: "user" | "contact";
   timestamp: Date;
   delivered: boolean;
+  read?: boolean;
   mediaUrl?: string;
   fileName?: string;
   transcricao?: string;
@@ -190,9 +191,11 @@ export function MessageItem({
               })}
             </span>
             {message.sender === "user" && (
-              message.delivered ? 
+              message.read ? 
                 <CheckCheck className="h-3 w-3 text-[#53bdeb]" /> : 
-                <Check className="h-3 w-3" />
+                message.delivered ? 
+                  <CheckCheck className="h-3 w-3 text-muted-foreground" /> : 
+                  <Check className="h-3 w-3 text-muted-foreground" />
             )}
           </div>
           
