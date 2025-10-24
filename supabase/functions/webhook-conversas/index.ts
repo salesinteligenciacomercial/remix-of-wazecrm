@@ -182,6 +182,35 @@ serve(async (req) => {
       );
     }
 
+    // Buscar company_id baseado no lead ou usar a primeira company
+    let companyId = null;
+    let leadId = null;
+
+    // Tentar encontrar lead existente pelo telefone
+    const { data: existingLead } = await supabase
+      .from('leads')
+      .select('id, company_id')
+      .eq('telefone', numero)
+      .single();
+
+    if (existingLead) {
+      companyId = existingLead.company_id;
+      leadId = existingLead.id;
+      console.log('📌 Lead encontrado:', { leadId, companyId });
+    } else {
+      // Se não encontrar lead, usar a primeira company do sistema
+      const { data: firstCompany } = await supabase
+        .from('companies')
+        .select('id')
+        .limit(1)
+        .single();
+      
+      if (firstCompany) {
+        companyId = firstCompany.id;
+        console.log('📌 Usando company padrão:', companyId);
+      }
+    }
+
     // Salvar conversa no Supabase
     const { data, error } = await supabase
       .from('conversas')
@@ -194,6 +223,8 @@ serve(async (req) => {
         midia_url,
         nome_contato,
         arquivo_nome,
+        company_id: companyId,
+        lead_id: leadId,
       }])
       .select()
       .single();

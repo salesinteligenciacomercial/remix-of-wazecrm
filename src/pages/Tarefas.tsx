@@ -96,7 +96,20 @@ export default function Tarefas() {
     if (!over) return;
 
     const taskId = active.id as string;
-    const newColumnId = over.id as string;
+    let newColumnId = over.id as string;
+
+    // Se arrastou sobre outra tarefa, buscar o column_id dessa tarefa
+    const overTask = tasks.find(t => t.id === newColumnId);
+    if (overTask && overTask.column_id) {
+      newColumnId = overTask.column_id;
+    }
+
+    // Verificar se é uma coluna válida
+    const isValidColumn = columns.some(c => c.id === newColumnId);
+    if (!isValidColumn) {
+      toast.error("Coluna inválida");
+      return;
+    }
 
     setTasks((tasks) => 
       tasks.map((task) => 
