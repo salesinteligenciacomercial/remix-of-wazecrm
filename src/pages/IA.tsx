@@ -1,51 +1,62 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, Sparkles, TrendingUp, Target, Workflow } from "lucide-react";
+import { Bot, Sparkles, TrendingUp, Target, Workflow, BarChart3, Send } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FluxoAutomacaoBuilder } from "@/components/fluxos/FluxoAutomacaoBuilder";
+import { IAAgentCard } from "@/components/ia/IAAgentCard";
+import { PainelInsights } from "@/components/ia/PainelInsights";
+import { DisparoEmMassa } from "@/components/campanhas/DisparoEmMassa";
+import { useState } from "react";
 
 export default function IA() {
+  const [agentStates, setAgentStates] = useState({
+    atendimento: true,
+    vendedora: true,
+    suporte: false,
+  });
+
+  const handleAgentToggle = (id: string, active: boolean) => {
+    setAgentStates(prev => ({ ...prev, [id]: active }));
+  };
+
   const aiAgents = [
     {
+      id: "atendimento",
       name: "IA de Atendimento",
-      description: "Pré-atendimento e triagem inicial de contatos",
+      description: "Pré-atendimento e triagem inicial automática",
       icon: Bot,
       color: "bg-blue-500",
+      active: agentStates.atendimento,
+      stats: {
+        conversationsHandled: 23,
+        avgResponseTime: "8s",
+        successRate: "94%",
+      }
     },
     {
+      id: "vendedora",
       name: "IA Vendedora",
-      description: "Funil de conversão e negociação automatizada",
+      description: "Conversão e negociação automatizada",
       icon: Sparkles,
       color: "bg-purple-500",
+      active: agentStates.vendedora,
+      stats: {
+        conversationsHandled: 15,
+        avgResponseTime: "12s",
+        successRate: "89%",
+      }
     },
     {
-      name: "IA Analista",
-      description: "Interpretação de conversas e relatórios inteligentes",
-      icon: TrendingUp,
-      color: "bg-orange-500",
-    },
-    {
+      id: "suporte",
       name: "IA de Suporte",
-      description: "Resolução de dúvidas e pós-venda automatizado",
+      description: "Resolução de dúvidas e pós-venda",
       icon: Bot,
       color: "bg-cyan-500",
-    },
-    {
-      name: "IA de Qualificação",
-      description: "Segmentação e classificação automática de leads",
-      icon: Target,
-      color: "bg-pink-500",
-    },
-    {
-      name: "IA de Agendamento",
-      description: "Marcação e follow-up de reuniões inteligente",
-      icon: Bot,
-      color: "bg-indigo-500",
-    },
-    {
-      name: "IA de Follow-Up",
-      description: "Reativação e acompanhamento automático",
-      icon: Target,
-      color: "bg-green-500",
+      active: agentStates.suporte,
+      stats: {
+        conversationsHandled: 9,
+        avgResponseTime: "15s",
+        successRate: "96%",
+      }
     },
   ];
 
@@ -53,78 +64,101 @@ export default function IA() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
         <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-          Fluxos e Automação
+          Fluxos e Automação com IA
         </h1>
         <p className="text-muted-foreground text-lg">
-          Configure agentes de IA e automações comerciais
+          Agentes inteligentes, automações e campanhas
         </p>
       </div>
 
-      <Tabs defaultValue="fluxos" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="fluxos" className="gap-2">
-            <Workflow className="h-4 w-4" />
-            Fluxos de Automação
-          </TabsTrigger>
+      <Tabs defaultValue="agentes" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="agentes" className="gap-2">
             <Bot className="h-4 w-4" />
             Agentes de IA
           </TabsTrigger>
+          <TabsTrigger value="fluxos" className="gap-2">
+            <Workflow className="h-4 w-4" />
+            Fluxos
+          </TabsTrigger>
+          <TabsTrigger value="campanhas" className="gap-2">
+            <Send className="h-4 w-4" />
+            Campanhas
+          </TabsTrigger>
+          <TabsTrigger value="insights" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Insights
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="fluxos" className="space-y-4 mt-6">
-          <FluxoAutomacaoBuilder />
-        </TabsContent>
-
-        <TabsContent value="agentes" className="space-y-4 mt-6">
-          <Card className="mb-6 border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5">
+        <TabsContent value="agentes" className="space-y-6 mt-6">
+          <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 rounded-lg bg-primary/10">
                   <Sparkles className="h-5 w-5 text-primary" />
                 </div>
-                <h3 className="font-semibold">Agentes de IA - Próxima Fase</h3>
+                <h3 className="font-semibold">IAs Ativadas e Funcionando</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Os agentes de IA serão ativados na próxima fase. Por enquanto, você pode criar fluxos de automação manual.
+                Os agentes de IA estão ativos e podem responder automaticamente conversas em tempo real.
+                Configure cada agente para personalizar o comportamento.
               </p>
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            {aiAgents.map((agent, index) => (
-              <Card 
-                key={agent.name} 
-                className="group relative overflow-hidden border-0 shadow-card hover:shadow-lg transition-all duration-300"
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <div className="absolute inset-0 bg-gradient-card opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <CardHeader className="relative">
-                  <CardTitle className="flex items-center gap-3">
-                    <div className={`h-12 w-12 rounded-xl ${agent.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
-                      <agent.icon className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <div className="font-semibold">{agent.name}</div>
-                      <div className="text-sm font-normal text-muted-foreground">
-                        {agent.description}
-                      </div>
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="relative">
-                  <div className="flex items-center justify-between">
-                    <p className="text-muted-foreground text-sm">
-                      Será ativado na fase 4
-                    </p>
-                    <div className="px-3 py-1 rounded-full bg-muted text-xs font-medium">
-                      Em breve
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {aiAgents.map((agent) => (
+              <IAAgentCard
+                key={agent.id}
+                {...agent}
+                onToggle={handleAgentToggle}
+              />
             ))}
           </div>
+
+          <Card className="border-0 shadow-card">
+            <CardHeader>
+              <CardTitle>Modo Híbrido: IA + Humano</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Configure quando a IA deve transferir conversas para atendimento humano:
+              </p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="p-4 border rounded-lg">
+                  <h4 className="font-semibold mb-2">Transferência Automática</h4>
+                  <ul className="text-sm space-y-1 text-muted-foreground">
+                    <li>• Quando não souber responder</li>
+                    <li>• Cliente solicitar atendente</li>
+                    <li>• Negociação acima de R$ 10.000</li>
+                    <li>• Reclamação detectada</li>
+                  </ul>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <h4 className="font-semibold mb-2">Sugestões ao Humano</h4>
+                  <ul className="text-sm space-y-1 text-muted-foreground">
+                    <li>• IA sugere respostas</li>
+                    <li>• Humano pode aceitar ou editar</li>
+                    <li>• Histórico completo disponível</li>
+                    <li>• Transição suave</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="fluxos" className="space-y-4 mt-6">
+          <FluxoAutomacaoBuilder />
+        </TabsContent>
+
+        <TabsContent value="campanhas" className="space-y-4 mt-6">
+          <DisparoEmMassa />
+        </TabsContent>
+
+        <TabsContent value="insights" className="space-y-4 mt-6">
+          <PainelInsights />
         </TabsContent>
       </Tabs>
     </div>
