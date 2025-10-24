@@ -1,10 +1,73 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Input validation schemas
+const createBoardSchema = z.object({
+  nome: z.string().trim().min(2, 'Nome muito curto').max(100, 'Nome muito longo'),
+  descricao: z.string().max(500).optional()
+});
+
+const createColumnSchema = z.object({
+  nome: z.string().trim().min(2, 'Nome muito curto').max(100, 'Nome muito longo'),
+  board_id: z.string().uuid('ID de board inválido'),
+  posicao: z.number().int().min(0).optional(),
+  cor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Cor inválida').optional()
+});
+
+const createTaskSchema = z.object({
+  title: z.string().trim().min(2, 'Título muito curto').max(200, 'Título muito longo'),
+  description: z.string().max(2000, 'Descrição muito longa').optional(),
+  assignee_id: z.string().uuid('ID de responsável inválido').optional(),
+  lead_id: z.string().uuid('ID de lead inválido').optional(),
+  column_id: z.string().uuid('ID de coluna inválido').optional(),
+  board_id: z.string().uuid('ID de board inválido').optional(),
+  due_date: z.string().datetime().optional(),
+  priority: z.enum(['baixa', 'media', 'alta', 'urgente']).optional()
+});
+
+const moveTaskSchema = z.object({
+  task_id: z.string().uuid('ID de tarefa inválido'),
+  nova_coluna_id: z.string().uuid('ID de coluna inválido')
+});
+
+const deleteTaskSchema = z.object({
+  task_id: z.string().uuid('ID de tarefa inválido')
+});
+
+const editTaskSchema = z.object({
+  task_id: z.string().uuid('ID de tarefa inválido'),
+  title: z.string().trim().min(2, 'Título muito curto').max(200, 'Título muito longo').optional(),
+  description: z.string().max(2000, 'Descrição muito longa').optional(),
+  priority: z.enum(['baixa', 'media', 'alta', 'urgente']).optional(),
+  due_date: z.string().datetime().optional(),
+  assignee_id: z.string().uuid('ID de responsável inválido').optional(),
+  lead_id: z.string().uuid('ID de lead inválido').optional()
+});
+
+const editBoardSchema = z.object({
+  board_id: z.string().uuid('ID de board inválido'),
+  nome: z.string().trim().min(2, 'Nome muito curto').max(100, 'Nome muito longo')
+});
+
+const deleteBoardSchema = z.object({
+  board_id: z.string().uuid('ID de board inválido')
+});
+
+const editColumnSchema = z.object({
+  column_id: z.string().uuid('ID de coluna inválido'),
+  nome: z.string().trim().min(2, 'Nome muito curto').max(100, 'Nome muito longo').optional(),
+  cor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Cor inválida').optional()
+});
+
+const deleteColumnSchema = z.object({
+  column_id: z.string().uuid('ID de coluna inválido')
+});
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -22,10 +85,10 @@ serve(async (req) => {
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return new Response(
+        JSON.stringify({ error: "Não autorizado", code: "UNAUTHORIZED" }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Get user's company_id
@@ -36,31 +99,31 @@ serve(async (req) => {
       .single();
 
     if (!userRole?.company_id) {
-      return new Response(JSON.stringify({ error: "User not associated with any company" }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return new Response(
+        JSON.stringify({ error: "Você não tem permissão para esta ação", code: "FORBIDDEN" }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const companyId = userRole.company_id;
     const { action, data } = await req.json();
-    console.log(`Action: ${action}`, data);
+    console.log(`Action: ${action}`);
 
     switch (action) {
       case "criar_board": {
-        const { nome, descricao } = data;
+        const validatedData = createBoardSchema.parse(data);
         const { data: board, error } = await supabase
           .from("task_boards")
-          .insert([{ nome, descricao, owner_id: user.id, company_id: companyId }])
+          .insert([{ nome: validatedData.nome, descricao: validatedData.descricao, owner_id: user.id, company_id: companyId }])
           .select()
           .single();
 
         if (error) {
           console.error("Error creating board:", error);
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: "Erro ao criar board", code: "DATABASE_ERROR" }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
 
         return new Response(JSON.stringify({ success: true, data: board }), {
@@ -70,19 +133,25 @@ serve(async (req) => {
       }
 
       case "criar_coluna": {
-        const { nome, board_id, posicao, cor } = data;
+        const validatedData = createColumnSchema.parse(data);
         const { data: column, error } = await supabase
           .from("task_columns")
-          .insert([{ nome, board_id, posicao: posicao || 0, cor: cor || '#6b7280', company_id: companyId }])
+          .insert([{ 
+            nome: validatedData.nome, 
+            board_id: validatedData.board_id, 
+            posicao: validatedData.posicao || 0, 
+            cor: validatedData.cor || '#6b7280', 
+            company_id: companyId 
+          }])
           .select()
           .single();
 
         if (error) {
           console.error("Error creating column:", error);
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: "Erro ao criar coluna", code: "DATABASE_ERROR" }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
 
         return new Response(JSON.stringify({ success: true, data: column }), {
@@ -92,18 +161,18 @@ serve(async (req) => {
       }
 
       case "criar_tarefa": {
-        const { title, description, assignee_id, lead_id, column_id, board_id, due_date, priority } = data;
+        const validatedData = createTaskSchema.parse(data);
         const { data: task, error } = await supabase
           .from("tasks")
           .insert([{
-            title,
-            description,
-            assignee_id,
-            lead_id,
-            column_id,
-            board_id,
-            due_date,
-            priority: priority || 'media',
+            title: validatedData.title,
+            description: validatedData.description,
+            assignee_id: validatedData.assignee_id,
+            lead_id: validatedData.lead_id,
+            column_id: validatedData.column_id,
+            board_id: validatedData.board_id,
+            due_date: validatedData.due_date,
+            priority: validatedData.priority || 'media',
             status: 'pendente',
             owner_id: user.id,
             company_id: companyId
@@ -113,10 +182,10 @@ serve(async (req) => {
 
         if (error) {
           console.error("Error creating task:", error);
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: "Erro ao criar tarefa", code: "DATABASE_ERROR" }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
 
         return new Response(JSON.stringify({ success: true, data: task }), {
@@ -126,18 +195,18 @@ serve(async (req) => {
       }
 
       case "mover_tarefa": {
-        const { task_id, nova_coluna_id } = data;
+        const validatedData = moveTaskSchema.parse(data);
         const { error } = await supabase
           .from("tasks")
-          .update({ column_id: nova_coluna_id })
-          .eq("id", task_id);
+          .update({ column_id: validatedData.nova_coluna_id })
+          .eq("id", validatedData.task_id);
 
         if (error) {
           console.error("Error moving task:", error);
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: "Erro ao mover tarefa", code: "DATABASE_ERROR" }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
 
         return new Response(JSON.stringify({ success: true }), {
@@ -147,18 +216,18 @@ serve(async (req) => {
       }
 
       case "deletar_tarefa": {
-        const { task_id } = data;
+        const validatedData = deleteTaskSchema.parse(data);
         const { error } = await supabase
           .from("tasks")
           .delete()
-          .eq("id", task_id);
+          .eq("id", validatedData.task_id);
 
         if (error) {
           console.error("Error deleting task:", error);
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: "Erro ao deletar tarefa", code: "DATABASE_ERROR" }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
 
         return new Response(JSON.stringify({ success: true }), {
@@ -168,27 +237,27 @@ serve(async (req) => {
       }
 
       case "editar_tarefa": {
-        const { task_id, title, description, priority, due_date, assignee_id, lead_id } = data;
+        const validatedData = editTaskSchema.parse(data);
         const { data: task, error } = await supabase
           .from("tasks")
           .update({
-            title,
-            description,
-            priority,
-            due_date,
-            assignee_id,
-            lead_id,
+            title: validatedData.title,
+            description: validatedData.description,
+            priority: validatedData.priority,
+            due_date: validatedData.due_date,
+            assignee_id: validatedData.assignee_id,
+            lead_id: validatedData.lead_id,
           })
-          .eq("id", task_id)
+          .eq("id", validatedData.task_id)
           .select()
           .single();
 
         if (error) {
           console.error("Error updating task:", error);
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: "Erro ao atualizar tarefa", code: "DATABASE_ERROR" }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
 
         return new Response(JSON.stringify({ success: true, data: task }), {
@@ -198,20 +267,20 @@ serve(async (req) => {
       }
 
       case "editar_board": {
-        const { board_id, nome } = data;
+        const validatedData = editBoardSchema.parse(data);
         const { data: board, error } = await supabase
           .from("task_boards")
-          .update({ nome })
-          .eq("id", board_id)
+          .update({ nome: validatedData.nome })
+          .eq("id", validatedData.board_id)
           .select()
           .single();
 
         if (error) {
           console.error("Error updating board:", error);
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: "Erro ao atualizar board", code: "DATABASE_ERROR" }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
 
         return new Response(JSON.stringify({ success: true, data: board }), {
@@ -221,23 +290,23 @@ serve(async (req) => {
       }
 
       case "deletar_board": {
-        const { board_id } = data;
+        const validatedData = deleteBoardSchema.parse(data);
         
         // Primeiro deletar todas as colunas do board
-        await supabase.from("task_columns").delete().eq("board_id", board_id);
+        await supabase.from("task_columns").delete().eq("board_id", validatedData.board_id);
         
         // Depois deletar o board
         const { error } = await supabase
           .from("task_boards")
           .delete()
-          .eq("id", board_id);
+          .eq("id", validatedData.board_id);
 
         if (error) {
           console.error("Error deleting board:", error);
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: "Erro ao deletar board", code: "DATABASE_ERROR" }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
 
         return new Response(JSON.stringify({ success: true }), {
@@ -247,20 +316,20 @@ serve(async (req) => {
       }
 
       case "editar_coluna": {
-        const { column_id, nome, cor } = data;
+        const validatedData = editColumnSchema.parse(data);
         const { data: column, error } = await supabase
           .from("task_columns")
-          .update({ nome, cor })
-          .eq("id", column_id)
+          .update({ nome: validatedData.nome, cor: validatedData.cor })
+          .eq("id", validatedData.column_id)
           .select()
           .single();
 
         if (error) {
           console.error("Error updating column:", error);
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: "Erro ao atualizar coluna", code: "DATABASE_ERROR" }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
 
         return new Response(JSON.stringify({ success: true, data: column }), {
@@ -270,18 +339,18 @@ serve(async (req) => {
       }
 
       case "deletar_coluna": {
-        const { column_id } = data;
+        const validatedData = deleteColumnSchema.parse(data);
         const { error } = await supabase
           .from("task_columns")
           .delete()
-          .eq("id", column_id);
+          .eq("id", validatedData.column_id);
 
         if (error) {
           console.error("Error deleting column:", error);
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: "Erro ao deletar coluna", code: "DATABASE_ERROR" }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
 
         return new Response(JSON.stringify({ success: true }), {
@@ -291,17 +360,25 @@ serve(async (req) => {
       }
 
       default:
-        return new Response(JSON.stringify({ error: "Ação inválida" }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        return new Response(
+          JSON.stringify({ error: "Ação inválida", code: "INVALID_ACTION" }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
     }
   } catch (error) {
     console.error("Error in api-tarefas:", error);
-    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    
+    // Handle Zod validation errors
+    if (error instanceof z.ZodError) {
+      return new Response(
+        JSON.stringify({ error: 'Dados inválidos fornecidos', code: 'VALIDATION_ERROR', details: error.errors }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    return new Response(
+      JSON.stringify({ error: "Erro interno ao processar requisição", code: "INTERNAL_ERROR" }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });

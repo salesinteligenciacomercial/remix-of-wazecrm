@@ -1,9 +1,25 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Input validation schema
+const enviarWhatsAppSchema = z.object({
+  numero: z.string()
+    .regex(/^[0-9]{10,15}$/, 'Número deve ter entre 10-15 dígitos')
+    .transform(val => val.replace(/[^0-9]/g, '')),
+  mensagem: z.string()
+    .min(1, 'Mensagem não pode ser vazia')
+    .max(4096, 'Mensagem muito longa')
+    .optional(),
+  tipo_mensagem: z.enum(['text', 'texto', 'image', 'audio', 'video', 'document']).optional(),
+  mediaUrl: z.string().url('URL de mídia inválida').optional()
+}).refine(data => data.mensagem || data.mediaUrl, {
+  message: 'Mensagem ou mídia é obrigatória'
+});
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -12,20 +28,28 @@ serve(async (req) => {
   }
 
   try {
-    const { numero, mensagem, tipo_mensagem, mediaUrl } = await req.json();
+    const body = await req.json();
 
-    console.log("📨 Recebido pedido de envio:", { numero, mensagem, tipo_mensagem, mediaUrl });
-
-    if (!numero || (!mensagem && !mediaUrl)) {
-      console.error("❌ Número e mensagem/mídia são obrigatórios");
-      return new Response(
-        JSON.stringify({ error: "Número e mensagem/mídia são obrigatórios" }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
+    // Validate input with Zod
+    let validatedData;
+    try {
+      validatedData = enviarWhatsAppSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error("❌ Dados de entrada inválidos:", error.errors);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Dados inválidos fornecidos',
+            code: 'VALIDATION_ERROR',
+            details: error.errors
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      throw error;
     }
+
+    console.log("📨 Pedido de envio validado");
 
     // Buscar configurações dos secrets
     const EVOLUTION_API_URL = Deno.env.get("EVOLUTION_API_URL");
@@ -35,45 +59,43 @@ serve(async (req) => {
     if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE) {
       console.error("❌ Variáveis de ambiente não configuradas");
       return new Response(
-        JSON.stringify({ error: "Configuração da Evolution API incompleta" }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
+        JSON.stringify({ 
+          error: "Configuração da Evolution API incompleta",
+          code: "CONFIG_ERROR"
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Formatar número no formato correto
-    const numeroFormatado = numero.includes("@s.whatsapp.net")
-      ? numero
-      : `${numero}@s.whatsapp.net`;
+    const numeroFormatado = validatedData.numero.includes("@s.whatsapp.net")
+      ? validatedData.numero
+      : `${validatedData.numero}@s.whatsapp.net`;
 
-    console.log("📞 Número formatado:", numeroFormatado);
+    console.log("📞 Número formatado");
 
     let evolutionUrl: string;
-    let body: any;
+    let bodyPayload: any;
 
     // Verificar se é mídia ou texto
-    if (mediaUrl) {
+    if (validatedData.mediaUrl) {
       // Enviar mídia
       evolutionUrl = `${EVOLUTION_API_URL}/message/sendMedia/${EVOLUTION_INSTANCE}`;
-      body = {
+      bodyPayload = {
         number: numeroFormatado,
-        mediaUrl: mediaUrl,
-        caption: mensagem || "",
+        mediaUrl: validatedData.mediaUrl,
+        caption: validatedData.mensagem || "",
       };
-      console.log("📸 Enviando mídia:", body);
+      console.log("📸 Enviando mídia");
     } else {
       // Enviar texto
       evolutionUrl = `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`;
-      body = {
+      bodyPayload = {
         number: numeroFormatado,
-        text: mensagem,
+        text: validatedData.mensagem,
       };
-      console.log("💬 Enviando texto:", body);
+      console.log("💬 Enviando texto");
     }
-
-    console.log("🌐 Enviando para:", evolutionUrl);
 
     // Enviar para Evolution API
     const response = await fetch(evolutionUrl, {
@@ -82,48 +104,40 @@ serve(async (req) => {
         "Content-Type": "application/json",
         "apikey": EVOLUTION_API_KEY,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(bodyPayload),
     });
 
     const result = await response.json();
 
     if (!response.ok) {
-      console.error("❌ Erro Evolution API:", result);
+      console.error("❌ Erro Evolution API");
       return new Response(
         JSON.stringify({
-          error: "Falha ao enviar mensagem para Evolution API",
-          detalhes: result,
+          error: "Falha ao enviar mensagem",
+          code: "EXTERNAL_API_ERROR"
         }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("✅ Mensagem enviada com sucesso:", result);
+    console.log("✅ Mensagem enviada com sucesso");
     
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: "Mensagem enviada com sucesso",
-        data: result 
+        message: "Mensagem enviada com sucesso"
       }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("❌ Erro geral:", e);
-    const errorMessage = e instanceof Error ? e.message : String(e);
     return new Response(
       JSON.stringify({ 
-        error: "Erro interno ao processar requisição", 
-        detalhes: errorMessage 
+        error: "Erro interno ao processar requisição",
+        code: "INTERNAL_ERROR"
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

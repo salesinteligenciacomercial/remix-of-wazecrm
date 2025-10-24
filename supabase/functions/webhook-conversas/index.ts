@@ -1,10 +1,57 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-signature',
 };
+
+// Input validation schemas
+const webhookPayloadSchema = z.object({
+  numero: z.string().regex(/^[0-9]{10,15}$/, 'Número deve ter entre 10-15 dígitos'),
+  mensagem: z.string().min(1).max(4096, 'Mensagem muito longa'),
+  origem: z.string().default('WhatsApp'),
+  tipo_mensagem: z.enum(['text', 'texto', 'image', 'audio', 'video', 'document']).default('text'),
+  midia_url: z.string().nullable().optional(),
+  nome_contato: z.string().max(100).optional(),
+  arquivo_nome: z.string().max(255).optional(),
+  company_id: z.string().uuid().optional()
+});
+
+// Verify webhook signature for security
+async function verifyWebhookSignature(
+  payload: string, 
+  signature: string | null, 
+  secret: string
+): Promise<boolean> {
+  if (!signature) return false;
+  
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    
+    const signatureBytes = await crypto.subtle.sign(
+      'HMAC',
+      key,
+      encoder.encode(payload)
+    );
+    
+    const expectedSignature = Array.from(new Uint8Array(signatureBytes))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    
+    return expectedSignature === signature;
+  } catch {
+    return false;
+  }
+}
 
 // Detectar se o payload é da Evolution API
 function isEvolutionAPIPayload(body: any): boolean {
@@ -34,10 +81,8 @@ function transformEvolutionPayload(body: any) {
     const img = data.message.imageMessage;
     mensagem = img.caption || '[Imagem]';
     tipo_mensagem = 'image';
-    // Verificar múltiplos locais onde o base64 pode estar
     const base64Content = data.message.base64 || img.base64;
     if (base64Content) {
-      // Limpar possíveis prefixos data: que já venham no base64
       const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
       midia_url = `data:${img.mimetype || 'image/jpeg'};base64,${cleanBase64}`;
     } else {
@@ -47,7 +92,6 @@ function transformEvolutionPayload(body: any) {
     const audio = data.message.audioMessage;
     mensagem = '[Áudio]';
     tipo_mensagem = 'audio';
-    // Verificar múltiplos locais onde o base64 pode estar
     const base64Content = data.message.base64 || audio.base64;
     if (base64Content) {
       const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
@@ -59,7 +103,6 @@ function transformEvolutionPayload(body: any) {
     const video = data.message.videoMessage;
     mensagem = video.caption || '[Vídeo]';
     tipo_mensagem = 'video';
-    // Verificar múltiplos locais onde o base64 pode estar
     const base64Content = data.message.base64 || video.base64;
     if (base64Content) {
       const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
@@ -72,7 +115,6 @@ function transformEvolutionPayload(body: any) {
     arquivo_nome = doc.fileName || 'arquivo';
     mensagem = `[Documento: ${arquivo_nome}]`;
     tipo_mensagem = 'document';
-    // Verificar múltiplos locais onde o base64 pode estar
     const base64Content = data.message.base64 || doc.base64;
     if (base64Content) {
       const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
@@ -105,15 +147,41 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const webhookSecret = Deno.env.get('WEBHOOK_SECRET');
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const body = await req.json();
+    // Get raw body for signature verification
+    const rawBody = await req.text();
+    let body;
+    
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      console.error('❌ JSON inválido recebido');
+      return new Response(
+        JSON.stringify({ error: 'Formato de dados inválido' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify webhook signature if secret is configured
+    if (webhookSecret) {
+      const signature = req.headers.get('x-webhook-signature');
+      const isValidSignature = await verifyWebhookSignature(rawBody, signature, webhookSecret);
+      
+      if (!isValidSignature) {
+        console.error('❌ Assinatura de webhook inválida');
+        return new Response(
+          JSON.stringify({ error: 'Não autorizado' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
     
     // Detectar origem do payload
     const isEvolutionAPI = isEvolutionAPIPayload(body);
     console.log('📩 Webhook recebido:', {
-      origem: isEvolutionAPI ? 'Evolution API (direto)' : 'N8N',
-      payload: body
+      origem: isEvolutionAPI ? 'Evolution API (direto)' : 'N8N'
     });
 
     // Transformar payload se vier da Evolution API
@@ -121,108 +189,75 @@ serve(async (req) => {
     if (isEvolutionAPI) {
       try {
         payload = transformEvolutionPayload(body);
-        console.log('✅ Payload transformado:', payload);
+        console.log('✅ Payload transformado');
       } catch (transformError) {
-        console.error('❌ Erro ao transformar payload da Evolution API:', transformError);
+        console.error('❌ Erro ao transformar payload da Evolution API');
+        return new Response(
+          JSON.stringify({ error: 'Erro ao processar payload' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
+    }
+
+    // Validate input with Zod
+    let validatedData;
+    try {
+      validatedData = webhookPayloadSchema.parse(payload);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error('❌ Dados de entrada inválidos:', error.errors);
         return new Response(
           JSON.stringify({ 
-            error: 'Erro ao processar payload da Evolution API',
-            details: transformError instanceof Error ? transformError.message : 'Erro desconhecido'
+            error: 'Dados inválidos fornecidos',
+            code: 'VALIDATION_ERROR'
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      throw error;
     }
 
-    const { numero, mensagem, origem = 'WhatsApp', tipo_mensagem = 'text', midia_url, nome_contato, arquivo_nome } = payload;
-
-    // Validações N8N (apenas se não vier da Evolution API)
-    if (!isEvolutionAPI) {
-      const hasUnsubstitutedVars = (value: string) => {
-        return value?.includes('{{') || value?.includes('$json') || value?.includes('=$json');
-      };
-
-      const isInvalidData = (value: string) => {
-        return !value || value.trim() === '' || value === '=' || value === '[object Object]' || value.startsWith('=');
-      };
-
-      if (hasUnsubstitutedVars(numero) || hasUnsubstitutedVars(mensagem) || hasUnsubstitutedVars(nome_contato || '')) {
-        console.error('❌ Variáveis N8n não substituídas detectadas:', body);
-        return new Response(
-          JSON.stringify({
-            error: 'Variáveis não substituídas detectadas no N8n.',
-            details: 'Configure o node "Set" corretamente. Exemplo: numero deve ser $json.numero (sem = no início)'
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
-      }
-
-      if (isInvalidData(numero) || isInvalidData(mensagem)) {
-        console.error('❌ Dados inválidos recebidos:', body);
-        return new Response(
-          JSON.stringify({
-            error: 'Dados inválidos recebidos.',
-            details: `numero: ${numero}, mensagem: ${mensagem}. Verifique o node Function no N8n.`,
-            fix: 'O node Function deve retornar strings válidas, não objetos ou valores vazios.'
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
-      }
-    }
-
-    // Validação geral (para ambos formatos)
-    if (!numero || !mensagem) {
-      console.error('❌ Dados incompletos:', payload);
-      return new Response(
-        JSON.stringify({ error: 'Número e mensagem são obrigatórios' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-
-    // Buscar company_id baseado no lead ou usar a primeira company
-    let companyId = null;
+    // Buscar company_id baseado no lead
+    let companyId = validatedData.company_id || null;
     let leadId = null;
 
     // Tentar encontrar lead existente pelo telefone
     const { data: existingLead } = await supabase
       .from('leads')
       .select('id, company_id')
-      .eq('telefone', numero)
+      .eq('telefone', validatedData.numero)
       .single();
 
     if (existingLead) {
       companyId = existingLead.company_id;
       leadId = existingLead.id;
-      console.log('📌 Lead encontrado:', { leadId, companyId });
-    } else {
-      // Se não encontrar lead, usar a primeira company do sistema
-      const { data: firstCompany } = await supabase
-        .from('companies')
-        .select('id')
-        .limit(1)
-        .single();
-      
-      if (firstCompany) {
-        companyId = firstCompany.id;
-        console.log('📌 Usando company padrão:', companyId);
-      }
+      console.log('📌 Lead encontrado');
+    }
+
+    // SECURITY: Require company_id - no fallback to first company
+    if (!companyId) {
+      console.error('❌ Company não identificada');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Lead não encontrado e identificação de empresa ausente',
+          code: 'COMPANY_NOT_FOUND'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Salvar conversa no Supabase
     const { data, error } = await supabase
       .from('conversas')
       .insert([{
-        numero,
-        mensagem,
-        origem,
+        numero: validatedData.numero,
+        mensagem: validatedData.mensagem,
+        origem: validatedData.origem,
         status: 'Recebida',
-        tipo_mensagem,
-        midia_url,
-        nome_contato,
-        arquivo_nome,
+        tipo_mensagem: validatedData.tipo_mensagem,
+        midia_url: validatedData.midia_url,
+        nome_contato: validatedData.nome_contato,
+        arquivo_nome: validatedData.arquivo_nome,
         company_id: companyId,
         lead_id: leadId,
       }])
@@ -231,38 +266,43 @@ serve(async (req) => {
 
     if (error) {
       console.error('❌ Erro ao salvar conversa:', error);
+      
+      // Map database errors to user-friendly messages
+      let errorMessage = 'Erro ao processar conversa';
+      let errorCode = 'INTERNAL_ERROR';
+      
+      if (error.message?.includes('violates')) {
+        errorMessage = 'Dados inválidos fornecidos';
+        errorCode = 'VALIDATION_ERROR';
+      } else if (error.message?.includes('row-level security')) {
+        errorMessage = 'Você não tem permissão para esta ação';
+        errorCode = 'FORBIDDEN';
+      }
+      
       return new Response(
-        JSON.stringify({ error: 'Erro ao salvar conversa no banco', details: error.message }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ error: errorMessage, code: errorCode }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('✅ Conversa salva com sucesso:', data);
+    console.log('✅ Conversa salva com sucesso');
 
     return new Response(
       JSON.stringify({
         success: true,
         message: 'Conversa registrada com sucesso',
-        conversa: data,
       }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (err) {
     console.error('⚠️ Erro interno:', err);
-    const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
     return new Response(
-      JSON.stringify({ error: 'Erro interno ao processar conversa', details: errorMessage }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      JSON.stringify({ 
+        error: 'Erro interno ao processar requisição',
+        code: 'INTERNAL_ERROR'
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
