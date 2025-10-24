@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { VisualFlowBuilder } from "./VisualFlowBuilder";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -138,18 +139,36 @@ export function FluxoAutomacaoBuilder() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {editMode && selectedFluxo ? (
         <div>
-          <h2 className="text-2xl font-bold">Fluxos de Automação</h2>
-          <p className="text-muted-foreground">
-            Crie fluxos visuais para automatizar atendimento e processos
-          </p>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Editor Visual - {selectedFluxo.nome}</h2>
+            <Button onClick={() => { setEditMode(false); setSelectedFluxo(null); }} variant="outline">
+              Voltar para Lista
+            </Button>
+          </div>
+          <VisualFlowBuilder 
+            fluxoId={selectedFluxo.id} 
+            onSave={() => {
+              setEditMode(false);
+              setSelectedFluxo(null);
+            }}
+          />
         </div>
-        <Button onClick={criarNovoFluxo}>
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Fluxo
-        </Button>
-      </div>
+      ) : (
+        <>
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold">Fluxos de Automação</h2>
+              <p className="text-muted-foreground">
+                Crie fluxos visuais para automatizar atendimento e processos
+              </p>
+            </div>
+            <Button onClick={criarNovoFluxo}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Fluxo
+            </Button>
+          </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         {fluxos.map((fluxo) => (
@@ -288,11 +307,27 @@ export function FluxoAutomacaoBuilder() {
               </Dialog>
 
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={() => {
+                    setSelectedFluxo(fluxo);
+                    setEditMode(true);
+                  }}
+                >
                   <Save className="h-4 w-4 mr-2" />
-                  Editar
+                  Editor Visual
                 </Button>
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={() => {
+                    setFluxos(prev => prev.filter(f => f.id !== fluxo.id));
+                    toast.success("Fluxo excluído");
+                  }}
+                >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Excluir
                 </Button>
@@ -316,6 +351,8 @@ export function FluxoAutomacaoBuilder() {
             </Button>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
     </div>
   );
