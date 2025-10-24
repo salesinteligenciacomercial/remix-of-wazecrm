@@ -48,15 +48,23 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
         },
       };
 
-      const { error } = await supabase
-        .from("companies")
-        .insert([companyData]);
+      console.log("Criando subconta:", companyData);
 
-      if (error) throw error;
+      const { data, error } = await supabase
+        .from("companies")
+        .insert([companyData])
+        .select();
+
+      if (error) {
+        console.error("Erro ao criar subconta:", error);
+        throw error;
+      }
+
+      console.log("Subconta criada com sucesso:", data);
 
       toast({
-        title: "Subconta criada",
-        description: "A subconta foi criada com sucesso.",
+        title: "Subconta criada com sucesso! ✅",
+        description: `${companyData.name} foi criada e está ativa.`,
       });
 
       onSuccess();
@@ -73,9 +81,10 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
       });
       setIsTestAccount(false);
     } catch (error: any) {
+      console.error("Erro completo:", error);
       toast({
         title: "Erro ao criar subconta",
-        description: error.message,
+        description: error.message || "Ocorreu um erro desconhecido. Verifique o console.",
         variant: "destructive",
       });
     } finally {
