@@ -12,6 +12,8 @@ interface ConversationHeaderProps {
   produto?: string;
   valor?: string;
   responsavel?: string;
+  tags?: string[];
+  funnelStage?: string;
   showInfoPanel: boolean;
   onToggleInfoPanel: () => void;
   syncStatus?: SyncStatus;
@@ -28,6 +30,8 @@ export function ConversationHeader({
   produto,
   valor,
   responsavel,
+  tags = [],
+  funnelStage,
   showInfoPanel,
   onToggleInfoPanel,
   syncStatus = 'idle',
@@ -180,26 +184,49 @@ export function ConversationHeader({
         </div>
         
         {/* Informações do Lead */}
-        {(produto || valor || responsavel) && (
-          <div className="flex items-center gap-3 pt-2 border-t border-border/50">
-            {produto && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-muted/50 rounded-md">
-                <FileText className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-medium text-foreground">{produto}</span>
+        {(tags.length > 0 || funnelStage || produto || valor || responsavel) && (
+          <div className="space-y-2 pt-2 border-t border-border/50">
+            {/* Tags */}
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map((tag, index) => (
+                  <Badge 
+                    key={index} 
+                    variant="secondary" 
+                    className="text-xs px-2 py-0.5"
+                  >
+                    {tag}
+                  </Badge>
+                ))}
               </div>
             )}
-            {valor && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 rounded-md">
-                <DollarSign className="h-3.5 w-3.5 text-green-600" />
-                <span className="text-xs font-semibold text-green-700">{valor}</span>
-              </div>
-            )}
-            {responsavel && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 rounded-md">
-                <User className="h-3.5 w-3.5 text-blue-600" />
-                <span className="text-xs font-medium text-blue-700">{responsavel}</span>
-              </div>
-            )}
+            
+            {/* Dados do Lead */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {funnelStage && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/10 rounded-md">
+                  <span className="text-xs font-medium text-purple-700">📊 {funnelStage}</span>
+                </div>
+              )}
+              {produto && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-muted/50 rounded-md">
+                  <FileText className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-medium text-foreground">{produto}</span>
+                </div>
+              )}
+              {valor && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 rounded-md">
+                  <DollarSign className="h-3.5 w-3.5 text-green-600" />
+                  <span className="text-xs font-semibold text-green-700">{valor}</span>
+                </div>
+              )}
+              {responsavel && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 rounded-md">
+                  <User className="h-3.5 w-3.5 text-blue-600" />
+                  <span className="text-xs font-medium text-blue-700">{responsavel}</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

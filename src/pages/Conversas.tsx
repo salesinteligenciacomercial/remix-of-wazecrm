@@ -1734,6 +1734,10 @@ function Conversas() {
               unread={conv.unread}
               isSelected={selectedConv?.id === conv.id}
               avatarUrl={conv.avatarUrl}
+              tags={conv.tags}
+              responsavel={conv.responsavel}
+              funnelStage={conv.funnelStage}
+              valor={conv.valor}
               onClick={() => {
                 console.log('🔍 Conversa selecionada:', conv.id, 'Mensagens:', conv.messages.length);
                 
@@ -1779,6 +1783,8 @@ function Conversas() {
               produto={selectedConv.produto}
               valor={selectedConv.valor}
               responsavel={selectedConv.responsavel}
+              tags={selectedConv.tags}
+              funnelStage={selectedConv.funnelStage}
               showInfoPanel={showInfoPanel}
               onToggleInfoPanel={() => setShowInfoPanel(!showInfoPanel)}
               syncStatus={syncStatus}

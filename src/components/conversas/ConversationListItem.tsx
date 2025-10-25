@@ -10,6 +10,10 @@ interface ConversationListItemProps {
   unread: number;
   isSelected: boolean;
   avatarUrl?: string;
+  tags?: string[];
+  responsavel?: string;
+  funnelStage?: string;
+  valor?: string;
   onClick: () => void;
 }
 
@@ -21,6 +25,10 @@ export function ConversationListItem({
   unread,
   isSelected,
   avatarUrl,
+  tags = [],
+  responsavel,
+  funnelStage,
+  valor,
   onClick,
 }: ConversationListItemProps) {
   const getChannelIcon = () => {
@@ -83,6 +91,48 @@ export function ConversationListItem({
             </div>
           </div>
           <p className="text-sm text-muted-foreground truncate">{lastMessage}</p>
+          
+          {/* Informações do Lead */}
+          <div className="mt-2 space-y-1.5">
+            {/* Tags */}
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {tags.slice(0, 2).map((tag, index) => (
+                  <Badge 
+                    key={index} 
+                    variant="secondary" 
+                    className="text-xs px-1.5 py-0 h-5"
+                  >
+                    {tag}
+                  </Badge>
+                ))}
+                {tags.length > 2 && (
+                  <Badge variant="outline" className="text-xs px-1.5 py-0 h-5">
+                    +{tags.length - 2}
+                  </Badge>
+                )}
+              </div>
+            )}
+            
+            {/* Responsável, Funil/Etapa, Valor */}
+            <div className="flex flex-wrap gap-1.5 text-xs">
+              {responsavel && (
+                <span className="text-muted-foreground truncate">
+                  👤 {responsavel}
+                </span>
+              )}
+              {funnelStage && (
+                <span className="text-muted-foreground truncate">
+                  📊 {funnelStage}
+                </span>
+              )}
+              {valor && (
+                <span className="text-green-600 font-semibold truncate">
+                  💰 {valor}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
