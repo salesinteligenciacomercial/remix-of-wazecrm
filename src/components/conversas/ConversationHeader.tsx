@@ -46,61 +46,63 @@ export function ConversationHeader({
   };
 
   return (
-    <div className="sticky top-0 z-10 bg-background border-b border-border p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-12 w-12">
-            <AvatarImage src={avatarUrl} alt={contactName} />
-            <AvatarFallback className="bg-primary/10 text-primary">
-              {getInitials(contactName)}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <h2 className="font-semibold text-foreground flex items-center gap-2">
-              {contactName}
-              {getChannelIcon()}
-            </h2>
-            <span className="text-xs text-muted-foreground capitalize">{channel}</span>
+    <div className="sticky top-0 z-20 bg-background border-b border-border shadow-sm">
+      <div className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-12 w-12">
+              <AvatarImage src={avatarUrl} alt={contactName} />
+              <AvatarFallback className="bg-primary/10 text-primary">
+                {getInitials(contactName)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h2 className="font-semibold text-foreground flex items-center gap-2">
+                {contactName}
+                {getChannelIcon()}
+              </h2>
+              <span className="text-xs text-muted-foreground capitalize">{channel}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon">
+              <Phone className="h-5 w-5" />
+            </Button>
+            <Button variant="ghost" size="icon">
+              <Video className="h-5 w-5" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={onToggleInfoPanel}
+              className={showInfoPanel ? "bg-accent" : ""}
+            >
+              <Info className="h-5 w-5" />
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon">
-            <Phone className="h-5 w-5" />
-          </Button>
-          <Button variant="ghost" size="icon">
-            <Video className="h-5 w-5" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={onToggleInfoPanel}
-            className={showInfoPanel ? "bg-accent" : ""}
-          >
-            <Info className="h-5 w-5" />
-          </Button>
+        
+        {/* Informações do Lead */}
+        <div className="flex items-center gap-4 text-sm">
+          {produto && (
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <FileText className="h-3.5 w-3.5" />
+              <span>{produto}</span>
+            </div>
+          )}
+          {valor && (
+            <div className="flex items-center gap-1 text-green-600 font-medium">
+              <DollarSign className="h-3.5 w-3.5" />
+              <span>{valor}</span>
+            </div>
+          )}
+          {responsavel && (
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <User className="h-3.5 w-3.5" />
+              <span>{responsavel}</span>
+            </div>
+          )}
         </div>
-      </div>
-      
-      {/* Informações do Lead */}
-      <div className="flex items-center gap-4 text-sm">
-        {produto && (
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <FileText className="h-3.5 w-3.5" />
-            <span>{produto}</span>
-          </div>
-        )}
-        {valor && (
-          <div className="flex items-center gap-1 text-green-600 font-medium">
-            <DollarSign className="h-3.5 w-3.5" />
-            <span>{valor}</span>
-          </div>
-        )}
-        {responsavel && (
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <User className="h-3.5 w-3.5" />
-            <span>{responsavel}</span>
-          </div>
-        )}
       </div>
     </div>
   );

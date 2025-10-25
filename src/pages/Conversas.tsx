@@ -148,7 +148,7 @@ const initialConversations: Conversation[] = [
   },
 ];
 
-export default function Conversas() {
+function Conversas() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [filter, setFilter] = useState<"all" | "waiting" | "answered" | "resolved">("all");
@@ -160,6 +160,7 @@ export default function Conversas() {
   const [scheduledMessages, setScheduledMessages] = useState<ScheduledMessage[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Estados para modais de visualização
@@ -680,9 +681,15 @@ export default function Conversas() {
     }
   };
 
+  
   // Funções de mensagem
   const handleReply = (messageId: string) => {
-    toast.info("Responder à mensagem");
+    const message = selectedConv?.messages.find(m => m.id === messageId);
+    if (message) {
+      setReplyingTo(messageId);
+      setMessageInput(`↩️ Respondendo: "${message.content.substring(0, 50)}${message.content.length > 50 ? '...' : ''}"\n\n`);
+      toast.success("Digite sua resposta");
+    }
   };
 
   const handleEdit = (messageId: string, newContent: string) => {
@@ -696,7 +703,13 @@ export default function Conversas() {
       } : conv
     );
     saveConversations(updated);
-    toast.success("Mensagem editada");
+    setSelectedConv({
+      ...selectedConv,
+      messages: selectedConv.messages.map(msg => 
+        msg.id === messageId ? { ...msg, content: newContent, edited: true } : msg
+      )
+    });
+    toast.success("Mensagem editada com sucesso");
   };
 
   const handleDelete = (messageId: string, forEveryone: boolean) => {
@@ -708,7 +721,11 @@ export default function Conversas() {
       } : conv
     );
     saveConversations(updated);
-    toast.success(forEveryone ? "Mensagem excluída para todos" : "Mensagem excluída");
+    setSelectedConv({
+      ...selectedConv,
+      messages: selectedConv.messages.filter(msg => msg.id !== messageId)
+    });
+    toast.success(forEveryone ? "Mensagem excluída para todos" : "Mensagem excluída para você");
   };
 
   const handleReact = (messageId: string, emoji: string) => {
@@ -722,6 +739,13 @@ export default function Conversas() {
       } : conv
     );
     saveConversations(updated);
+    setSelectedConv({
+      ...selectedConv,
+      messages: selectedConv.messages.map(msg => 
+        msg.id === messageId ? { ...msg, reaction: emoji } : msg
+      )
+    });
+    toast.success(`Reação ${emoji} adicionada`);
   };
 
   const handleSendMedia = async (file: File, caption: string, type: string) => {
@@ -1323,6 +1347,23 @@ export default function Conversas() {
 
                 {/* Input Area */}
                 <div className="bg-background border-t border-border p-4">
+                  {replyingTo && (
+                    <div className="mb-2 p-2 bg-muted rounded-lg flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        ↩️ Respondendo mensagem
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setReplyingTo(null);
+                          setMessageInput("");
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <MediaUpload onSendMedia={handleSendMedia} />
                     <Input
@@ -1334,7 +1375,10 @@ export default function Conversas() {
                     />
                     <AudioRecorder onSendAudio={handleSendAudio} />
                     <Button 
-                      onClick={() => handleSendMessage()} 
+                      onClick={() => {
+                        handleSendMessage();
+                        setReplyingTo(null);
+                      }} 
                       size="icon"
                       className="bg-[#25D366] hover:bg-[#128C7E] text-white"
                     >
@@ -1818,3 +1862,5 @@ export default function Conversas() {
     </div>
   );
 }
+
+export default Conversas;

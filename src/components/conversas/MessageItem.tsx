@@ -63,20 +63,38 @@ export function MessageItem({
     setDragStart(e.touches[0].clientX);
   };
 
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (dragStart === null) return;
+    
+    const currentX = e.touches[0].clientX;
+    const diff = currentX - dragStart;
+    
+    // Aplicar transformação visual durante o arraste
+    const element = e.currentTarget as HTMLElement;
+    if ((message.sender === "contact" && diff > 0) || (message.sender === "user" && diff < 0)) {
+      element.style.transform = `translateX(${diff * 0.3}px)`;
+      element.style.transition = 'none';
+    }
+  };
+
   const handleTouchEnd = (e: React.TouchEvent) => {
+    const element = e.currentTarget as HTMLElement;
+    element.style.transform = '';
+    element.style.transition = 'transform 0.2s ease';
+    
     if (dragStart !== null) {
       const dragEnd = e.changedTouches[0].clientX;
       const diff = dragEnd - dragStart;
       
-      // Arraste para a direita > 50px = responder
-      if (message.sender === "contact" && diff > 50) {
+      // Arraste para a direita > 80px = responder (mensagem do contato)
+      if (message.sender === "contact" && diff > 80) {
         onReply(message.id);
-        toast.success("Responder mensagem");
+        toast.success("↩️ Arraste para responder ativado!");
       }
-      // Arraste para a esquerda > 50px = responder
-      else if (message.sender === "user" && diff < -50) {
+      // Arraste para a esquerda > 80px = responder (mensagem do usuário)
+      else if (message.sender === "user" && diff < -80) {
         onReply(message.id);
-        toast.success("Responder mensagem");
+        toast.success("↩️ Arraste para responder ativado!");
       }
     }
     setDragStart(null);
@@ -88,6 +106,7 @@ export function MessageItem({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
       <div className="relative">
