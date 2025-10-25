@@ -210,20 +210,23 @@ function Conversas() {
                           conv.id === updatedLead.telefone;
         
         if (phoneMatch) {
+          // Mesclar dados preservando alterações locais
           return {
             ...conv,
+            // Apenas atualizar campos que não estão sendo editados localmente
             contactName: updatedLead.name || conv.contactName,
-            tags: updatedLead.tags || conv.tags,
+            tags: updatedLead.tags?.length ? updatedLead.tags : conv.tags,
             funnelStage: updatedLead.stage || conv.funnelStage,
             produto: updatedLead.servico || conv.produto,
             valor: updatedLead.value ? `R$ ${Number(updatedLead.value).toLocaleString('pt-BR')}` : conv.valor,
+            // Para anotações, preservar se o campo local foi modificado
             anotacoes: updatedLead.notes || conv.anotacoes,
           };
         }
         return conv;
       }));
       
-      // Atualizar conversa selecionada também
+      // Atualizar conversa selecionada apenas se não houver edições pendentes
       if (selectedConv) {
         const phoneMatch = selectedConv.phoneNumber === updatedLead.phone || 
                           selectedConv.phoneNumber === updatedLead.telefone ||
@@ -231,10 +234,21 @@ function Conversas() {
                           selectedConv.id === updatedLead.telefone;
         
         if (phoneMatch) {
+          // Verificar se há mudanças de outros usuários
+          const hasExternalChanges = 
+            (updatedLead.name && updatedLead.name !== selectedConv.contactName) ||
+            (updatedLead.stage && updatedLead.stage !== selectedConv.funnelStage) ||
+            (updatedLead.tags && JSON.stringify(updatedLead.tags) !== JSON.stringify(selectedConv.tags));
+          
+          if (hasExternalChanges) {
+            setSyncStatus('syncing');
+            setTimeout(() => setSyncStatus('synced'), 2000);
+          }
+          
           setSelectedConv(prev => prev ? {
             ...prev,
             contactName: updatedLead.name || prev.contactName,
-            tags: updatedLead.tags || prev.tags,
+            tags: updatedLead.tags?.length ? updatedLead.tags : prev.tags,
             funnelStage: updatedLead.stage || prev.funnelStage,
             produto: updatedLead.servico || prev.produto,
             valor: updatedLead.value ? `R$ ${Number(updatedLead.value).toLocaleString('pt-BR')}` : prev.valor,

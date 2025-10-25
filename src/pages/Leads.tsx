@@ -100,6 +100,7 @@ export default function Leads() {
           lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           lead.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           lead.phone?.includes(searchTerm) ||
+          lead.telefone?.includes(searchTerm) ||
           lead.company?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
