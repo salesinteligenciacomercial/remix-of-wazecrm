@@ -11,6 +11,7 @@ import { NovoFunilDialog } from "@/components/funil/NovoFunilDialog";
 import { EditarFunilDialog } from "@/components/funil/EditarFunilDialog";
 import { AdicionarEtapaDialog } from "@/components/funil/AdicionarEtapaDialog";
 import { toast } from "sonner";
+import { useLeadsSync } from "@/hooks/useLeadsSync";
 
 interface Lead {
   id: string;
@@ -47,6 +48,31 @@ const Kanban = () => {
   const [funis, setFunis] = useState<Funil[]>([]);
   const [selectedFunil, setSelectedFunil] = useState<string>("");
   const [loading, setLoading] = useState(true);
+
+  // Integrar sincronização de leads em tempo real
+  useLeadsSync({
+    onInsert: (newLead) => {
+      console.log('📡 [Funil] Novo lead adicionado via sync:', newLead);
+      setLeads(prev => [{
+        ...newLead,
+        nome: newLead.name || "",
+        name: newLead.name || ""
+      }, ...prev]);
+    },
+    onUpdate: (updatedLead) => {
+      console.log('📡 [Funil] Lead atualizado via sync:', updatedLead);
+      setLeads(prev => prev.map(lead => 
+        lead.id === updatedLead.id 
+          ? { ...updatedLead, nome: updatedLead.name || "", name: updatedLead.name || "" }
+          : lead
+      ));
+    },
+    onDelete: (deletedLead) => {
+      console.log('📡 [Funil] Lead removido via sync:', deletedLead);
+      setLeads(prev => prev.filter(lead => lead.id !== deletedLead.id));
+    },
+    showNotifications: false // Não mostrar notificações no funil para não ficar repetitivo
+  });
 
   useEffect(() => {
     carregarDados();
@@ -135,20 +161,34 @@ const Kanban = () => {
       leads.map((l) => l.id === leadId ? { ...l, etapa_id: newEtapaId } : l)
     );
 
-    // Atualizar no banco
+    // Atualizar no banco - isso vai disparar o realtime sync automaticamente
     try {
       const { error } = await supabase
         .from("leads")
-        .update({ etapa_id: newEtapaId })
+        .update({ 
+          etapa_id: newEtapaId,
+          funil_id: etapaDestino.funil_id, // Garantir que o funil_id está correto
+          stage: etapaDestino.nome.toLowerCase() // Atualizar também o stage para sincronizar
+        })
         .eq("id", leadId);
 
       if (error) throw error;
+      
       console.log("✅ Lead atualizado no banco com sucesso");
+      console.log("🔄 Sincronização automática vai propagar para Conversas e Leads");
       toast.success(`Lead movido para ${etapaDestino.nome}!`);
+      
+      // A sincronização via realtime vai atualizar automaticamente:
+      // - O componente Conversas (Info Panel)
+      // - O componente Leads
+      // - Este próprio componente Funil
     } catch (error) {
       console.error("❌ Erro ao mover lead:", error);
       toast.error("Erro ao mover lead");
-      carregarDados(); // Recarregar em caso de erro
+      // Reverter mudança local em caso de erro
+      setLeads((leads) => 
+        leads.map((l) => l.id === leadId ? { ...l, etapa_id: lead.etapa_id } : l)
+      );
     }
   };
 
