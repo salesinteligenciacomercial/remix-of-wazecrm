@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Video, Info, User, MessageSquare, Instagram, Facebook, FileText, DollarSign, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
+import { Phone, Video, Info, User, MessageSquare, Instagram, Facebook, FileText, DollarSign, RefreshCw, CheckCircle2, AlertCircle, Loader2, Check, Plus } from "lucide-react";
 
 type SyncStatus = 'synced' | 'syncing' | 'error' | 'idle';
 
@@ -15,6 +15,10 @@ interface ConversationHeaderProps {
   showInfoPanel: boolean;
   onToggleInfoPanel: () => void;
   syncStatus?: SyncStatus;
+  leadVinculado?: any;
+  verificandoLead?: boolean;
+  mostrarBotaoCriarLead?: boolean;
+  onCriarLead?: () => void;
 }
 
 export function ConversationHeader({
@@ -27,6 +31,10 @@ export function ConversationHeader({
   showInfoPanel,
   onToggleInfoPanel,
   syncStatus = 'idle',
+  leadVinculado,
+  verificandoLead = false,
+  mostrarBotaoCriarLead = false,
+  onCriarLead,
 }: ConversationHeaderProps) {
   const getChannelIcon = () => {
     switch (channel) {
@@ -105,9 +113,38 @@ export function ConversationHeader({
                 </h2>
                 {getSyncStatusBadge()}
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                <span className="capitalize font-medium">{channel}</span>
+              <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                  <span className="capitalize font-medium">{channel}</span>
+                </div>
+                
+                {/* Badge de Lead Vinculado */}
+                {verificandoLead && (
+                  <Badge variant="outline" className="gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Verificando...
+                  </Badge>
+                )}
+                
+                {!verificandoLead && leadVinculado && (
+                  <Badge className="gap-1 bg-green-600 hover:bg-green-700">
+                    <Check className="h-3 w-3" />
+                    Lead Cadastrado
+                  </Badge>
+                )}
+                
+                {!verificandoLead && mostrarBotaoCriarLead && onCriarLead && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onCriarLead}
+                    className="h-6 text-xs gap-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Criar Lead no CRM
+                  </Button>
+                )}
               </div>
             </div>
           </div>

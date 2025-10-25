@@ -132,7 +132,7 @@ const Kanban = () => {
       return;
     }
 
-    // Verificar se o lead já está na etapa de destino
+    // Buscar o lead que está sendo movido
     const lead = leads.find(l => l.id === leadId);
     if (!lead) {
       console.log("❌ Lead não encontrado:", leadId);
@@ -140,10 +140,8 @@ const Kanban = () => {
       return;
     }
 
-    if (lead.etapa_id === newEtapaId) {
-      console.log("✅ Lead já está na etapa de destino");
-      return;
-    }
+    // Removida verificação redundante que bloqueava movimentações legítimas
+    console.log(`🔄 Movendo lead "${lead.name}" para nova etapa...`);
 
     // Verificar se o destino é realmente uma etapa válida
     const etapaDestino = etapas.find(e => e.id === newEtapaId);

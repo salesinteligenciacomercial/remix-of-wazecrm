@@ -88,13 +88,24 @@ serve(async (req) => {
       
       // Normalizar tipo de mídia
       let mediaType = validatedData.tipo_mensagem || 'document';
-      if (mediaType === 'pdf') mediaType = 'document';
       if (mediaType === 'texto') mediaType = 'text';
+      // PDF e document são mantidos como document
+      if (mediaType === 'pdf') mediaType = 'document';
+      
+      // Definir mimeType baseado no tipo de mídia se não fornecido
+      let mimeType = validatedData.mimeType;
+      if (!mimeType) {
+        if (mediaType === 'image') mimeType = 'image/jpeg';
+        else if (mediaType === 'audio') mimeType = 'audio/mpeg';
+        else if (mediaType === 'video') mimeType = 'video/mp4';
+        else if (validatedData.tipo_mensagem === 'pdf') mimeType = 'application/pdf';
+        else mimeType = 'application/octet-stream';
+      }
       
       bodyPayload = {
         number: numeroFormatado,
         mediatype: mediaType,
-        mimetype: validatedData.mimeType || 'application/octet-stream',
+        mimetype: mimeType,
         caption: validatedData.caption || validatedData.mensagem || "",
         fileName: validatedData.fileName || 'arquivo',
         media: validatedData.mediaBase64,

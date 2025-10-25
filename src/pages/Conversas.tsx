@@ -164,8 +164,9 @@ function Conversas() {
   const [showInfoPanel, setShowInfoPanel] = useState(true);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'idle'>('idle');
-  const [leadVinculado, setLeadVinculado] = useState<boolean>(false);
-  const [verificandoLead, setVerificandoLead] = useState<boolean>(false);
+  const [leadVinculado, setLeadVinculado] = useState<any>(null);
+  const [verificandoLead, setVerificandoLead] = useState(false);
+  const [mostrarBotaoCriarLead, setMostrarBotaoCriarLead] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Estados para modais de visualização
@@ -1534,6 +1535,7 @@ function Conversas() {
   const verificarLeadVinculado = async (conversation: Conversation) => {
     try {
       setVerificandoLead(true);
+      setMostrarBotaoCriarLead(false);
       
       const { data: userRole } = await supabase
         .from('user_roles')
@@ -1541,20 +1543,33 @@ function Conversas() {
         .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
         .maybeSingle();
 
-      if (!userRole?.company_id) return;
+      if (!userRole?.company_id) {
+        setVerificandoLead(false);
+        return;
+      }
 
       const phoneToSearch = conversation.phoneNumber || conversation.id;
       
       const { data: existingLead } = await supabase
         .from('leads')
-        .select('id')
+        .select('*')
         .eq('company_id', userRole.company_id)
         .or(`phone.eq.${phoneToSearch},telefone.eq.${phoneToSearch}`)
         .maybeSingle();
 
-      setLeadVinculado(!!existingLead);
+      if (existingLead) {
+        setLeadVinculado(existingLead);
+        setMostrarBotaoCriarLead(false);
+        console.log("✅ Lead vinculado encontrado:", existingLead);
+      } else {
+        setLeadVinculado(null);
+        setMostrarBotaoCriarLead(true);
+        console.log("ℹ️ Nenhum lead vinculado a este contato");
+      }
     } catch (error) {
       console.error('Erro ao verificar lead:', error);
+      setLeadVinculado(null);
+      setMostrarBotaoCriarLead(false);
     } finally {
       setVerificandoLead(false);
     }
@@ -1720,6 +1735,10 @@ function Conversas() {
               showInfoPanel={showInfoPanel}
               onToggleInfoPanel={() => setShowInfoPanel(!showInfoPanel)}
               syncStatus={syncStatus}
+              leadVinculado={leadVinculado}
+              verificandoLead={verificandoLead}
+              mostrarBotaoCriarLead={mostrarBotaoCriarLead}
+              onCriarLead={criarLeadManualmente}
             />
 
             <div className="flex flex-1 overflow-hidden">
