@@ -1,6 +1,13 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Instagram, Facebook } from "lucide-react";
+import { MessageSquare, Instagram, Facebook, MoreVertical, Edit, UserPlus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ConversationListItemProps {
   contactName: string;
@@ -15,6 +22,11 @@ interface ConversationListItemProps {
   funnelStage?: string;
   valor?: string;
   onClick: () => void;
+  conversationId?: string;
+  leadId?: string;
+  onEditName?: () => void;
+  onCreateLead?: () => void;
+  onDeleteConversation?: () => void;
 }
 
 export function ConversationListItem({
@@ -30,6 +42,11 @@ export function ConversationListItem({
   funnelStage,
   valor,
   onClick,
+  conversationId,
+  leadId,
+  onEditName,
+  onCreateLead,
+  onDeleteConversation,
 }: ConversationListItemProps) {
   const getChannelIcon = () => {
     switch (channel) {
@@ -51,6 +68,10 @@ export function ConversationListItem({
       .join("")
       .toUpperCase()
       .slice(0, 2);
+  };
+
+  const handleMenuClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
   };
 
   return (
@@ -76,18 +97,43 @@ export function ConversationListItem({
                 {contactName}
               </span>
             </div>
-            <div className="flex flex-col items-end gap-1">
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {timestamp.toLocaleTimeString("pt-BR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-              {unread > 0 && (
-                <Badge className="bg-[#25D366] hover:bg-[#25D366] text-white text-xs h-5 min-w-5 rounded-full flex items-center justify-center">
-                  {unread}
-                </Badge>
-              )}
+            <div className="flex items-center gap-1">
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {timestamp.toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                {unread > 0 && (
+                  <Badge className="bg-[#25D366] hover:bg-[#25D366] text-white text-xs h-5 min-w-5 rounded-full flex items-center justify-center">
+                    {unread}
+                  </Badge>
+                )}
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild onClick={handleMenuClick}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={handleMenuClick}>
+                  <DropdownMenuItem onClick={onEditName}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Editar nome
+                  </DropdownMenuItem>
+                  {!leadId && onCreateLead && (
+                    <DropdownMenuItem onClick={onCreateLead}>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Adicionar ao CRM
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={onDeleteConversation} className="text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir conversa
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
           <p className="text-sm text-muted-foreground truncate">{lastMessage}</p>

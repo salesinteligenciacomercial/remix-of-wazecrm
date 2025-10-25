@@ -1613,6 +1613,103 @@ function Conversas() {
     }
   };
 
+  const handleEditName = async (conversationId: string) => {
+    const conv = conversations.find(c => c.id === conversationId);
+    if (!conv) return;
+
+    const novoNome = prompt("Digite o novo nome do contato:", conv.contactName);
+    if (!novoNome || novoNome.trim() === "") return;
+
+    try {
+      // Atualizar no Supabase
+      const { error } = await supabase
+        .from('conversas')
+        .update({ nome_contato: novoNome.trim() })
+        .eq('numero', conv.phoneNumber || conv.id);
+
+      if (error) throw error;
+
+      // Atualizar localmente
+      const updated = conversations.map(c =>
+        c.id === conversationId ? { ...c, contactName: novoNome.trim() } : c
+      );
+      setConversations(updated);
+      if (selectedConv?.id === conversationId) {
+        setSelectedConv({ ...selectedConv, contactName: novoNome.trim() });
+      }
+      saveConversations(updated);
+
+      toast.success("Nome atualizado com sucesso!");
+    } catch (error) {
+      console.error('Erro ao editar nome:', error);
+      toast.error("Erro ao atualizar nome");
+    }
+  };
+
+  const handleCreateLead = async (conversationId: string) => {
+    const conv = conversations.find(c => c.id === conversationId);
+    if (!conv) return;
+
+    try {
+      setSyncStatus('syncing');
+      
+      // Selecionar a conversa antes de criar o lead
+      setSelectedConv(conv);
+      
+      // Aguardar um pouco para o state atualizar
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const lead = await findOrCreateLead(conv);
+      
+      if (lead) {
+        setLeadVinculado(lead);
+        setSyncStatus('synced');
+        setTimeout(() => setSyncStatus('idle'), 4000);
+        toast.success(`Lead ${conv.contactName} criado com sucesso!`);
+      } else {
+        setSyncStatus('error');
+        setTimeout(() => setSyncStatus('idle'), 5000);
+        toast.error("Erro ao criar lead");
+      }
+    } catch (error) {
+      console.error('Erro ao criar lead:', error);
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 5000);
+      toast.error("Erro ao criar lead");
+    }
+  };
+
+  const handleDeleteConversation = async (conversationId: string) => {
+    const conv = conversations.find(c => c.id === conversationId);
+    if (!conv) return;
+
+    const confirmar = window.confirm(`Tem certeza que deseja excluir a conversa com ${conv.contactName}?`);
+    if (!confirmar) return;
+
+    try {
+      // Deletar no Supabase
+      const { error } = await supabase
+        .from('conversas')
+        .delete()
+        .eq('numero', conv.phoneNumber || conv.id);
+
+      if (error) throw error;
+
+      // Remover localmente
+      const updated = conversations.filter(c => c.id !== conversationId);
+      setConversations(updated);
+      if (selectedConv?.id === conversationId) {
+        setSelectedConv(null);
+      }
+      saveConversations(updated);
+
+      toast.success("Conversa excluída com sucesso!");
+    } catch (error) {
+      console.error('Erro ao excluir conversa:', error);
+      toast.error("Erro ao excluir conversa");
+    }
+  };
+
   const filteredConversations = conversations
     .filter((conv) => filter === "all" || conv.status === filter)
     .filter((conv) => conv.contactName.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -1738,6 +1835,11 @@ function Conversas() {
               responsavel={conv.responsavel}
               funnelStage={conv.funnelStage}
               valor={conv.valor}
+              conversationId={conv.id}
+              leadId={leadVinculado ? 'existing' : undefined}
+              onEditName={() => handleEditName(conv.id)}
+              onCreateLead={() => handleCreateLead(conv.id)}
+              onDeleteConversation={() => handleDeleteConversation(conv.id)}
               onClick={() => {
                 console.log('🔍 Conversa selecionada:', conv.id, 'Mensagens:', conv.messages.length);
                 
