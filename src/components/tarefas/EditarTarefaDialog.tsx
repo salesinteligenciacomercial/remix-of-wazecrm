@@ -48,6 +48,7 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
   const [leadId, setLeadId] = useState(task.lead_id || "");
   const [users, setUsers] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (open) {
@@ -68,9 +69,41 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
     setLeads(leadsData || []);
   };
 
-  const handleSubmit = async () => {
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    // Validar título
     if (!title.trim()) {
-      toast.error("Digite um título para a tarefa");
+      newErrors.title = "Título é obrigatório";
+    } else if (title.trim().length < 3) {
+      newErrors.title = "Título deve ter no mínimo 3 caracteres";
+    } else if (title.length > 100) {
+      newErrors.title = "Título deve ter no máximo 100 caracteres";
+    }
+
+    // Validar descrição
+    if (description.length > 500) {
+      newErrors.description = "Descrição deve ter no máximo 500 caracteres";
+    }
+
+    // Validar data
+    if (dueDate) {
+      const selectedDate = new Date(dueDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (selectedDate < today) {
+        newErrors.dueDate = "A data não pode ser no passado";
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      toast.error("Corrija os erros antes de salvar");
       return;
     }
 
@@ -80,8 +113,8 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
           action: "editar_tarefa",
           data: {
             task_id: task.id,
-            title,
-            description,
+            title: title.trim(),
+            description: description.trim(),
             priority,
             due_date: dueDate || null,
             assignee_id: assigneeId || null,
@@ -92,6 +125,7 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
 
       toast.success("Tarefa atualizada com sucesso!");
       setOpen(false);
+      setErrors({});
       onTaskUpdated();
     } catch (error) {
       console.error("Erro ao atualizar tarefa:", error);
@@ -120,19 +154,36 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
             <Label>Título *</Label>
             <Input
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (errors.title) setErrors({ ...errors, title: "" });
+              }}
               placeholder="Digite o título da tarefa"
+              className={errors.title ? "border-destructive" : ""}
             />
+            {errors.title && (
+              <p className="text-xs text-destructive mt-1">{errors.title}</p>
+            )}
           </div>
 
           <div>
             <Label>Descrição</Label>
             <Textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                if (errors.description) setErrors({ ...errors, description: "" });
+              }}
               placeholder="Descreva a tarefa..."
               rows={3}
+              className={errors.description ? "border-destructive" : ""}
             />
+            {errors.description && (
+              <p className="text-xs text-destructive mt-1">{errors.description}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              {description.length}/500 caracteres
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -156,8 +207,15 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
               <Input
                 type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  if (errors.dueDate) setErrors({ ...errors, dueDate: "" });
+                }}
+                className={errors.dueDate ? "border-destructive" : ""}
               />
+              {errors.dueDate && (
+                <p className="text-xs text-destructive mt-1">{errors.dueDate}</p>
+              )}
             </div>
           </div>
 
