@@ -168,6 +168,7 @@ function Conversas() {
   const [leadVinculado, setLeadVinculado] = useState<any>(null);
   const [verificandoLead, setVerificandoLead] = useState(false);
   const [mostrarBotaoCriarLead, setMostrarBotaoCriarLead] = useState(false);
+  const [leadsVinculados, setLeadsVinculados] = useState<Record<string, string>>({}); // conversationId -> leadId
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Estados para modais de visualização
@@ -452,6 +453,34 @@ function Conversas() {
       }) || [];
 
       if (validData && validData.length > 0) {
+        // Buscar todos os leads vinculados às conversas
+        const { data: userRole } = await supabase
+          .from('user_roles')
+          .select('company_id')
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+          .maybeSingle();
+
+        const numeros = [...new Set(validData.map(conv => conv.numero))];
+        const { data: leadsData } = await supabase
+          .from('leads')
+          .select('id, phone, telefone')
+          .eq('company_id', userRole?.company_id)
+          .in('phone', numeros.concat(numeros.map(n => formatPhoneNumber(n))));
+
+        // Criar mapeamento de número -> leadId
+        const leadsMap: Record<string, string> = {};
+        if (leadsData) {
+          leadsData.forEach(lead => {
+            const phone = lead.phone || lead.telefone;
+            if (phone) {
+              leadsMap[phone] = lead.id;
+              // Também mapear versões formatadas
+              leadsMap[formatPhoneNumber(phone)] = lead.id;
+            }
+          });
+        }
+        setLeadsVinculados(leadsMap);
+
         // Agrupar mensagens por número
         const conversasAgrupadas = validData.reduce((acc: Record<string, any[]>, conv: any) => {
           if (!acc[conv.numero]) {
@@ -1662,6 +1691,13 @@ function Conversas() {
       const lead = await findOrCreateLead(conv);
       
       if (lead) {
+        // Atualizar o mapeamento de leads vinculados
+        setLeadsVinculados(prev => ({
+          ...prev,
+          [conv.id]: lead.id,
+          [formatPhoneNumber(conv.id)]: lead.id
+        }));
+        
         setLeadVinculado(lead);
         setSyncStatus('synced');
         setTimeout(() => setSyncStatus('idle'), 4000);
@@ -1698,8 +1734,18 @@ function Conversas() {
       // Remover localmente
       const updated = conversations.filter(c => c.id !== conversationId);
       setConversations(updated);
+      
+      // Remover do mapeamento de leads vinculados
+      setLeadsVinculados(prev => {
+        const newMap = { ...prev };
+        delete newMap[conv.id];
+        delete newMap[formatPhoneNumber(conv.id)];
+        return newMap;
+      });
+      
       if (selectedConv?.id === conversationId) {
         setSelectedConv(null);
+        setLeadVinculado(null);
       }
       saveConversations(updated);
 
@@ -1836,7 +1882,7 @@ function Conversas() {
               funnelStage={conv.funnelStage}
               valor={conv.valor}
               conversationId={conv.id}
-              leadId={leadVinculado ? 'existing' : undefined}
+              leadId={leadsVinculados[conv.id] || leadsVinculados[formatPhoneNumber(conv.id)]}
               onEditName={() => handleEditName(conv.id)}
               onCreateLead={() => handleCreateLead(conv.id)}
               onDeleteConversation={() => handleDeleteConversation(conv.id)}
