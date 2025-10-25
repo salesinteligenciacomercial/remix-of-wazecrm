@@ -225,11 +225,18 @@ serve(async (req) => {
     const result = await response.json();
 
     if (!response.ok) {
-      console.error("❌ Erro Evolution API");
+      console.error("❌ Erro Evolution API:", {
+        status: response.status,
+        statusText: response.statusText,
+        url: evolutionUrl,
+        payload: bodyPayload,
+        result: result
+      });
       return new Response(
         JSON.stringify({
           error: "Falha ao enviar mensagem",
-          code: "EXTERNAL_API_ERROR"
+          code: "EXTERNAL_API_ERROR",
+          details: result
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
