@@ -1,6 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Phone, Video, Info, User, MessageSquare, Instagram, Facebook, FileText, DollarSign } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Phone, Video, Info, User, MessageSquare, Instagram, Facebook, FileText, DollarSign, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
+
+type SyncStatus = 'synced' | 'syncing' | 'error' | 'idle';
 
 interface ConversationHeaderProps {
   contactName: string;
@@ -11,6 +14,7 @@ interface ConversationHeaderProps {
   responsavel?: string;
   showInfoPanel: boolean;
   onToggleInfoPanel: () => void;
+  syncStatus?: SyncStatus;
 }
 
 export function ConversationHeader({
@@ -22,6 +26,7 @@ export function ConversationHeader({
   responsavel,
   showInfoPanel,
   onToggleInfoPanel,
+  syncStatus = 'idle',
 }: ConversationHeaderProps) {
   const getChannelIcon = () => {
     switch (channel) {
@@ -43,6 +48,34 @@ export function ConversationHeader({
       .join("")
       .toUpperCase()
       .slice(0, 2);
+  };
+
+  const getSyncStatusBadge = () => {
+    switch (syncStatus) {
+      case 'syncing':
+        return (
+          <Badge variant="outline" className="gap-1.5 bg-blue-500/10 text-blue-600 border-blue-500/20 animate-pulse">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            <span className="text-xs font-medium">Sincronizando...</span>
+          </Badge>
+        );
+      case 'synced':
+        return (
+          <Badge variant="outline" className="gap-1.5 bg-green-500/10 text-green-600 border-green-500/20">
+            <CheckCircle2 className="h-3 w-3" />
+            <span className="text-xs font-medium">Sincronizado</span>
+          </Badge>
+        );
+      case 'error':
+        return (
+          <Badge variant="outline" className="gap-1.5 bg-red-500/10 text-red-600 border-red-500/20">
+            <AlertCircle className="h-3 w-3" />
+            <span className="text-xs font-medium">Erro na sincronização</span>
+          </Badge>
+        );
+      default:
+        return null;
+    }
   };
 
   return (
@@ -70,6 +103,7 @@ export function ConversationHeader({
                 <h2 className="font-bold text-lg text-foreground">
                   {contactName}
                 </h2>
+                {getSyncStatusBadge()}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>

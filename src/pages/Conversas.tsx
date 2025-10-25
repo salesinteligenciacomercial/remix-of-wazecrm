@@ -162,6 +162,7 @@ function Conversas() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'idle'>('idle');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Estados para modais de visualização
@@ -1172,6 +1173,8 @@ function Conversas() {
     }
     
     try {
+      setSyncStatus('syncing');
+      
       // Buscar ou criar lead no Supabase
       const leadData = await findOrCreateLead(selectedConv);
       
@@ -1185,11 +1188,15 @@ function Conversas() {
         
         if (error) {
           console.error('Erro ao atualizar tags no Supabase:', error);
+          setSyncStatus('error');
           toast.error('Erro ao salvar tag');
+          setTimeout(() => setSyncStatus('idle'), 3000);
           return;
         }
         
         console.log('✅ Tag adicionada no Supabase');
+        setSyncStatus('synced');
+        setTimeout(() => setSyncStatus('idle'), 2000);
       }
       
       // Atualizar localmente (será sincronizado via realtime)
@@ -1204,7 +1211,9 @@ function Conversas() {
       toast.success("Tag adicionada!");
     } catch (error) {
       console.error('Erro ao adicionar tag:', error);
+      setSyncStatus('error');
       toast.error('Erro ao adicionar tag');
+      setTimeout(() => setSyncStatus('idle'), 3000);
     }
   };
 
@@ -1215,6 +1224,8 @@ function Conversas() {
     }
     
     try {
+      setSyncStatus('syncing');
+      
       // Buscar ou criar lead no Supabase
       const leadData = await findOrCreateLead(selectedConv);
       
@@ -1227,11 +1238,15 @@ function Conversas() {
         
         if (error) {
           console.error('Erro ao atualizar funil no Supabase:', error);
+          setSyncStatus('error');
           toast.error('Erro ao salvar estágio');
+          setTimeout(() => setSyncStatus('idle'), 3000);
           return;
         }
         
         console.log('✅ Estágio atualizado no Supabase');
+        setSyncStatus('synced');
+        setTimeout(() => setSyncStatus('idle'), 2000);
       }
       
       // Atualizar localmente (será sincronizado via realtime)
@@ -1246,7 +1261,9 @@ function Conversas() {
       toast.success("Adicionado ao funil!");
     } catch (error) {
       console.error('Erro ao adicionar ao funil:', error);
+      setSyncStatus('error');
       toast.error('Erro ao adicionar ao funil');
+      setTimeout(() => setSyncStatus('idle'), 3000);
     }
   };
 
@@ -1257,6 +1274,8 @@ function Conversas() {
     }
     
     try {
+      setSyncStatus('syncing');
+      
       // Buscar ou criar lead no Supabase
       const leadData = await findOrCreateLead(selectedConv);
       
@@ -1272,11 +1291,15 @@ function Conversas() {
         
         if (error) {
           console.error('Erro ao atualizar responsável no Supabase:', error);
+          setSyncStatus('error');
           toast.error('Erro ao salvar responsável');
+          setTimeout(() => setSyncStatus('idle'), 3000);
           return;
         }
         
         console.log('✅ Responsável atualizado no Supabase');
+        setSyncStatus('synced');
+        setTimeout(() => setSyncStatus('idle'), 2000);
       }
       
       // Atualizar localmente (será sincronizado via realtime)
@@ -1291,7 +1314,9 @@ function Conversas() {
       toast.success("Responsável atualizado!");
     } catch (error) {
       console.error('Erro ao atualizar responsável:', error);
+      setSyncStatus('error');
       toast.error('Erro ao atualizar responsável');
+      setTimeout(() => setSyncStatus('idle'), 3000);
     }
   };
 
@@ -1299,6 +1324,8 @@ function Conversas() {
     if (!selectedConv) return;
     
     try {
+      setSyncStatus('syncing');
+      
       // Buscar ou criar lead no Supabase
       const leadData = await findOrCreateLead(selectedConv);
       
@@ -1326,11 +1353,15 @@ function Conversas() {
         
         if (error) {
           console.error('Erro ao atualizar informações no Supabase:', error);
+          setSyncStatus('error');
           toast.error('Erro ao salvar informações');
+          setTimeout(() => setSyncStatus('idle'), 3000);
           return;
         }
         
         console.log('✅ Informações atualizadas no Supabase');
+        setSyncStatus('synced');
+        setTimeout(() => setSyncStatus('idle'), 2000);
       }
       
       // Atualizar localmente (será sincronizado via realtime)
@@ -1357,7 +1388,9 @@ function Conversas() {
       toast.success("Informações atualizadas!");
     } catch (error) {
       console.error('Erro ao atualizar informações:', error);
+      setSyncStatus('error');
       toast.error('Erro ao atualizar informações');
+      setTimeout(() => setSyncStatus('idle'), 3000);
     }
   };
 
@@ -1562,6 +1595,7 @@ function Conversas() {
               responsavel={selectedConv.responsavel}
               showInfoPanel={showInfoPanel}
               onToggleInfoPanel={() => setShowInfoPanel(!showInfoPanel)}
+              syncStatus={syncStatus}
             />
 
             <div className="flex flex-1 overflow-hidden">

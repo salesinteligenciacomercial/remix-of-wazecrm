@@ -131,6 +131,50 @@ graph TB
 ✅ **Sem Duplicação**: Hook centralizado evita código repetido  
 ✅ **Escalável**: Fácil adicionar novos módulos à sincronização  
 ✅ **Robusto**: Tratamento de erros e rollback em falhas  
+✅ **Feedback Visual**: Indicadores mostram status da sincronização em tempo real
+
+---
+
+## 🎨 Feedback Visual de Sincronização
+
+O sistema exibe badges de status no cabeçalho da conversa:
+
+### Estados Visuais
+
+**🔄 Sincronizando...**
+- Badge azul pulsante
+- Ícone de refresh girando
+- Aparece durante operações de atualização
+- Duração: até a conclusão da operação
+
+**✅ Sincronizado**
+- Badge verde
+- Ícone de check
+- Confirma sucesso da operação
+- Desaparece após 2 segundos
+
+**⚠️ Erro na sincronização**
+- Badge vermelho
+- Ícone de alerta
+- Indica falha na operação
+- Desaparece após 3 segundos
+- Toast de erro complementa o feedback
+
+**Estado Idle**
+- Sem badge visível
+- Estado padrão quando não há sincronização em andamento
+
+### Implementação
+
+**ConversationHeader.tsx:**
+- Aceita prop `syncStatus` com 4 estados: 'idle' | 'syncing' | 'synced' | 'error'
+- Renderiza badge apropriado ao lado do nome do contato
+- Animações CSS para feedback visual rico
+
+**Conversas.tsx:**
+- Estado `syncStatus` controla o feedback
+- Atualizado em cada operação (tags, funil, responsável, informações)
+- Timers automáticos para limpar o estado após conclusão
 
 ---
 
@@ -161,8 +205,17 @@ graph TB
 1. Abra uma conversa no menu **Conversas**
 2. Clique em "Editar Informações" no Info Panel
 3. Altere o Valor da Negociação
-4. Navegue para **Funil de Vendas**
-5. ✅ Verifique se o valor no card foi atualizado
+4. **Observe o badge "Sincronizando..." aparecer no header**
+5. Aguarde o badge mudar para "✅ Sincronizado"
+6. Navegue para **Funil de Vendas**
+7. ✅ Verifique se o valor no card foi atualizado
+
+### Teste 4: Feedback Visual de Erro
+1. Desconecte da internet
+2. Tente adicionar uma tag em **Conversas**
+3. **Observe o badge "⚠️ Erro na sincronização" aparecer**
+4. Reconecte e tente novamente
+5. ✅ Verifique se o badge muda para "✅ Sincronizado"
 
 ---
 
@@ -173,6 +226,9 @@ Para acompanhar a sincronização, monitore o console:
 ```javascript
 // Conversas
 📡 [Conversas] Lead atualizado via sync: {...}
+🔄 Sincronizando tags...
+✅ Tag adicionada no Supabase
+🎯 Status: synced
 
 // Leads  
 📡 [Leads] Novo lead adicionado via sync: {...}
@@ -181,6 +237,16 @@ Para acompanhar a sincronização, monitore o console:
 // Funil
 📡 [Funil] Lead atualizado via sync: {...}
 🔄 Sincronização automática vai propagar para Conversas e Leads
+```
+
+### Estados de Sincronização
+
+```typescript
+// Estados possíveis
+'idle'    → Sem operações em andamento
+'syncing' → Salvando no Supabase
+'synced'  → Salvo com sucesso
+'error'   → Erro na operação
 ```
 
 ---
