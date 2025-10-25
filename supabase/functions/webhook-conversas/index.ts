@@ -154,20 +154,11 @@ serve(async (req) => {
     const url = new URL(req.url);
     const instanceName = url.searchParams.get('instance');
     
-    // CRÍTICO: Instância é obrigatória para evitar misturar mensagens entre CRMs
-    if (!instanceName) {
-      console.error('❌ Parâmetro instance não fornecido na URL');
-      return new Response(
-        JSON.stringify({ 
-          error: 'Parâmetro instance é obrigatório',
-          code: 'MISSING_INSTANCE',
-          help: 'Adicione ?instance=NOME_INSTANCIA na URL do webhook'
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (instanceName) {
+      console.log('📡 Instância identificada:', instanceName);
+    } else {
+      console.warn('⚠️ Parâmetro instance não fornecido - tentando identificar pela company do lead');
     }
-    
-    console.log('📡 Instância identificada:', instanceName);
 
     // Get raw body for signature verification
     const rawBody = await req.text();
