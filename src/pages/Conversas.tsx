@@ -264,7 +264,7 @@ function Conversas() {
 
   useEffect(() => {
     console.log('🚀 Componente Conversas montado');
-    loadConversations();
+    // Não carregar do localStorage - apenas Supabase
     loadQuickMessages();
     loadReminders();
     loadScheduledMessages();
@@ -347,21 +347,9 @@ function Conversas() {
   };
 
   const loadConversations = () => {
-    const saved = localStorage.getItem(CONVERSATIONS_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      const withDates = parsed.map((conv: any) => ({
-        ...conv,
-        messages: conv.messages.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp),
-        })),
-      }));
-      setConversations(withDates);
-    } else {
-      setConversations(initialConversations);
-      localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(initialConversations));
-    }
+    // Não carregar do localStorage - dados vêm apenas do Supabase
+    // Manter conversas iniciais apenas como fallback temporário
+    setConversations(initialConversations);
   };
 
   const loadSupabaseConversations = async () => {
@@ -632,7 +620,8 @@ function Conversas() {
   };
 
   const saveConversations = (updated: Conversation[]) => {
-    localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(updated));
+    // Não salvar no localStorage para evitar QuotaExceededError
+    // Os dados são persistidos no Supabase
     setConversations(updated);
   };
 
