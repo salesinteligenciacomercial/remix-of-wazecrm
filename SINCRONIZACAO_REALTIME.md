@@ -38,12 +38,25 @@ useLeadsSync({
 - ✅ Atribuir Responsável
 - ✅ Adicionar ao Funil / Mudar Estágio
 - ✅ Editar Informações (Produto, Valor, Anotações)
+- ✅ **Criar Lead Automaticamente** a partir da conversa
+- ✅ **Indicador de Vinculação** mostra se conversa tem lead associado
 
 **Como Funciona:**
 1. Usuário edita informações no **Info Panel** (painel lateral)
 2. Sistema busca/cria lead correspondente no Supabase via `findOrCreateLead()`
-3. Atualiza dados na tabela `leads` com `.update()`
+3. Atualiza dados na tabela `leads` com `.update()` ou `.insert()`
 4. **Realtime propaga** mudanças para Leads e Funil
+
+**Criação Automática de Leads:**
+- Ao editar qualquer informação (tags, funil, etc.), se o lead não existir, ele é criado automaticamente
+- Campos preenchidos automaticamente: `name`, `phone`, `company_id`, `owner_id`, `source`, `status`, `stage`
+- Toast de confirmação: "Lead '[nome]' criado automaticamente!"
+- Badge verde "✅ Lead vinculado no CRM" aparece no Info Panel
+
+**Criação Manual de Leads:**
+- Badge amarelo "⚠️ Lead não cadastrado" quando não há vinculação
+- Botão "Criar Lead no CRM" permite criação explícita
+- Útil para converter conversas em leads antes de editar informações
 
 **Mapeamento:**
 - `conversas.phoneNumber` → `leads.phone` ou `leads.telefone`
@@ -52,6 +65,7 @@ useLeadsSync({
 - `conversas.produto` → `leads.servico`
 - `conversas.valor` → `leads.value`
 - `conversas.anotacoes` → `leads.notes`
+- `conversas.channel` → `leads.source` (ex: "Conversa whatsapp")
 
 ---
 
@@ -210,7 +224,26 @@ O sistema exibe badges de status no cabeçalho da conversa:
 6. Navegue para **Funil de Vendas**
 7. ✅ Verifique se o valor no card foi atualizado
 
-### Teste 4: Feedback Visual de Erro
+### Teste 4: Criação Automática de Lead
+1. Abra uma **Conversa** sem lead vinculado
+2. **Observe** o badge "⚠️ Lead não cadastrado" no Info Panel
+3. Adicione uma tag à conversa
+4. **Observe** o badge mudar para "✅ Lead vinculado no CRM"
+5. Toast de confirmação aparece
+6. Navegue para **Leads**
+7. ✅ Verifique se o novo lead apareceu automaticamente
+8. Navegue para **Funil de Vendas**
+9. ✅ Verifique se o lead está visível no funil
+
+### Teste 5: Criação Manual de Lead
+1. Abra uma **Conversa** sem lead vinculado
+2. Clique no botão "Criar Lead no CRM" no Info Panel
+3. **Observe** o badge de sincronização aparecer
+4. Aguarde confirmação de sucesso
+5. Navegue para **Leads** e **Funil**
+6. ✅ Verifique se o lead apareceu em ambos os módulos
+
+### Teste 6: Feedback Visual de Erro
 1. Desconecte da internet
 2. Tente adicionar uma tag em **Conversas**
 3. **Observe o badge "⚠️ Erro na sincronização" aparecer**
@@ -253,11 +286,16 @@ Para acompanhar a sincronização, monitore o console:
 
 ## 🚀 Próximos Passos
 
-- [ ] Adicionar sincronização de status (Aguardando, Respondido, Resolvido)
+- [x] Hook global de sincronização (`useLeadsSync`)
+- [x] Sincronização Conversas ↔ Leads  
+- [x] Sincronização Conversas ↔ Funil
+- [x] Feedback visual de sincronização
+- [x] Criação automática de leads a partir de conversas
 - [ ] Sincronizar anotações internas entre módulos
 - [ ] Implementar histórico de mudanças do lead
 - [ ] Adicionar websocket para notificações push
 - [ ] Criar dashboard de sincronização em tempo real
+- [ ] Sincronizar status de atendimento (Aguardando, Respondido, Resolvido)
 
 ---
 

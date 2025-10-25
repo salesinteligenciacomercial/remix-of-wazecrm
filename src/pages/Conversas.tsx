@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   MessageSquare, Instagram, Facebook, Send, Search, Bot, User, Paperclip, 
   Clock, Calendar, Zap, FileText, Tag, TrendingUp, ArrowRightLeft, Image as ImageIcon,
-  Mic, FileUp, Check, CheckCheck, Phone, Video, Info, DollarSign, Users, Bell, Download, Volume2
+  Mic, FileUp, Check, CheckCheck, Phone, Video, Info, DollarSign, Users, Bell, Download, Volume2,
+  RefreshCw, CheckCircle2, AlertCircle
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
@@ -163,6 +164,8 @@ function Conversas() {
   const [showInfoPanel, setShowInfoPanel] = useState(true);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'idle'>('idle');
+  const [leadVinculado, setLeadVinculado] = useState<boolean>(false);
+  const [verificandoLead, setVerificandoLead] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Estados para modais de visualização
@@ -1397,19 +1400,30 @@ function Conversas() {
   // Função auxiliar para buscar ou criar lead no Supabase
   const findOrCreateLead = async (conversation: Conversation) => {
     try {
+      console.log('🔍 Buscando/criando lead para conversa:', conversation.contactName);
+      
+      // Buscar user_id do usuário autenticado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.warn('⚠️ Usuário não autenticado');
+        return null;
+      }
+
       // Buscar company_id do usuário
       const { data: userRole } = await supabase
         .from('user_roles')
         .select('company_id')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .eq('user_id', user.id)
         .maybeSingle();
 
       if (!userRole?.company_id) {
         console.warn('⚠️ Usuário sem company_id');
+        toast.error('Erro: Configuração de empresa não encontrada');
         return null;
       }
 
       const phoneToSearch = conversation.phoneNumber || conversation.id;
+      console.log('📞 Buscando lead com telefone:', phoneToSearch);
       
       // Tentar buscar lead existente por telefone
       const { data: existingLead, error: searchError } = await supabase
@@ -1420,7 +1434,7 @@ function Conversas() {
         .maybeSingle();
 
       if (searchError && searchError.code !== 'PGRST116') {
-        console.error('Erro ao buscar lead:', searchError);
+        console.error('❌ Erro ao buscar lead:', searchError);
         return null;
       }
 
@@ -1432,33 +1446,99 @@ function Conversas() {
 
       // Se não encontrou, criar novo lead
       console.log('📝 Criando novo lead no Supabase...');
+      
+      // Preparar dados do novo lead
+      const newLeadData = {
+        name: conversation.contactName,
+        phone: phoneToSearch,
+        telefone: phoneToSearch,
+        company_id: userRole.company_id,
+        owner_id: user.id,
+        status: 'novo',
+        stage: conversation.funnelStage?.toLowerCase() || 'prospeccao',
+        value: conversation.valor ? parseFloat(conversation.valor.replace(/[^\d,]/g, '').replace(',', '.')) : 0,
+        tags: conversation.tags || [],
+        notes: conversation.anotacoes || null,
+        servico: conversation.produto || null,
+        source: `Conversa ${conversation.channel}`,
+      };
+
+      console.log('📦 Dados do novo lead:', newLeadData);
+
       const { data: newLead, error: createError } = await supabase
         .from('leads')
-        .insert({
-          name: conversation.contactName,
-          phone: phoneToSearch,
-          telefone: phoneToSearch,
-          company_id: userRole.company_id,
-          status: 'novo',
-          stage: 'prospeccao',
-          value: 0,
-          tags: conversation.tags || [],
-          notes: conversation.anotacoes || null,
-          servico: conversation.produto || null,
-        })
+        .insert(newLeadData)
         .select()
         .single();
 
       if (createError) {
-        console.error('Erro ao criar lead:', createError);
+        console.error('❌ Erro ao criar lead:', createError);
+        toast.error(`Erro ao criar lead: ${createError.message}`);
         return null;
       }
 
-      console.log('✅ Novo lead criado:', newLead.id);
+      console.log('✅ Novo lead criado com sucesso:', newLead.id);
+      toast.success(`Lead "${conversation.contactName}" criado automaticamente!`);
+      
+      // O realtime vai propagar para Leads e Funil automaticamente
       return newLead;
     } catch (error) {
-      console.error('Erro em findOrCreateLead:', error);
+      console.error('❌ Erro em findOrCreateLead:', error);
+      toast.error('Erro ao processar lead');
       return null;
+    }
+  };
+
+  // Função para verificar se existe lead vinculado
+  const verificarLeadVinculado = async (conversation: Conversation) => {
+    try {
+      setVerificandoLead(true);
+      
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .maybeSingle();
+
+      if (!userRole?.company_id) return;
+
+      const phoneToSearch = conversation.phoneNumber || conversation.id;
+      
+      const { data: existingLead } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('company_id', userRole.company_id)
+        .or(`phone.eq.${phoneToSearch},telefone.eq.${phoneToSearch}`)
+        .maybeSingle();
+
+      setLeadVinculado(!!existingLead);
+    } catch (error) {
+      console.error('Erro ao verificar lead:', error);
+    } finally {
+      setVerificandoLead(false);
+    }
+  };
+
+  // Função para criar lead manualmente
+  const criarLeadManualmente = async () => {
+    if (!selectedConv) return;
+    
+    try {
+      setSyncStatus('syncing');
+      const lead = await findOrCreateLead(selectedConv);
+      
+      if (lead) {
+        setLeadVinculado(true);
+        setSyncStatus('synced');
+        setTimeout(() => setSyncStatus('idle'), 2000);
+      } else {
+        setSyncStatus('error');
+        setTimeout(() => setSyncStatus('idle'), 3000);
+      }
+    } catch (error) {
+      console.error('Erro ao criar lead:', error);
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 3000);
     }
   };
 
@@ -1565,6 +1645,9 @@ function Conversas() {
                 };
                 
                 setSelectedConv(updatedConv);
+                
+                // Verificar se existe lead vinculado
+                verificarLeadVinculado(conv);
                 
                 // Atualizar no localStorage
                 const updated = conversations.map(c => 
@@ -1696,6 +1779,38 @@ function Conversas() {
                       <h4 className="text-foreground font-medium mb-3 flex items-center gap-2">
                         <DollarSign className="h-4 w-4" /> Informações do Lead
                       </h4>
+                      
+                      {/* Status de vinculação com Lead */}
+                      <div className="mb-3">
+                        {verificandoLead ? (
+                          <Badge variant="outline" className="w-full justify-center gap-2 py-2">
+                            <RefreshCw className="h-3 w-3 animate-spin" />
+                            <span className="text-xs">Verificando...</span>
+                          </Badge>
+                        ) : leadVinculado ? (
+                          <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-green-500/10 text-green-600 border-green-500/20">
+                            <CheckCircle2 className="h-3 w-3" />
+                            <span className="text-xs font-medium">Lead vinculado no CRM</span>
+                          </Badge>
+                        ) : (
+                          <div className="space-y-2">
+                            <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-amber-500/10 text-amber-600 border-amber-500/20">
+                              <AlertCircle className="h-3 w-3" />
+                              <span className="text-xs font-medium">Lead não cadastrado</span>
+                            </Badge>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="w-full border-primary/50 hover:bg-primary/10"
+                              onClick={criarLeadManualmente}
+                            >
+                              <User className="h-3 w-3 mr-2" />
+                              Criar Lead no CRM
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      
                       <Dialog>
                         <DialogTrigger asChild>
                           <Button size="sm" variant="outline" className="w-full mb-2">
