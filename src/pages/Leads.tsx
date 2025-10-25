@@ -12,6 +12,7 @@ import { LeadTagsDialog } from "@/components/leads/LeadTagsDialog";
 import { NovoLeadDialog } from "@/components/funil/NovoLeadDialog";
 import { ImportarLeadsDialog } from "@/components/funil/ImportarLeadsDialog";
 import { formatPhoneNumber } from "@/utils/phoneFormatter";
+import { useNavigate } from "react-router-dom";
 
 interface Lead {
   id: string;
@@ -36,6 +37,14 @@ export default function Leads() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const { toast } = useToast();
+  const navigate = useNavigate();
+
+  const abrirConversa = (phone: string, name: string) => {
+    if (phone) {
+      const numero = phone.replace(/\D/g, "");
+      navigate(`/conversas?phone=${numero}&name=${encodeURIComponent(name)}`);
+    }
+  };
 
   useEffect(() => {
     carregarLeads();
@@ -181,10 +190,21 @@ export default function Leads() {
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4" />
                         {lead.phone}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 ml-2 text-[#25D366] hover:text-[#25D366] hover:bg-[#25D366]/10 transition-all"
+                          onClick={() => abrirConversa(lead.phone!, lead.name)}
+                          title="Abrir Conversa no WhatsApp"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 mr-1" />
+                          <span className="text-xs font-medium">WhatsApp</span>
+                        </Button>
                       </div>
                     )}
                     {lead.company && (
                       <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
                         <span className="font-medium">{lead.company}</span>
                       </div>
                     )}

@@ -1279,13 +1279,28 @@ function Conversas() {
               avatarUrl={conv.avatarUrl}
               onClick={() => {
                 console.log('🔍 Conversa selecionada:', conv.id, 'Mensagens:', conv.messages.length);
-                setSelectedConv(conv);
-                // Marcar mensagens como lidas
+                
+                // Marcar mensagens como lidas e visualizadas
+                const updatedConv = {
+                  ...conv,
+                  unread: 0,
+                  messages: conv.messages.map(msg => ({
+                    ...msg,
+                    read: true
+                  }))
+                };
+                
+                setSelectedConv(updatedConv);
+                
+                // Atualizar no localStorage
+                const updated = conversations.map(c => 
+                  c.id === conv.id ? updatedConv : c
+                );
+                saveConversations(updated);
+                
+                // Mostrar toast de visualizado
                 if (conv.unread > 0) {
-                  const updated = conversations.map(c => 
-                    c.id === conv.id ? { ...c, unread: 0 } : c
-                  );
-                  saveConversations(updated);
+                  toast.success('✔️ Mensagens visualizadas');
                 }
               }}
             />
