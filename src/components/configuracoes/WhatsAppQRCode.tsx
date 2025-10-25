@@ -4,31 +4,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, QrCode, CheckCircle, XCircle, RefreshCw } from "lucide-react";
+import { Loader2, QrCode, CheckCircle, XCircle, RefreshCw, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function WhatsAppQRCode() {
   const [loading, setLoading] = useState(false);
-  const [connection, setConnection] = useState<any>(null);
+  const [connections, setConnections] = useState<any[]>([]);
+  const [selectedConnection, setSelectedConnection] = useState<any>(null);
   const [qrCode, setQrCode] = useState<string>("");
   const [instanceName, setInstanceName] = useState("");
-  const [status, setStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
+  const [showNewInstance, setShowNewInstance] = useState(false);
 
   useEffect(() => {
-    loadConnection();
+    loadConnections();
     
-    // Atualizar status a cada 10 segundos
     const interval = setInterval(() => {
-      if (connection) {
-        checkConnectionStatus();
-      }
-    }, 10000);
+      loadConnections();
+    }, 15000);
 
     return () => clearInterval(interval);
-  }, [connection]);
+  }, []);
 
-  const loadConnection = async () => {
+  const loadConnections = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -41,19 +40,20 @@ export function WhatsAppQRCode() {
 
       if (!userRole?.company_id) return;
 
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('whatsapp_connections')
         .select('*')
         .eq('company_id', userRole.company_id)
-        .single();
+        .order('created_at', { ascending: false });
 
       if (data) {
-        setConnection(data);
-        setStatus(data.status as any);
-        setInstanceName(data.instance_name);
+        setConnections(data);
+        if (!selectedConnection && data.length > 0) {
+          setSelectedConnection(data[0]);
+        }
       }
     } catch (error) {
-      console.error('Erro ao carregar conexão:', error);
+      console.error('Erro ao carregar conexões:', error);
     }
   };
 
@@ -64,7 +64,6 @@ export function WhatsAppQRCode() {
     }
 
     setLoading(true);
-    setStatus("connecting");
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -78,105 +77,66 @@ export function WhatsAppQRCode() {
 
       if (!userRole?.company_id) throw new Error("Empresa não encontrada");
 
-      // Criar ou atualizar conexão
       const connectionData = {
         company_id: userRole.company_id,
-        instance_name: instanceName,
+        instance_name: instanceName.toUpperCase(),
         evolution_api_url: import.meta.env.VITE_EVOLUTION_API_URL || 'https://api.evolutionapi.com',
-        evolution_api_key: '', // Será preenchido pela API
         status: 'connecting',
-        qr_code_expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(), // 2 minutos
+        qr_code_expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
       };
 
       const { data: conn, error: connError } = await supabase
         .from('whatsapp_connections')
-        .upsert(connectionData, { onConflict: 'company_id' })
+        .insert(connectionData)
         .select()
         .single();
 
       if (connError) throw connError;
-      setConnection(conn);
-
-      // Simular geração de QR Code (na produção, chamaria a Evolution API)
-      const mockQR = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`whatsapp-instance-${instanceName}-${Date.now()}`)}`;
+      
+      setSelectedConnection(conn);
+      const mockQR = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`whatsapp-${instanceName}-${Date.now()}`)}`;
       setQrCode(mockQR);
+      setShowNewInstance(false);
+      setInstanceName("");
 
       toast.success("QR Code gerado! Escaneie com seu WhatsApp");
-
-      // Simular checagem de status (na produção, seria polling real)
-      setTimeout(() => {
-        checkConnectionStatus();
-      }, 30000);
+      loadConnections();
     } catch (error: any) {
       console.error('Erro ao gerar QR Code:', error);
       toast.error(error.message || "Erro ao gerar QR Code");
-      setStatus("disconnected");
     } finally {
       setLoading(false);
     }
   };
 
-  const checkConnectionStatus = async () => {
+  const deleteConnection = async (connectionId: string) => {
     try {
-      if (!connection) return;
-
-      // Na produção, faria requisição para Evolution API
-      // Por ora, simular status
-      const isConnected = Math.random() > 0.5;
-
-      if (isConnected && status !== "connected") {
-        const { error } = await supabase
-          .from('whatsapp_connections')
-          .update({ 
-            status: 'connected',
-            last_connected_at: new Date().toISOString(),
-            whatsapp_number: '+5511999999999' // Seria retornado pela API
-          })
-          .eq('id', connection.id);
-
-        if (!error) {
-          setStatus("connected");
-          toast.success("WhatsApp conectado com sucesso!");
-          setQrCode("");
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao verificar status:', error);
-    }
-  };
-
-  const disconnectWhatsApp = async () => {
-    try {
-      if (!connection) return;
-
       const { error } = await supabase
         .from('whatsapp_connections')
-        .update({ 
-          status: 'disconnected',
-          qr_code: null,
-          whatsapp_number: null
-        })
-        .eq('id', connection.id);
+        .delete()
+        .eq('id', connectionId);
 
       if (error) throw error;
 
-      setStatus("disconnected");
-      setQrCode("");
-      setConnection(null);
-      toast.success("WhatsApp desconectado");
+      toast.success("Instância removida");
+      if (selectedConnection?.id === connectionId) {
+        setSelectedConnection(null);
+        setQrCode("");
+      }
+      loadConnections();
     } catch (error: any) {
-      console.error('Erro ao desconectar:', error);
-      toast.error("Erro ao desconectar");
+      console.error('Erro ao deletar:', error);
+      toast.error("Erro ao remover instância");
     }
   };
 
-  const getStatusBadge = () => {
+  const getStatusBadge = (status: string) => {
     const badges = {
       disconnected: <Badge variant="outline" className="gap-1"><XCircle className="h-3 w-3" /> Desconectado</Badge>,
       connecting: <Badge variant="secondary" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Conectando...</Badge>,
       connected: <Badge className="gap-1 bg-success"><CheckCircle className="h-3 w-3" /> Conectado</Badge>,
     };
-    return badges[status];
+    return badges[status as keyof typeof badges] || badges.disconnected;
   };
 
   return (
@@ -186,111 +146,97 @@ export function WhatsAppQRCode() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <QrCode className="h-5 w-5 text-success" />
-              Conexão WhatsApp
+              Instâncias WhatsApp
             </CardTitle>
             <CardDescription>
-              Conecte seu WhatsApp via QR Code usando Evolution API
+              Gerencie múltiplas conexões WhatsApp via Evolution API
             </CardDescription>
           </div>
-          {getStatusBadge()}
+          <Button onClick={() => setShowNewInstance(true)} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Instância
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {status === "disconnected" && (
-          <>
-            <div className="space-y-2">
-              <Label>Nome da Instância</Label>
-              <Input
-                placeholder="Ex: empresa-whatsapp"
-                value={instanceName}
-                onChange={(e) => setInstanceName(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Escolha um nome único para identificar esta conexão
-              </p>
+        {showNewInstance && (
+          <div className="p-4 border rounded-lg space-y-3 bg-muted/50">
+            <Label>Nome da Nova Instância</Label>
+            <Input
+              placeholder="Ex: CENTRAL, VENDAS, SUPORTE"
+              value={instanceName}
+              onChange={(e) => setInstanceName(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button onClick={generateQRCode} disabled={loading} className="flex-1">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar"}
+              </Button>
+              <Button variant="outline" onClick={() => {setShowNewInstance(false); setInstanceName("");}}>
+                Cancelar
+              </Button>
             </div>
-            <Button 
-              onClick={generateQRCode} 
-              disabled={loading}
-              className="w-full"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Gerando QR Code...
-                </>
-              ) : (
-                <>
-                  <QrCode className="h-4 w-4 mr-2" />
-                  Gerar QR Code
-                </>
-              )}
-            </Button>
-          </>
-        )}
-
-        {status === "connecting" && qrCode && (
-          <div className="space-y-4">
-            <div className="p-6 bg-muted/50 rounded-lg flex flex-col items-center gap-4">
-              <img 
-                src={qrCode} 
-                alt="QR Code WhatsApp" 
-                className="w-64 h-64 border-4 border-white shadow-lg rounded-lg"
-              />
-              <div className="text-center space-y-2">
-                <p className="font-medium">Escaneie este QR Code com seu WhatsApp</p>
-                <p className="text-sm text-muted-foreground">
-                  1. Abra o WhatsApp no seu celular<br/>
-                  2. Toque em Menu ou Configurações<br/>
-                  3. Toque em Aparelhos conectados<br/>
-                  4. Toque em Conectar um aparelho<br/>
-                  5. Aponte seu celular para esta tela
-                </p>
-              </div>
-            </div>
-            <Button 
-              variant="outline" 
-              onClick={generateQRCode}
-              className="w-full"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Gerar Novo QR Code
-            </Button>
           </div>
         )}
 
-        {status === "connected" && connection && (
-          <div className="space-y-4">
-            <div className="p-4 bg-success/10 border border-success/20 rounded-lg">
-              <div className="flex items-center gap-2 text-success mb-2">
-                <CheckCircle className="h-5 w-5" />
-                <span className="font-semibold">WhatsApp Conectado!</span>
-              </div>
-              <div className="space-y-1 text-sm">
-                <p><strong>Instância:</strong> {connection.instance_name}</p>
-                {connection.whatsapp_number && (
-                  <p><strong>Número:</strong> {connection.whatsapp_number}</p>
+        <ScrollArea className="h-[400px]">
+          <div className="space-y-3">
+            {connections.map((conn) => (
+              <div key={conn.id} className="p-4 border rounded-lg space-y-2 hover:bg-muted/50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <QrCode className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="font-semibold">{conn.instance_name}</p>
+                      {conn.whatsapp_number && (
+                        <p className="text-xs text-muted-foreground">{conn.whatsapp_number}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getStatusBadge(conn.status)}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteConnection(conn.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+                
+                {conn.status === 'connecting' && selectedConnection?.id === conn.id && qrCode && (
+                  <div className="mt-3 p-3 bg-background rounded-lg">
+                    <img src={qrCode} alt="QR Code" className="w-48 h-48 mx-auto border" />
+                    <p className="text-xs text-center mt-2 text-muted-foreground">
+                      Escaneie com WhatsApp em até 2 minutos
+                    </p>
+                  </div>
                 )}
-                {connection.last_connected_at && (
-                  <p><strong>Conectado em:</strong> {new Date(connection.last_connected_at).toLocaleString('pt-BR')}</p>
+                
+                {conn.last_connected_at && (
+                  <p className="text-xs text-muted-foreground">
+                    Última conexão: {new Date(conn.last_connected_at).toLocaleString('pt-BR')}
+                  </p>
                 )}
               </div>
-            </div>
-            <Button 
-              variant="destructive" 
-              onClick={disconnectWhatsApp}
-              className="w-full"
-            >
-              <XCircle className="h-4 w-4 mr-2" />
-              Desconectar WhatsApp
-            </Button>
+            ))}
+            
+            {connections.length === 0 && !showNewInstance && (
+              <div className="text-center py-8 text-muted-foreground">
+                <QrCode className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                <p>Nenhuma instância configurada</p>
+                <p className="text-sm">Clique em "Nova Instância" para começar</p>
+              </div>
+            )}
           </div>
-        )}
+        </ScrollArea>
 
         <div className="pt-4 border-t">
           <p className="text-xs text-muted-foreground">
-            <strong>Importante:</strong> A conexão WhatsApp é única por empresa. 
-            Certifique-se de não usar o mesmo número em múltiplos dispositivos.
+            <strong>Importante:</strong> Cada instância deve usar um número WhatsApp diferente.
+            Configure o webhook da Evolution API para: <code className="bg-muted px-1 py-0.5 rounded">
+              {window.location.origin}/functions/v1/webhook-conversas?instance=NOME_INSTANCIA
+            </code>
           </p>
         </div>
       </CardContent>

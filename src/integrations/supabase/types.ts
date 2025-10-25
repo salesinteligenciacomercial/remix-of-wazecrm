@@ -1187,7 +1187,7 @@ export type Database = {
           {
             foreignKeyName: "whatsapp_connections_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
