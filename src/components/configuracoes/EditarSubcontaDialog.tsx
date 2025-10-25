@@ -26,6 +26,9 @@ interface EditarSubcontaDialogProps {
 
 export function EditarSubcontaDialog({ company, open, onOpenChange, onSuccess }: EditarSubcontaDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [showRedefinirSenha, setShowRedefinirSenha] = useState(false);
+  const [novaSenha, setNovaSenha] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     cnpj: "",
@@ -50,8 +53,28 @@ export function EditarSubcontaDialog({ company, open, onOpenChange, onSuccess }:
         max_users: company.max_users,
         max_leads: company.max_leads,
       });
+      
+      // Buscar user_id do admin da empresa
+      loadAdminUser();
     }
   }, [company]);
+
+  const loadAdminUser = async () => {
+    try {
+      const { data } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('company_id', company.id)
+        .eq('role', 'company_admin')
+        .single();
+      
+      if (data) {
+        setUserId(data.user_id);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar user_id:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,6 +109,58 @@ export function EditarSubcontaDialog({ company, open, onOpenChange, onSuccess }:
     } catch (error: any) {
       toast({
         title: "Erro ao atualizar subconta",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRedefinirSenha = async () => {
+    if (!novaSenha || novaSenha.length < 6) {
+      toast({
+        title: "Erro",
+        description: "A senha deve ter no mínimo 6 caracteres",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!userId) {
+      toast({
+        title: "Erro",
+        description: "Usuário não encontrado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke('redefinir-senha-subconta', {
+        body: {
+          userId,
+          novaSenha,
+          notificar: true,
+          email: formData.email,
+          telefone: formData.telefone,
+          nome: formData.responsavel,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Senha redefinida",
+        description: "A nova senha foi enviada por email e WhatsApp",
+      });
+
+      setShowRedefinirSenha(false);
+      setNovaSenha("");
+    } catch (error: any) {
+      toast({
+        title: "Erro ao redefinir senha",
         description: error.message,
         variant: "destructive",
       });
@@ -189,6 +264,50 @@ export function EditarSubcontaDialog({ company, open, onOpenChange, onSuccess }:
               />
             </div>
           </div>
+
+          {showRedefinirSenha ? (
+            <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+              <h4 className="font-semibold">Redefinir Senha do Administrador</h4>
+              <div className="space-y-2">
+                <Label htmlFor="nova-senha">Nova Senha *</Label>
+                <Input
+                  id="nova-senha"
+                  type="text"
+                  placeholder="Digite a nova senha (mín. 6 caracteres)"
+                  value={novaSenha}
+                  onChange={(e) => setNovaSenha(e.target.value)}
+                  minLength={6}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowRedefinirSenha(false);
+                    setNovaSenha("");
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button type="button" onClick={handleRedefinirSenha} disabled={loading}>
+                  {loading ? "Redefinindo..." : "Confirmar Nova Senha"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                ✉️ A nova senha será enviada automaticamente por email e WhatsApp
+              </p>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowRedefinirSenha(true)}
+              className="w-full"
+            >
+              🔐 Redefinir Senha do Administrador
+            </Button>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -118,7 +118,36 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
         console.log("✅ [NOVA SUBCONTA] Role criada com sucesso");
       }
 
-      // 5. Preparar credenciais de acesso
+      // 5. Enviar credenciais por email e WhatsApp
+      console.log("📧 [NOVA SUBCONTA] Enviando credenciais...");
+      
+      try {
+        const { error: envioError } = await supabase.functions.invoke('enviar-credenciais-subconta', {
+          body: {
+            nome: formData.responsavel,
+            email: adminEmail,
+            senha: generatedPassword,
+            telefone: formData.telefone,
+            nomeConta: companyData.name,
+            url: window.location.origin,
+          },
+        });
+
+        if (envioError) {
+          console.error("⚠️ [NOVA SUBCONTA] Erro ao enviar credenciais:", envioError);
+          toast({
+            title: "⚠️ Atenção",
+            description: "Subconta criada, mas houve erro ao enviar credenciais automaticamente.",
+            variant: "destructive",
+          });
+        } else {
+          console.log("✅ [NOVA SUBCONTA] Credenciais enviadas com sucesso");
+        }
+      } catch (envioError) {
+        console.error("⚠️ [NOVA SUBCONTA] Exceção ao enviar credenciais:", envioError);
+      }
+
+      // 6. Preparar credenciais de acesso para exibição
       const accessUrl = window.location.origin;
       
       setCredentials({
@@ -134,7 +163,7 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
 
       toast({
         title: "Subconta criada com sucesso! ✅",
-        description: `${companyData.name} foi criada. Copie as credenciais e configure o WhatsApp!`,
+        description: `${companyData.name} foi criada. Credenciais enviadas por email e WhatsApp!`,
       });
 
       onSuccess();
