@@ -116,17 +116,22 @@ export function ConversationListItem({
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 flex-shrink-0 hover:bg-accent"
+                    className="h-8 w-8 flex-shrink-0 hover:bg-accent opacity-100"
                   >
-                    <MoreVertical className="h-4 w-4" />
+                    <MoreVertical className="h-4 w-4 text-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="z-50" onClick={handleMenuClick}>
+                <DropdownMenuContent 
+                  align="end" 
+                  className="z-[100] bg-popover border border-border shadow-lg min-w-[180px]"
+                  onClick={handleMenuClick}
+                >
                   <DropdownMenuItem 
                     onClick={(e) => {
                       e.stopPropagation();
                       onEditName?.();
                     }}
+                    className="cursor-pointer hover:bg-accent"
                   >
                     <Edit className="h-4 w-4 mr-2" />
                     Editar nome
@@ -137,6 +142,7 @@ export function ConversationListItem({
                         e.stopPropagation();
                         onCreateLead();
                       }}
+                      className="cursor-pointer hover:bg-accent"
                     >
                       <UserPlus className="h-4 w-4 mr-2" />
                       Adicionar ao CRM
@@ -147,7 +153,7 @@ export function ConversationListItem({
                       e.stopPropagation();
                       onDeleteConversation?.();
                     }}
-                    className="text-destructive"
+                    className="text-destructive cursor-pointer hover:bg-accent"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Excluir conversa
