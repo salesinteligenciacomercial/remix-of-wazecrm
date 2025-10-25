@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus } from "lucide-react";
+import { Plus, Tag, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -30,8 +31,10 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
     source: "",
     notes: "",
     funil_id: "",
-    etapa_id: ""
+    etapa_id: "",
+    tags: [] as string[]
   });
+  const [newTag, setNewTag] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -128,7 +131,8 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
           owner_id: session.user.id,
           company_id: userRole.company_id,
           status: "novo",
-          stage: "prospeccao"
+          stage: "prospeccao",
+          tags: formData.tags
         }])
         .select();
 
@@ -148,8 +152,10 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
         source: "",
         notes: "",
         funil_id: funis.length > 0 ? funis[0].id : "",
-        etapa_id: ""
+        etapa_id: "",
+        tags: []
       });
+      setNewTag("");
       setOpen(false);
       onLeadCreated();
     } catch (error) {
@@ -297,6 +303,64 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
               rows={3}
               placeholder="Informações adicionais sobre o lead"
             />
+          </div>
+
+          <div>
+            <Label htmlFor="tags">Tags</Label>
+            <div className="flex gap-2 mb-2">
+              <Input
+                id="tags"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const tagTrimmed = newTag.trim();
+                    if (tagTrimmed && !formData.tags.includes(tagTrimmed)) {
+                      setFormData({ ...formData, tags: [...formData.tags, tagTrimmed] });
+                      setNewTag("");
+                    }
+                  }
+                }}
+                placeholder="Digite uma tag e pressione Enter"
+              />
+              <Button
+                type="button"
+                size="icon"
+                onClick={() => {
+                  const tagTrimmed = newTag.trim();
+                  if (tagTrimmed && !formData.tags.includes(tagTrimmed)) {
+                    setFormData({ ...formData, tags: [...formData.tags, tagTrimmed] });
+                    setNewTag("");
+                  }
+                }}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2 min-h-[60px] p-2 border rounded-md bg-muted/20">
+              {formData.tags.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhuma tag adicionada</p>
+              ) : (
+                formData.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="gap-1">
+                    <Tag className="h-3 w-3" />
+                    {tag}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4 p-0 hover:bg-transparent"
+                      onClick={() => {
+                        setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) });
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                ))
+              )}
+            </div>
           </div>
 
           <div className="flex gap-2 pt-4">

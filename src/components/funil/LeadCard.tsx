@@ -15,6 +15,7 @@ interface LeadCardProps {
     value?: number;
     company?: string;
     source?: string;
+    tags?: string[];
   };
   onDelete: (leadId: string) => void;
 }
@@ -61,11 +62,23 @@ export function LeadCard({ lead, onDelete }: LeadCardProps) {
       
       <div className="relative space-y-3">
         <div className="flex justify-between items-start gap-2">
-          <div className="flex items-center gap-2 flex-1">
+          <div className="flex items-start gap-2 flex-1">
             <div className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
               <User className="h-4 w-4 text-primary" />
             </div>
-            <h4 className="font-semibold text-sm text-foreground">{lead.nome}</h4>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-semibold text-sm text-foreground mb-1">{lead.nome}</h4>
+              {lead.tags && lead.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {lead.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="text-xs">
+                      <Tag className="h-2.5 w-2.5 mr-1" />
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex gap-1">
             <LeadActionsDialog lead={{ id: lead.id, name: lead.nome, telefone: lead.telefone, email: lead.email }} />
