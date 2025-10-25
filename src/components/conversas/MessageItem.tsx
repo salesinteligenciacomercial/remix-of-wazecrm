@@ -119,7 +119,7 @@ export function MessageItem({
         )}
         
         <div
-          className={`max-w-[65%] rounded-lg px-3 py-2 shadow-sm relative ${
+          className={`max-w-[500px] min-w-[100px] w-fit rounded-lg px-3 py-2 shadow-sm relative ${
             message.sender === "user"
               ? "bg-[#d9fdd3] text-foreground"
               : "bg-white text-foreground"
@@ -127,8 +127,8 @@ export function MessageItem({
         >
           {/* Text Message */}
           {message.type === "text" && (
-            <div>
-              <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+            <div className="max-w-full">
+              <p className="text-sm break-words overflow-wrap-anywhere">{message.content}</p>
               {message.edited && (
                 <span className="text-[10px] text-muted-foreground italic"> (editado)</span>
               )}
