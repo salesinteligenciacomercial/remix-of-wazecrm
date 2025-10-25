@@ -31,25 +31,52 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
     processFile(selectedFile);
   };
 
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
   const processFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
-      const lines = text.split('\n');
-      const headers = lines[0].split(',').map(h => h.trim());
+      const lines = text.split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        toast.error("Arquivo CSV vazio ou inválido");
+        return;
+      }
+
+      const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
       
       const previewData = lines.slice(1, 6).map(line => {
-        const values = line.split(',');
+        const values = parseCSVLine(line);
         const obj: any = {};
         headers.forEach((header, index) => {
-          obj[header] = values[index]?.trim() || '';
+          obj[header] = values[index] || '';
         });
         return obj;
       });
 
       setPreview(previewData);
     };
-    reader.readAsText(file);
+    reader.readAsText(file, 'UTF-8');
   };
 
   const handleImport = async () => {
@@ -76,42 +103,58 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
         return;
       }
 
-      // Buscar primeiro funil e etapa do usuário
-      const { data: funil } = await supabase
+      // Buscar primeiro funil do usuário
+      const { data: funis } = await supabase
         .from("funis")
-        .select("id, etapas(id)")
+        .select("id")
         .eq("company_id", userRole.company_id)
-        .limit(1)
-        .single();
+        .limit(1);
 
-      if (!funil || !funil.etapas || funil.etapas.length === 0) {
-        toast.error("Crie um funil com etapas antes de importar leads");
+      if (!funis || funis.length === 0) {
+        toast.error("Crie um funil antes de importar leads");
         setLoading(false);
         return;
       }
 
+      const funilId = funis[0].id;
+
+      // Buscar primeira etapa do funil
+      const { data: etapas } = await supabase
+        .from("etapas")
+        .select("id")
+        .eq("funil_id", funilId)
+        .order("posicao", { ascending: true })
+        .limit(1);
+
+      if (!etapas || etapas.length === 0) {
+        toast.error("Crie etapas no funil antes de importar leads");
+        setLoading(false);
+        return;
+      }
+
+      const etapaId = etapas[0].id;
+
       const reader = new FileReader();
       reader.onload = async (event) => {
         const text = event.target?.result as string;
-        const lines = text.split('\n');
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const lines = text.split('\n').filter(line => line.trim());
+        const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
         
         const leadsToImport = lines.slice(1)
-          .filter(line => line.trim())
           .map(line => {
-            const values = line.split(',');
+            const values = parseCSVLine(line);
             const lead: any = {
               owner_id: user.id,
               company_id: userRole.company_id,
-              funil_id: funil.id,
-              etapa_id: funil.etapas[0].id,
+              funil_id: funilId,
+              etapa_id: etapaId,
               status: 'novo',
               stage: 'prospeccao',
               value: 0,
             };
 
             headers.forEach((header, index) => {
-              const value = values[index]?.trim();
+              const value = values[index]?.trim().replace(/^["']|["']$/g, '');
               if (!value) return;
 
               // Mapear colunas do CSV para campos do banco
@@ -123,6 +166,7 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
                 case 'telefone':
                 case 'phone':
                 case 'whatsapp':
+                case 'celular':
                   let telefone = value.replace(/\D/g, "");
                   if (!telefone.startsWith("55")) {
                     telefone = "55" + telefone;
@@ -132,7 +176,12 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
                   break;
                 case 'email':
                 case 'e-mail':
-                  lead.email = value;
+                  if (value.includes('@')) {
+                    lead.email = value.toLowerCase();
+                  }
+                  break;
+                case 'cpf':
+                  lead.cpf = value.replace(/\D/g, "");
                   break;
                 case 'empresa':
                 case 'company':
@@ -140,32 +189,54 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
                   break;
                 case 'origem':
                 case 'source':
+                case 'fonte':
                   lead.source = value;
                   break;
                 case 'valor':
                 case 'value':
-                  lead.value = parseFloat(value.replace(/[^0-9.-]+/g, "")) || 0;
+                case 'ticket':
+                  const valorLimpo = value.replace(/[^0-9,.-]+/g, "").replace(',', '.');
+                  lead.value = parseFloat(valorLimpo) || 0;
                   break;
                 case 'status':
-                  lead.status = value.toLowerCase();
+                  const statusValido = ['novo', 'em_contato', 'qualificado', 'negociacao', 'ganho', 'perdido'];
+                  const statusNormalizado = value.toLowerCase().replace(/\s+/g, '_');
+                  if (statusValido.includes(statusNormalizado)) {
+                    lead.status = statusNormalizado;
+                  }
                   break;
                 case 'servico':
                 case 'service':
+                case 'produto':
                   lead.servico = value;
                   break;
                 case 'segmentacao':
                 case 'segmento':
+                case 'categoria':
                   lead.segmentacao = value;
                   break;
                 case 'tags':
-                  lead.tags = value.split(';').map((t: string) => t.trim());
+                case 'tag':
+                case 'etiquetas':
+                  const tagsArray = value.includes(';') 
+                    ? value.split(';') 
+                    : value.includes(',') 
+                    ? value.split(',') 
+                    : [value];
+                  lead.tags = tagsArray.map((t: string) => t.trim()).filter((t: string) => t);
+                  break;
+                case 'observacoes':
+                case 'notes':
+                case 'nota':
+                case 'observacao':
+                  lead.notes = value;
                   break;
               }
             });
 
             return lead;
           })
-          .filter(lead => lead.name); // Só importar leads com nome
+          .filter(lead => lead.name && lead.name.length > 0); // Só importar leads com nome válido
 
         if (leadsToImport.length === 0) {
           toast.error("Nenhum lead válido encontrado no arquivo");
@@ -212,9 +283,13 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
             <AlertDescription>
               <strong>Formato do arquivo CSV:</strong>
               <br />
-              Colunas aceitas: nome, telefone, email, empresa, origem, valor, status, servico, segmentacao, tags
+              <strong>Obrigatório:</strong> nome
               <br />
-              Separe múltiplas tags com ponto e vírgula (;)
+              <strong>Opcionais:</strong> telefone, email, cpf, empresa, origem, valor, status, servico, segmentacao, tags, observacoes
+              <br />
+              • Separe múltiplas tags com ponto e vírgula (;) ou vírgula (,)
+              <br />
+              • O telefone será formatado automaticamente com código do Brasil (+55)
             </AlertDescription>
           </Alert>
 
