@@ -13,6 +13,7 @@ import { NovoLeadDialog } from "@/components/funil/NovoLeadDialog";
 import { ImportarLeadsDialog } from "@/components/funil/ImportarLeadsDialog";
 import { formatPhoneNumber } from "@/utils/phoneFormatter";
 import { useNavigate } from "react-router-dom";
+import { useLeadsSync } from "@/hooks/useLeadsSync";
 
 interface Lead {
   id: string;
@@ -45,6 +46,25 @@ export default function Leads() {
       navigate(`/conversas?phone=${numero}&name=${encodeURIComponent(name)}`);
     }
   };
+
+  // Integrar sincronização de leads em tempo real
+  useLeadsSync({
+    onInsert: (newLead) => {
+      console.log('📡 [Leads] Novo lead adicionado via sync:', newLead);
+      setLeads(prev => [newLead, ...prev]);
+    },
+    onUpdate: (updatedLead) => {
+      console.log('📡 [Leads] Lead atualizado via sync:', updatedLead);
+      setLeads(prev => prev.map(lead => 
+        lead.id === updatedLead.id ? updatedLead : lead
+      ));
+    },
+    onDelete: (deletedLead) => {
+      console.log('📡 [Leads] Lead removido via sync:', deletedLead);
+      setLeads(prev => prev.filter(lead => lead.id !== deletedLead.id));
+    },
+    showNotifications: true
+  });
 
   useEffect(() => {
     carregarLeads();

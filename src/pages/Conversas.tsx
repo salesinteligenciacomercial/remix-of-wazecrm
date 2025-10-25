@@ -20,6 +20,7 @@ import { MessageItem } from "@/components/conversas/MessageItem";
 import { AudioRecorder } from "@/components/conversas/AudioRecorder";
 import { MediaUpload } from "@/components/conversas/MediaUpload";
 import { formatPhoneNumber } from "@/utils/phoneFormatter";
+import { useLeadsSync } from "@/hooks/useLeadsSync";
 
 interface Message {
   id: string;
@@ -189,6 +190,56 @@ function Conversas() {
 
   const funnelStages = ["Novo", "Qualificado", "Em Negociação", "Fechado", "Perdido"];
   const usuarios = ["Você", "Ana Costa", "Pedro Lima", "Julia Santos", "Carlos Mendes"];
+
+  // Integrar sincronização de leads em tempo real
+  useLeadsSync({
+    onUpdate: (updatedLead) => {
+      console.log('📡 [Conversas] Lead atualizado via sync:', updatedLead);
+      
+      // Atualizar conversa correspondente se existir
+      setConversations(prev => prev.map(conv => {
+        // Buscar por telefone formatado
+        const phoneMatch = conv.phoneNumber === updatedLead.phone || 
+                          conv.phoneNumber === updatedLead.telefone ||
+                          conv.id === updatedLead.phone ||
+                          conv.id === updatedLead.telefone;
+        
+        if (phoneMatch) {
+          return {
+            ...conv,
+            contactName: updatedLead.name || conv.contactName,
+            tags: updatedLead.tags || conv.tags,
+            funnelStage: updatedLead.stage || conv.funnelStage,
+            produto: updatedLead.servico || conv.produto,
+            valor: updatedLead.value ? `R$ ${Number(updatedLead.value).toLocaleString('pt-BR')}` : conv.valor,
+            anotacoes: updatedLead.notes || conv.anotacoes,
+          };
+        }
+        return conv;
+      }));
+      
+      // Atualizar conversa selecionada também
+      if (selectedConv) {
+        const phoneMatch = selectedConv.phoneNumber === updatedLead.phone || 
+                          selectedConv.phoneNumber === updatedLead.telefone ||
+                          selectedConv.id === updatedLead.phone ||
+                          selectedConv.id === updatedLead.telefone;
+        
+        if (phoneMatch) {
+          setSelectedConv(prev => prev ? {
+            ...prev,
+            contactName: updatedLead.name || prev.contactName,
+            tags: updatedLead.tags || prev.tags,
+            funnelStage: updatedLead.stage || prev.funnelStage,
+            produto: updatedLead.servico || prev.produto,
+            valor: updatedLead.value ? `R$ ${Number(updatedLead.value).toLocaleString('pt-BR')}` : prev.valor,
+            anotacoes: updatedLead.notes || prev.anotacoes,
+          } : null);
+        }
+      }
+    },
+    showNotifications: false // Não mostrar notificações automáticas
+  });
 
   useEffect(() => {
     console.log('🚀 Componente Conversas montado');
@@ -1114,78 +1165,268 @@ function Conversas() {
     toast.success("Reunião agendada!");
   };
 
-  const addTag = () => {
+  const addTag = async () => {
     if (!selectedConv || !newTag.trim()) {
       toast.error("Digite uma tag");
       return;
     }
-    const updatedConversations = conversations.map((conv) =>
-      conv.id === selectedConv.id
-        ? { ...conv, tags: [...(conv.tags || []), newTag] }
-        : conv
-    );
-    saveConversations(updatedConversations);
-    setSelectedConv({ ...selectedConv, tags: [...(selectedConv.tags || []), newTag] });
-    setNewTag("");
-    toast.success("Tag adicionada!");
+    
+    try {
+      // Buscar ou criar lead no Supabase
+      const leadData = await findOrCreateLead(selectedConv);
+      
+      if (leadData) {
+        // Atualizar tags no Supabase
+        const updatedTags = [...(leadData.tags || []), newTag];
+        const { error } = await supabase
+          .from('leads')
+          .update({ tags: updatedTags })
+          .eq('id', leadData.id);
+        
+        if (error) {
+          console.error('Erro ao atualizar tags no Supabase:', error);
+          toast.error('Erro ao salvar tag');
+          return;
+        }
+        
+        console.log('✅ Tag adicionada no Supabase');
+      }
+      
+      // Atualizar localmente (será sincronizado via realtime)
+      const updatedConversations = conversations.map((conv) =>
+        conv.id === selectedConv.id
+          ? { ...conv, tags: [...(conv.tags || []), newTag] }
+          : conv
+      );
+      saveConversations(updatedConversations);
+      setSelectedConv({ ...selectedConv, tags: [...(selectedConv.tags || []), newTag] });
+      setNewTag("");
+      toast.success("Tag adicionada!");
+    } catch (error) {
+      console.error('Erro ao adicionar tag:', error);
+      toast.error('Erro ao adicionar tag');
+    }
   };
 
-  const addToFunnel = () => {
+  const addToFunnel = async () => {
     if (!selectedConv || !selectedFunnel) {
       toast.error("Selecione um estágio");
       return;
     }
-    const updatedConversations = conversations.map((conv) =>
-      conv.id === selectedConv.id
-        ? { ...conv, funnelStage: selectedFunnel }
-        : conv
-    );
-    saveConversations(updatedConversations);
-    setSelectedConv({ ...selectedConv, funnelStage: selectedFunnel });
-    setSelectedFunnel("");
-    toast.success("Adicionado ao funil!");
+    
+    try {
+      // Buscar ou criar lead no Supabase
+      const leadData = await findOrCreateLead(selectedConv);
+      
+      if (leadData) {
+        // Atualizar estágio no Supabase
+        const { error } = await supabase
+          .from('leads')
+          .update({ stage: selectedFunnel.toLowerCase() })
+          .eq('id', leadData.id);
+        
+        if (error) {
+          console.error('Erro ao atualizar funil no Supabase:', error);
+          toast.error('Erro ao salvar estágio');
+          return;
+        }
+        
+        console.log('✅ Estágio atualizado no Supabase');
+      }
+      
+      // Atualizar localmente (será sincronizado via realtime)
+      const updatedConversations = conversations.map((conv) =>
+        conv.id === selectedConv.id
+          ? { ...conv, funnelStage: selectedFunnel }
+          : conv
+      );
+      saveConversations(updatedConversations);
+      setSelectedConv({ ...selectedConv, funnelStage: selectedFunnel });
+      setSelectedFunnel("");
+      toast.success("Adicionado ao funil!");
+    } catch (error) {
+      console.error('Erro ao adicionar ao funil:', error);
+      toast.error('Erro ao adicionar ao funil');
+    }
   };
 
-  const updateResponsavel = () => {
+  const updateResponsavel = async () => {
     if (!selectedConv || !newResponsavel) {
       toast.error("Selecione um responsável");
       return;
     }
-    const updatedConversations = conversations.map((conv) =>
-      conv.id === selectedConv.id
-        ? { ...conv, responsavel: newResponsavel }
-        : conv
-    );
-    saveConversations(updatedConversations);
-    setSelectedConv({ ...selectedConv, responsavel: newResponsavel });
-    setNewResponsavel("");
-    toast.success("Responsável atualizado!");
+    
+    try {
+      // Buscar ou criar lead no Supabase
+      const leadData = await findOrCreateLead(selectedConv);
+      
+      if (leadData) {
+        // Por enquanto, salvamos o nome do responsável em notes ou company
+        // Em produção, você pode ter uma tabela de usuários e usar responsavel_id
+        const { error } = await supabase
+          .from('leads')
+          .update({ 
+            notes: `Responsável: ${newResponsavel}${leadData.notes ? '\n' + leadData.notes : ''}`
+          })
+          .eq('id', leadData.id);
+        
+        if (error) {
+          console.error('Erro ao atualizar responsável no Supabase:', error);
+          toast.error('Erro ao salvar responsável');
+          return;
+        }
+        
+        console.log('✅ Responsável atualizado no Supabase');
+      }
+      
+      // Atualizar localmente (será sincronizado via realtime)
+      const updatedConversations = conversations.map((conv) =>
+        conv.id === selectedConv.id
+          ? { ...conv, responsavel: newResponsavel }
+          : conv
+      );
+      saveConversations(updatedConversations);
+      setSelectedConv({ ...selectedConv, responsavel: newResponsavel });
+      setNewResponsavel("");
+      toast.success("Responsável atualizado!");
+    } catch (error) {
+      console.error('Erro ao atualizar responsável:', error);
+      toast.error('Erro ao atualizar responsável');
+    }
   };
 
-  const updateLeadInfo = () => {
+  const updateLeadInfo = async () => {
     if (!selectedConv) return;
     
-    const updatedConversations = conversations.map((conv) =>
-      conv.id === selectedConv.id
-        ? { 
-            ...conv, 
-            produto: newProduto || conv.produto,
-            valor: newValor || conv.valor,
-            anotacoes: newAnotacoes !== undefined ? newAnotacoes : conv.anotacoes
+    try {
+      // Buscar ou criar lead no Supabase
+      const leadData = await findOrCreateLead(selectedConv);
+      
+      if (leadData) {
+        // Preparar dados para atualização
+        const updateData: any = {};
+        
+        if (newProduto) updateData.servico = newProduto;
+        if (newValor) {
+          // Extrair valor numérico
+          const numericValue = parseFloat(newValor.replace(/[^\d,]/g, '').replace(',', '.'));
+          if (!isNaN(numericValue)) {
+            updateData.value = numericValue;
           }
-        : conv
-    );
-    saveConversations(updatedConversations);
-    setSelectedConv({ 
-      ...selectedConv, 
-      produto: newProduto || selectedConv.produto,
-      valor: newValor || selectedConv.valor,
-      anotacoes: newAnotacoes !== undefined ? newAnotacoes : selectedConv.anotacoes
-    });
-    setNewProduto("");
-    setNewValor("");
-    setNewAnotacoes("");
-    toast.success("Informações atualizadas!");
+        }
+        if (newAnotacoes !== undefined && newAnotacoes !== '') {
+          updateData.notes = newAnotacoes;
+        }
+        
+        // Atualizar no Supabase
+        const { error } = await supabase
+          .from('leads')
+          .update(updateData)
+          .eq('id', leadData.id);
+        
+        if (error) {
+          console.error('Erro ao atualizar informações no Supabase:', error);
+          toast.error('Erro ao salvar informações');
+          return;
+        }
+        
+        console.log('✅ Informações atualizadas no Supabase');
+      }
+      
+      // Atualizar localmente (será sincronizado via realtime)
+      const updatedConversations = conversations.map((conv) =>
+        conv.id === selectedConv.id
+          ? { 
+              ...conv, 
+              produto: newProduto || conv.produto,
+              valor: newValor || conv.valor,
+              anotacoes: newAnotacoes !== undefined ? newAnotacoes : conv.anotacoes
+            }
+          : conv
+      );
+      saveConversations(updatedConversations);
+      setSelectedConv({ 
+        ...selectedConv, 
+        produto: newProduto || selectedConv.produto,
+        valor: newValor || selectedConv.valor,
+        anotacoes: newAnotacoes !== undefined ? newAnotacoes : selectedConv.anotacoes
+      });
+      setNewProduto("");
+      setNewValor("");
+      setNewAnotacoes("");
+      toast.success("Informações atualizadas!");
+    } catch (error) {
+      console.error('Erro ao atualizar informações:', error);
+      toast.error('Erro ao atualizar informações');
+    }
+  };
+
+  // Função auxiliar para buscar ou criar lead no Supabase
+  const findOrCreateLead = async (conversation: Conversation) => {
+    try {
+      // Buscar company_id do usuário
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .maybeSingle();
+
+      if (!userRole?.company_id) {
+        console.warn('⚠️ Usuário sem company_id');
+        return null;
+      }
+
+      const phoneToSearch = conversation.phoneNumber || conversation.id;
+      
+      // Tentar buscar lead existente por telefone
+      const { data: existingLead, error: searchError } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('company_id', userRole.company_id)
+        .or(`phone.eq.${phoneToSearch},telefone.eq.${phoneToSearch}`)
+        .maybeSingle();
+
+      if (searchError && searchError.code !== 'PGRST116') {
+        console.error('Erro ao buscar lead:', searchError);
+        return null;
+      }
+
+      // Se encontrou, retornar
+      if (existingLead) {
+        console.log('✅ Lead encontrado:', existingLead.id);
+        return existingLead;
+      }
+
+      // Se não encontrou, criar novo lead
+      console.log('📝 Criando novo lead no Supabase...');
+      const { data: newLead, error: createError } = await supabase
+        .from('leads')
+        .insert({
+          name: conversation.contactName,
+          phone: phoneToSearch,
+          telefone: phoneToSearch,
+          company_id: userRole.company_id,
+          status: 'novo',
+          stage: 'prospeccao',
+          value: 0,
+          tags: conversation.tags || [],
+          notes: conversation.anotacoes || null,
+          servico: conversation.produto || null,
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('Erro ao criar lead:', createError);
+        return null;
+      }
+
+      console.log('✅ Novo lead criado:', newLead.id);
+      return newLead;
+    } catch (error) {
+      console.error('Erro em findOrCreateLead:', error);
+      return null;
+    }
   };
 
   const filteredConversations = conversations
