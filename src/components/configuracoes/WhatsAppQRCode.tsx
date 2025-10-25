@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, QrCode, CheckCircle, XCircle, RefreshCw, Plus, Trash2 } from "lucide-react";
+import { Loader2, QrCode, CheckCircle, XCircle, RefreshCw, Plus, Trash2, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function WhatsAppQRCode() {
   const [loading, setLoading] = useState(false);
@@ -16,6 +18,9 @@ export function WhatsAppQRCode() {
   const [qrCode, setQrCode] = useState<string>("");
   const [instanceName, setInstanceName] = useState("");
   const [showNewInstance, setShowNewInstance] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [apiUrl, setApiUrl] = useState("https://evolution-evolution-api.kxuvcf.easypanel.host");
+  const [creationMode, setCreationMode] = useState<"qrcode" | "manual">("qrcode");
 
   useEffect(() => {
     loadConnections();
@@ -63,6 +68,13 @@ export function WhatsAppQRCode() {
       return;
     }
 
+    if (creationMode === "manual") {
+      if (!apiKey.trim() || !apiUrl.trim()) {
+        toast.error("Preencha API Key e URL da Evolution API");
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -77,10 +89,25 @@ export function WhatsAppQRCode() {
 
       if (!userRole?.company_id) throw new Error("Empresa não encontrada");
 
+      // Verificar se já existe instância com este nome nesta empresa
+      const { data: existingConn } = await supabase
+        .from('whatsapp_connections')
+        .select('id')
+        .eq('company_id', userRole.company_id)
+        .eq('instance_name', instanceName.toUpperCase())
+        .single();
+
+      if (existingConn) {
+        toast.error("Já existe uma instância com este nome nesta empresa");
+        setLoading(false);
+        return;
+      }
+
       const connectionData = {
         company_id: userRole.company_id,
         instance_name: instanceName.toUpperCase(),
-        evolution_api_url: import.meta.env.VITE_EVOLUTION_API_URL || 'https://api.evolutionapi.com',
+        evolution_api_url: creationMode === "manual" ? apiUrl : "https://evolution-evolution-api.kxuvcf.easypanel.host",
+        evolution_api_key: creationMode === "manual" ? apiKey : null,
         status: 'connecting',
         qr_code_expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
       };
@@ -94,19 +121,39 @@ export function WhatsAppQRCode() {
       if (connError) throw connError;
       
       setSelectedConnection(conn);
-      const mockQR = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`whatsapp-${instanceName}-${Date.now()}`)}`;
-      setQrCode(mockQR);
-      setShowNewInstance(false);
-      setInstanceName("");
-
-      toast.success("QR Code gerado! Escaneie com seu WhatsApp");
-      loadConnections();
+      
+      // Se modo manual, marcar como conectado imediatamente
+      if (creationMode === "manual") {
+        await supabase
+          .from('whatsapp_connections')
+          .update({ status: 'connected', last_connected_at: new Date().toISOString() })
+          .eq('id', conn.id);
+        
+        toast.success("Instância configurada manualmente com sucesso!");
+        setShowNewInstance(false);
+        resetForm();
+        loadConnections();
+      } else {
+        // Gerar QR Code mock (em produção, integrar com Evolution API real)
+        const mockQR = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`whatsapp-${instanceName}-${Date.now()}`)}`;
+        setQrCode(mockQR);
+        setShowNewInstance(false);
+        toast.success("QR Code gerado! Escaneie com seu WhatsApp");
+        loadConnections();
+      }
     } catch (error: any) {
-      console.error('Erro ao gerar QR Code:', error);
-      toast.error(error.message || "Erro ao gerar QR Code");
+      console.error('Erro ao criar instância:', error);
+      toast.error(error.message || "Erro ao criar instância");
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetForm = () => {
+    setInstanceName("");
+    setApiKey("");
+    setApiUrl("https://evolution-evolution-api.kxuvcf.easypanel.host");
+    setCreationMode("qrcode");
   };
 
   const deleteConnection = async (connectionId: string) => {
@@ -160,18 +207,81 @@ export function WhatsAppQRCode() {
       </CardHeader>
       <CardContent className="space-y-4">
         {showNewInstance && (
-          <div className="p-4 border rounded-lg space-y-3 bg-muted/50">
-            <Label>Nome da Nova Instância</Label>
-            <Input
-              placeholder="Ex: CENTRAL, VENDAS, SUPORTE"
-              value={instanceName}
-              onChange={(e) => setInstanceName(e.target.value)}
-            />
+          <div className="p-4 border rounded-lg space-y-4 bg-muted/50">
+            <Alert>
+              <AlertDescription className="text-xs">
+                <strong>🔒 Isolamento Garantido:</strong> Cada instância é exclusiva desta empresa e não será compartilhada com outras subcontas.
+              </AlertDescription>
+            </Alert>
+
+            <Tabs value={creationMode} onValueChange={(v) => setCreationMode(v as "qrcode" | "manual")}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="qrcode" className="text-xs">
+                  <QrCode className="h-3 w-3 mr-1" /> Escanear QR Code
+                </TabsTrigger>
+                <TabsTrigger value="manual" className="text-xs">
+                  <KeyRound className="h-3 w-3 mr-1" /> Configuração Manual
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="qrcode" className="space-y-3 mt-3">
+                <div className="space-y-2">
+                  <Label>Nome da Instância *</Label>
+                  <Input
+                    placeholder="Ex: EMPRESA_VENDAS"
+                    value={instanceName}
+                    onChange={(e) => setInstanceName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
+                    maxLength={20}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Apenas letras, números e underscore. Será único para esta empresa.
+                  </p>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="manual" className="space-y-3 mt-3">
+                <div className="space-y-2">
+                  <Label>Nome da Instância *</Label>
+                  <Input
+                    placeholder="Ex: EMPRESA_VENDAS"
+                    value={instanceName}
+                    onChange={(e) => setInstanceName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
+                    maxLength={20}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>API Key da Evolution API *</Label>
+                  <Input
+                    type="password"
+                    placeholder="Sua API Key da instância"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>URL da Evolution API *</Label>
+                  <Input
+                    placeholder="https://sua-api.com"
+                    value={apiUrl}
+                    onChange={(e) => setApiUrl(e.target.value)}
+                  />
+                </div>
+
+                <Alert>
+                  <AlertDescription className="text-xs">
+                    Use esta opção se você já tem uma instância configurada na Evolution API e deseja apenas conectá-la ao CRM.
+                  </AlertDescription>
+                </Alert>
+              </TabsContent>
+            </Tabs>
+
             <div className="flex gap-2">
               <Button onClick={generateQRCode} disabled={loading} className="flex-1">
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar"}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : creationMode === "manual" ? "Conectar" : "Gerar QR Code"}
               </Button>
-              <Button variant="outline" onClick={() => {setShowNewInstance(false); setInstanceName("");}}>
+              <Button variant="outline" onClick={() => {setShowNewInstance(false); resetForm();}}>
                 Cancelar
               </Button>
             </div>
@@ -231,12 +341,18 @@ export function WhatsAppQRCode() {
           </div>
         </ScrollArea>
 
-        <div className="pt-4 border-t">
+        <div className="pt-4 border-t space-y-2">
           <p className="text-xs text-muted-foreground">
-            <strong>Importante:</strong> Cada instância deve usar um número WhatsApp diferente.
-            Configure o webhook da Evolution API para: <code className="bg-muted px-1 py-0.5 rounded">
-              {window.location.origin}/functions/v1/webhook-conversas?instance=NOME_INSTANCIA
-            </code>
+            <strong>✅ Isolamento por Empresa:</strong> Cada instância criada aqui pertence exclusivamente a esta empresa e não será visível ou acessível por outras subcontas do sistema.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            <strong>📱 Webhook Evolution API:</strong> Configure o webhook na Evolution API para:
+          </p>
+          <code className="block bg-muted px-2 py-1 rounded text-xs break-all">
+            https://dteppsfseusqixuppglh.supabase.co/functions/v1/webhook-conversas
+          </code>
+          <p className="text-xs text-muted-foreground mt-1">
+            O sistema identificará automaticamente a instância pelo nome configurado.
           </p>
         </div>
       </CardContent>

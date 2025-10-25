@@ -134,7 +134,7 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
 
       toast({
         title: "Subconta criada com sucesso! ✅",
-        description: `${companyData.name} foi criada. Copie as credenciais de acesso!`,
+        description: `${companyData.name} foi criada. Copie as credenciais e configure o WhatsApp!`,
       });
 
       onSuccess();
@@ -246,6 +246,22 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
             <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 p-3 border border-yellow-200 dark:border-yellow-800">
               <p className="text-xs text-yellow-800 dark:text-yellow-200">
                 ⚠️ <strong>Importante:</strong> Guarde estas credenciais em local seguro. A senha não poderá ser recuperada depois!
+              </p>
+            </div>
+
+            <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 p-4 border border-blue-200 dark:border-blue-800 space-y-2">
+              <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                📱 Próximos Passos - Configurar WhatsApp:
+              </h4>
+              <ol className="text-xs text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
+                <li>Acesse o sistema com as credenciais acima</li>
+                <li>Vá em <strong>Configurações → Integrações</strong></li>
+                <li>Clique em <strong>"Nova Instância"</strong> no card WhatsApp</li>
+                <li>Escolha entre escanear QR Code ou configurar manualmente</li>
+                <li>Configure o webhook na Evolution API para receber mensagens</li>
+              </ol>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                ✅ Cada subconta terá sua própria instância WhatsApp isolada e independente.
               </p>
             </div>
 
