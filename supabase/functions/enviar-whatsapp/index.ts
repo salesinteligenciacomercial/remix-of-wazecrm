@@ -75,6 +75,7 @@ serve(async (req) => {
 
     // Buscar instância WhatsApp da company
     let EVOLUTION_INSTANCE: string;
+    let INSTANCE_API_KEY: string = EVOLUTION_API_KEY;
     
     if (validatedData.company_id) {
       console.log("🔍 Buscando instância WhatsApp para company:", validatedData.company_id);
@@ -83,10 +84,10 @@ serve(async (req) => {
       const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
       const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
       
-      // Buscar conexão WhatsApp ativa da company
+      // Buscar conexão WhatsApp ativa da company (incluindo API key)
       const { data: connection, error: connError } = await supabase
         .from('whatsapp_connections')
-        .select('instance_name, whatsapp_number')
+        .select('instance_name, whatsapp_number, evolution_api_key')
         .eq('company_id', validatedData.company_id)
         .eq('status', 'connected')
         .single();
@@ -103,6 +104,13 @@ serve(async (req) => {
       }
       
       EVOLUTION_INSTANCE = connection.instance_name;
+      
+      // Usar API key da conexão se disponível
+      if (connection.evolution_api_key) {
+        INSTANCE_API_KEY = connection.evolution_api_key;
+        console.log("✅ Usando API key da instância:", EVOLUTION_INSTANCE);
+      }
+      
       console.log("✅ Instância encontrada:", EVOLUTION_INSTANCE, "- Número:", connection.whatsapp_number);
     } else {
       // Fallback para instância padrão (compatibilidade)
@@ -217,7 +225,7 @@ serve(async (req) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": EVOLUTION_API_KEY,
+        "apikey": INSTANCE_API_KEY,
       },
       body: JSON.stringify(bodyPayload),
     });
