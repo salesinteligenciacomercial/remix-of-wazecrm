@@ -295,33 +295,31 @@ export default function Conversas() {
     try {
       console.log('🔄 [SUPABASE] Iniciando carregamento de conversas...');
       
-      // Função para buscar foto do perfil via Evolution API
+      // Função para buscar foto do perfil via Edge Function (mais seguro)
       const getProfilePicture = async (numero: string): Promise<string | undefined> => {
         try {
-          const evolutionUrl = import.meta.env.VITE_EVOLUTION_API_URL || 'https://evo.easysend.app';
-          const instanceName = import.meta.env.VITE_EVOLUTION_INSTANCE || 'easycrm';
-          const apiKey = import.meta.env.VITE_EVOLUTION_API_KEY;
+          console.log('🔍 Buscando foto de perfil para:', numero);
+          
+          const { data, error } = await supabase.functions.invoke('get-profile-picture', {
+            body: { number: numero }
+          });
 
-          const response = await fetch(
-            `${evolutionUrl}/chat/fetchProfilePictureUrl/${instanceName}`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'apikey': apiKey,
-              },
-              body: JSON.stringify({ number: numero }),
-            }
-          );
-
-          if (response.ok) {
-            const data = await response.json();
-            return data.profilePictureUrl || undefined;
+          if (error) {
+            console.error('❌ Erro ao buscar foto:', error);
+            return undefined;
           }
+
+          if (data?.profilePictureUrl) {
+            console.log('✅ Foto de perfil encontrada');
+            return data.profilePictureUrl;
+          }
+          
+          console.log('ℹ️ Nenhuma foto de perfil disponível');
+          return undefined;
         } catch (error) {
-          console.log('Não foi possível buscar foto do perfil:', numero);
+          console.error('❌ Exceção ao buscar foto do perfil:', error);
+          return undefined;
         }
-        return undefined;
       };
       
       // Buscar company_id do usuário autenticado
