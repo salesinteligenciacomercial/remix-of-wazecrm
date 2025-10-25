@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -26,7 +27,11 @@ const navigation = [
   { name: "Configurações", href: "/configuracoes", icon: Settings },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed?: boolean;
+}
+
+export function Sidebar({ collapsed = false }: SidebarProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -44,62 +49,95 @@ export function Sidebar() {
   };
 
   return (
-    <div className="flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border shadow-xl">
+    <div 
+      className={`flex h-screen flex-col bg-sidebar border-r border-sidebar-border shadow-xl transition-all duration-300 ease-in-out ${
+        collapsed ? "w-20" : "w-64"
+      }`}
+    >
       {/* Logo */}
-      <div className="flex h-16 items-center px-6 border-b border-sidebar-border/50">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
+      <div className="flex h-16 items-center justify-center px-3 border-b border-sidebar-border/50">
+        {collapsed ? (
+          <div className="h-10 w-10 rounded-xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
             <span className="text-white font-bold text-xl">C</span>
           </div>
-          <div>
-            <span className="text-sidebar-foreground font-bold text-lg block leading-tight">CEUSIA</span>
-            <span className="text-sidebar-foreground/60 text-xs">CRM & Automação</span>
+        ) : (
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
+              <span className="text-white font-bold text-xl">C</span>
+            </div>
+            <div>
+              <span className="text-sidebar-foreground font-bold text-lg block leading-tight">CEUSIA</span>
+              <span className="text-sidebar-foreground/60 text-xs">CRM & Automação</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
-        {navigation.map((item) => (
-          <NavLink
-            key={item.name}
-            to={item.href}
-            className={({ isActive }) =>
-              `group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-primary/20"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-1"
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <div className={`p-1.5 rounded-lg transition-colors ${
-                  isActive 
-                    ? "bg-white/20" 
-                    : "bg-sidebar-accent/30 group-hover:bg-sidebar-accent"
-                }`}>
-                  <item.icon className="h-4 w-4" />
-                </div>
-                <span className="flex-1">{item.name}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
-      </nav>
+      <TooltipProvider delayDuration={0}>
+        <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
+          {navigation.map((item) => (
+            <Tooltip key={item.name}>
+              <TooltipTrigger asChild>
+                <NavLink
+                  to={item.href}
+                  className={({ isActive }) =>
+                    `group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200 ${
+                      isActive
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-primary/20"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-1"
+                    } ${collapsed ? "justify-center" : ""}`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <div className={`p-1.5 rounded-lg transition-colors ${
+                        isActive 
+                          ? "bg-white/20" 
+                          : "bg-sidebar-accent/30 group-hover:bg-sidebar-accent"
+                      }`}>
+                        <item.icon className="h-4 w-4" />
+                      </div>
+                      {!collapsed && <span className="flex-1">{item.name}</span>}
+                    </>
+                  )}
+                </NavLink>
+              </TooltipTrigger>
+              {collapsed && (
+                <TooltipContent side="right" className="font-medium">
+                  {item.name}
+                </TooltipContent>
+              )}
+            </Tooltip>
+          ))}
+        </nav>
+      </TooltipProvider>
 
       {/* Footer */}
       <div className="border-t border-sidebar-border/50 p-4">
-        <Button
-          variant="ghost"
-          className="w-full justify-start text-sidebar-foreground hover:bg-destructive/20 hover:text-destructive transition-all duration-200 group"
-          onClick={handleLogout}
-        >
-          <div className="p-1.5 rounded-lg bg-sidebar-accent/30 group-hover:bg-destructive/30 mr-3 transition-colors">
-            <LogOut className="h-4 w-4" />
-          </div>
-          <span className="font-medium">Sair do Sistema</span>
-        </Button>
+        <TooltipProvider delayDuration={0}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                className={`w-full text-sidebar-foreground hover:bg-destructive/20 hover:text-destructive transition-all duration-200 group ${
+                  collapsed ? "justify-center px-0" : "justify-start"
+                }`}
+                onClick={handleLogout}
+              >
+                <div className="p-1.5 rounded-lg bg-sidebar-accent/30 group-hover:bg-destructive/30 transition-colors">
+                  <LogOut className="h-4 w-4" />
+                </div>
+                {!collapsed && <span className="font-medium ml-3">Sair do Sistema</span>}
+              </Button>
+            </TooltipTrigger>
+            {collapsed && (
+              <TooltipContent side="right" className="font-medium">
+                Sair do Sistema
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
   );

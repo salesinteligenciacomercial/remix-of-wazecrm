@@ -1,4 +1,4 @@
-import { Bell, Search, Building2 } from "lucide-react";
+import { Bell, Search, Building2, PanelLeftClose, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -6,7 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export function Header() {
+interface HeaderProps {
+  onToggleSidebar: () => void;
+  sidebarCollapsed: boolean;
+}
+
+export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
   const [userName, setUserName] = useState("Usuário");
   const [companyName, setCompanyName] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -53,6 +58,21 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-border/40 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 shadow-sm">
       <div className="flex h-16 items-center gap-4 px-6">
+        {/* Toggle Sidebar Button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggleSidebar}
+          className="hover:bg-muted group transition-all"
+          title={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+        >
+          {sidebarCollapsed ? (
+            <PanelLeft className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+          ) : (
+            <PanelLeftClose className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+          )}
+        </Button>
+
         {/* Search */}
         <div className="flex-1 max-w-xl">
           <div className="relative group">

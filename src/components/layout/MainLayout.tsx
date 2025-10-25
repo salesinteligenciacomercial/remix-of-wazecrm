@@ -8,6 +8,7 @@ import { Session } from "@supabase/supabase-js";
 export function MainLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     // Check current session
@@ -38,11 +39,13 @@ export function MainLayout() {
     return <Navigate to="/auth" replace />;
   }
 
+  const toggleSidebar = () => setSidebarCollapsed(!sidebarCollapsed);
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar />
+      <Sidebar collapsed={sidebarCollapsed} />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header />
+        <Header onToggleSidebar={toggleSidebar} sidebarCollapsed={sidebarCollapsed} />
         <main className="flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>
