@@ -22,6 +22,7 @@ import { AudioRecorder } from "@/components/conversas/AudioRecorder";
 import { MediaUpload } from "@/components/conversas/MediaUpload";
 import { NovaConversaDialog } from "@/components/conversas/NovaConversaDialog";
 import { EditarInformacoesLeadDialog } from "@/components/conversas/EditarInformacoesLeadDialog";
+import { ResponsaveisManager } from "@/components/conversas/ResponsaveisManager";
 import { formatPhoneNumber, safeFormatPhoneNumber } from "@/utils/phoneFormatter";
 import { useLeadsSync } from "@/hooks/useLeadsSync";
 
@@ -39,6 +40,7 @@ interface Message {
   reaction?: string;
   replyTo?: string;
   edited?: boolean;
+  sentBy?: string; // Nome do responsável que enviou
   contactData?: {
     name: string;
     phone: string;
@@ -175,6 +177,7 @@ function Conversas() {
   const [mostrarBotaoCriarLead, setMostrarBotaoCriarLead] = useState(false);
   const [leadsVinculados, setLeadsVinculados] = useState<Record<string, string>>({}); // conversationId -> leadId
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null); // Company ID do usuário
+  const [userName, setUserName] = useState<string>(""); // Nome do usuário logado
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Estados para modais de visualização
@@ -270,6 +273,29 @@ function Conversas() {
 
   useEffect(() => {
     console.log('🚀 Componente Conversas montado');
+    // Carregar nome do usuário
+    const carregarPerfilUsuario = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, email")
+            .eq("id", session.user.id)
+            .maybeSingle();
+          
+          if (profile) {
+            setUserName(profile.full_name || profile.email);
+            console.log('👤 Usuário logado:', profile.full_name || profile.email);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Erro ao carregar perfil:', error);
+      }
+    };
+    
+    carregarPerfilUsuario();
+    
     // Não carregar do localStorage - apenas Supabase
     loadQuickMessages();
     loadReminders();
@@ -1060,6 +1086,7 @@ function Conversas() {
         read: false,
         mediaUrl: URL.createObjectURL(file),
         fileName: file.name,
+        sentBy: userName || "Você", // Adicionar quem enviou
       };
 
       const updatedConversations = conversations.map((conv) =>
@@ -1159,6 +1186,7 @@ function Conversas() {
         delivered: true,
         read: false,
         mediaUrl: URL.createObjectURL(audioBlob),
+        sentBy: userName || "Você", // Adicionar quem enviou
       };
 
       const updatedConversations = conversations.map((conv) =>
@@ -1230,6 +1258,7 @@ function Conversas() {
       timestamp: new Date(),
       delivered: true,
       replyTo: replyingTo || undefined,
+      sentBy: userName || "Você", // Adicionar quem enviou a mensagem
     };
 
     const updatedConversations = conversations.map((conv) =>
@@ -2295,40 +2324,20 @@ function Conversas() {
                       )}
                     </div>
 
-                    {/* Responsável */}
-                    <div>
-                      <h4 className="text-foreground font-medium mb-2 flex items-center gap-2">
-                        <Users className="h-4 w-4" /> Responsável
-                      </h4>
-                      <p className="text-sm text-muted-foreground mb-2">{selectedConv.responsavel || "Não definido"}</p>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button size="sm" variant="outline" className="w-full">
-                            <User className="h-3 w-3 mr-2" /> Atribuir Responsável
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Atribuir Responsável</DialogTitle>
-                          </DialogHeader>
-                          <Select value={newResponsavel} onValueChange={setNewResponsavel}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione o responsável" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {usuarios.map((user) => (
-                                <SelectItem key={user} value={user}>
-                                  {user}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button onClick={updateResponsavel}>
-                            Atribuir
-                          </Button>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
+                    {/* Responsáveis */}
+                    <ResponsaveisManager 
+                      leadId={leadsVinculados[selectedConv.id] || leadsVinculados[safeFormatPhoneNumber(selectedConv.id)] || null}
+                      responsaveisAtuais={selectedConv.responsavel ? [selectedConv.responsavel] : []}
+                      onResponsaveisUpdated={(responsaveis) => {
+                        console.log('👥 Responsáveis atualizados:', responsaveis);
+                        setConversations(prev => prev.map(conv => 
+                          conv.id === selectedConv.id 
+                            ? { ...conv, responsavel: responsaveis.join(', ') }
+                            : conv
+                        ));
+                        setSelectedConv(prev => prev ? { ...prev, responsavel: responsaveis.join(', ') } : null);
+                      }}
+                    />
 
                     {/* Tags */}
                     <div>

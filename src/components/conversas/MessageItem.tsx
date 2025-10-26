@@ -33,6 +33,7 @@ interface Message {
   reaction?: string;
   replyTo?: string;
   edited?: boolean;
+  sentBy?: string; // Nome do responsável que enviou
   contactData?: {
     name: string;
     phone: string;
@@ -131,6 +132,16 @@ export function MessageItem({
               : "bg-white text-foreground"
           }`}
         >
+          {/* Nome do responsável que enviou (apenas para mensagens da equipe) */}
+          {message.sender === "user" && message.sentBy && (
+            <div className="flex items-center gap-1 mb-1">
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20">
+                <UserIcon className="h-2.5 w-2.5 mr-0.5" />
+                {message.sentBy}
+              </Badge>
+            </div>
+          )}
+          
           {/* Botão de 3 pontinhos - sempre visível ao passar mouse */}
           <div className={`absolute -top-1 ${message.sender === "user" ? "-left-9" : "-right-9"} opacity-0 group-hover:opacity-100 transition-opacity`}>
             <MessageActions
