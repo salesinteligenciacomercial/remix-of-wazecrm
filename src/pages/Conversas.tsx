@@ -6,7 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
   MessageSquare, Instagram, Facebook, Send, Search, Bot, User, Paperclip, 
   Clock, Calendar, Zap, FileText, Tag, TrendingUp, ArrowRightLeft, Image as ImageIcon,
   Mic, FileUp, Check, CheckCheck, Phone, Video, Info, DollarSign, Users, Bell, Download, Volume2,
@@ -69,6 +71,12 @@ interface QuickMessage {
   id: string;
   title: string;
   content: string;
+  category: string;
+}
+
+interface QuickMessageCategory {
+  id: string;
+  name: string;
 }
 
 interface Reminder {
@@ -96,6 +104,7 @@ interface Meeting {
 
 const CONVERSATIONS_KEY = "continuum_conversations";
 const QUICK_MESSAGES_KEY = "continuum_quick_messages";
+const QUICK_CATEGORIES_KEY = "continuum_quick_categories";
 const REMINDERS_KEY = "continuum_reminders";
 const SCHEDULED_MESSAGES_KEY = "continuum_scheduled_messages";
 const MEETINGS_KEY = "continuum_meetings";
@@ -166,6 +175,7 @@ function Conversas() {
   const [messageInput, setMessageInput] = useState("");
   const [aiMode, setAiMode] = useState<Record<string, boolean>>({});
   const [quickMessages, setQuickMessages] = useState<QuickMessage[]>([]);
+  const [quickCategories, setQuickCategories] = useState<QuickMessageCategory[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [scheduledMessages, setScheduledMessages] = useState<ScheduledMessage[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -189,6 +199,8 @@ function Conversas() {
   // Form states
   const [newQuickTitle, setNewQuickTitle] = useState("");
   const [newQuickContent, setNewQuickContent] = useState("");
+  const [newQuickCategory, setNewQuickCategory] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDatetime, setReminderDatetime] = useState("");
   const [reminderNotes, setReminderNotes] = useState("");
@@ -398,6 +410,7 @@ function Conversas() {
     
     // Não carregar do localStorage - apenas Supabase
     loadQuickMessages();
+    loadQuickCategories();
     loadReminders();
     loadScheduledMessages();
     loadMeetings();
@@ -853,12 +866,25 @@ function Conversas() {
     if (saved) {
       setQuickMessages(JSON.parse(saved));
     } else {
-      const initial = [
-        { id: "1", title: "Saudação", content: "Olá! Como posso ajudar você hoje?" },
-        { id: "2", title: "Informações", content: "Gostaria de saber mais sobre o produto?" },
+      setQuickMessages([]);
+    }
+  };
+
+  const loadQuickCategories = () => {
+    const saved = localStorage.getItem(QUICK_CATEGORIES_KEY);
+    if (saved) {
+      setQuickCategories(JSON.parse(saved));
+    } else {
+      const initialCategories = [
+        { id: "1", name: "Atendimento" },
+        { id: "2", name: "Suporte" },
+        { id: "3", name: "Dúvidas" },
+        { id: "4", name: "Objeções" },
+        { id: "5", name: "Preços" },
+        { id: "6", name: "PIX" },
       ];
-      setQuickMessages(initial);
-      localStorage.setItem(QUICK_MESSAGES_KEY, JSON.stringify(initial));
+      setQuickCategories(initialCategories);
+      localStorage.setItem(QUICK_CATEGORIES_KEY, JSON.stringify(initialCategories));
     }
   };
 
@@ -891,6 +917,11 @@ function Conversas() {
   const saveQuickMessages = (updated: QuickMessage[]) => {
     localStorage.setItem(QUICK_MESSAGES_KEY, JSON.stringify(updated));
     setQuickMessages(updated);
+  };
+
+  const saveQuickCategories = (updated: QuickMessageCategory[]) => {
+    localStorage.setItem(QUICK_CATEGORIES_KEY, JSON.stringify(updated));
+    setQuickCategories(updated);
   };
 
   const saveReminders = (updated: Reminder[]) => {
@@ -1487,24 +1518,51 @@ function Conversas() {
   };
 
   const addQuickMessage = () => {
-    if (!newQuickTitle.trim() || !newQuickContent.trim()) {
-      toast.error("Preencha título e conteúdo");
+    if (!newQuickTitle || !newQuickContent || !newQuickCategory) {
+      toast.error("Preencha todos os campos e selecione uma categoria");
       return;
     }
     const newMsg: QuickMessage = {
       id: Date.now().toString(),
       title: newQuickTitle,
       content: newQuickContent,
+      category: newQuickCategory,
     };
     saveQuickMessages([...quickMessages, newMsg]);
     setNewQuickTitle("");
     setNewQuickContent("");
+    setNewQuickCategory("");
     toast.success("Mensagem rápida criada!");
+  };
+
+  const addQuickCategory = () => {
+    if (!newCategoryName.trim()) {
+      toast.error("Digite o nome da categoria");
+      return;
+    }
+    const newCat: QuickMessageCategory = {
+      id: Date.now().toString(),
+      name: newCategoryName,
+    };
+    saveQuickCategories([...quickCategories, newCat]);
+    setNewCategoryName("");
+    toast.success("Categoria criada!");
   };
 
   const deleteQuickMessage = (id: string) => {
     saveQuickMessages(quickMessages.filter(m => m.id !== id));
     toast.success("Mensagem rápida removida!");
+  };
+
+  const deleteQuickCategory = (id: string) => {
+    // Verificar se há mensagens usando esta categoria
+    const messagesInCategory = quickMessages.filter(m => m.category === id);
+    if (messagesInCategory.length > 0) {
+      toast.error("Não é possível excluir categoria com mensagens vinculadas");
+      return;
+    }
+    saveQuickCategories(quickCategories.filter(c => c.id !== id));
+    toast.success("Categoria removida!");
   };
 
   const sendQuickMessage = (content: string) => {
@@ -2633,59 +2691,181 @@ function Conversas() {
                               <Zap className="h-4 w-4 mr-2" /> Mensagens Rápidas
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-2xl">
+                          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
                             <DialogHeader>
                               <DialogTitle>💡 Mensagens Rápidas</DialogTitle>
                             </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="space-y-2">
-                                <Label>Título</Label>
-                                <Input
-                                  value={newQuickTitle}
-                                  onChange={(e) => setNewQuickTitle(e.target.value)}
-                                  placeholder="Ex: Saudação"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Mensagem</Label>
-                                <Textarea
-                                  value={newQuickContent}
-                                  onChange={(e) => setNewQuickContent(e.target.value)}
-                                  placeholder="Digite a mensagem..."
-                                />
-                              </div>
-                              <Button onClick={addQuickMessage} className="w-full">
-                                Criar Mensagem Rápida
-                              </Button>
-                              <div className="border-t pt-4">
-                                <h4 className="text-sm font-medium mb-2">Mensagens salvas:</h4>
-                                <div className="space-y-2">
-                                  {quickMessages.map((qm) => (
-                                    <div key={qm.id} className="flex items-center justify-between p-2 bg-muted rounded">
-                                      <div className="flex-1">
-                                        <p className="text-sm font-medium">{qm.title}</p>
-                                        <p className="text-xs text-muted-foreground truncate">{qm.content}</p>
-                                      </div>
-                                      <div className="flex gap-1">
-                                        <Button
-                                          size="sm"
-                                          onClick={() => sendQuickMessage(qm.content)}
-                                        >
-                                          Enviar
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="destructive"
-                                          onClick={() => deleteQuickMessage(qm.id)}
-                                        >
-                                          ×
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ))}
+                            
+                            <Tabs defaultValue="messages" className="w-full">
+                              <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="messages">Mensagens</TabsTrigger>
+                                <TabsTrigger value="categories">Categorias</TabsTrigger>
+                              </TabsList>
+                              
+                              <TabsContent value="messages" className="space-y-4">
+                                {/* Criar nova mensagem */}
+                                <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
+                                  <h4 className="text-sm font-semibold">Criar Nova Mensagem</h4>
+                                  <div className="space-y-2">
+                                    <Label>Categoria *</Label>
+                                    <Select value={newQuickCategory} onValueChange={setNewQuickCategory}>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Selecione a categoria" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {quickCategories.map((cat) => (
+                                          <SelectItem key={cat.id} value={cat.id}>
+                                            {cat.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Título *</Label>
+                                    <Input
+                                      value={newQuickTitle}
+                                      onChange={(e) => setNewQuickTitle(e.target.value)}
+                                      placeholder="Ex: Saudação"
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Mensagem *</Label>
+                                    <Textarea
+                                      value={newQuickContent}
+                                      onChange={(e) => setNewQuickContent(e.target.value)}
+                                      placeholder="Digite a mensagem..."
+                                      rows={3}
+                                    />
+                                  </div>
+                                  <Button onClick={addQuickMessage} className="w-full">
+                                    Criar Mensagem Rápida
+                                  </Button>
                                 </div>
-                              </div>
-                            </div>
+
+                                {/* Mensagens organizadas por categoria */}
+                                <div className="border-t pt-4">
+                                  <h4 className="text-sm font-medium mb-3">Mensagens por Categoria:</h4>
+                                  {quickCategories.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground text-center py-4">
+                                      Crie categorias na aba "Categorias"
+                                    </p>
+                                  ) : (
+                                    <Accordion type="single" collapsible className="w-full">
+                                      {quickCategories.map((category) => {
+                                        const categoryMessages = quickMessages.filter(
+                                          (msg) => msg.category === category.id
+                                        );
+                                        return (
+                                          <AccordionItem key={category.id} value={category.id}>
+                                            <AccordionTrigger className="hover:no-underline">
+                                              <div className="flex items-center justify-between w-full pr-4">
+                                                <span className="font-medium">{category.name}</span>
+                                                <Badge variant="secondary">{categoryMessages.length}</Badge>
+                                              </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                              {categoryMessages.length === 0 ? (
+                                                <p className="text-sm text-muted-foreground py-2 px-4">
+                                                  Nenhuma mensagem nesta categoria
+                                                </p>
+                                              ) : (
+                                                <div className="space-y-2">
+                                                  {categoryMessages.map((qm) => (
+                                                    <div
+                                                      key={qm.id}
+                                                      className="flex items-start justify-between p-3 bg-background rounded border"
+                                                    >
+                                                      <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium">{qm.title}</p>
+                                                        <p className="text-xs text-muted-foreground mt-1 break-words">
+                                                          {qm.content}
+                                                        </p>
+                                                      </div>
+                                                      <div className="flex gap-1 ml-2">
+                                                        <Button
+                                                          size="sm"
+                                                          onClick={() => sendQuickMessage(qm.content)}
+                                                        >
+                                                          Enviar
+                                                        </Button>
+                                                        <Button
+                                                          size="sm"
+                                                          variant="destructive"
+                                                          onClick={() => deleteQuickMessage(qm.id)}
+                                                        >
+                                                          ×
+                                                        </Button>
+                                                      </div>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </AccordionContent>
+                                          </AccordionItem>
+                                        );
+                                      })}
+                                    </Accordion>
+                                  )}
+                                </div>
+                              </TabsContent>
+                              
+                              <TabsContent value="categories" className="space-y-4">
+                                {/* Criar nova categoria */}
+                                <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
+                                  <h4 className="text-sm font-semibold">Criar Nova Categoria</h4>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      value={newCategoryName}
+                                      onChange={(e) => setNewCategoryName(e.target.value)}
+                                      placeholder="Nome da categoria"
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          addQuickCategory();
+                                        }
+                                      }}
+                                    />
+                                    <Button onClick={addQuickCategory}>
+                                      Criar
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                {/* Lista de categorias */}
+                                <div>
+                                  <h4 className="text-sm font-medium mb-3">Categorias Criadas:</h4>
+                                  <div className="space-y-2">
+                                    {quickCategories.map((cat) => {
+                                      const messageCount = quickMessages.filter(
+                                        (msg) => msg.category === cat.id
+                                      ).length;
+                                      return (
+                                        <div
+                                          key={cat.id}
+                                          className="flex items-center justify-between p-3 bg-muted rounded border"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <span className="font-medium">{cat.name}</span>
+                                            <Badge variant="secondary">
+                                              {messageCount} {messageCount === 1 ? "mensagem" : "mensagens"}
+                                            </Badge>
+                                          </div>
+                                          <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={() => deleteQuickCategory(cat.id)}
+                                            disabled={messageCount > 0}
+                                          >
+                                            Excluir
+                                          </Button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </TabsContent>
+                            </Tabs>
                           </DialogContent>
                         </Dialog>
 
