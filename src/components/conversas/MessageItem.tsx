@@ -89,36 +89,12 @@ export function MessageItem({
     const element = e.currentTarget as HTMLElement;
     element.style.transform = '';
     element.style.transition = 'transform 0.2s ease';
-    
-    if (dragStart !== null) {
-      const dragEnd = e.changedTouches[0].clientX;
-      const diff = dragEnd - dragStart;
-      
-      // Arraste para a direita > 80px = responder (mensagem do contato)
-      if (message.sender === "contact" && diff > 80) {
-        onReply(message.id);
-        toast({
-          title: "↩️ Responder mensagem",
-          description: "Digite sua resposta abaixo"
-        });
-      }
-      // Arraste para a esquerda > 80px = responder (mensagem do usuário)
-      else if (message.sender === "user" && diff < -80) {
-        onReply(message.id);
-        toast({
-          title: "↩️ Responder mensagem", 
-          description: "Digite sua resposta abaixo"
-        });
-      }
-    }
     setDragStart(null);
   };
 
   return (
     <div
       className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"} animate-fade-in group`}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -133,12 +109,24 @@ export function MessageItem({
         )}
         
         <div
-          className={`max-w-[500px] min-w-[100px] w-fit rounded-lg px-3 py-2 shadow-sm relative ${
+          className={`max-w-[500px] min-w-[100px] w-fit rounded-lg px-3 py-2 shadow-sm relative group ${
             message.sender === "user"
               ? "bg-[#d9fdd3] text-foreground"
               : "bg-white text-foreground"
           }`}
         >
+          {/* Botão de 3 pontinhos - sempre visível ao passar mouse */}
+          <div className={`absolute -top-1 ${message.sender === "user" ? "-left-9" : "-right-9"} opacity-0 group-hover:opacity-100 transition-opacity`}>
+            <MessageActions
+              messageId={message.id}
+              content={message.content}
+              sender={message.sender}
+              onReply={onReply}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onReact={onReact}
+            />
+          </div>
           {/* Text Message */}
           {message.type === "text" && (
             <div className="max-w-full">
@@ -345,23 +333,6 @@ END:VCARD`;
             </Badge>
           )}
         </div>
-
-        {/* Actions */}
-        {showActions && (
-          <div 
-            className={`absolute top-0 ${message.sender === "user" ? "right-full mr-2" : "left-full ml-2"}`}
-          >
-            <MessageActions
-              messageId={message.id}
-              content={message.content}
-              sender={message.sender}
-              onReply={onReply}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onReact={onReact}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

@@ -63,7 +63,7 @@ export function MessageActions({
     <div className="flex items-center gap-1">
       {/* Emojis rápidos */}
       {showEmojiPicker && (
-        <div className="flex gap-1 bg-background border rounded-lg p-1 shadow-lg animate-in slide-in-from-left">
+        <div className="flex gap-1 bg-background border rounded-lg p-1 shadow-lg animate-in slide-in-from-left z-50">
           {emojis.map(({ emoji, icon: Icon }) => (
             <Button
               key={emoji}
@@ -83,7 +83,8 @@ export function MessageActions({
         size="sm"
         variant="ghost"
         onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-        className="h-7 w-7 p-0"
+        className="h-8 w-8 p-0 rounded-full hover:bg-muted"
+        title="Reagir com emoji"
       >
         <Smile className="h-4 w-4" />
       </Button>
@@ -91,12 +92,20 @@ export function MessageActions({
       {/* Menu de ações */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            className="h-8 w-8 p-0 rounded-full hover:bg-muted"
+            title="Mais opções"
+          >
             <MoreVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => onReply(messageId)}>
+        <DropdownMenuContent align="end" className="w-48 bg-background z-50">
+          <DropdownMenuItem onClick={() => {
+            onReply(messageId);
+            setShowEmojiPicker(false);
+          }}>
             <Reply className="h-4 w-4 mr-2" />
             Responder
           </DropdownMenuItem>
@@ -108,6 +117,7 @@ export function MessageActions({
                 if (newContent && newContent !== content) {
                   onEdit(messageId, newContent);
                 }
+                setShowEmojiPicker(false);
               }}>
                 <Edit className="h-4 w-4 mr-2" />
                 Editar
@@ -117,8 +127,9 @@ export function MessageActions({
                 onClick={() => {
                   const confirmDelete = window.confirm("Excluir mensagem para todos?");
                   onDelete(messageId, confirmDelete);
+                  setShowEmojiPicker(false);
                 }}
-                className="text-destructive"
+                className="text-destructive focus:text-destructive"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Excluir
