@@ -16,7 +16,8 @@ const webhookPayloadSchema = z.object({
   midia_url: z.string().nullable().optional(),
   nome_contato: z.string().max(100).nullable().optional(),
   arquivo_nome: z.string().max(255).nullable().optional(),
-  company_id: z.string().uuid().optional()
+  company_id: z.string().uuid().optional(),
+  replied_to_message: z.string().nullable().optional()
 });
 
 // Verify webhook signature for security
@@ -70,6 +71,7 @@ function transformEvolutionPayload(body: any) {
   let tipo_mensagem = 'text';
   let midia_url = null;
   let arquivo_nome = null;
+  let replied_to_message = null;
   
   if (data.message.conversation) {
     mensagem = data.message.conversation;
@@ -77,6 +79,15 @@ function transformEvolutionPayload(body: any) {
   } else if (data.message.extendedTextMessage?.text) {
     mensagem = data.message.extendedTextMessage.text;
     tipo_mensagem = 'texto';
+    
+    // Capturar mensagem citada
+    if (data.message.extendedTextMessage?.contextInfo?.quotedMessage) {
+      const quoted = data.message.extendedTextMessage.contextInfo.quotedMessage;
+      replied_to_message = quoted.conversation || 
+                          quoted.extendedTextMessage?.text || 
+                          quoted.imageMessage?.caption ||
+                          '[Mensagem citada]';
+    }
   } else if (data.message.imageMessage) {
     const img = data.message.imageMessage;
     mensagem = img.caption || '[Imagem]';
@@ -134,7 +145,8 @@ function transformEvolutionPayload(body: any) {
     tipo_mensagem,
     midia_url,
     nome_contato: data.pushName || 'Desconhecido',
-    arquivo_nome
+    arquivo_nome,
+    replied_to_message
   };
 }
 
@@ -337,6 +349,7 @@ serve(async (req) => {
         arquivo_nome: validatedData.arquivo_nome,
         company_id: companyId,
         lead_id: leadId,
+        replied_to_message: validatedData.replied_to_message || null,
       }])
       .select()
       .single();

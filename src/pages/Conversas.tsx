@@ -600,6 +600,7 @@ function Conversas() {
                 read: m.status === 'Lida',
                 mediaUrl: m.midia_url || undefined,
                 fileName: fileName,
+                replyTo: m.replied_to_message || undefined,
               };
             });
           
@@ -1242,6 +1243,7 @@ function Conversas() {
         .single();
 
       // Salvar no Supabase após sucesso
+      const repliedMessage = replyingTo ? selectedConv.messages.find(m => m.id === replyingTo)?.content : null;
       const { error: dbError } = await supabase.from('conversas').insert([{
         numero: selectedConv.id,
         mensagem: messageContent,
@@ -1251,6 +1253,7 @@ function Conversas() {
         tipo_mensagem: type,
         nome_contato: selectedConv.contactName,
         company_id: userRole?.company_id, // IMPORTANTE: Adicionar company_id
+        replied_to_message: repliedMessage || null,
       }]);
 
       if (dbError) {

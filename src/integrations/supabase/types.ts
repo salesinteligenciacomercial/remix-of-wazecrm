@@ -290,6 +290,8 @@ export type Database = {
           numero: string
           origem: string
           owner_id: string | null
+          replied_to_id: string | null
+          replied_to_message: string | null
           status: string
           telefone_formatado: string | null
           tipo_mensagem: string | null
@@ -307,6 +309,8 @@ export type Database = {
           numero: string
           origem?: string
           owner_id?: string | null
+          replied_to_id?: string | null
+          replied_to_message?: string | null
           status?: string
           telefone_formatado?: string | null
           tipo_mensagem?: string | null
@@ -324,6 +328,8 @@ export type Database = {
           numero?: string
           origem?: string
           owner_id?: string | null
+          replied_to_id?: string | null
+          replied_to_message?: string | null
           status?: string
           telefone_formatado?: string | null
           tipo_mensagem?: string | null
