@@ -8,6 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { 
   MessageSquare, Instagram, Facebook, Send, Search, Bot, User, Paperclip, 
   Clock, Calendar, Zap, FileText, Tag, TrendingUp, ArrowRightLeft, Image as ImageIcon,
@@ -82,10 +87,20 @@ interface QuickMessageCategory {
 
 interface Reminder {
   id: string;
-  conversationId: string;
-  title: string;
-  datetime: string;
-  notes: string;
+  compromisso_id: string;
+  canal: string;
+  status_envio: string;
+  mensagem?: string;
+  horas_antecedencia: number;
+  data_envio?: string;
+  created_at: string;
+  destinatario?: string;
+  telefone_responsavel?: string;
+  compromisso?: {
+    data_hora_inicio: string;
+    tipo_servico: string;
+    lead_id?: string;
+  };
 }
 
 interface ScheduledMessage {
@@ -452,6 +467,36 @@ function Conversas() {
     },
     showNotifications: false // Não mostrar notificações automáticas
   });
+
+  // Carregar e sincronizar lembretes em tempo real
+  useEffect(() => {
+    if (!leadVinculado?.id) {
+      setReminders([]);
+      return;
+    }
+
+    loadReminders();
+
+    // Subscrever para atualizações em tempo real de lembretes
+    const lembretesChannel = supabase
+      .channel('lembretes_conversas_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lembretes',
+        },
+        () => {
+          loadReminders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(lembretesChannel);
+    };
+  }, [leadVinculado?.id]);
 
   useEffect(() => {
     console.log('🚀 Componente Conversas montado');
@@ -957,9 +1002,28 @@ function Conversas() {
     }
   };
 
-  const loadReminders = () => {
-    const saved = localStorage.getItem(REMINDERS_KEY);
-    if (saved) setReminders(JSON.parse(saved));
+  const loadReminders = async () => {
+    if (!leadVinculado?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('lembretes')
+        .select(`
+          *,
+          compromisso:compromissos(
+            data_hora_inicio,
+            tipo_servico,
+            lead_id
+          )
+        `)
+        .eq('compromisso.lead_id', leadVinculado.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setReminders(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar lembretes:', error);
+    }
   };
 
   const loadMeetings = () => {
@@ -986,11 +1050,6 @@ function Conversas() {
   const saveQuickCategories = (updated: QuickMessageCategory[]) => {
     localStorage.setItem(QUICK_CATEGORIES_KEY, JSON.stringify(updated));
     setQuickCategories(updated);
-  };
-
-  const saveReminders = (updated: Reminder[]) => {
-    localStorage.setItem(REMINDERS_KEY, JSON.stringify(updated));
-    setReminders(updated);
   };
 
   const saveMeetings = (updated: Meeting[]) => {
@@ -1628,23 +1687,64 @@ function Conversas() {
     handleSendMessage(content);
   };
 
-  const addReminder = () => {
+  const addReminder = async () => {
     if (!selectedConv || !reminderTitle.trim() || !reminderDatetime) {
       toast.error("Preencha todos os campos");
       return;
     }
-    const newReminder: Reminder = {
-      id: Date.now().toString(),
-      conversationId: selectedConv.id,
-      title: reminderTitle,
-      datetime: reminderDatetime,
-      notes: reminderNotes,
-    };
-    saveReminders([...reminders, newReminder]);
-    setReminderTitle("");
-    setReminderDatetime("");
-    setReminderNotes("");
-    toast.success("Lembrete agendado!");
+    
+    if (!leadVinculado?.id) {
+      toast.error("Vincule um lead primeiro");
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      // Buscar ou criar compromisso
+      const dataHoraCompromisso = new Date(reminderDatetime);
+      
+      const { data: compromisso, error: compromissoError } = await supabase
+        .from('compromissos')
+        .insert({
+          lead_id: leadVinculado.id,
+          usuario_responsavel_id: user.id,
+          owner_id: user.id,
+          data_hora_inicio: dataHoraCompromisso.toISOString(),
+          data_hora_fim: new Date(dataHoraCompromisso.getTime() + 60 * 60 * 1000).toISOString(),
+          tipo_servico: reminderTitle,
+          observacoes: reminderNotes,
+          status: 'agendado',
+        })
+        .select()
+        .single();
+
+      if (compromissoError) throw compromissoError;
+
+      // Criar lembrete
+      const { error: lembreteError } = await supabase
+        .from('lembretes')
+        .insert({
+          compromisso_id: compromisso.id,
+          canal: 'whatsapp',
+          horas_antecedencia: 24,
+          mensagem: `Olá! Lembramos: ${reminderTitle}`,
+          status_envio: 'pendente',
+          destinatario: 'lead',
+        });
+
+      if (lembreteError) throw lembreteError;
+
+      setReminderTitle("");
+      setReminderDatetime("");
+      setReminderNotes("");
+      toast.success("Lembrete criado e sincronizado!");
+      loadReminders();
+    } catch (error) {
+      console.error('Erro ao criar lembrete:', error);
+      toast.error("Erro ao criar lembrete");
+    }
   };
 
   const scheduleMessage = async () => {
@@ -3314,42 +3414,136 @@ function Conversas() {
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button variant="outline" className="w-full justify-start">
-                              <Bell className="h-4 w-4 mr-2" /> Agendar Lembrete
+                              <Bell className="h-4 w-4 mr-2" /> Gerenciar Lembretes
                             </Button>
                           </DialogTrigger>
-                          <DialogContent>
+                          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                             <DialogHeader>
-                              <DialogTitle>Agendar Lembrete</DialogTitle>
+                              <DialogTitle>Lembretes do Lead</DialogTitle>
                             </DialogHeader>
-                            <div className="space-y-4">
-                              <div>
-                                <Label>Título do Lembrete</Label>
-                                <Input
-                                  value={reminderTitle}
-                                  onChange={(e) => setReminderTitle(e.target.value)}
-                                  placeholder="Ex: Ligar para cliente"
-                                />
-                              </div>
-                              <div>
-                                <Label>Data e Hora</Label>
-                                <Input
-                                  type="datetime-local"
-                                  value={reminderDatetime}
-                                  onChange={(e) => setReminderDatetime(e.target.value)}
-                                />
-                              </div>
-                              <div>
-                                <Label>Observações</Label>
-                                <Textarea
-                                  value={reminderNotes}
-                                  onChange={(e) => setReminderNotes(e.target.value)}
-                                  placeholder="Notas adicionais..."
-                                />
-                              </div>
-                              <Button onClick={addReminder} className="w-full">
-                                Criar Lembrete
-                              </Button>
-                            </div>
+                            
+                            <Tabs defaultValue="criar" className="w-full">
+                              <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="criar">Criar Novo</TabsTrigger>
+                                <TabsTrigger value="historico">
+                                  Histórico ({reminders.length})
+                                </TabsTrigger>
+                              </TabsList>
+
+                              <TabsContent value="criar" className="space-y-4">
+                                <div>
+                                  <Label>Título do Lembrete</Label>
+                                  <Input
+                                    value={reminderTitle}
+                                    onChange={(e) => setReminderTitle(e.target.value)}
+                                    placeholder="Ex: Ligar para cliente"
+                                  />
+                                </div>
+                                <div>
+                                  <Label>Data e Hora</Label>
+                                  <Input
+                                    type="datetime-local"
+                                    value={reminderDatetime}
+                                    onChange={(e) => setReminderDatetime(e.target.value)}
+                                  />
+                                </div>
+                                <div>
+                                  <Label>Observações</Label>
+                                  <Textarea
+                                    value={reminderNotes}
+                                    onChange={(e) => setReminderNotes(e.target.value)}
+                                    placeholder="Notas adicionais..."
+                                  />
+                                </div>
+                                {!leadVinculado && (
+                                  <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
+                                    <p className="text-sm text-yellow-600">
+                                      ⚠️ Vincule um lead primeiro para criar lembretes
+                                    </p>
+                                  </div>
+                                )}
+                                <Button 
+                                  onClick={addReminder} 
+                                  className="w-full"
+                                  disabled={!leadVinculado}
+                                >
+                                  Criar Lembrete
+                                </Button>
+                              </TabsContent>
+
+                              <TabsContent value="historico" className="space-y-4">
+                                <ScrollArea className="h-[400px]">
+                                  {reminders.length === 0 ? (
+                                    <div className="text-center py-12 text-muted-foreground">
+                                      <Bell className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                                      <p>Nenhum lembrete criado</p>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-3">
+                                      {reminders.map((lembrete) => (
+                                        <Card key={lembrete.id} className={`border-l-4 ${
+                                          lembrete.status_envio === 'enviado' ? 'border-l-green-500' :
+                                          lembrete.status_envio === 'pendente' ? 'border-l-yellow-500' :
+                                          'border-l-red-500'
+                                        }`}>
+                                          <CardContent className="pt-4">
+                                            <div className="space-y-2">
+                                              <div className="flex justify-between items-start">
+                                                <div className="space-y-1 flex-1">
+                                                  <div className="flex items-center gap-2">
+                                                    <span className="font-medium">
+                                                      {lembrete.compromisso?.tipo_servico || 'Lembrete'}
+                                                    </span>
+                                                    <Badge variant={
+                                                      lembrete.status_envio === 'enviado' ? 'default' :
+                                                      lembrete.status_envio === 'pendente' ? 'secondary' :
+                                                      'destructive'
+                                                    }>
+                                                      {lembrete.status_envio === 'enviado' ? '✓ Enviado' :
+                                                       lembrete.status_envio === 'pendente' ? '⏳ Pendente' :
+                                                       '✗ Erro'}
+                                                    </Badge>
+                                                  </div>
+                                                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" />
+                                                    {lembrete.compromisso?.data_hora_inicio && 
+                                                      format(parseISO(lembrete.compromisso.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                                                    }
+                                                  </p>
+                                                  <p className="text-sm text-muted-foreground">
+                                                    <strong>Destinatário:</strong> {
+                                                      lembrete.destinatario === 'lead' ? 'Lead' :
+                                                      lembrete.destinatario === 'responsavel' ? 'Responsável' :
+                                                      lembrete.destinatario === 'ambos' ? 'Lead e Responsável' :
+                                                      'Lead'
+                                                    }
+                                                  </p>
+                                                  <p className="text-sm text-muted-foreground">
+                                                    <strong>Canal:</strong> {lembrete.canal.toUpperCase()} | 
+                                                    <strong> Antecedência:</strong> {lembrete.horas_antecedencia}h
+                                                  </p>
+                                                  {lembrete.data_envio && (
+                                                    <p className="text-xs text-muted-foreground">
+                                                      {lembrete.status_envio === 'enviado' ? 'Enviado em: ' : 'Última tentativa: '}
+                                                      {format(parseISO(lembrete.data_envio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                                    </p>
+                                                  )}
+                                                  {lembrete.mensagem && (
+                                                    <p className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
+                                                      {lembrete.mensagem}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </CardContent>
+                                        </Card>
+                                      ))}
+                                    </div>
+                                  )}
+                                </ScrollArea>
+                              </TabsContent>
+                            </Tabs>
                           </DialogContent>
                         </Dialog>
 
