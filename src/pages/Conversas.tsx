@@ -2446,9 +2446,30 @@ function Conversas() {
                     {/* Funnel Stage */}
                     <div>
                       <h4 className="text-foreground font-medium mb-2 flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4" /> Estágio do Funil
+                        <TrendingUp className="h-4 w-4" /> Funil de Vendas
                       </h4>
-                      <p className="text-sm text-muted-foreground mb-2">{selectedConv.funnelStage || "Não definido"}</p>
+                      {leadVinculado && leadVinculado.funil_id ? (
+                        <div className="mb-2 p-2 bg-primary/5 rounded-md border border-primary/20">
+                          <p className="text-xs text-muted-foreground">Lead no funil:</p>
+                          <p className="text-sm font-medium">
+                            {funis.find(f => f.id === leadVinculado.funil_id)?.nome || "Funil"}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">Etapa atual:</p>
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-2 h-2 rounded-full" 
+                              style={{ 
+                                backgroundColor: etapas.find(e => e.id === leadVinculado.etapa_id)?.cor || '#3b82f6' 
+                              }}
+                            />
+                            <p className="text-sm font-medium">
+                              {etapas.find(e => e.id === leadVinculado.etapa_id)?.nome || "Não definida"}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground mb-2">Não está em nenhum funil</p>
+                      )}
                       <Dialog>
                         <DialogTrigger asChild>
                           <Button size="sm" variant="outline" className="w-full">
