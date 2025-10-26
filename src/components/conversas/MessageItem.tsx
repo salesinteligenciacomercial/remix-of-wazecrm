@@ -338,7 +338,7 @@ END:VCARD`;
           {/* Reaction */}
           {message.reaction && (
             <Badge 
-              className="absolute -bottom-2 -right-2 h-6 w-6 rounded-full flex items-center justify-center p-0 border-2 border-background"
+              className="absolute -bottom-2 -right-2 h-7 w-7 rounded-full flex items-center justify-center p-0 border-2 border-background text-base shadow-md"
               variant="secondary"
             >
               {message.reaction}

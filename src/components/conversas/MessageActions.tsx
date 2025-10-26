@@ -54,7 +54,8 @@ export function MessageActions({
     onReact(messageId, emoji);
     setShowEmojiPicker(false);
     toast({
-      title: `Reação ${emoji} adicionada`
+      title: "✅ Reação enviada",
+      description: `${emoji} adicionado à mensagem`
     });
   };
 

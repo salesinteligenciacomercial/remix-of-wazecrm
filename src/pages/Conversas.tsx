@@ -909,6 +909,9 @@ function Conversas() {
 
   const handleReact = (messageId: string, emoji: string) => {
     if (!selectedConv) return;
+    
+    console.log('🎭 Reação adicionada:', emoji, 'Mensagem:', messageId);
+    
     const updated = conversations.map(conv => 
       conv.id === selectedConv.id ? {
         ...conv,
@@ -917,14 +920,16 @@ function Conversas() {
         )
       } : conv
     );
-    saveConversations(updated);
+    
+    setConversations(updated);
     setSelectedConv({
       ...selectedConv,
       messages: selectedConv.messages.map(msg => 
         msg.id === messageId ? { ...msg, reaction: emoji } : msg
       )
     });
-    toast.success(`Reação ${emoji} adicionada`);
+    
+    toast.success(`Reação ${emoji} adicionada com sucesso!`);
   };
 
   const handleSendMedia = async (file: File, caption: string, type: string) => {
