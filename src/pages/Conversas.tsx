@@ -12,7 +12,7 @@ import {
   MessageSquare, Instagram, Facebook, Send, Search, Bot, User, Paperclip, 
   Clock, Calendar, Zap, FileText, Tag, TrendingUp, ArrowRightLeft, Image as ImageIcon,
   Mic, FileUp, Check, CheckCheck, Phone, Video, Info, DollarSign, Users, Bell, Download, Volume2,
-  RefreshCw, CheckCircle2, AlertCircle, Reply, CheckSquare, X, Plus
+  RefreshCw, CheckCircle2, AlertCircle, Reply, CheckSquare, X, Plus, Trash2
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
@@ -482,7 +482,6 @@ function Conversas() {
     loadQuickMessages();
     loadQuickCategories();
     loadReminders();
-    loadScheduledMessages();
     loadMeetings();
     loadAiMode();
     
@@ -963,11 +962,6 @@ function Conversas() {
     if (saved) setReminders(JSON.parse(saved));
   };
 
-  const loadScheduledMessages = () => {
-    const saved = localStorage.getItem(SCHEDULED_MESSAGES_KEY);
-    if (saved) setScheduledMessages(JSON.parse(saved));
-  };
-
   const loadMeetings = () => {
     const saved = localStorage.getItem(MEETINGS_KEY);
     if (saved) setMeetings(JSON.parse(saved));
@@ -997,11 +991,6 @@ function Conversas() {
   const saveReminders = (updated: Reminder[]) => {
     localStorage.setItem(REMINDERS_KEY, JSON.stringify(updated));
     setReminders(updated);
-  };
-
-  const saveScheduledMessages = (updated: ScheduledMessage[]) => {
-    localStorage.setItem(SCHEDULED_MESSAGES_KEY, JSON.stringify(updated));
-    setScheduledMessages(updated);
   };
 
   const saveMeetings = (updated: Meeting[]) => {
