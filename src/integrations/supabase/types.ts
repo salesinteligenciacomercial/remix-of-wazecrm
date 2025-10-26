@@ -924,6 +924,54 @@ export type Database = {
           },
         ]
       }
+      scheduled_whatsapp_messages: {
+        Row: {
+          company_id: string
+          contact_name: string | null
+          conversation_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          message_content: string
+          owner_id: string
+          phone_number: string
+          scheduled_datetime: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          contact_name?: string | null
+          conversation_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_content: string
+          owner_id: string
+          phone_number: string
+          scheduled_datetime: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          contact_name?: string | null
+          conversation_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_content?: string
+          owner_id?: string
+          phone_number?: string
+          scheduled_datetime?: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       task_boards: {
         Row: {
           atualizado_em: string | null

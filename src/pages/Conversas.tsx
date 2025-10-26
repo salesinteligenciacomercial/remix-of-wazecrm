@@ -17,6 +17,7 @@ import {
 import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { CountdownTimer } from "@/components/conversas/CountdownTimer";
 import { ConversationHeader } from "@/components/conversas/ConversationHeader";
 import { ConversationListItem } from "@/components/conversas/ConversationListItem";
 import { MessageItem } from "@/components/conversas/MessageItem";
@@ -177,7 +178,7 @@ function Conversas() {
   const [quickMessages, setQuickMessages] = useState<QuickMessage[]>([]);
   const [quickCategories, setQuickCategories] = useState<QuickMessageCategory[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [scheduledMessages, setScheduledMessages] = useState<ScheduledMessage[]>([]);
+  const [scheduledMessages, setScheduledMessages] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
@@ -1657,22 +1658,144 @@ function Conversas() {
     toast.success("Lembrete agendado!");
   };
 
-  const scheduleMessage = () => {
+  const scheduleMessage = async () => {
     if (!selectedConv || !scheduledContent.trim() || !scheduledDatetime) {
       toast.error("Preencha todos os campos");
       return;
     }
-    const newScheduled: ScheduledMessage = {
-      id: Date.now().toString(),
-      conversationId: selectedConv.id,
-      content: scheduledContent,
-      datetime: scheduledDatetime,
-    };
-    saveScheduledMessages([...scheduledMessages, newScheduled]);
-    setScheduledContent("");
-    setScheduledDatetime("");
-    toast.success("Mensagem agendada!");
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Usuário não autenticado");
+        return;
+      }
+
+      const { data: userRole } = await supabase
+        .from("user_roles")
+        .select("company_id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (!userRole?.company_id) {
+        toast.error("Empresa não encontrada");
+        return;
+      }
+
+      const phoneNumber = selectedConv.phoneNumber || selectedConv.id;
+
+      const { error } = await supabase
+        .from('scheduled_whatsapp_messages')
+        .insert([{
+          company_id: userRole.company_id,
+          owner_id: session.user.id,
+          conversation_id: selectedConv.id,
+          phone_number: phoneNumber,
+          contact_name: selectedConv.contactName,
+          message_content: scheduledContent,
+          scheduled_datetime: new Date(scheduledDatetime).toISOString(),
+          status: 'pending',
+        }]);
+
+      if (error) {
+        console.error('❌ Erro ao agendar mensagem:', error);
+        toast.error('Erro ao agendar mensagem');
+        return;
+      }
+
+      console.log('✅ Mensagem agendada com sucesso');
+      toast.success("Mensagem agendada com sucesso!");
+      setScheduledContent("");
+      setScheduledDatetime("");
+      
+      // Recarregar lista de mensagens agendadas
+      await carregarMensagensAgendadas();
+    } catch (error) {
+      console.error('❌ Erro:', error);
+      toast.error('Erro ao agendar mensagem');
+    }
   };
+
+  const carregarMensagensAgendadas = async () => {
+    if (!selectedConv) return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data: userRole } = await supabase
+        .from("user_roles")
+        .select("company_id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (!userRole?.company_id) return;
+
+      const phoneNumber = selectedConv.phoneNumber || selectedConv.id;
+
+      const { data, error } = await supabase
+        .from('scheduled_whatsapp_messages')
+        .select('*')
+        .eq('company_id', userRole.company_id)
+        .eq('phone_number', phoneNumber)
+        .order('scheduled_datetime', { ascending: true });
+
+      if (!error && data) {
+        console.log('📅 Mensagens agendadas:', data.length);
+        setScheduledMessages(data);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar mensagens agendadas:', error);
+    }
+  };
+
+  const cancelarMensagemAgendada = async (messageId: string) => {
+    try {
+      const { error } = await supabase
+        .from('scheduled_whatsapp_messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (error) {
+        console.error('❌ Erro ao cancelar mensagem:', error);
+        toast.error('Erro ao cancelar mensagem');
+        return;
+      }
+
+      toast.success('Mensagem cancelada');
+      await carregarMensagensAgendadas();
+    } catch (error) {
+      console.error('❌ Erro:', error);
+      toast.error('Erro ao cancelar mensagem');
+    }
+  };
+
+  // Sincronizar mensagens agendadas em tempo real
+  useEffect(() => {
+    if (!selectedConv) return;
+
+    carregarMensagensAgendadas();
+
+    const channel = supabase
+      .channel('scheduled-messages-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'scheduled_whatsapp_messages',
+        },
+        (payload) => {
+          console.log('📡 Atualização de mensagem agendada:', payload);
+          carregarMensagensAgendadas();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedConv?.id]);
 
   const scheduleMeeting = () => {
     if (!selectedConv || !meetingTitle.trim() || !meetingDatetime) {
@@ -3062,33 +3185,139 @@ function Conversas() {
                           <DialogTrigger asChild>
                             <Button variant="outline" className="w-full justify-start">
                               <Clock className="h-4 w-4 mr-2" /> Agendar Mensagem
+                              {scheduledMessages.filter(m => m.status === 'pending').length > 0 && (
+                                <Badge variant="secondary" className="ml-auto">
+                                  {scheduledMessages.filter(m => m.status === 'pending').length}
+                                </Badge>
+                              )}
                             </Button>
                           </DialogTrigger>
-                          <DialogContent>
+                          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                             <DialogHeader>
-                              <DialogTitle>Agendar Mensagem</DialogTitle>
+                              <DialogTitle>⏰ Agendar Mensagem WhatsApp</DialogTitle>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                Programe mensagens para serem enviadas automaticamente
+                              </p>
                             </DialogHeader>
-                            <div className="space-y-4">
-                              <div>
-                                <Label>Mensagem</Label>
-                                <Textarea
-                                  value={scheduledContent}
-                                  onChange={(e) => setScheduledContent(e.target.value)}
-                                  placeholder="Digite a mensagem..."
-                                />
-                              </div>
-                              <div>
-                                <Label>Data e Hora</Label>
-                                <Input
-                                  type="datetime-local"
-                                  value={scheduledDatetime}
-                                  onChange={(e) => setScheduledDatetime(e.target.value)}
-                                />
-                              </div>
-                              <Button onClick={scheduleMessage} className="w-full">
-                                Agendar Envio
-                              </Button>
-                            </div>
+                            
+                            <Tabs defaultValue="agendar" className="w-full">
+                              <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="agendar">Agendar Nova</TabsTrigger>
+                                <TabsTrigger value="historico">
+                                  Histórico 
+                                  ({scheduledMessages.length})
+                                </TabsTrigger>
+                              </TabsList>
+
+                              <TabsContent value="agendar" className="space-y-4">
+                                <div className="space-y-3">
+                                  <div className="space-y-2">
+                                    <Label>Mensagem *</Label>
+                                    <Textarea
+                                      value={scheduledContent}
+                                      onChange={(e) => setScheduledContent(e.target.value)}
+                                      placeholder="Digite a mensagem que será enviada..."
+                                      rows={4}
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Data e Hora *</Label>
+                                    <Input
+                                      type="datetime-local"
+                                      value={scheduledDatetime}
+                                      onChange={(e) => setScheduledDatetime(e.target.value)}
+                                      min={new Date().toISOString().slice(0, 16)}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                      A mensagem será enviada automaticamente no horário agendado
+                                    </p>
+                                  </div>
+                                  <Button onClick={scheduleMessage} className="w-full">
+                                    <Clock className="h-4 w-4 mr-2" />
+                                    Agendar Envio
+                                  </Button>
+                                </div>
+                              </TabsContent>
+
+                              <TabsContent value="historico" className="space-y-4">
+                                {scheduledMessages.length === 0 ? (
+                                  <div className="text-center py-12 text-muted-foreground">
+                                    <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                    <p>Nenhuma mensagem agendada</p>
+                                    <p className="text-xs mt-1">
+                                      Agende mensagens na aba "Agendar Nova"
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {scheduledMessages.map((msg) => (
+                                      <div
+                                        key={msg.id}
+                                        className={`p-3 border rounded-lg ${
+                                          msg.status === 'sent' ? 'bg-green-50 border-green-200' :
+                                          msg.status === 'failed' ? 'bg-red-50 border-red-200' :
+                                          'bg-background'
+                                        }`}
+                                      >
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              {msg.status === 'pending' && (
+                                                <Badge variant="outline" className="text-xs">
+                                                  ⏳ Aguardando
+                                                </Badge>
+                                              )}
+                                              {msg.status === 'sent' && (
+                                                <Badge variant="default" className="text-xs bg-green-600">
+                                                  ✓ Enviada
+                                                </Badge>
+                                              )}
+                                              {msg.status === 'failed' && (
+                                                <Badge variant="destructive" className="text-xs">
+                                                  ✗ Falha
+                                                </Badge>
+                                              )}
+                                            </div>
+                                            <p className="text-sm font-medium break-words">
+                                              {msg.message_content}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                              <span>
+                                                📅 {new Date(msg.scheduled_datetime).toLocaleString('pt-BR')}
+                                              </span>
+                                              {msg.status === 'pending' && (
+                                                <span className="text-primary font-medium">
+                                                  <CountdownTimer targetDate={msg.scheduled_datetime} />
+                                                </span>
+                                              )}
+                                              {msg.status === 'sent' && msg.sent_at && (
+                                                <span className="text-green-600">
+                                                  Enviado em {new Date(msg.sent_at).toLocaleString('pt-BR')}
+                                                </span>
+                                              )}
+                                            </div>
+                                            {msg.error_message && (
+                                              <p className="text-xs text-destructive mt-1">
+                                                Erro: {msg.error_message}
+                                              </p>
+                                            )}
+                                          </div>
+                                          {msg.status === 'pending' && (
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              onClick={() => cancelarMensagemAgendada(msg.id)}
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </TabsContent>
+                            </Tabs>
                           </DialogContent>
                         </Dialog>
 
