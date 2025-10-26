@@ -269,10 +269,48 @@ function Conversas() {
     }
   };
 
+  // Função para recarregar dados do lead vinculado
+  const recarregarLeadVinculado = async (conversaId: string) => {
+    try {
+      const conversa = conversations.find(c => c.id === conversaId);
+      if (!conversa) return;
+
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .maybeSingle();
+
+      if (!userRole?.company_id) return;
+
+      const phoneToSearch = conversa.phoneNumber || conversa.id;
+      
+      const { data: leadData } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('company_id', userRole.company_id)
+        .or(`phone.eq.${phoneToSearch},telefone.eq.${phoneToSearch}`)
+        .maybeSingle();
+
+      if (leadData) {
+        console.log('🔄 Lead vinculado atualizado:', leadData);
+        setLeadVinculado(leadData);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao recarregar lead:', error);
+    }
+  };
+
   // Integrar sincronização de leads em tempo real
   useLeadsSync({
     onUpdate: (updatedLead) => {
       console.log('📡 [Conversas] Lead atualizado via sync:', updatedLead);
+      
+      // Atualizar leadVinculado se for o mesmo lead
+      if (leadVinculado && leadVinculado.id === updatedLead.id) {
+        console.log('✅ Atualizando lead vinculado com novos dados');
+        setLeadVinculado(updatedLead);
+      }
       
       // Atualizar conversa correspondente se existir
       setConversations(prev => prev.map(conv => {
@@ -1628,6 +1666,10 @@ function Conversas() {
       setSelectedConv({ ...selectedConv, funnelStage: nomeEtapa });
       setSelectedFunilId("");
       setSelectedFunnel("");
+      
+      // Recarregar dados do lead vinculado
+      await recarregarLeadVinculado(selectedConv.id);
+      
       toast.success(`Lead adicionado ao funil!`);
     } catch (error) {
       console.error('Erro ao adicionar ao funil:', error);
