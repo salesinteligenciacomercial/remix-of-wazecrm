@@ -38,7 +38,6 @@ export function LeadQuickActions({
 
   const abrirConversa = () => {
     navigate('/conversas', { state: { leadId } });
-    toast.success("Abrindo conversas do lead");
   };
 
   const criarAgendamento = () => {

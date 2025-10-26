@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { LeadActionsDialog } from "@/components/leads/LeadActionsDialog";
 import { LeadQuickActions } from "@/components/leads/LeadQuickActions";
 import { LeadTagsDialog } from "@/components/leads/LeadTagsDialog";
+import { TagsManager } from "@/components/leads/TagsManager";
 import { NovoLeadDialog } from "@/components/funil/NovoLeadDialog";
 import { ImportarLeadsDialog } from "@/components/funil/ImportarLeadsDialog";
 import { formatPhoneNumber } from "@/utils/phoneFormatter";
@@ -37,14 +38,12 @@ export default function Leads() {
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const abrirConversa = (phone: string, name: string) => {
-    if (phone) {
-      const numero = phone.replace(/\D/g, "");
-      navigate(`/conversas?phone=${numero}&name=${encodeURIComponent(name)}`);
-    }
+  const abrirConversa = (leadId: string, leadName: string) => {
+    navigate('/conversas', { state: { leadId } });
   };
 
   // Integrar sincronização de leads em tempo real
@@ -72,7 +71,7 @@ export default function Leads() {
 
   useEffect(() => {
     filterLeads();
-  }, [searchTerm, selectedStatus, leads]);
+  }, [searchTerm, selectedStatus, selectedTag, leads]);
 
   const carregarLeads = async () => {
     const { data, error } = await supabase
@@ -109,6 +108,12 @@ export default function Leads() {
       filtered = filtered.filter((lead) => lead.status === selectedStatus);
     }
 
+    if (selectedTag) {
+      filtered = filtered.filter((lead) => 
+        lead.tags?.includes(selectedTag)
+      );
+    }
+
     setFilteredLeads(filtered);
   };
 
@@ -134,41 +139,66 @@ export default function Leads() {
           </p>
         </div>
         <div className="flex gap-2">
+          <TagsManager 
+            onTagSelected={setSelectedTag}
+            selectedTag={selectedTag}
+          />
           <ImportarLeadsDialog onLeadsImported={carregarLeads} />
           <NovoLeadDialog onLeadCreated={carregarLeads} />
         </div>
       </div>
 
-      <div className="flex gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome, email, telefone ou empresa..."
-            className="pl-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="space-y-3">
+        <div className="flex gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome, email, telefone ou empresa..."
+              className="pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant={selectedStatus === "all" ? "default" : "outline"}
+              onClick={() => setSelectedStatus("all")}
+            >
+              Todos
+            </Button>
+            <Button
+              variant={selectedStatus === "novo" ? "default" : "outline"}
+              onClick={() => setSelectedStatus("novo")}
+            >
+              Novos
+            </Button>
+            <Button
+              variant={selectedStatus === "qualificado" ? "default" : "outline"}
+              onClick={() => setSelectedStatus("qualificado")}
+            >
+              Qualificados
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant={selectedStatus === "all" ? "default" : "outline"}
-            onClick={() => setSelectedStatus("all")}
-          >
-            Todos
-          </Button>
-          <Button
-            variant={selectedStatus === "novo" ? "default" : "outline"}
-            onClick={() => setSelectedStatus("novo")}
-          >
-            Novos
-          </Button>
-          <Button
-            variant={selectedStatus === "qualificado" ? "default" : "outline"}
-            onClick={() => setSelectedStatus("qualificado")}
-          >
-            Qualificados
-          </Button>
-        </div>
+
+        {/* Filtro ativo de tag */}
+        {selectedTag && (
+          <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg border border-primary/20">
+            <Tag className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium">Filtrando por tag:</span>
+            <Badge variant="secondary" className="gap-1">
+              {selectedTag}
+            </Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              onClick={() => setSelectedTag(null)}
+            >
+              Limpar filtro
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4">
@@ -215,7 +245,7 @@ export default function Leads() {
                           variant="ghost"
                           size="sm"
                           className="h-6 px-2 ml-2 text-[#25D366] hover:text-[#25D366] hover:bg-[#25D366]/10 transition-all"
-                          onClick={() => abrirConversa(lead.phone!, lead.name)}
+                          onClick={() => abrirConversa(lead.id, lead.name)}
                           title="Abrir Conversa no WhatsApp"
                         >
                           <MessageSquare className="h-3.5 w-3.5 mr-1" />

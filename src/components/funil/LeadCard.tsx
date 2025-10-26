@@ -48,10 +48,7 @@ export function LeadCard({ lead, onDelete, onLeadMoved }: LeadCardProps) {
   } : undefined;
 
   const abrirConversa = () => {
-    if (lead.telefone) {
-      const numero = lead.telefone.replace(/\D/g, "");
-      navigate(`/conversas?phone=${numero}&name=${encodeURIComponent(lead.nome)}`);
-    }
+    navigate('/conversas', { state: { leadId: lead.id } });
   };
 
   return (
