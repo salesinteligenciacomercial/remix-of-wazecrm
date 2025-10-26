@@ -45,6 +45,11 @@ export function EditarInformacoesLeadDialog({
   });
   const [newTag, setNewTag] = useState("");
 
+  // Garantir que o dialog está fechado ao carregar nova conversa
+  useEffect(() => {
+    setOpen(false);
+  }, [leadId, telefone]);
+
   useEffect(() => {
     if (open) {
       carregarDados();
