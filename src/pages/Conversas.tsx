@@ -435,7 +435,14 @@ function Conversas() {
                       
                       <button
                         onClick={() => {
-                          setSelectedConv(novaConvFormatted);
+                          // Buscar a conversa completa com todo o histórico
+                          setConversations(prev => {
+                            const conversaCompleta = prev.find(c => c.id === novaConvFormatted.id);
+                            if (conversaCompleta) {
+                              setSelectedConv(conversaCompleta);
+                            }
+                            return prev;
+                          });
                           toast.dismiss(t);
                         }}
                         className="w-full px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
