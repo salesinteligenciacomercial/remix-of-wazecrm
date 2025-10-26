@@ -29,6 +29,27 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { EditarCompromissoDialog } from "@/components/agenda/EditarCompromissoDialog";
 
+interface Lembrete {
+  id: string;
+  compromisso_id: string;
+  canal: string;
+  status_envio: string;
+  mensagem?: string;
+  horas_antecedencia: number;
+  data_envio?: string;
+  created_at: string;
+  destinatario?: string;
+  telefone_responsavel?: string;
+  compromisso?: {
+    data_hora_inicio: string;
+    tipo_servico: string;
+    lead?: {
+      name: string;
+      phone?: string;
+    };
+  };
+}
+
 interface Compromisso {
   id: string;
   lead_id?: string;
@@ -61,6 +82,8 @@ export default function Agenda() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [novoCompromissoOpen, setNovoCompromissoOpen] = useState(false);
   const [configuracoesOpen, setConfiguracoesOpen] = useState(false);
+  const [lembretes, setLembretes] = useState<Lembrete[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("agenda");
   
   // Form states para novo compromisso
   const [formData, setFormData] = useState({
@@ -73,14 +96,16 @@ export default function Agenda() {
     custo_estimado: "",
     enviar_lembrete: true,
     horas_antecedencia: "24",
+    destinatario_lembrete: "lead",
   });
 
   useEffect(() => {
     carregarCompromissos();
     carregarLeads();
+    carregarLembretes();
     
     // Subscrever para atualizações em tempo real
-    const channel = supabase
+    const compromissosChannel = supabase
       .channel('compromissos_realtime')
       .on(
         'postgres_changes',
@@ -95,8 +120,25 @@ export default function Agenda() {
       )
       .subscribe();
 
+    // Subscrever lembretes em tempo real
+    const lembretesChannel = supabase
+      .channel('lembretes_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lembretes'
+        },
+        () => {
+          carregarLembretes();
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(compromissosChannel);
+      supabase.removeChannel(lembretesChannel);
     };
   }, []);
 
@@ -132,6 +174,28 @@ export default function Agenda() {
     }
   };
 
+  const carregarLembretes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('lembretes')
+        .select(`
+          *,
+          compromisso:compromissos(
+            data_hora_inicio,
+            tipo_servico,
+            lead:leads(name, phone)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setLembretes(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar lembretes:', error);
+      toast.error("Erro ao carregar lembretes");
+    }
+  };
+
   const criarCompromisso = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -160,12 +224,23 @@ export default function Agenda() {
 
       // Criar lembrete se solicitado
       if (formData.enviar_lembrete && compromisso) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user?.id)
+          .single();
+
+        const leadSelecionado = leads.find(l => l.id === formData.lead_id);
+        
         await supabase.from('lembretes').insert({
           compromisso_id: compromisso.id,
           canal: 'whatsapp',
           horas_antecedencia: parseInt(formData.horas_antecedencia),
           mensagem: `Olá! Lembramos do seu compromisso agendado para ${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`,
           status_envio: 'pendente',
+          destinatario: formData.destinatario_lembrete,
+          telefone_responsavel: profile?.full_name || user?.email,
         });
       }
 
@@ -229,6 +304,7 @@ export default function Agenda() {
       custo_estimado: "",
       enviar_lembrete: true,
       horas_antecedencia: "24",
+      destinatario_lembrete: "lead",
     });
   };
 
@@ -420,20 +496,35 @@ export default function Agenda() {
                 </div>
 
                 {formData.enviar_lembrete && (
-                  <div className="space-y-2">
-                    <Label>Horas de antecedência</Label>
-                    <Select value={formData.horas_antecedencia} onValueChange={(value) => setFormData({...formData, horas_antecedencia: value})}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">1 hora antes</SelectItem>
-                        <SelectItem value="3">3 horas antes</SelectItem>
-                        <SelectItem value="24">24 horas antes</SelectItem>
-                        <SelectItem value="48">48 horas antes</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <>
+                    <div className="space-y-2">
+                      <Label>Enviar lembrete para</Label>
+                      <Select value={formData.destinatario_lembrete} onValueChange={(value) => setFormData({...formData, destinatario_lembrete: value})}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="lead">Apenas o Lead</SelectItem>
+                          <SelectItem value="responsavel">Apenas o Responsável</SelectItem>
+                          <SelectItem value="ambos">Lead e Responsável</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Horas de antecedência</Label>
+                      <Select value={formData.horas_antecedencia} onValueChange={(value) => setFormData({...formData, horas_antecedencia: value})}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 hora antes</SelectItem>
+                          <SelectItem value="3">3 horas antes</SelectItem>
+                          <SelectItem value="24">24 horas antes</SelectItem>
+                          <SelectItem value="48">48 horas antes</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
                 )}
 
                 <Button className="w-full" onClick={criarCompromisso}>
@@ -728,14 +819,88 @@ export default function Agenda() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Bell className="h-5 w-5" />
-                Lembretes Programados
+                Histórico de Lembretes
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12 text-muted-foreground">
-                <Bell className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>Funcionalidade de lembretes em desenvolvimento</p>
-              </div>
+              <ScrollArea className="h-[600px]">
+                {lembretes.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Bell className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p>Nenhum lembrete criado</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {lembretes.map((lembrete) => (
+                      <Card key={lembrete.id} className={`border-l-4 ${
+                        lembrete.status_envio === 'enviado' ? 'border-l-green-500' :
+                        lembrete.status_envio === 'pendente' ? 'border-l-yellow-500' :
+                        'border-l-red-500'
+                      }`}>
+                        <CardContent className="pt-4">
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-start">
+                              <div className="space-y-1 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">
+                                    {lembrete.compromisso?.tipo_servico || 'Compromisso'}
+                                  </span>
+                                  <Badge variant={
+                                    lembrete.status_envio === 'enviado' ? 'default' :
+                                    lembrete.status_envio === 'pendente' ? 'secondary' :
+                                    'destructive'
+                                  }>
+                                    {lembrete.status_envio === 'enviado' ? '✓ Enviado' :
+                                     lembrete.status_envio === 'pendente' ? '⏳ Pendente' :
+                                     '✗ Erro'}
+                                  </Badge>
+                                </div>
+                                {lembrete.compromisso?.lead && (
+                                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                    <User className="h-3 w-3" />
+                                    {lembrete.compromisso.lead.name}
+                                  </p>
+                                )}
+                                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {lembrete.compromisso?.data_hora_inicio && 
+                                    format(parseISO(lembrete.compromisso.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                                  }
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  <strong>Destinatário:</strong> {
+                                    lembrete.destinatario === 'lead' ? 'Lead' :
+                                    lembrete.destinatario === 'responsavel' ? 'Responsável' :
+                                    lembrete.destinatario === 'ambos' ? 'Lead e Responsável' :
+                                    'Lead'
+                                  }
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  <strong>Canal:</strong> {lembrete.canal.toUpperCase()}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  <strong>Antecedência:</strong> {lembrete.horas_antecedencia}h
+                                </p>
+                                {lembrete.data_envio && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {lembrete.status_envio === 'enviado' ? 'Enviado em: ' : 'Última tentativa: '}
+                                    {format(parseISO(lembrete.data_envio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                  </p>
+                                )}
+                                {lembrete.mensagem && (
+                                  <p className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
+                                    {lembrete.mensagem}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
             </CardContent>
           </Card>
         </TabsContent>

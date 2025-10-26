@@ -781,10 +781,12 @@ export type Database = {
           compromisso_id: string
           created_at: string | null
           data_envio: string | null
+          destinatario: string
           horas_antecedencia: number
           id: string
           mensagem: string | null
           status_envio: string | null
+          telefone_responsavel: string | null
         }
         Insert: {
           canal: string
@@ -792,10 +794,12 @@ export type Database = {
           compromisso_id: string
           created_at?: string | null
           data_envio?: string | null
+          destinatario?: string
           horas_antecedencia?: number
           id?: string
           mensagem?: string | null
           status_envio?: string | null
+          telefone_responsavel?: string | null
         }
         Update: {
           canal?: string
@@ -803,10 +807,12 @@ export type Database = {
           compromisso_id?: string
           created_at?: string | null
           data_envio?: string | null
+          destinatario?: string
           horas_antecedencia?: number
           id?: string
           mensagem?: string | null
           status_envio?: string | null
+          telefone_responsavel?: string | null
         }
         Relationships: [
           {

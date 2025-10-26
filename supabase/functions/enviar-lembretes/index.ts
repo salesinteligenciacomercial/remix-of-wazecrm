@@ -14,6 +14,8 @@ interface Lembrete {
   horas_antecedencia: number;
   data_envio: string;
   status_envio: string;
+  destinatario?: string;
+  telefone_responsavel?: string;
   compromisso: {
     id: string;
     data_hora_inicio: string;
@@ -136,73 +138,102 @@ serve(async (req) => {
           continue;
         }
 
-        const telefone = lembrete.compromisso.lead.phone || lembrete.compromisso.lead.telefone;
-        
-        if (!telefone) {
-          console.error(`❌ Telefone não encontrado para lead do compromisso ${lembrete.compromisso_id}`);
-          await supabase
-            .from('lembretes')
-            .update({ 
-              status_envio: 'erro',
-              data_envio: new Date().toISOString()
-            })
-            .eq('id', lembrete.id);
-          erros++;
-          continue;
-        }
-
-        // Formatar telefone (remover caracteres não numéricos)
-        const telefoneFormatado = telefone.replace(/\D/g, '');
-
         // Enviar mensagem via Evolution API
         if (lembrete.canal === 'whatsapp') {
-          console.log(`📱 Enviando WhatsApp para: ${telefoneFormatado}`);
+          const destinatario = lembrete.destinatario || 'lead';
+          const telefones: string[] = [];
           
-          const whatsappUrl = `${evolutionUrl}/message/sendText/${instanceName}`;
-          const whatsappPayload = {
-            number: telefoneFormatado,
-            text: lembrete.mensagem || `Olá ${lembrete.compromisso.lead.name}! Lembramos do seu compromisso de ${lembrete.compromisso.tipo_servico} agendado para ${new Date(lembrete.compromisso.data_hora_inicio).toLocaleString('pt-BR')}.`,
-          };
+          // Determinar quais telefones enviar baseado no destinatário
+          if (destinatario === 'lead' || destinatario === 'ambos') {
+            const leadTelefone = lembrete.compromisso.lead.phone || lembrete.compromisso.lead.telefone;
+            if (leadTelefone) {
+              telefones.push(leadTelefone);
+            }
+          }
+          
+          if (destinatario === 'responsavel' || destinatario === 'ambos') {
+            if (lembrete.telefone_responsavel) {
+              telefones.push(lembrete.telefone_responsavel);
+            }
+          }
+          
+          if (telefones.length === 0) {
+            console.error(`❌ Nenhum telefone disponível para lembrete ${lembrete.id}`);
+            await supabase
+              .from('lembretes')
+              .update({ 
+                status_envio: 'erro',
+                data_envio: new Date().toISOString()
+              })
+              .eq('id', lembrete.id);
+            erros++;
+            continue;
+          }
+          
+          // Enviar para todos os telefones
+          let todosEnviados = true;
+          for (const telefone of telefones) {
+            const telefoneFormatado = telefone.replace(/\D/g, '');
+            
+            console.log(`📱 Enviando WhatsApp para: ${telefoneFormatado}`);
+            
+            const whatsappUrl = `${evolutionUrl}/message/sendText/${instanceName}`;
+            const whatsappPayload = {
+              number: telefoneFormatado,
+              text: lembrete.mensagem || `Olá! Lembramos do compromisso de ${lembrete.compromisso.tipo_servico} agendado para ${new Date(lembrete.compromisso.data_hora_inicio).toLocaleString('pt-BR')}.`,
+            };
 
-          console.log(`🌐 Chamando Evolution API: ${whatsappUrl}`);
+            console.log(`🌐 Chamando Evolution API: ${whatsappUrl}`);
 
-          const whatsappResponse = await fetch(whatsappUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': evolutionApiKey,
-            },
-            body: JSON.stringify(whatsappPayload),
-          });
+            const whatsappResponse = await fetch(whatsappUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': evolutionApiKey,
+              },
+              body: JSON.stringify(whatsappPayload),
+            });
 
-          console.log(`📥 Status da resposta: ${whatsappResponse.status}`);
+            console.log(`📥 Status da resposta: ${whatsappResponse.status}`);
 
-          if (!whatsappResponse.ok) {
-            const errorText = await whatsappResponse.text();
-            console.error(`❌ Erro ao enviar WhatsApp:`, errorText);
-            throw new Error(`Falha ao enviar WhatsApp: ${whatsappResponse.status}`);
+            if (!whatsappResponse.ok) {
+              const errorText = await whatsappResponse.text();
+              console.error(`❌ Erro ao enviar WhatsApp:`, errorText);
+              todosEnviados = false;
+            } else {
+              const whatsappResult = await whatsappResponse.json();
+              console.log(`✅ WhatsApp enviado com sucesso:`, whatsappResult);
+            }
           }
 
-          const whatsappResult = await whatsappResponse.json();
-          console.log(`✅ WhatsApp enviado com sucesso:`, whatsappResult);
+          if (todosEnviados) {
+            // Atualizar status do lembrete para enviado
+            await supabase
+              .from('lembretes')
+              .update({ 
+                status_envio: 'enviado',
+                data_envio: new Date().toISOString()
+              })
+              .eq('id', lembrete.id);
 
-          // Atualizar status do lembrete para enviado
-          await supabase
-            .from('lembretes')
-            .update({ 
-              status_envio: 'enviado',
-              data_envio: new Date().toISOString()
-            })
-            .eq('id', lembrete.id);
+            // Atualizar flag no compromisso
+            await supabase
+              .from('compromissos')
+              .update({ lembrete_enviado: true })
+              .eq('id', lembrete.compromisso_id);
 
-          // Atualizar flag no compromisso
-          await supabase
-            .from('compromissos')
-            .update({ lembrete_enviado: true })
-            .eq('id', lembrete.compromisso_id);
-
-          processados++;
-          console.log(`✅ Lembrete ${lembrete.id} processado com sucesso`);
+            processados++;
+            console.log(`✅ Lembrete ${lembrete.id} processado com sucesso`);
+          } else {
+            await supabase
+              .from('lembretes')
+              .update({ 
+                status_envio: 'erro',
+                data_envio: new Date().toISOString()
+              })
+              .eq('id', lembrete.id);
+            erros++;
+          }
         } else {
           console.log(`⚠️ Canal ${lembrete.canal} não suportado ainda`);
           await supabase
