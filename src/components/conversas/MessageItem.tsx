@@ -16,6 +16,7 @@ import {
   Smile
 } from "lucide-react";
 import { MessageActions } from "./MessageActions";
+import { PDFPreview } from "./PDFPreview";
 import { toast } from "@/hooks/use-toast";
 
 interface Message {
@@ -230,23 +231,11 @@ export function MessageItem({
               ) : (
                 <div className="space-y-2">
                   {/* Preview thumbnail do PDF */}
-                  <div 
-                    className="relative cursor-pointer hover:opacity-90 transition-opacity border border-border rounded overflow-hidden"
+                  <PDFPreview
+                    url={message.mediaUrl}
+                    fileName={message.fileName}
                     onClick={() => setPdfExpanded(true)}
-                  >
-                    <iframe 
-                      src={message.mediaUrl} 
-                      className="w-[200px] h-[260px] pointer-events-none"
-                      title="PDF Preview"
-                      style={{ transform: 'scale(1)', transformOrigin: 'top left' }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
-                      <div className="text-white text-xs font-medium truncate w-full">
-                        <FileText className="h-4 w-4 inline mr-1" />
-                        {message.fileName || 'Documento PDF'}
-                      </div>
-                    </div>
-                  </div>
+                  />
                   
                   <div className="flex gap-2">
                     <Button
