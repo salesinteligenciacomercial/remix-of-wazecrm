@@ -20,6 +20,7 @@ import {
   RefreshCw, CheckCircle2, AlertCircle, Reply, CheckSquare, X, Plus, Trash2
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CountdownTimer } from "@/components/conversas/CountdownTimer";
@@ -216,6 +217,7 @@ function Conversas() {
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null); // Company ID do usuário
   const [userName, setUserName] = useState<string>(""); // Nome do usuário logado
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
   
   // Estados para modais de visualização
   const [imageModalOpen, setImageModalOpen] = useState(false);
@@ -545,7 +547,170 @@ function Conversas() {
     console.log('🔄 Carregando conversas iniciais do Supabase...');
     loadSupabaseConversations();
 
-    // Verificar se veio de um lead (query param)
+    // Verificar se veio de um lead (via state do navigate)
+    const handleLeadRedirect = async () => {
+      const state = location.state as { leadId?: string } | null;
+      
+      if (state?.leadId) {
+        console.log('🔍 Lead ID recebido via state:', state.leadId);
+        
+        try {
+          // Buscar o lead no Supabase
+          const { data: leadData, error } = await supabase
+            .from('leads')
+            .select('*')
+            .eq('id', state.leadId)
+            .maybeSingle();
+          
+          if (error || !leadData) {
+            console.error('❌ Erro ao buscar lead:', error);
+            toast.error('Lead não encontrado');
+            return;
+          }
+          
+          console.log('✅ Lead encontrado:', leadData);
+          
+          // Pegar o telefone do lead (pode estar em 'phone' ou 'telefone')
+          const leadPhone = leadData.phone || leadData.telefone;
+          
+          if (!leadPhone) {
+            toast.error('Lead não possui telefone cadastrado');
+            return;
+          }
+          
+          // Formatar o telefone removendo caracteres especiais
+          const phoneFormatted = leadPhone.replace(/\D/g, '');
+          
+          // Buscar conversa existente no Supabase
+          const { data: conversasData } = await supabase
+            .from('conversas')
+            .select('*')
+            .eq('telefone_formatado', phoneFormatted)
+            .order('created_at', { ascending: false });
+          
+          if (conversasData && conversasData.length > 0) {
+            // Encontrou conversas, carregar todas e selecionar a primeira
+            console.log(`📱 ${conversasData.length} conversa(s) encontrada(s) para o lead`);
+            
+            // Agrupar mensagens por número
+            const conversationsMap = new Map<string, Conversation>();
+            
+            for (const msg of conversasData) {
+              const convId = msg.telefone_formatado || msg.numero;
+              
+              if (!conversationsMap.has(convId)) {
+                conversationsMap.set(convId, {
+                  id: convId,
+                  contactName: msg.nome_contato || leadData.name || 'Desconhecido',
+                  channel: msg.origem?.toLowerCase() === 'whatsapp' ? 'whatsapp' : 
+                          msg.origem?.toLowerCase() === 'instagram' ? 'instagram' : 'facebook',
+                  status: msg.status === 'Enviada' ? 'answered' : 'waiting',
+                  lastMessage: msg.mensagem || '',
+                  unread: 0,
+                  messages: [],
+                  tags: leadData.tags || [],
+                  funnelStage: leadData.stage,
+                  responsavel: leadData.responsavel_id,
+                  produto: leadData.servico,
+                  valor: leadData.value ? `R$ ${Number(leadData.value).toLocaleString('pt-BR')}` : undefined,
+                  phoneNumber: convId,
+                });
+              }
+              
+              const conv = conversationsMap.get(convId)!;
+              
+              // Adicionar mensagem
+              const message: Message = {
+                id: msg.id,
+                content: msg.mensagem || '',
+                type: msg.tipo_mensagem === 'image' ? 'image' :
+                      msg.tipo_mensagem === 'audio' ? 'audio' :
+                      msg.tipo_mensagem === 'video' ? 'video' :
+                      msg.tipo_mensagem === 'document' ? 'pdf' : 'text',
+                sender: msg.status === 'Enviada' ? 'user' : 'contact',
+                timestamp: new Date(msg.created_at),
+                delivered: msg.status === 'Enviada',
+                read: msg.status === 'Lida',
+                mediaUrl: msg.midia_url,
+                fileName: msg.arquivo_nome,
+              };
+              
+              conv.messages.push(message);
+              
+              // Atualizar última mensagem
+              if (new Date(msg.created_at) > new Date(conv.lastMessage)) {
+                conv.lastMessage = msg.mensagem || '';
+              }
+            }
+            
+            // Converter para array e ordenar mensagens
+            const loadedConversations = Array.from(conversationsMap.values()).map(conv => ({
+              ...conv,
+              messages: conv.messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+            }));
+            
+            // Adicionar ou atualizar no estado
+            setConversations(prev => {
+              const updated = [...prev];
+              for (const newConv of loadedConversations) {
+                const existingIndex = updated.findIndex(c => c.id === newConv.id);
+                if (existingIndex >= 0) {
+                  updated[existingIndex] = newConv;
+                } else {
+                  updated.unshift(newConv);
+                }
+              }
+              return updated;
+            });
+            
+            // Selecionar a primeira conversa
+            const conversationToSelect = loadedConversations[0];
+            setSelectedConv(conversationToSelect);
+            setLeadVinculado(leadData);
+            
+            toast.success(`Conversa de ${leadData.name} aberta`);
+          } else {
+            // Não encontrou conversa, criar uma nova
+            console.log('📝 Nenhuma conversa encontrada, criando nova...');
+            
+            const newConv: Conversation = {
+              id: phoneFormatted,
+              contactName: leadData.name,
+              channel: "whatsapp",
+              status: "waiting",
+              lastMessage: "Nova conversa",
+              unread: 0,
+              messages: [],
+              tags: leadData.tags || [],
+              funnelStage: leadData.stage,
+              responsavel: leadData.responsavel_id,
+              produto: leadData.servico,
+              valor: leadData.value ? `R$ ${Number(leadData.value).toLocaleString('pt-BR')}` : undefined,
+              phoneNumber: phoneFormatted,
+            };
+            
+            setConversations(prev => [newConv, ...prev]);
+            setSelectedConv(newConv);
+            setLeadVinculado(leadData);
+            
+            toast.success(`Nova conversa com ${leadData.name} iniciada`);
+          }
+          
+          // Limpar o state após processar
+          window.history.replaceState({}, '', '/conversas');
+        } catch (error) {
+          console.error('❌ Erro ao processar redirecionamento do lead:', error);
+          toast.error('Erro ao abrir conversa do lead');
+        }
+      }
+    };
+    
+    // Executar após carregar conversas
+    setTimeout(() => {
+      handleLeadRedirect();
+    }, 1000);
+    
+    // Verificar se veio de um lead (query param - manter compatibilidade)
     const urlParams = new URLSearchParams(window.location.search);
     const phoneParam = urlParams.get('phone');
     const nameParam = urlParams.get('name');
