@@ -18,7 +18,7 @@ import {
   Frown,
   Angry
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 
 interface MessageActionsProps {
   messageId: string;
@@ -53,7 +53,9 @@ export function MessageActions({
   const handleReact = (emoji: string) => {
     onReact(messageId, emoji);
     setShowEmojiPicker(false);
-    toast.success(`Reação ${emoji} adicionada`);
+    toast({
+      title: `Reação ${emoji} adicionada`
+    });
   };
 
   return (

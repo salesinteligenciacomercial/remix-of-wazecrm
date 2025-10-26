@@ -11,10 +11,12 @@ import {
   Video,
   Mic,
   Reply,
-  User as UserIcon
+  User as UserIcon,
+  MoreVertical,
+  Smile
 } from "lucide-react";
 import { MessageActions } from "./MessageActions";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 
 interface Message {
   id: string;
@@ -95,12 +97,18 @@ export function MessageItem({
       // Arraste para a direita > 80px = responder (mensagem do contato)
       if (message.sender === "contact" && diff > 80) {
         onReply(message.id);
-        toast.success("↩️ Arraste para responder ativado!");
+        toast({
+          title: "↩️ Responder mensagem",
+          description: "Digite sua resposta abaixo"
+        });
       }
       // Arraste para a esquerda > 80px = responder (mensagem do usuário)
       else if (message.sender === "user" && diff < -80) {
         onReply(message.id);
-        toast.success("↩️ Arraste para responder ativado!");
+        toast({
+          title: "↩️ Responder mensagem", 
+          description: "Digite sua resposta abaixo"
+        });
       }
     }
     setDragStart(null);
@@ -341,7 +349,7 @@ END:VCARD`;
         {/* Actions */}
         {showActions && (
           <div 
-            className={`absolute top-0 ${message.sender === "user" ? "left-full ml-2" : "right-full mr-2"}`}
+            className={`absolute top-0 ${message.sender === "user" ? "right-full mr-2" : "left-full ml-2"}`}
           >
             <MessageActions
               messageId={message.id}
