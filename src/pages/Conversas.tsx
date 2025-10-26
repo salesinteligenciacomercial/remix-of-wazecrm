@@ -21,6 +21,7 @@ import { MessageItem } from "@/components/conversas/MessageItem";
 import { AudioRecorder } from "@/components/conversas/AudioRecorder";
 import { MediaUpload } from "@/components/conversas/MediaUpload";
 import { NovaConversaDialog } from "@/components/conversas/NovaConversaDialog";
+import { EditarInformacoesLeadDialog } from "@/components/conversas/EditarInformacoesLeadDialog";
 import { formatPhoneNumber, safeFormatPhoneNumber } from "@/utils/phoneFormatter";
 import { useLeadsSync } from "@/hooks/useLeadsSync";
 
@@ -2267,48 +2268,16 @@ function Conversas() {
                         )}
                       </div>
                       
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button size="sm" variant="outline" className="w-full mb-2">
-                            <FileText className="h-3 w-3 mr-2" /> Editar Informações
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Informações do Lead</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <Label>Produto de Interesse</Label>
-                              <Input
-                                placeholder={selectedConv.produto || "Ex: Sistema CRM"}
-                                value={newProduto}
-                                onChange={(e) => setNewProduto(e.target.value)}
-                              />
-                            </div>
-                            <div>
-                              <Label>Valor da Negociação</Label>
-                              <Input
-                                placeholder={selectedConv.valor || "Ex: R$ 5.000,00"}
-                                value={newValor}
-                                onChange={(e) => setNewValor(e.target.value)}
-                              />
-                            </div>
-                            <div>
-                              <Label>Anotações Internas</Label>
-                              <Textarea
-                                placeholder={selectedConv.anotacoes || "Observações sobre o lead..."}
-                                value={newAnotacoes}
-                                onChange={(e) => setNewAnotacoes(e.target.value)}
-                                rows={4}
-                              />
-                            </div>
-                            <Button onClick={updateLeadInfo} className="w-full">
-                              Salvar Informações
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                      <EditarInformacoesLeadDialog 
+                        leadId={leadsVinculados[selectedConv.id] || leadsVinculados[safeFormatPhoneNumber(selectedConv.id)] || null}
+                        telefone={selectedConv.phoneNumber || selectedConv.id}
+                        nomeContato={selectedConv.contactName}
+                        onLeadUpdated={() => {
+                          // Recarregar dados da conversa após atualização
+                          verificarLeadVinculado(selectedConv);
+                          loadSupabaseConversations();
+                        }}
+                      />
                       {selectedConv.produto && (
                         <p className="text-sm text-muted-foreground mb-1">
                           <strong>Produto:</strong> {selectedConv.produto}
