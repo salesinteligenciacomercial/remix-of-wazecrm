@@ -71,46 +71,59 @@ export function MoverLeadFunilDialog({
 
   const carregarFunis = async () => {
     try {
+      console.log("🔄 Carregando funis...");
       const { data, error } = await supabase
         .from("funis")
         .select("id, nome")
         .order("criado_em");
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Erro ao carregar funis:", error);
+        throw error;
+      }
 
+      console.log("✅ Funis carregados:", data);
       setFunis(data || []);
 
       // Se há funil atual, seleciona automaticamente
       if (funilAtualId && data?.some(f => f.id === funilAtualId)) {
+        console.log("📍 Funil atual selecionado:", funilAtualId);
         setSelectedFunil(funilAtualId);
       }
     } catch (error: any) {
-      console.error("Erro ao carregar funis:", error);
+      console.error("❌ Erro ao carregar funis:", error);
       toast.error("Erro ao carregar funis");
     }
   };
 
   const carregarEtapas = async (funilId: string) => {
     try {
+      console.log("🔄 Carregando etapas do funil:", funilId);
       const { data, error } = await supabase
         .from("etapas")
         .select("id, nome, funil_id, cor")
         .eq("funil_id", funilId)
         .order("posicao");
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Erro ao carregar etapas:", error);
+        throw error;
+      }
 
+      console.log("✅ Etapas carregadas:", data);
       setEtapas(data || []);
 
       // Se há etapa atual no funil selecionado, seleciona automaticamente
       if (etapaAtualId && funilId === funilAtualId && data?.some(e => e.id === etapaAtualId)) {
+        console.log("📍 Etapa atual selecionada:", etapaAtualId);
         setSelectedEtapa(etapaAtualId);
       } else if (data && data.length > 0) {
         // Seleciona a primeira etapa por padrão
+        console.log("📍 Selecionando primeira etapa:", data[0].id);
         setSelectedEtapa(data[0].id);
       }
     } catch (error: any) {
-      console.error("Erro ao carregar etapas:", error);
+      console.error("❌ Erro ao carregar etapas:", error);
       toast.error("Erro ao carregar etapas");
     }
   };
@@ -137,6 +150,7 @@ export function MoverLeadFunilDialog({
     setLoading(true);
 
     try {
+      console.log("🔄 Movendo lead:", { leadId, selectedFunil, selectedEtapa });
       const { error } = await supabase
         .from("leads")
         .update({
@@ -145,16 +159,20 @@ export function MoverLeadFunilDialog({
         })
         .eq("id", leadId);
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Erro ao mover lead:", error);
+        throw error;
+      }
 
       const funilNome = funis.find(f => f.id === selectedFunil)?.nome;
       const etapaNome = etapas.find(e => e.id === selectedEtapa)?.nome;
 
+      console.log("✅ Lead movido com sucesso!");
       toast.success(`Lead "${leadNome}" movido para ${funilNome} - ${etapaNome}`);
       setOpen(false);
       onLeadMoved();
     } catch (error: any) {
-      console.error("Erro ao mover lead:", error);
+      console.error("❌ Erro ao mover lead:", error);
       toast.error(error.message || "Erro ao mover lead");
     } finally {
       setLoading(false);
