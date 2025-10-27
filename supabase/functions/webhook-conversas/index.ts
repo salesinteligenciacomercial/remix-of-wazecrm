@@ -275,9 +275,9 @@ serve(async (req) => {
       }
     }
 
-    // Limpar número para buscar lead (remover caracteres especiais)
+    // Limpar e normalizar número (remover caracteres especiais e garantir formato consistente)
     const numeroLimpo = validatedData.numero.replace(/[^0-9]/g, '');
-    console.log('🔍 Buscando lead com número:', numeroLimpo);
+    console.log('🔍 Número normalizado:', numeroLimpo);
 
     // Se temos company_id, buscar lead apenas nessa company
     if (companyId) {
@@ -335,11 +335,12 @@ serve(async (req) => {
       }
     }
 
-    // Salvar conversa no Supabase
+    // Salvar conversa no Supabase com telefone normalizado
     const { data, error } = await supabase
       .from('conversas')
       .insert([{
         numero: validatedData.numero,
+        telefone_formatado: numeroLimpo, // CRITICAL: Sempre salvar versão normalizada
         mensagem: validatedData.mensagem,
         origem: validatedData.origem,
         status: 'Recebida',

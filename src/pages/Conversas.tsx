@@ -760,9 +760,18 @@ function Conversas() {
         async (payload) => {
           console.log('📩 Nova mensagem recebida via realtime:', payload);
           
-          // Processar apenas a nova mensagem, sem recarregar tudo
+            // Processar apenas a nova mensagem, sem recarregar tudo
           if (payload.eventType === 'INSERT' && payload.new) {
             const novaConversa = payload.new;
+            
+            // Normalizar telefone para encontrar conversa correta
+            const telefoneNormalizado = novaConversa.telefone_formatado || novaConversa.numero.replace(/[^0-9]/g, '');
+            
+            console.log('📩 Processando nova mensagem realtime:', {
+              numeroOriginal: novaConversa.numero,
+              telefoneNormalizado,
+              mensagem: novaConversa.mensagem
+            });
             
             // Buscar foto de perfil da nova mensagem
             let profilePic: string | undefined;
@@ -777,7 +786,7 @@ function Conversas() {
             
             // Converter para formato do componente
             const novaConvFormatted: Conversation = {
-              id: novaConversa.numero,
+              id: telefoneNormalizado, // USAR TELEFONE NORMALIZADO
               contactName: novaConversa.nome_contato || novaConversa.numero,
               avatarUrl: profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(novaConversa.nome_contato || novaConversa.numero)}&background=10b981&color=fff`,
               channel: 'whatsapp' as const,
@@ -800,23 +809,42 @@ function Conversas() {
             
             // Atualizar ou adicionar conversa na lista
             setConversations(prev => {
-              const existingIndex = prev.findIndex(c => c.id === novaConvFormatted.id);
+              // Buscar conversa existente usando telefone normalizado
+              const existingIndex = prev.findIndex(c => 
+                c.id === telefoneNormalizado || 
+                c.phoneNumber === telefoneNormalizado
+              );
               
               if (existingIndex >= 0) {
-                // Conversa já existe - adicionar mensagem
+                // Conversa já existe - adicionar mensagem ao histórico
                 const updated = [...prev];
-                updated[existingIndex] = {
-                  ...updated[existingIndex],
-                  messages: [...updated[existingIndex].messages, ...novaConvFormatted.messages],
-                  lastMessage: novaConvFormatted.lastMessage,
-                  unread: updated[existingIndex].unread + 1,
-                };
+                const conversaExistente = updated[existingIndex];
                 
-                // Mover para o topo
-                const [item] = updated.splice(existingIndex, 1);
-                updated.unshift(item);
+                // Verificar se a mensagem já não existe (evitar duplicatas)
+                const mensagemJaExiste = conversaExistente.messages.some(
+                  m => m.id === novaConvFormatted.messages[0].id
+                );
                 
-                console.log('🔄 Mensagem adicionada à conversa existente:', novaConvFormatted.contactName);
+                if (!mensagemJaExiste) {
+                  updated[existingIndex] = {
+                    ...conversaExistente,
+                    messages: [...conversaExistente.messages, ...novaConvFormatted.messages],
+                    lastMessage: novaConvFormatted.lastMessage,
+                    unread: conversaExistente.unread + 1,
+                  };
+                  
+                  // Mover para o topo
+                  const [item] = updated.splice(existingIndex, 1);
+                  updated.unshift(item);
+                  
+                  console.log('✅ Mensagem adicionada à conversa existente:', {
+                    contato: conversaExistente.contactName,
+                    totalMensagens: updated[0].messages.length
+                  });
+                } else {
+                  console.log('⚠️ Mensagem duplicada ignorada');
+                }
+                
                 return updated;
               } else {
                 // Nova conversa - adicionar no topo
@@ -826,9 +854,17 @@ function Conversas() {
             });
             
             // Se a conversa está selecionada, atualizar também
-            if (selectedConv && selectedConv.id === novaConvFormatted.id) {
+            if (selectedConv && (selectedConv.id === telefoneNormalizado || selectedConv.phoneNumber === telefoneNormalizado)) {
               setSelectedConv(prev => {
                 if (!prev) return prev;
+                
+                // Verificar se mensagem já existe
+                const mensagemJaExiste = prev.messages.some(
+                  m => m.id === novaConvFormatted.messages[0].id
+                );
+                
+                if (mensagemJaExiste) return prev;
+                
                 return {
                   ...prev,
                   messages: [...prev.messages, ...novaConvFormatted.messages],
@@ -1037,22 +1073,34 @@ function Conversas() {
         }
         setLeadsVinculados(leadsMap);
 
-        // Agrupar mensagens por número
+        // Agrupar mensagens por número NORMALIZADO (telefone_formatado)
         const conversasAgrupadas = validData.reduce((acc: Record<string, any[]>, conv: any) => {
-          if (!acc[conv.numero]) {
-            acc[conv.numero] = [];
+          // Usar telefone_formatado como chave de agrupamento (sempre normalizado)
+          const chaveAgrupamento = conv.telefone_formatado || conv.numero.replace(/[^0-9]/g, '');
+          
+          if (!acc[chaveAgrupamento]) {
+            acc[chaveAgrupamento] = [];
           }
-          acc[conv.numero].push(conv);
+          acc[chaveAgrupamento].push(conv);
           return acc;
         }, {});
+        
+        console.log('📊 Agrupamento de conversas:', {
+          totalGrupos: Object.keys(conversasAgrupadas).length,
+          grupos: Object.entries(conversasAgrupadas).map(([tel, msgs]) => ({
+            telefone: tel,
+            quantidadeMensagens: msgs.length
+          }))
+        });
 
         // Converter para formato local
         const novasConversas: Conversation[] = await Promise.all(
-          Object.entries(conversasAgrupadas).map(async ([numero, mensagens]) => {
+          Object.entries(conversasAgrupadas).map(async ([telefoneNormalizado, mensagens]) => {
             const ultima = mensagens[0];
+            const numeroOriginal = ultima.numero;
             
-            // Buscar foto do perfil
-            const avatarUrl = await getProfilePicture(numero);
+            // Buscar foto do perfil usando número original
+            const avatarUrl = await getProfilePicture(numeroOriginal);
             
             const messagensFormatadas = [...mensagens].reverse().map(m => {
               const msgContent = m.mensagem || 'Sem conteúdo';
@@ -1083,15 +1131,17 @@ function Conversas() {
             });
           
             console.log('📦 Conversa formatada completa:', {
-              numero,
+              telefoneNormalizado,
+              numeroOriginal,
               totalMensagens: messagensFormatadas.length,
               primeiroContent: messagensFormatadas[0]?.content,
               todasMensagens: messagensFormatadas.map(m => ({ id: m.id, content: m.content }))
             });
             
             return {
-              id: numero,
-              contactName: ultima.nome_contato || numero,
+              id: telefoneNormalizado, // USAR TELEFONE NORMALIZADO como ID
+              phoneNumber: telefoneNormalizado, // Armazenar também em phoneNumber
+              contactName: ultima.nome_contato || numeroOriginal,
               channel: (ultima.origem.toLowerCase() === 'whatsapp' ? 'whatsapp' : 
                        ultima.origem.toLowerCase() === 'instagram' ? 'instagram' : 'facebook') as "whatsapp" | "instagram" | "facebook",
               lastMessage: ultima.mensagem || '',
@@ -1554,6 +1604,7 @@ function Conversas() {
 
       await supabase.from('conversas').insert([{
         numero: selectedConv.id,
+        telefone_formatado: selectedConv.phoneNumber || selectedConv.id.replace(/[^0-9]/g, ''), // Normalizar
         mensagem: caption || tipoMensagem[type],
         origem: 'WhatsApp',
         status: 'Enviada',
@@ -1654,6 +1705,7 @@ function Conversas() {
 
       await supabase.from('conversas').insert([{
         numero: selectedConv.id,
+        telefone_formatado: selectedConv.phoneNumber || selectedConv.id.replace(/[^0-9]/g, ''), // Normalizar
         mensagem: 'Áudio enviado',
         origem: 'WhatsApp',
         status: 'Enviada',
@@ -1768,6 +1820,7 @@ function Conversas() {
       const repliedMessage = replyingTo ? selectedConv.messages.find(m => m.id === replyingTo)?.content : null;
       const { error: dbError } = await supabase.from('conversas').insert([{
         numero: selectedConv.id,
+        telefone_formatado: selectedConv.phoneNumber || selectedConv.id.replace(/[^0-9]/g, ''), // Normalizar
         mensagem: messageContent,
         origem: selectedConv.channel === 'whatsapp' ? 'WhatsApp' : 
                 selectedConv.channel === 'instagram' ? 'Instagram' : 'Facebook',
