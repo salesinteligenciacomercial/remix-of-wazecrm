@@ -770,7 +770,8 @@ function Conversas() {
             console.log('📩 Processando nova mensagem realtime:', {
               numeroOriginal: novaConversa.numero,
               telefoneNormalizado,
-              mensagem: novaConversa.mensagem
+              mensagem: novaConversa.mensagem,
+              nomeContato: novaConversa.nome_contato
             });
             
             // Buscar foto de perfil da nova mensagem
@@ -784,11 +785,18 @@ function Conversas() {
               console.error('❌ Erro ao buscar foto:', error);
             }
             
+            // CORREÇÃO: Usar o nome do contato da mensagem se não for vazio/nulo e diferente do número
+            const nomeValido = novaConversa.nome_contato && 
+                              novaConversa.nome_contato.trim() !== '' && 
+                              novaConversa.nome_contato !== novaConversa.numero
+                              ? novaConversa.nome_contato 
+                              : novaConversa.numero;
+            
             // Converter para formato do componente
             const novaConvFormatted: Conversation = {
               id: telefoneNormalizado, // USAR TELEFONE NORMALIZADO
-              contactName: novaConversa.nome_contato || novaConversa.numero,
-              avatarUrl: profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(novaConversa.nome_contato || novaConversa.numero)}&background=10b981&color=fff`,
+              contactName: nomeValido,
+              avatarUrl: profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(nomeValido)}&background=10b981&color=fff`,
               channel: 'whatsapp' as const,
               status: 'waiting' as const,
               messages: [{
@@ -828,11 +836,24 @@ function Conversas() {
                 );
                 
                 if (!mensagemJaExiste) {
+                  // CORREÇÃO: Se a conversa existente tem apenas o número como nome 
+                  // e a nova mensagem traz um nome válido, atualizar o nome
+                  const nomeExistenteEhNumero = /^\d+$/.test(conversaExistente.contactName);
+                  const novoNomeValido = novaConvFormatted.contactName && 
+                                        novaConvFormatted.contactName.trim() !== '' && 
+                                        !/^\d+$/.test(novaConvFormatted.contactName);
+                  
+                  const nomeAtualizado = (nomeExistenteEhNumero && novoNomeValido) 
+                    ? novaConvFormatted.contactName 
+                    : conversaExistente.contactName;
+                  
                   updated[existingIndex] = {
                     ...conversaExistente,
+                    contactName: nomeAtualizado, // Usar nome atualizado
                     messages: [...conversaExistente.messages, ...novaConvFormatted.messages],
                     lastMessage: novaConvFormatted.lastMessage,
                     unread: conversaExistente.unread + 1,
+                    avatarUrl: novoNomeValido ? novaConvFormatted.avatarUrl : conversaExistente.avatarUrl, // Atualizar avatar se nome foi atualizado
                   };
                   
                   // Salvar referência da conversa atualizada
@@ -843,8 +864,9 @@ function Conversas() {
                   updated.unshift(item);
                   
                   console.log('✅ Mensagem adicionada à conversa existente:', {
-                    contato: conversaExistente.contactName,
-                    totalMensagens: updated[0].messages.length
+                    contato: nomeAtualizado,
+                    totalMensagens: updated[0].messages.length,
+                    nomeAtualizado: nomeExistenteEhNumero && novoNomeValido
                   });
                 } else {
                   console.log('⚠️ Mensagem duplicada ignorada');
@@ -1119,6 +1141,22 @@ function Conversas() {
             const ultima = mensagens[0];
             const numeroOriginal = ultima.numero;
             
+            // CORREÇÃO: Buscar o nome do contato mais recente que não seja vazio/nulo
+            // Ordenar mensagens por data (mais recente primeiro) e pegar o primeiro nome válido
+            const nomeValido = mensagens
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+              .find(m => m.nome_contato && m.nome_contato.trim() !== '' && m.nome_contato !== numeroOriginal)
+              ?.nome_contato;
+            
+            const contactName = nomeValido || ultima.nome_contato || numeroOriginal;
+            
+            console.log('📝 Nome do contato determinado:', {
+              telefone: telefoneNormalizado,
+              nomeEscolhido: contactName,
+              totalMensagens: mensagens.length,
+              nomesDisponiveis: mensagens.map(m => m.nome_contato).filter(Boolean)
+            });
+            
             // Buscar foto do perfil usando número original
             const avatarUrl = await getProfilePicture(numeroOriginal);
             
@@ -1153,6 +1191,7 @@ function Conversas() {
             console.log('📦 Conversa formatada completa:', {
               telefoneNormalizado,
               numeroOriginal,
+              contactName,
               totalMensagens: messagensFormatadas.length,
               primeiroContent: messagensFormatadas[0]?.content,
               todasMensagens: messagensFormatadas.map(m => ({ id: m.id, content: m.content }))
@@ -1161,7 +1200,7 @@ function Conversas() {
             return {
               id: telefoneNormalizado, // USAR TELEFONE NORMALIZADO como ID
               phoneNumber: telefoneNormalizado, // Armazenar também em phoneNumber
-              contactName: ultima.nome_contato || numeroOriginal,
+              contactName: contactName,
               channel: (ultima.origem.toLowerCase() === 'whatsapp' ? 'whatsapp' : 
                        ultima.origem.toLowerCase() === 'instagram' ? 'instagram' : 'facebook') as "whatsapp" | "instagram" | "facebook",
               lastMessage: ultima.mensagem || '',

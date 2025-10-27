@@ -116,7 +116,7 @@ export function ConversationListItem({
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 flex-shrink-0 hover:bg-accent opacity-100"
+                    className="h-8 w-8 flex-shrink-0 hover:bg-accent opacity-100 ml-1 z-10"
                   >
                     <MoreVertical className="h-4 w-4 text-foreground" />
                   </Button>
