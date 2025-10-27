@@ -777,9 +777,9 @@ function Conversas() {
             let profilePic: string | undefined;
             try {
               const { data: picData } = await supabase.functions.invoke('get-profile-picture', {
-                body: { numero: novaConversa.numero }
+                body: { number: novaConversa.numero } // Edge function espera "number"
               });
-              profilePic = picData?.profilePicUrl;
+              profilePic = picData?.profilePictureUrl; // Corrigir nome do campo
             } catch (error) {
               console.error('❌ Erro ao buscar foto:', error);
             }
@@ -808,6 +808,8 @@ function Conversas() {
             };
             
             // Atualizar ou adicionar conversa na lista
+            let conversaAtualizada: Conversation | null = null;
+            
             setConversations(prev => {
               // Buscar conversa existente usando telefone normalizado
               const existingIndex = prev.findIndex(c => 
@@ -833,6 +835,9 @@ function Conversas() {
                     unread: conversaExistente.unread + 1,
                   };
                   
+                  // Salvar referência da conversa atualizada
+                  conversaAtualizada = updated[existingIndex];
+                  
                   // Mover para o topo
                   const [item] = updated.splice(existingIndex, 1);
                   updated.unshift(item);
@@ -849,28 +854,18 @@ function Conversas() {
               } else {
                 // Nova conversa - adicionar no topo
                 console.log('➕ Nova conversa criada:', novaConvFormatted.contactName);
+                conversaAtualizada = novaConvFormatted;
                 return [novaConvFormatted, ...prev];
               }
             });
             
-            // Se a conversa está selecionada, atualizar também
-            if (selectedConv && (selectedConv.id === telefoneNormalizado || selectedConv.phoneNumber === telefoneNormalizado)) {
-              setSelectedConv(prev => {
-                if (!prev) return prev;
-                
-                // Verificar se mensagem já existe
-                const mensagemJaExiste = prev.messages.some(
-                  m => m.id === novaConvFormatted.messages[0].id
-                );
-                
-                if (mensagemJaExiste) return prev;
-                
-                return {
-                  ...prev,
-                  messages: [...prev.messages, ...novaConvFormatted.messages],
-                  lastMessage: novaConvFormatted.lastMessage,
-                };
-              });
+            // CRÍTICO: Se a conversa recebida é a que está aberta, atualizar selectedConv IMEDIATAMENTE
+            if (selectedConv && conversaAtualizada && 
+                (selectedConv.id === telefoneNormalizado || selectedConv.phoneNumber === telefoneNormalizado)) {
+              
+              console.log('🔄 Atualizando conversa selecionada com nova mensagem em tempo real');
+              
+              setSelectedConv(conversaAtualizada);
             }
             
             // Notificar APENAS se for mensagem RECEBIDA do cliente (não quando o CRM envia)
@@ -959,7 +954,7 @@ function Conversas() {
           console.log('🔍 Buscando foto de perfil para:', numero);
           
           const { data, error } = await supabase.functions.invoke('get-profile-picture', {
-            body: { number: numero }
+            body: { number: numero } // Edge function espera "number"
           });
 
           if (error) {
