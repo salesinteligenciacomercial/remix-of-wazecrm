@@ -601,7 +601,7 @@ function Conversas() {
               if (!conversationsMap.has(convId)) {
                 conversationsMap.set(convId, {
                   id: convId,
-                  contactName: msg.nome_contato || leadData.name || 'Desconhecido',
+                  contactName: leadData.name || msg.nome_contato || 'Desconhecido', // PRIORIZAR NOME DO LEAD
                   channel: msg.origem?.toLowerCase() === 'whatsapp' ? 'whatsapp' : 
                           msg.origem?.toLowerCase() === 'instagram' ? 'instagram' : 'facebook',
                   status: msg.status === 'Enviada' ? 'answered' : 'waiting',
@@ -785,12 +785,21 @@ function Conversas() {
               console.error('❌ Erro ao buscar foto:', error);
             }
             
-            // CORREÇÃO: Usar o nome do contato da mensagem se não for vazio/nulo e diferente do número
-            const nomeValido = novaConversa.nome_contato && 
-                              novaConversa.nome_contato.trim() !== '' && 
-                              novaConversa.nome_contato !== novaConversa.numero
-                              ? novaConversa.nome_contato 
-                              : novaConversa.numero;
+            // Buscar se existe lead vinculado para usar o nome correto
+            const telefoneFormatado = telefoneNormalizado;
+            const { data: leadVinculadoRealtime } = await supabase
+              .from('leads')
+              .select('name')
+              .or(`phone.eq.${telefoneFormatado},telefone.eq.${telefoneFormatado}`)
+              .maybeSingle();
+            
+            // PRIORIZAR NOME DO LEAD, depois nome da mensagem, depois número
+            const nomeValido = leadVinculadoRealtime?.name || 
+                              (novaConversa.nome_contato && 
+                               novaConversa.nome_contato.trim() !== '' && 
+                               novaConversa.nome_contato !== novaConversa.numero
+                                ? novaConversa.nome_contato 
+                                : novaConversa.numero);
             
             // Converter para formato do componente
             const novaConvFormatted: Conversation = {
@@ -1135,20 +1144,44 @@ function Conversas() {
           }))
         });
 
+        // Buscar leads vinculados para obter nomes atualizados
+        const telefonesNormalizados = Object.keys(conversasAgrupadas);
+        const { data: leadsVinculados } = await supabase
+          .from('leads')
+          .select('id, name, phone, telefone')
+          .eq('company_id', userRole?.company_id)
+          .or(telefonesNormalizados.map(tel => `phone.eq.${tel},telefone.eq.${tel}`).join(','));
+
+        // Criar mapa de telefone -> nome do lead
+        const leadNamesMap: Record<string, string> = {};
+        if (leadsVinculados) {
+          leadsVinculados.forEach(lead => {
+            const phone = lead.phone || lead.telefone;
+            if (phone && lead.name) {
+              const phoneNormalizado = phone.replace(/[^0-9]/g, '');
+              leadNamesMap[phoneNormalizado] = lead.name;
+            }
+          });
+        }
+
         // Converter para formato local
         const novasConversas: Conversation[] = await Promise.all(
           Object.entries(conversasAgrupadas).map(async ([telefoneNormalizado, mensagens]) => {
             const ultima = mensagens[0];
             const numeroOriginal = ultima.numero;
             
-            // CORREÇÃO: Buscar o nome do contato mais recente que não seja vazio/nulo
-            // Ordenar mensagens por data (mais recente primeiro) e pegar o primeiro nome válido
-            const nomeValido = mensagens
-              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-              .find(m => m.nome_contato && m.nome_contato.trim() !== '' && m.nome_contato !== numeroOriginal)
-              ?.nome_contato;
+            // PRIORIDADE: 1º Nome do Lead no CRM, 2º Nome da conversa, 3º Número
+            let contactName = leadNamesMap[telefoneNormalizado]; // PRIORIZAR LEAD
             
-            const contactName = nomeValido || ultima.nome_contato || numeroOriginal;
+            if (!contactName) {
+              // Se não tem lead, buscar nome mais recente das mensagens
+              const nomeValido = mensagens
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                .find(m => m.nome_contato && m.nome_contato.trim() !== '' && m.nome_contato !== numeroOriginal)
+                ?.nome_contato;
+              
+              contactName = nomeValido || ultima.nome_contato || numeroOriginal;
+            }
             
             console.log('📝 Nome do contato determinado:', {
               telefone: telefoneNormalizado,
