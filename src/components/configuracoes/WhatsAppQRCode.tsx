@@ -208,9 +208,9 @@ export function WhatsAppQRCode() {
       <CardContent className="space-y-4">
         {showNewInstance && (
           <div className="p-4 border rounded-lg space-y-4 bg-muted/50">
-            <Alert>
+            <Alert className="bg-success/10 border-success">
               <AlertDescription className="text-xs">
-                <strong>🔒 Isolamento Garantido:</strong> Cada instância é exclusiva desta empresa e não será compartilhada com outras subcontas.
+                <strong>✅ Sistema Multi-tenant Configurado:</strong> Cada subconta terá acesso isolado com WhatsApp exclusivo, leads separados e usuários independentes.
               </AlertDescription>
             </Alert>
 
@@ -341,19 +341,29 @@ export function WhatsAppQRCode() {
           </div>
         </ScrollArea>
 
-        <div className="pt-4 border-t space-y-2">
-          <p className="text-xs text-muted-foreground">
-            <strong>✅ Isolamento por Empresa:</strong> Cada instância criada aqui pertence exclusivamente a esta empresa e não será visível ou acessível por outras subcontas do sistema.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            <strong>📱 Webhook Evolution API:</strong> Configure o webhook na Evolution API para:
-          </p>
-          <code className="block bg-muted px-2 py-1 rounded text-xs break-all">
-            https://dteppsfseusqixuppglh.supabase.co/functions/v1/webhook-conversas
-          </code>
-          <p className="text-xs text-muted-foreground mt-1">
-            O sistema identificará automaticamente a instância pelo nome configurado.
-          </p>
+        <div className="pt-4 border-t space-y-3">
+          <Alert className="bg-success/10 border-success">
+            <AlertDescription className="text-xs space-y-2">
+              <p>
+                <strong>✅ Isolamento Total por Empresa:</strong> Cada instância WhatsApp criada aqui é exclusiva desta empresa e completamente isolada de outras subcontas.
+              </p>
+            </AlertDescription>
+          </Alert>
+          
+          <Alert>
+            <AlertDescription className="text-xs space-y-2">
+              <p>
+                <strong>📱 Configuração do Webhook Evolution API:</strong>
+              </p>
+              <p>Cole esta URL no webhook da sua instância Evolution API:</p>
+              <code className="block bg-muted px-2 py-1 rounded break-all mt-1">
+                https://dteppsfseusqixuppglh.supabase.co/functions/v1/webhook-conversas?instance=NOME_DA_INSTANCIA
+              </code>
+              <p className="mt-2">
+                <strong>Importante:</strong> Substitua NOME_DA_INSTANCIA pelo nome exato da instância que você criou acima.
+              </p>
+            </AlertDescription>
+          </Alert>
         </div>
       </CardContent>
     </Card>

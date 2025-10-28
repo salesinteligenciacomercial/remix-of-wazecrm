@@ -155,10 +155,10 @@ export function SubcontasManager() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Building2 className="h-5 w-5" />
-                Gestão de Subcontas
+                Gestão de Subcontas (Multi-tenant)
               </CardTitle>
               <CardDescription>
-                Gerencie as empresas licenciadas do sistema
+                Crie e gerencie empresas com isolamento completo de dados, WhatsApp e usuários
               </CardDescription>
             </div>
             <Button onClick={() => setShowNovaDialog(true)}>
