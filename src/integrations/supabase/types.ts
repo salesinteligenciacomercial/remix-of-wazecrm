@@ -1394,6 +1394,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assert_user_can_access_funil: {
+        Args: { p_funil_id: string }
+        Returns: undefined
+      }
       formatar_telefone: { Args: { telefone: string }; Returns: string }
       get_user_company_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
@@ -1402,6 +1406,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      reorder_etapas: {
+        Args: { p_funil_id: string; p_order: string[] }
+        Returns: undefined
       }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
