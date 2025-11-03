@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Instagram, Facebook, MoreVertical, Edit, UserPlus, Trash2 } from "lucide-react";
@@ -29,7 +30,7 @@ interface ConversationListItemProps {
   onDeleteConversation?: () => void;
 }
 
-export function ConversationListItem({
+function ConversationListItemComponent({
   contactName,
   channel,
   lastMessage,
@@ -227,3 +228,23 @@ export function ConversationListItem({
     </div>
   );
 }
+
+// MELHORIA: Memoizar componente para otimização de performance (MICRO-PROMPT 4)
+export const ConversationListItem = memo(ConversationListItemComponent, (prevProps, nextProps) => {
+  // Comparação personalizada para evitar re-renders desnecessários
+  return (
+    prevProps.contactName === nextProps.contactName &&
+    prevProps.channel === nextProps.channel &&
+    prevProps.lastMessage === nextProps.lastMessage &&
+    prevProps.timestamp.getTime() === nextProps.timestamp.getTime() &&
+    prevProps.unread === nextProps.unread &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.avatarUrl === nextProps.avatarUrl &&
+    JSON.stringify(prevProps.tags) === JSON.stringify(nextProps.tags) &&
+    prevProps.responsavel === nextProps.responsavel &&
+    prevProps.funnelStage === nextProps.funnelStage &&
+    prevProps.valor === nextProps.valor &&
+    prevProps.conversationId === nextProps.conversationId &&
+    prevProps.leadId === nextProps.leadId
+  );
+});

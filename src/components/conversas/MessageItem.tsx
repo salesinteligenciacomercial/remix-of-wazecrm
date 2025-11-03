@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -63,7 +63,7 @@ interface MessageItemProps {
   onOpenContactConversation?: (name: string, phone: string) => void;
 }
 
-export function MessageItem({
+function MessageItemComponent({
   message,
   allMessages,
   onDownload,
@@ -461,3 +461,6 @@ END:VCARD`;
     </div>
   );
 }
+
+// MELHORIA: Memoizar componente para otimização de performance (MICRO-PROMPT 4)
+export const MessageItem = memo(MessageItemComponent);
