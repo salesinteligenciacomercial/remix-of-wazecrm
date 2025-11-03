@@ -352,6 +352,44 @@ export type Database = {
           },
         ]
       }
+      conversation_assignments: {
+        Row: {
+          assigned_user_id: string | null
+          company_id: string
+          created_at: string | null
+          id: string
+          queue_id: string | null
+          telefone_formatado: string
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_user_id?: string | null
+          company_id: string
+          created_at?: string | null
+          id?: string
+          queue_id?: string | null
+          telefone_formatado: string
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_user_id?: string | null
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          queue_id?: string | null
+          telefone_formatado?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_assignments_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "support_queues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       etapas: {
         Row: {
           atualizado_em: string | null
@@ -399,6 +437,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      filas_atendimento: {
+        Row: {
+          ativa: boolean | null
+          created_at: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          owner_id: string
+          prioridade: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativa?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          owner_id: string
+          prioridade?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativa?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          owner_id?: string
+          prioridade?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       funis: {
         Row: {
@@ -978,6 +1049,68 @@ export type Database = {
         }
         Relationships: []
       }
+      support_queue_members: {
+        Row: {
+          created_at: string | null
+          id: string
+          queue_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          queue_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          queue_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_queue_members_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "support_queues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_queues: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          priority: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          priority?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          priority?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       task_boards: {
         Row: {
           atualizado_em: string | null
@@ -1075,6 +1208,7 @@ export type Database = {
         Row: {
           assignee_id: string | null
           board_id: string | null
+          checklist: Json | null
           column_id: string | null
           company_id: string | null
           created_at: string
@@ -1091,6 +1225,7 @@ export type Database = {
         Insert: {
           assignee_id?: string | null
           board_id?: string | null
+          checklist?: Json | null
           column_id?: string | null
           company_id?: string | null
           created_at?: string
@@ -1107,6 +1242,7 @@ export type Database = {
         Update: {
           assignee_id?: string | null
           board_id?: string | null
+          checklist?: Json | null
           column_id?: string | null
           company_id?: string | null
           created_at?: string
@@ -1258,6 +1394,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assert_user_can_access_funil: {
+        Args: { p_funil_id: string }
+        Returns: undefined
+      }
       formatar_telefone: { Args: { telefone: string }; Returns: string }
       get_user_company_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
@@ -1266,6 +1406,23 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      reorder_etapas: {
+        Args: { p_funil_id: string; p_order: string[] }
+        Returns: undefined
+      }
+      update_etapa: {
+        Args: {
+          p_cor: string
+          p_etapa_id: string
+          p_nome: string
+          p_posicao: number
+        }
+        Returns: undefined
+      }
+      update_funil_nome: {
+        Args: { p_funil_id: string; p_nome: string }
+        Returns: undefined
       }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
