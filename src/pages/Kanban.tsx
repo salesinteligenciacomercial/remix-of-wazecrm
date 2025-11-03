@@ -543,7 +543,7 @@ export default function KanbanPage() {
         toast.warning("Aguarde a operação anterior finalizar", {
           description: "Tente novamente em alguns segundos"
         });
-        return;
+      return;
       }
     } else {
       // ✅ Bloqueio não está ativo - ativar agora (caso handleDragStart não tenha sido chamado)

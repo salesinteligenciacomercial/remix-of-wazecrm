@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { EditarLeadDialog } from "./EditarLeadDialog";
 import { MoverLeadFunilDialog } from "./MoverLeadFunilDialog";
 import { LeadComments } from "./LeadComments";
-import { useNavigate } from "react-router-dom";
+import { ConversasModal } from "./ConversasModal";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -45,9 +45,9 @@ interface LeadCardProps {
 }
 
 export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, isDragging: externalIsDragging }: LeadCardProps) {
-  const navigate = useNavigate();
   const [agendaModalOpen, setAgendaModalOpen] = useState(false);
   const [tarefaModalOpen, setTarefaModalOpen] = useState(false);
+  const [conversasModalOpen, setConversasModalOpen] = useState(false);
   const [proximoCompromisso, setProximoCompromisso] = useState<string | null>(null);
   const [proximaTarefa, setProximaTarefa] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -134,16 +134,17 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
     transition: 'all 200ms ease',
   };
 
+  // ✅ Novo: Abre modal de conversas ao invés de redirecionar
   const abrirConversa = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
     if (lead.telefone) {
-      navigate('/conversas', { state: { leadId: lead.id } });
+      setConversasModalOpen(true);
     } else {
       console.warn('Lead sem telefone:', lead.nome);
     }
-  }, [lead.telefone, lead.id, lead.nome, navigate]);
+  }, [lead.telefone, lead.nome]);
 
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -367,6 +368,13 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
             />
           </div>
         )}
+
+        {/* ✅ Modal de Conversas - Abre popup sem redirecionar */}
+        <ConversasModal
+          open={conversasModalOpen}
+          onOpenChange={setConversasModalOpen}
+          lead={lead}
+        />
       </div>
     </Card>
   );
@@ -385,4 +393,358 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
     prevProps.isDragging === nextProps.isDragging &&
     JSON.stringify(prevProps.lead.tags) === JSON.stringify(nextProps.lead.tags)
   );
+});
+
+              }}
+
+              className="h-8 w-8 p-0"
+
+            >
+
+              {isExpanded ? (
+
+                <ChevronUp className="h-4 w-4" />
+
+              ) : (
+
+                <ChevronDown className="h-4 w-4" />
+
+              )}
+
+            </Button>
+
+          </div>
+
+        </div>
+
+
+
+        {/* Conteúdo expandido */}
+
+        {isExpanded && (
+
+          <div className="space-y-3 border-t pt-3" onClick={(e) => e.stopPropagation()}>
+
+            <div
+
+              className="flex gap-1"
+
+              onClick={(e) => e.stopPropagation()}
+
+              onMouseDown={(e) => e.stopPropagation()}
+
+            >
+
+              <div onClick={(e) => e.stopPropagation()}>
+
+                <MoverLeadFunilDialog
+
+                  leadId={lead.id}
+
+                  leadNome={lead.nome}
+
+                  funilAtualId={lead.funil_id}
+
+                  etapaAtualId={lead.etapa_id}
+
+                  onLeadMoved={() => onLeadMoved?.()}
+
+                />
+
+              </div>
+
+              <div onClick={(e) => e.stopPropagation()}>
+
+                <EditarLeadDialog lead={lead} onLeadUpdated={onLeadMoved || (() => {})} />
+
+              </div>
+
+              <TooltipProvider>
+
+                <Tooltip>
+
+                  <TooltipTrigger asChild>
+
+                    <Button
+
+                      variant="ghost"
+
+                      size="icon"
+
+                      className="h-8 w-8"
+
+                      onClick={handleAgendaModal}
+
+                    >
+
+                      <Calendar className="h-4 w-4" />
+
+                    </Button>
+
+                  </TooltipTrigger>
+
+                  <TooltipContent>
+
+                    <p>Próximo compromisso:</p>
+
+                    <p className="font-medium">{proximoCompromisso || "Nenhum agendado"}</p>
+
+                  </TooltipContent>
+
+                </Tooltip>
+
+              </TooltipProvider>
+
+
+
+              <TooltipProvider>
+
+                <Tooltip>
+
+                  <TooltipTrigger asChild>
+
+                    <Button
+
+                      variant="ghost"
+
+                      size="icon"
+
+                      className="h-8 w-8"
+
+                      onClick={handleTarefaModal}
+
+                    >
+
+                      <CheckSquare className="h-4 w-4" />
+
+                    </Button>
+
+                  </TooltipTrigger>
+
+                  <TooltipContent>
+
+                    <p>Próxima tarefa:</p>
+
+                    <p className="font-medium">{proximaTarefa || "Nenhuma pendente"}</p>
+
+                  </TooltipContent>
+
+                </Tooltip>
+
+              </TooltipProvider>
+
+
+
+              <Button
+
+                variant="ghost"
+
+                size="icon"
+
+                className="h-8 w-8 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+
+                onClick={handleDelete}
+
+              >
+
+                <Trash2 className="h-4 w-4" />
+
+              </Button>
+
+            </div>
+
+
+
+            <AgendaModal
+
+              open={agendaModalOpen}
+
+              onOpenChange={setAgendaModalOpen}
+
+              lead={lead}
+
+              onAgendamentoCriado={() => {
+
+                carregarProximasAtividades();
+
+                onLeadMoved?.();
+
+              }}
+
+            />
+
+
+
+            <TarefaModal
+
+              open={tarefaModalOpen}
+
+              onOpenChange={setTarefaModalOpen}
+
+              lead={lead}
+
+              onTarefaCriada={() => {
+
+                carregarProximasAtividades();
+
+                onLeadMoved?.();
+
+              }}
+
+            />
+
+
+
+            {lead.company && (
+
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-2 py-1.5 rounded-md">
+
+                <Building2 className="h-3 w-3" />
+
+                <span>{lead.company}</span>
+
+              </div>
+
+            )}
+
+
+
+            {lead.telefone && (
+
+              <div className="flex items-center justify-between gap-2">
+
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+
+                  <Phone className="h-3 w-3" />
+
+                  <span>{lead.telefone}</span>
+
+                </div>
+
+                <div onClick={(e) => e.stopPropagation()}>
+
+                  <Button
+
+                    variant="ghost"
+
+                    size="sm"
+
+                    className="h-7 px-2 text-success hover:text-success hover:bg-success/10 transition-all"
+
+                    onClick={abrirConversa}
+
+                    title="Ver histórico de conversas"
+
+                  >
+
+                    <MessageCircle className="h-3.5 w-3.5 mr-1" />
+
+                    <span className="text-xs font-medium">Ver Conversas</span>
+
+                  </Button>
+
+                </div>
+
+              </div>
+
+            )}
+
+
+
+            {lead.email && (
+
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 px-2 py-1.5 rounded-md">
+
+                <Mail className="h-3 w-3" />
+
+                <span className="truncate">{lead.email}</span>
+
+              </div>
+
+            )}
+
+
+
+            {lead.value !== undefined && lead.value > 0 && (
+
+              <div className="flex items-center justify-between pt-2 border-t border-border/50">
+
+                <span className="text-xs text-muted-foreground font-medium">Valor Estimado</span>
+
+                <Badge className="font-semibold bg-gradient-success text-success-foreground shadow-sm">
+
+                  R$ {lead.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+
+                </Badge>
+
+              </div>
+
+            )}
+
+
+
+            {lead.source && (
+
+              <Badge variant="outline" className="text-xs font-medium border-primary/20 text-primary">
+
+                <Tag className="h-3 w-3 mr-1" />
+
+                {lead.source}
+
+              </Badge>
+
+            )}
+
+
+
+            {/* ✅ CRÍTICO: Passa notes do lead ao LeadComments - Se retroceder, verificar se passa initialNotes */}
+            <LeadComments
+
+              leadId={lead.id}
+
+              initialNotes={lead.notes ?? null} // ✅ IMPORTANTE: Passa notes do lead
+              onCommentAdded={() => onLeadMoved?.()}
+
+            />
+
+          </div>
+
+        )}
+
+      </div>
+
+    </Card>
+
+  );
+
+}, (prevProps, nextProps) => {
+
+  // 🎯 Otimização: comparação customizada para evitar re-renders desnecessários
+
+  return (
+
+    prevProps.lead.id === nextProps.lead.id &&
+
+    prevProps.lead.nome === nextProps.lead.nome &&
+
+    prevProps.lead.telefone === nextProps.lead.telefone &&
+
+    prevProps.lead.email === nextProps.lead.email &&
+
+    prevProps.lead.value === nextProps.lead.value &&
+
+    prevProps.lead.company === nextProps.lead.company &&
+
+    prevProps.lead.source === nextProps.lead.source &&
+
+    prevProps.lead.funil_id === nextProps.lead.funil_id &&
+
+    prevProps.lead.etapa_id === nextProps.lead.etapa_id &&
+
+    prevProps.isDragging === nextProps.isDragging &&
+
+    JSON.stringify(prevProps.lead.tags) === JSON.stringify(nextProps.lead.tags)
+
+  );
+
 });

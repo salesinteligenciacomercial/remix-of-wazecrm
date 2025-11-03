@@ -84,13 +84,38 @@ export function EditarEtapaDialog({ etapaId, nomeAtual, corAtual, onEtapaUpdated
         }
       }
 
-      const { error } = await supabase.rpc("update_etapa", {
-        p_etapa_id: etapaId,
-        p_nome: nomeFormatado,
-        p_cor: cor,
-        p_posicao: null,
-      });
+      // ✅ BACKUP ATUALIZADO - 2024-11-01: Tenta RPC primeiro, fallback para UPDATE direto
+      let error = null;
+      try {
+        // ✅ Tentar usar RPC se existir
+        const { error: rpcError } = await supabase.rpc("update_etapa", {
+          p_etapa_id: etapaId,
+          p_nome: nomeFormatado,
+          p_cor: cor,
+          p_posicao: null,
+        });
+        if (rpcError) {
+          console.warn("RPC update_etapa não disponível, usando UPDATE direto:", rpcError);
+          error = null; // Reset para tentar UPDATE direto
+        }
+      } catch (e) {
+        console.warn("RPC update_etapa não disponível, usando UPDATE direto");
+      }
 
+      // ✅ CRÍTICO: Fallback para UPDATE direto - NÃO REMOVER
+      // ✅ IMPORTANTE: Tabela etapas usa campo "atualizado_em" (NÃO "updated_at")
+      // Schema: migration 20251022210449_fa6c8264-1153-40d0-a942-f85e5035729b.sql linha 59
+      if (!error) {
+        const { error: directUpdateError } = await supabase
+          .from("etapas")
+          .update({
+            nome: nomeFormatado,
+            cor: cor,
+            atualizado_em: new Date().toISOString() // ✅ Schema: atualizado_em TIMESTAMP
+          })
+          .eq("id", etapaId);
+        error = directUpdateError;
+      }
       if (error) throw error;
 
       toast.success(`Etapa "${nomeFormatado}" atualizada com sucesso!`);

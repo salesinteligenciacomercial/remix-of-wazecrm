@@ -228,15 +228,33 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
       console.log("User ID:", session.user.id);
       console.log("Etapas a processar:", etapas);
 
+      // ✅ BACKUP ATUALIZADO - 2024-11-01: Tenta RPC primeiro, fallback para UPDATE direto
       // 1. Atualizar nome do funil
-      // ✅ CORRIGIDO: Removido conflito de merge - usando método direto
-      const { error: funilError } = await supabase
+      let funilError = null;
+      try {
+        // ✅ Tentar usar RPC se existir
+        const { error: rpcError } = await supabase.rpc("update_funil_nome", {
+          p_funil_id: funilId,
+          p_nome: nomeFunil,
+        });
+        if (rpcError) {
+          console.warn("RPC update_funil_nome não disponível, usando UPDATE direto:", rpcError);
+          funilError = null; // Reset para tentar UPDATE direto
+        }
+      } catch (e) {
+        console.warn("RPC update_funil_nome não disponível, usando UPDATE direto");
+      }
+
+      // ✅ CRÍTICO: Fallback para UPDATE direto - NÃO REMOVER
+      if (!funilError) {
+        const { error: updateError } = await supabase
         .from("funis")
         .update({
           nome: nomeFunil
         })
         .eq("id", funilId);
-
+        funilError = updateError;
+      }
       if (funilError) {
         console.error("❌ Erro ao atualizar nome do funil:", funilError);
         throw funilError;
@@ -271,12 +289,39 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
         } else {
           console.log(`🔄 Atualizando etapa ${i + 1}: "${etapa.nome}"`);
           
-          const { error: updateError } = await supabase.rpc("update_etapa", {
+          // ✅ BACKUP ATUALIZADO - 2024-11-01: Tenta RPC primeiro, fallback para UPDATE direto
+          let updateError = null;
+          try {
+            // ✅ Tentar usar RPC se existir
+            const { error: rpcError } = await supabase.rpc("update_etapa", {
             p_etapa_id: etapa.id,
             p_nome: etapa.nome,
             p_cor: etapa.cor,
             p_posicao: i,
           });
+            if (rpcError) {
+              console.warn("RPC update_etapa não disponível, usando UPDATE direto:", rpcError);
+              updateError = null; // Reset para tentar UPDATE direto
+            }
+          } catch (e) {
+            console.warn("RPC update_etapa não disponível, usando UPDATE direto");
+          }
+
+          // ✅ CRÍTICO: Fallback para UPDATE direto - NÃO REMOVER
+          // ✅ IMPORTANTE: Tabela etapas usa campo "atualizado_em" (NÃO "updated_at")
+          // Schema: migration 20251022210449_fa6c8264-1153-40d0-a942-f85e5035729b.sql linha 59
+          if (!updateError) {
+            const { error: directUpdateError } = await supabase
+              .from("etapas")
+              .update({
+                nome: etapa.nome,
+                cor: etapa.cor,
+                posicao: i,
+                atualizado_em: new Date().toISOString() // ✅ Schema: atualizado_em TIMESTAMP
+              })
+              .eq("id", etapa.id);
+            updateError = directUpdateError;
+          }
           
           if (updateError) {
             console.error("❌ Erro ao atualizar etapa:", updateError);
