@@ -229,19 +229,13 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
       console.log("Etapas a processar:", etapas);
 
       // 1. Atualizar nome do funil
-<<<<<<< HEAD
+      // ✅ CORRIGIDO: Removido conflito de merge - usando método direto
       const { error: funilError } = await supabase
         .from("funis")
         .update({
           nome: nomeFunil
         })
         .eq("id", funilId);
-=======
-      const { error: funilError } = await supabase.rpc("update_funil_nome", {
-        p_funil_id: funilId,
-        p_nome: nomeFunil,
-      });
->>>>>>> 158e01b8da2883ce44433512c8452a2ca810f2ad
 
       if (funilError) {
         console.error("❌ Erro ao atualizar nome do funil:", funilError);
