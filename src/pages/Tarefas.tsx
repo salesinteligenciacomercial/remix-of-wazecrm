@@ -1,4 +1,18 @@
-import React, { useState, useEffect, type ReactNode, useMemo, useCallback } from "react";
+/**
+ * ✅ OTIMIZAÇÕES DE PERFORMANCE IMPLEMENTADAS:
+ * 1. Debounce na busca (300ms) - reduz chamadas de filtro durante digitação
+ * 2. Memoização de tarefas filtradas por coluna (tasksByColumn)
+ * 3. Memoização de contagens por coluna (taskCountsByColumn)
+ * 4. Limite de carga inicial (INITIAL_LOAD_LIMIT = 50)
+ * 5. Query filtrada por board_id quando selecionado
+ * 6. Lazy loading com paginação (TASKS_PER_PAGE = 20)
+ * 7. useMemo para métricas de produtividade
+ * 8. useCallback para funções de filtro
+ * 9. React.memo em TaskCard (verificado)
+ * 10. React.memo em DroppableColumnContainer
+ */
+
+import React, { useState, useEffect, type ReactNode, useMemo, useCallback, useRef } from "react";
 import { DndContext, DragEndEvent, closestCorners, useDroppable, DragOverlay, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { Plus, Settings } from "lucide-react";
@@ -50,16 +64,28 @@ interface Board {
   descricao?: string;
 }
 
+// ✅ MELHORADO: DroppableColumnContainer com feedback visual aprimorado
 const DroppableColumnContainer = React.memo(function DroppableColumnContainer({ columnId, children }: { columnId: string; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({
     id: columnId,
-    data: { type: 'column', columnId },
+    data: { 
+      type: 'column', 
+      columnId: columnId,
+      // Adicionar metadados extras para melhor identificação
+      metadata: { columnId }
+    },
   });
+  
   return (
     <div
       ref={setNodeRef}
       data-column-id={columnId}
-      className={`bg-secondary/20 p-4 rounded-b-lg min-h-[500px] ${isOver ? 'bg-primary/10 border-2 border-primary border-dashed' : ''}`}
+      data-droppable-type="column"
+      className={`bg-secondary/20 p-4 rounded-b-lg min-h-[500px] transition-all duration-200 ${
+        isOver 
+          ? 'bg-primary/20 border-2 border-primary border-dashed shadow-lg scale-[1.02]' 
+          : 'border border-transparent'
+      }`}
     >
       {children}
     </div>
@@ -77,14 +103,17 @@ export default function Tarefas() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"board" | "calendar" | "dashboard">("board");
   const [searchText, setSearchText] = useState<string>("");
+  const [debouncedSearchText, setDebouncedSearchText] = useState<string>("");
   const [allUsers, setAllUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [filterAssignee, setFilterAssignee] = useState<string>("");
   const [filterPriority, setFilterPriority] = useState<string>("");
   const [filterTag, setFilterTag] = useState<string>("");
   const [tasksPerColumn, setTasksPerColumn] = useState<Record<string, number>>({});
   const [loadingMore, setLoadingMore] = useState<Record<string, boolean>>({});
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const TASKS_PER_PAGE = 10;
+  const TASKS_PER_PAGE = 20; // ✅ OTIMIZAÇÃO: Aumentado de 10 para 20
+  const INITIAL_LOAD_LIMIT = 50; // ✅ OTIMIZAÇÃO: Limitar carga inicial
 
   const columnsFiltradas = useMemo(() =>
     columns.filter((column) => column.board_id === selectedBoard),
@@ -220,19 +249,14 @@ export default function Tarefas() {
     })();
 
     // Realtime: tasks (atualizações incrementais)
+    // ✅ CORRIGIDO: Usa campos reais do banco (checklist, tags, comments, attachments) sem fallback
     const formatTask = (task: any) => {
-      let meta: any = {};
-      if (typeof task.description === 'string') {
-        const match = task.description.match(/<!--meta:(.*)-->/s);
-        if (match) {
-          try { meta = JSON.parse(match[1]); } catch { /* ignore */ }
-        }
-      }
       return {
         ...task,
-        checklist: task.checklist ?? meta.checklist ?? [],
-        tags: task.tags ?? meta.tags ?? [],
-        comments: task.comments ?? meta.comments ?? [],
+        checklist: task.checklist ?? [],
+        tags: task.tags ?? [],
+        comments: task.comments ?? [],
+        attachments: task.attachments ?? [],
         assignee_name: (task as any).assignee?.full_name,
         lead_name: (task as any).lead?.name,
       } as any;
@@ -332,29 +356,32 @@ export default function Tarefas() {
       const { data: columnsData } = await supabase.from("task_columns").select("*").order("posicao");
       setColumns(columnsData || []);
 
-      const { data: tasksData } = await supabase
+      // ✅ OTIMIZAÇÃO: Limitar query inicial - só carregar tarefas do board selecionado e limitar quantidade
+      const tasksQuery = supabase
         .from("tasks")
         .select(`
           *,
           assignee:profiles!tasks_assignee_id_fkey(full_name),
           lead:leads!tasks_lead_id_fkey(name)
         `)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(INITIAL_LOAD_LIMIT);
 
+      // Se tiver board selecionado, filtrar por board
+      if (selectedBoard) {
+        tasksQuery.eq("board_id", selectedBoard);
+      }
+
+      const { data: tasksData } = await tasksQuery;
+
+      // ✅ CORRIGIDO: Usa campos reais do banco sem fallback de descrição
       const formattedTasks = (tasksData || []).map((task: any) => {
-        // Fallback: extrair metadados de descrição, se checklist/tags/comments não existirem
-        let meta: any = {};
-        if (typeof task.description === 'string') {
-          const match = task.description.match(/<!--meta:(.*)-->\s*$/s);
-          if (match) {
-            try { meta = JSON.parse(match[1]); } catch {}
-          }
-        }
         return {
           ...task,
-          checklist: task.checklist ?? meta.checklist ?? [],
-          tags: task.tags ?? meta.tags ?? [],
-          comments: task.comments ?? meta.comments ?? [],
+          checklist: task.checklist ?? [],
+          tags: task.tags ?? [],
+          comments: task.comments ?? [],
+          attachments: task.attachments ?? [],
           assignee_name: task.assignee?.full_name,
           lead_name: task.lead?.name,
         };
@@ -368,57 +395,167 @@ export default function Tarefas() {
     }
   };
 
+  // ✅ MELHORADO: Drag & Drop com validação robusta e logs detalhados
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over) return;
-
-    const taskId = String(active.id);
-    const overData: any = (over as any).data?.current || {};
-    // Destino confiável: quando solta sobre outra tarefa, containerId é a coluna;
-    // quando solta na área da coluna, usamos columnId (setado no droppable) ou o próprio over.id
-    const containerId = overData?.sortable?.containerId as string | undefined;
-    const columnMetaId = overData?.columnId as string | undefined;
-    const guessed = (containerId || columnMetaId || String(over.id));
-
-    const newColumnId = guessed;
-
-    // Validar coluna
-    const isValidColumn = columns.some(c => c.id === newColumnId);
-    if (!isValidColumn) {
-      toast.error("Coluna inválida");
+    
+    if (!over) {
+      console.warn('[Drag&Drop] Sem destino válido');
       setActiveTaskId(null);
       return;
     }
 
-    // Atualização otimista simples
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, column_id: newColumnId } : t));
+    const taskId = String(active.id);
+    const task = tasks.find(t => t.id === taskId);
+    
+    if (!task) {
+      console.error('[Drag&Drop] Tarefa não encontrada:', taskId);
+      toast.error("Tarefa não encontrada");
+      setActiveTaskId(null);
+      return;
+    }
+
+    const overData: any = (over as any).data?.current || {};
+    const overId = String(over.id);
+    
+    // ✅ MELHORADO: Validação robusta com múltiplos fallbacks
+    let newColumnId: string | null = null;
+    
+    // Prioridade 1: columnId direto do droppable (mais confiável)
+    if (overData?.columnId && typeof overData.columnId === 'string') {
+      newColumnId = overData.columnId;
+      console.log('[Drag&Drop] Usando columnId do droppable:', newColumnId);
+    }
+    // Prioridade 2: metadata.columnId
+    else if (overData?.metadata?.columnId && typeof overData.metadata.columnId === 'string') {
+      newColumnId = overData.metadata.columnId;
+      console.log('[Drag&Drop] Usando columnId do metadata:', newColumnId);
+    }
+    // Prioridade 3: containerId do sortable (quando solta sobre outra tarefa)
+    else if (overData?.sortable?.containerId && typeof overData.sortable.containerId === 'string') {
+      newColumnId = overData.sortable.containerId;
+      console.log('[Drag&Drop] Usando containerId do sortable:', newColumnId);
+    }
+    // Prioridade 4: Tentar extrair do elemento DOM via data-column-id
+    else if (overId) {
+      // Verificar se overId é uma coluna válida
+      const isValidColumnId = columnsFiltradas.some(c => c.id === overId);
+      if (isValidColumnId) {
+        newColumnId = overId;
+        console.log('[Drag&Drop] Usando over.id como columnId:', newColumnId);
+      } else {
+        // Tentar buscar elemento pai com data-column-id
+        try {
+          const element = document.querySelector(`[data-column-id="${overId}"]`) ||
+                         document.querySelector(`[data-droppable-type="column"][data-column-id]`);
+          if (element) {
+            const domColumnId = element.getAttribute('data-column-id');
+            if (domColumnId) {
+              newColumnId = domColumnId;
+              console.log('[Drag&Drop] Usando columnId do DOM:', newColumnId);
+            }
+          }
+        } catch (e) {
+          console.warn('[Drag&Drop] Erro ao buscar no DOM:', e);
+        }
+      }
+    }
+
+    // ✅ MELHORADO: Validação detalhada antes de atualizar
+    if (!newColumnId) {
+      console.error('[Drag&Drop] Não foi possível identificar coluna destino', {
+        overId,
+        overData,
+        activeId: active.id,
+        availableColumns: columnsFiltradas.map(c => c.id)
+      });
+      toast.error("Não foi possível identificar a coluna destino");
+      setActiveTaskId(null);
+      return;
+    }
+
+    // Validar se a coluna existe e pertence ao board selecionado
+    const targetColumn = columnsFiltradas.find(c => c.id === newColumnId);
+    if (!targetColumn) {
+      console.error('[Drag&Drop] Coluna destino não encontrada ou inválida', {
+        newColumnId,
+        availableColumns: columnsFiltradas.map(c => ({ id: c.id, nome: c.nome })),
+        selectedBoard
+      });
+      toast.error(`Coluna destino inválida: ${newColumnId}`);
+      setActiveTaskId(null);
+      return;
+    }
+
+    // Validar se a tarefa já está na mesma coluna
+    if (task.column_id === newColumnId) {
+      console.log('[Drag&Drop] Tarefa já está na coluna destino, ignorando');
+      setActiveTaskId(null);
+      return;
+    }
+
+    const oldColumnId = task.column_id;
+    console.log('[Drag&Drop] Movendo tarefa', {
+      taskId,
+      taskTitle: task.title,
+      fromColumn: oldColumnId,
+      toColumn: newColumnId,
+      targetColumnName: targetColumn.nome
+    });
+
+    // ✅ MELHORADO: Atualização otimista com validação
+    setTasks(prev => prev.map(t => {
+      if (t.id === taskId) {
+        return { ...t, column_id: newColumnId! };
+      }
+      return t;
+    }));
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return toast.error("Não autenticado");
+      if (!session) {
+        // Reverter atualização otimista
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, column_id: oldColumnId } : t));
+        toast.error("Não autenticado");
+        setActiveTaskId(null);
+        return;
+      }
 
-      await supabase.functions.invoke("api-tarefas", {
+      const response = await supabase.functions.invoke("api-tarefas", {
         body: { action: "mover_tarefa", data: { task_id: taskId, nova_coluna_id: newColumnId } }
       });
 
-      toast.success("Tarefa movida!");
+      if (response.error) {
+        throw response.error;
+      }
+
+      toast.success(`Tarefa movida para "${targetColumn.nome}"`);
 
       // Emitir evento global para sincronização
-      const movedTask = tasks.find(t => t.id === taskId);
-      if (movedTask) {
+      if (task) {
         emitGlobalEvent({
           type: 'task-updated',
           data: {
-            ...movedTask,
+            ...task,
             column_id: newColumnId,
-            status: columns.find(c => c.id === newColumnId)?.nome.toLowerCase() || 'unknown'
+            status: targetColumn.nome.toLowerCase() || 'unknown'
           },
           source: 'Tarefas'
         });
       }
       // Realtime (tasks channel) confirmará a atualização; evitar recarga completa
-    } catch (error) {
-      toast.error("Erro ao mover tarefa");
+    } catch (error: any) {
+      console.error('[Drag&Drop] Erro ao mover tarefa:', error);
+      
+      // Reverter atualização otimista
+      setTasks(prev => prev.map(t => {
+        if (t.id === taskId) {
+          return { ...t, column_id: oldColumnId };
+        }
+        return t;
+      }));
+      
+      toast.error(error?.message || "Erro ao mover tarefa");
       // Reverter para estado consistente via recarga somente em erro
       carregarDados();
     }
@@ -491,14 +628,29 @@ export default function Tarefas() {
     }
   }, [tasksPerColumn, TASKS_PER_PAGE]);
 
+  // ✅ OTIMIZAÇÃO: Debounce na busca (300ms)
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      setDebouncedSearchText(searchText);
+    }, 300);
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchText]);
+
   const matchesSearch = useCallback((t: Task) => {
-    if (!searchText.trim()) return true;
-    const q = searchText.toLowerCase();
+    if (!debouncedSearchText.trim()) return true;
+    const q = debouncedSearchText.toLowerCase();
     return (
       (t.title || "").toLowerCase().includes(q) ||
       (t.description || "").toLowerCase().includes(q)
     );
-  }, [searchText]);
+  }, [debouncedSearchText]);
 
   const matchesFilters = useCallback((t: any) => {
     if (filterAssignee && !(t.assignee_id === filterAssignee || (t.responsaveis || []).includes(filterAssignee))) return false;
@@ -506,6 +658,26 @@ export default function Tarefas() {
     if (filterTag && !(Array.isArray(t.tags) && t.tags.includes(filterTag))) return false;
     return true;
   }, [filterAssignee, filterPriority, filterTag]);
+
+  // ✅ OTIMIZAÇÃO: Memoizar tarefas filtradas por coluna
+  const tasksByColumn = useMemo(() => {
+    const grouped: Record<string, Task[]> = {};
+    columnsFiltradas.forEach((column) => {
+      grouped[column.id] = tasks.filter(
+        (t) => t.column_id === column.id && matchesSearch(t) && matchesFilters(t)
+      );
+    });
+    return grouped;
+  }, [tasks, columnsFiltradas, matchesSearch, matchesFilters]);
+
+  // ✅ OTIMIZAÇÃO: Memoizar contagem de tarefas por coluna
+  const taskCountsByColumn = useMemo(() => {
+    const counts: Record<string, number> = {};
+    columnsFiltradas.forEach((column) => {
+      counts[column.id] = tasksByColumn[column.id]?.length || 0;
+    });
+    return counts;
+  }, [tasksByColumn, columnsFiltradas]);
 
   // Métricas de produtividade
   const productivityMetrics = useMemo(() => {
@@ -805,18 +977,22 @@ export default function Tarefas() {
                     </div>
                   </div>
                   <span className="text-sm">
-                    {tasks.filter(t => t.column_id === column.id).length} tarefas
+                    {taskCountsByColumn[column.id] || 0} tarefas
                   </span>
                 </div>
-                <SortableContext id={column.id} items={tasks.filter(t => t.column_id === column.id).map(t => t.id)} strategy={verticalListSortingStrategy}>
+                <SortableContext 
+                  id={column.id} 
+                  items={(tasksByColumn[column.id] || []).slice(0, tasksPerColumn[column.id] || TASKS_PER_PAGE).map(t => t.id)} 
+                  strategy={verticalListSortingStrategy}
+                >
                   <DroppableColumnContainer columnId={column.id}>
                     <NovaTarefaDialog 
                       columnId={column.id} 
                       boardId={selectedBoard} 
-                      onTaskCreated={carregarDados} 
+                      onTaskCreated={carregarDados}
                     />
-                    {tasks
-                      .filter(t => t.column_id === column.id && matchesSearch(t) && matchesFilters(t))
+                    {/* ✅ OTIMIZAÇÃO: Usar tarefas já filtradas e memoizadas */}
+                    {(tasksByColumn[column.id] || [])
                       .slice(0, tasksPerColumn[column.id] || TASKS_PER_PAGE)
                       .map((task) => (
                         <TaskCard
@@ -838,13 +1014,13 @@ export default function Tarefas() {
                             }
                             // Realtime removerá a tarefa; evitar recarga completa
                           }}
-                          onUpdate={carregarDados}
+                          onUpdate={() => {}}
                         />
                       ))}
 
-                    {/* Botão Carregar Mais */}
+                    {/* Botão Carregar Mais - ✅ OTIMIZAÇÃO: Usar contagem memoizada */}
                     {(() => {
-                      const totalTasksInColumn = tasks.filter(t => t.column_id === column.id && matchesSearch(t) && matchesFilters(t)).length;
+                      const totalTasksInColumn = taskCountsByColumn[column.id] || 0;
                       const visibleTasks = tasksPerColumn[column.id] || TASKS_PER_PAGE;
                       const hasMoreTasks = totalTasksInColumn > visibleTasks;
 

@@ -1,3 +1,14 @@
+/**
+ * ✅ BACKUP ATUALIZADO - 2024-11-01
+ * IMPORTANTE: Este componente possui funcionalidade de EXPANDIR/RECOLHER (collapse/expand)
+ * Se este arquivo retroceder, verificar:
+ * 1. Importa ChevronDown e ChevronUp de lucide-react (linha 8)
+ * 2. Possui estado isExpanded (useState(false)) para controlar expandir/recolher
+ * 3. Botão de Chevron no CardHeader ao lado do Badge de prioridade
+ * 4. CardContent está dentro de {isExpanded && (...)} para mostrar/recolher conteúdo
+ * 5. Por padrão, cartões iniciam RECOLHIDOS (isExpanded = false)
+ */
+
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -5,12 +16,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { User, Calendar as CalendarIcon, Trash2, ExternalLink, MessageSquare, Plus, GripVertical, Bell, Play, Pause, Clock, Paperclip, Link, FileText, Image } from "lucide-react";
+import { User, Calendar as CalendarIcon, Trash2, ExternalLink, MessageSquare, Plus, GripVertical, Bell, Play, Pause, Clock, Paperclip, Link, FileText, Image, ChevronDown, ChevronUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { EditarTarefaDialog } from "./EditarTarefaDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { enviarLembreteWhatsApp } from "@/services/whatsappService";
+import { useTaskTimer } from "@/hooks/useTaskTimer";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,13 +77,30 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
   const navigate = useNavigate();
   const [localChecklist, setLocalChecklist] = useState(task.checklist || []);
   const [newItem, setNewItem] = useState("");
-  const [currentTime, setCurrentTime] = useState(0);
-  const [isTracking, setIsTracking] = useState(false);
-  const [trackingInterval, setTrackingInterval] = useState<NodeJS.Timeout | null>(null);
   const [attachments, setAttachments] = useState(task.attachments || []);
   const [showAttachmentDialog, setShowAttachmentDialog] = useState(false);
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [uploading, setUploading] = useState(false);
+  // ✅ BACKUP: Estado para controlar expandir/recolher - Se retroceder, verificar esta linha
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [localComments, setLocalComments] = useState(task.comments || []);
+  const [newComment, setNewComment] = useState("");
+
+  // ✅ MELHORADO: Usar hook useTaskTimer para gerenciar timer
+  const {
+    currentTime,
+    isTracking,
+    formattedTime,
+    startTimer,
+    pauseTimer,
+    stopTimer
+  } = useTaskTimer({
+    taskId: task.id,
+    initialTimeSpent: task.tempo_gasto || 0,
+    timeTrackingStarted: task.time_tracking_iniciado || null,
+    timeTrackingPaused: task.time_tracking_pausado || false,
+    onTimeUpdated: onUpdate
+  });
 
   useEffect(() => {
     setLocalChecklist(task.checklist || []);
@@ -81,85 +110,41 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
     setAttachments(task.attachments || []);
   }, [task.attachments, task.id]);
 
-  // Atualizar tempo atual baseado no tempo gasto salvo + tempo decorrido desde o início
   useEffect(() => {
-    const updateCurrentTime = () => {
-      const baseTime = task.tempo_gasto || 0;
-      if (task.time_tracking_iniciado && !task.time_tracking_pausado) {
-        const startTime = new Date(task.time_tracking_iniciado).getTime();
-        const now = Date.now();
-        const elapsed = Math.floor((now - startTime) / 1000); // em segundos
-        setCurrentTime(baseTime + elapsed);
-        setIsTracking(true);
-      } else {
-        setCurrentTime(baseTime);
-        setIsTracking(false);
-      }
-    };
+    setLocalComments(task.comments || []);
+  }, [task.comments, task.id]);
 
-    updateCurrentTime();
+  // ✅ REMOVIDO: Código antigo de timer substituído por useTaskTimer hook
 
-    // Atualizar a cada segundo se estiver trackeando
-    if (task.time_tracking_iniciado && !task.time_tracking_pausado) {
-      const interval = setInterval(updateCurrentTime, 1000);
-      setTrackingInterval(interval);
-      return () => clearInterval(interval);
-    } else if (trackingInterval) {
-      clearInterval(trackingInterval);
-      setTrackingInterval(null);
-    }
+  const addComment = useCallback(async () => {
+    const text = newComment.trim();
+    if (!text) return;
 
-    return () => {
-      if (trackingInterval) clearInterval(trackingInterval);
-    };
-  }, [task.tempo_gasto, task.time_tracking_iniciado, task.time_tracking_pausado, trackingInterval]);
+    const comment = {
+      id: (globalThis as any).crypto?.randomUUID?.() || `${Date.now()}`,
+      text,
+      created_at: new Date().toISOString(),
+    } as any;
 
-  const startTimeTracking = useCallback(async () => {
+    const updated = [...(localComments || []), comment];
+    setLocalComments(updated);
+    setNewComment("");
+
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      const now = new Date().toISOString();
       const { error } = await supabase
         .from('tasks')
-        .update({
-          time_tracking_iniciado: now,
-          time_tracking_pausado: false
-        })
+        .update({ comments: updated })
         .eq('id', task.id);
-
       if (error) throw error;
       onUpdate();
-      toast.success("Time tracking iniciado!");
-    } catch (error) {
-      console.error("Erro ao iniciar time tracking:", error);
-      toast.error("Erro ao iniciar time tracking");
+      toast.success("Comentário adicionado");
+    } catch (e) {
+      console.error("Erro ao adicionar comentário:", e);
+      setLocalComments(task.comments || []);
+      toast.error("Não foi possível adicionar o comentário");
     }
-  }, [task.id, onUpdate]);
-
-  const pauseTimeTracking = useCallback(async () => {
-    try {
-      const { supabase } = await import("@/integrations/supabase/client");
-      const now = new Date();
-      const startTime = new Date(task.time_tracking_iniciado!);
-      const elapsedMinutes = Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60));
-      const totalTime = (task.tempo_gasto || 0) + elapsedMinutes;
-
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          tempo_gasto: totalTime,
-          time_tracking_iniciado: null,
-          time_tracking_pausado: true
-        })
-        .eq('id', task.id);
-
-      if (error) throw error;
-      onUpdate();
-      toast.success(`Time tracking pausado! Tempo total: ${totalTime} minutos`);
-    } catch (error) {
-      console.error("Erro ao pausar time tracking:", error);
-      toast.error("Erro ao pausar time tracking");
-    }
-  }, [task.id, task.tempo_gasto, task.time_tracking_iniciado, onUpdate]);
+  }, [newComment, localComments, task.id, task.description, onUpdate]);
 
   const formatTime = useCallback((seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -223,7 +208,8 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       toast.success("Arquivo anexado com sucesso!");
     } catch (error) {
       console.error("Erro ao fazer upload:", error);
-      toast.error("Erro ao fazer upload do arquivo");
+      setAttachments(task.attachments || []);
+      toast.error("Erro ao salvar anexo");
     } finally {
       setUploading(false);
     }
@@ -308,6 +294,7 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
     return colors[priority] || "bg-gray-500";
   }, []);
 
+  // ✅ CORRIGIDO: Usa campo real checklist, sem fallback para descrição
   const toggleChecklist = useCallback(async (itemId: string, checked: boolean) => {
     const updated = (localChecklist || []).map((i) => (i.id === itemId ? { ...i, done: checked } : i));
     setLocalChecklist(updated);
@@ -320,22 +307,14 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       if (error) throw error;
       onUpdate();
     } catch (e) {
-      // Fallback: gravar metadados no final da descrição
-      try {
-        const { supabase } = await import("@/integrations/supabase/client");
-        const desc = (task.description || '').replace(/<!--meta:.*-->\s*$/s, '').trimEnd();
-        const meta = { checklist: updated, tags: (task as any).tags || [], comments: (task as any).comments || [] };
-        const newDesc = `${desc}\n\n<!--meta:${JSON.stringify(meta)}-->`;
-        const { error: err2 } = await supabase.from('tasks').update({ description: newDesc }).eq('id', task.id);
-        if (err2) throw err2;
-        onUpdate();
-      } catch (err3) {
-        setLocalChecklist(task.checklist || []);
-        console.error('Erro fallback checklist -> description:', err3);
-      }
+      // Reverter estado local em caso de erro
+      setLocalChecklist(task.checklist || []);
+      console.error('Erro ao atualizar checklist:', e);
+      toast.error('Erro ao atualizar checklist');
     }
-  }, [localChecklist, task.id, task.description, onUpdate]);
+  }, [localChecklist, task.id, task.checklist, onUpdate]);
 
+  // ✅ CORRIGIDO: Usa campo real checklist, sem fallback para descrição
   const addChecklistItem = useCallback(async () => {
     const text = newItem.trim();
     if (!text) return;
@@ -351,20 +330,12 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       if (error) throw error;
       onUpdate();
     } catch (e) {
-      try {
-        const { supabase } = await import("@/integrations/supabase/client");
-        const desc = (task.description || '').replace(/<!--meta:.*-->\s*$/s, '').trimEnd();
-        const meta = { checklist: updated, tags: (task as any).tags || [], comments: (task as any).comments || [] };
-        const newDesc = `${desc}\n\n<!--meta:${JSON.stringify(meta)}-->`;
-        const { error: err2 } = await supabase.from('tasks').update({ description: newDesc }).eq('id', task.id);
-        if (err2) throw err2;
-        onUpdate();
-      } catch (err3) {
-        console.error("Erro ao adicionar item (fallback):", err3);
-        setLocalChecklist(task.checklist || []);
-      }
+      // Reverter estado local em caso de erro
+      console.error("Erro ao adicionar item ao checklist:", e);
+      setLocalChecklist(task.checklist || []);
+      toast.error('Erro ao adicionar item ao checklist');
     }
-  }, [newItem, localChecklist, task.id, task.description, onUpdate]);
+  }, [newItem, localChecklist, task.id, task.checklist, onUpdate]);
 
   const sendReminderNow = useCallback(async () => {
     try {
@@ -421,12 +392,26 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
               {isOverdue && <span className="ml-2 text-red-500">🔴</span>}
             </CardTitle>
           </div>
-          <Badge className={`${getPriorityColor(task.priority)} border-0 text-white shadow-sm`}>
-            {task.priority}
-          </Badge>
+          <div className="flex items-center gap-1">
+            <Badge className={`${getPriorityColor(task.priority)} border-0 text-white shadow-sm`}>
+              {task.priority}
+            </Badge>
+            {/* ✅ BACKUP: Botão de expandir/recolher - Se retroceder, verificar este botão Chevron */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={(e) => { e.stopPropagation(); setIsExpanded(v => !v); }}
+              title={isExpanded ? 'Recolher' : 'Expandir'}
+            >
+              {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       
+      {/* ✅ BACKUP: CardContent dentro de isExpanded - Se retroceder, verificar esta condicional */}
+      {isExpanded && (
       <CardContent className="relative space-y-3">
         {cleanDescription && (
           <p className="text-sm text-muted-foreground line-clamp-1 bg-muted/30 px-3 py-2 rounded-md">
@@ -452,18 +437,27 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
               <span className="font-medium">{new Date(task.due_date).toLocaleDateString("pt-BR")}</span>
             </div>
           )}
-          {Array.isArray(task.comments) && task.comments.length > 0 && (
+          {Array.isArray(localComments) && localComments.length > 0 && (
             <div className="flex items-center gap-1.5 text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">
               <MessageSquare className="h-3 w-3" />
-              <span className="font-medium">{task.comments.length}</span>
+              <span className="font-medium">{localComments.length}</span>
             </div>
           )}
-          {/* Time Tracking Display */}
+          {attachments.length > 0 && (
+            <div className="flex items-center gap-1.5 text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">
+              <Paperclip className="h-3 w-3" />
+              <span className="font-medium">{attachments.length}</span>
+            </div>
+          )}
+          {/* ✅ MELHORADO: Display de timer usando hook useTaskTimer */}
           <div className="flex items-center gap-1.5 text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">
             <Clock className="h-3 w-3" />
             <span className={`font-medium font-mono ${isTracking ? 'text-green-600 animate-pulse' : ''}`}>
-              {formatTime(currentTime)}
+              {formattedTime}
             </span>
+            {isTracking && (
+              <span className="text-[10px] text-green-600 font-semibold ml-1">●</span>
+            )}
           </div>
         </div>
         
@@ -493,8 +487,8 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
               <Paperclip className="h-3 w-3" />
               Anexos ({attachments.length})
             </div>
-            <div className="space-y-1 max-h-20 overflow-y-auto">
-              {attachments.slice(0, 3).map((attachment, index) => (
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {attachments.map((attachment, index) => (
                 <div key={index} className="flex items-center gap-2 text-xs bg-muted/30 p-1.5 rounded">
                   {attachment.type === 'link' ? (
                     <Link className="h-3 w-3 text-blue-500" />
@@ -523,31 +517,19 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
                   </Button>
                 </div>
               ))}
-              {attachments.length > 3 && (
-                <div className="text-[10px] text-muted-foreground text-center">
-                  +{attachments.length - 3} mais
-                </div>
-              )}
             </div>
           </div>
         )}
 
-        {Array.isArray(task.comments) && task.comments.length > 0 && (
-          <div className="text-[11px] text-muted-foreground bg-muted/20 p-2 rounded">
-            {task.comments[task.comments.length - 1]?.text?.slice(0, 80)}
-          </div>
-        )}
+        
 
         <div className="mt-1 space-y-1">
-          {(localChecklist || []).slice(0, 3).map((item) => (
+          {(localChecklist || []).map((item) => (
             <label key={item.id} className="flex items-center gap-2 text-xs p-1 rounded hover:bg-muted/40 cursor-pointer">
               <Checkbox checked={!!item.done} onCheckedChange={(v: any) => toggleChecklist(item.id!, !!v)} />
               <span className={item.done ? "line-through text-muted-foreground" : ""}>{item.text}</span>
             </label>
           ))}
-          {Array.isArray(localChecklist) && localChecklist.length > 3 && (
-            <div className="text-[10px] text-muted-foreground">+ {localChecklist.length - 3} itens</div>
-          )}
           <div className="flex items-center gap-1 pt-1">
             <Input value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="Adicionar item..." className="h-7 text-xs" />
             <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={addChecklistItem}>
@@ -574,7 +556,19 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
           </div>
         )}
         
-        <div className="flex justify-end gap-1 pt-2">
+        <div className="flex justify-end items-center gap-1 pt-2">
+          {/* Adicionar comentário - posicionado antes do sino */}
+          <div className="flex items-center gap-1">
+            <Input
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Adicionar comentário..."
+              className="h-7 text-xs w-40"
+            />
+            <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={addComment} title="Adicionar comentário">
+              <MessageSquare className="h-3 w-3" />
+            </Button>
+          </div>
           <Button
             variant="ghost"
             size="sm"
@@ -584,14 +578,14 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
           >
             <Bell className="h-3 w-3" />
           </Button>
-          {/* Time Tracking Buttons */}
+          {/* ✅ MELHORADO: Botões de timer usando hook useTaskTimer */}
           {isTracking ? (
             <Button
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-              onClick={(e) => { e.stopPropagation(); pauseTimeTracking(); }}
-              title="Pausar time tracking"
+              onClick={(e) => { e.stopPropagation(); pauseTimer(); }}
+              title="Pausar timer"
             >
               <Pause className="h-3 w-3" />
             </Button>
@@ -600,8 +594,8 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-              onClick={(e) => { e.stopPropagation(); startTimeTracking(); }}
-              title="Iniciar time tracking"
+              onClick={(e) => { e.stopPropagation(); startTimer(); }}
+              title="Iniciar timer"
             >
               <Play className="h-3 w-3" />
             </Button>
@@ -667,7 +661,19 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
             </AlertDialogContent>
           </AlertDialog>
         </div>
+
+        {/* Lista de comentários abaixo do botão de comentário */}
+        {Array.isArray(localComments) && localComments.length > 0 && (
+          <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+            {localComments.map((c, idx) => (
+              <div key={c.id || idx} className="text-[11px] text-muted-foreground bg-muted/20 p-2 rounded">
+                {c.text}
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
+      )}
 
       {/* Add Link Dialog */}
       <Dialog open={showAttachmentDialog} onOpenChange={setShowAttachmentDialog}>

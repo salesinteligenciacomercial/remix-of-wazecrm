@@ -13,7 +13,11 @@ import {
   Reply,
   User as UserIcon,
   MoreVertical,
-  Smile
+  Smile,
+  Loader2,
+  AlertCircle,
+  RefreshCw,
+  CheckCircle2
 } from "lucide-react";
 import { MessageActions } from "./MessageActions";
 import { PDFPreview } from "./PDFPreview";
@@ -31,6 +35,7 @@ interface Message {
   fileName?: string;
   mimeType?: string;
   transcricao?: string;
+  transcriptionStatus?: "pending" | "processing" | "completed" | "error"; // MELHORIA: Status da transcrição
   reaction?: string;
   replyTo?: string;
   edited?: boolean;
@@ -49,6 +54,8 @@ interface MessageItemProps {
   onImageClick?: (url: string, name: string) => void;
   onPdfClick?: (url: string, name: string) => void;
   isTranscribing?: boolean;
+  transcriptionStatus?: "pending" | "processing" | "completed" | "error"; // MELHORIA: Status da transcrição
+  onRetryTranscribe?: () => void; // MELHORIA: Função para reenviar transcrição
   onReply: (messageId: string) => void;
   onEdit: (messageId: string, newContent: string) => void;
   onDelete: (messageId: string, forEveryone: boolean) => void;
@@ -64,6 +71,8 @@ export function MessageItem({
   onImageClick,
   onPdfClick,
   isTranscribing,
+  transcriptionStatus,
+  onRetryTranscribe,
   onReply,
   onEdit,
   onDelete,
@@ -203,19 +212,79 @@ export function MessageItem({
               <audio controls className="w-full h-8" style={{ maxWidth: '300px' }}>
                 <source src={message.mediaUrl} />
               </audio>
-              {!message.transcricao && onTranscribe && (
+              
+              {/* MELHORIA: Indicador visual de status de transcrição */}
+              {transcriptionStatus === "processing" && (
+                <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <Loader2 className="h-4 w-4 text-blue-600 dark:text-blue-400 animate-spin" />
+                  <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                    Transcrevendo...
+                  </span>
+                </div>
+              )}
+              
+              {transcriptionStatus === "pending" && (
+                <div className="flex items-center gap-2 p-2 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                  <Loader2 className="h-4 w-4 text-yellow-600 dark:text-yellow-400 animate-spin" />
+                  <span className="text-xs text-yellow-700 dark:text-yellow-300 font-medium">
+                    Aguardando processamento...
+                  </span>
+                </div>
+              )}
+              
+              {transcriptionStatus === "error" && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    <span className="text-xs text-red-700 dark:text-red-300 font-medium flex-1">
+                      Erro ao transcrever áudio
+                    </span>
+                  </div>
+                  {onRetryTranscribe && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={onRetryTranscribe}
+                      className="w-full"
+                    >
+                      <RefreshCw className="h-3 w-3 mr-2" />
+                      Reenviar Transcrição
+                    </Button>
+                  )}
+                </div>
+              )}
+              
+              {/* Botão para transcrever se ainda não tiver sido iniciado */}
+              {!message.transcricao && 
+               transcriptionStatus !== "processing" && 
+               transcriptionStatus !== "pending" && 
+               transcriptionStatus !== "completed" &&
+               onTranscribe && (
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => onTranscribe(message.id, message.mediaUrl!)}
-                  disabled={isTranscribing}
+                  disabled={isTranscribing || transcriptionStatus === "processing"}
                   className="w-full"
                 >
                   <Mic className="h-3 w-3 mr-2" />
-                  {isTranscribing ? 'Transcrevendo...' : 'Transcrever Áudio'}
+                  {isTranscribing || transcriptionStatus === "processing" ? 'Transcrevendo...' : 'Transcrever Áudio'}
                 </Button>
               )}
-              {message.transcricao && (
+              
+              {/* MELHORIA: Mostrar transcrição quando disponível de forma assíncrona */}
+              {message.transcricao && transcriptionStatus === "completed" && (
+                <div className="mt-2 p-2 bg-muted/50 rounded text-xs border border-border">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle2 className="h-3 w-3 text-green-600 dark:text-green-400" />
+                    <strong className="text-green-700 dark:text-green-300">Transcrição:</strong>
+                  </div>
+                  <p className="mt-1">{message.transcricao}</p>
+                </div>
+              )}
+              
+              {/* Mostrar transcrição mesmo sem status (compatibilidade) */}
+              {message.transcricao && transcriptionStatus !== "completed" && transcriptionStatus !== "error" && (
                 <div className="mt-2 p-2 bg-muted/50 rounded text-xs border border-border">
                   <strong>Transcrição:</strong>
                   <p className="mt-1">{message.transcricao}</p>

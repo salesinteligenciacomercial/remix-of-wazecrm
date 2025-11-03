@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -6,8 +6,11 @@ import { toast } from "sonner";
 let sharedChannel: any = null;
 let subscriberCount = 0;
 let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 5;
+let reconnectTimeoutId: NodeJS.Timeout | null = null;
+let isReconnecting = false;
+const MAX_RECONNECT_ATTEMPTS = 10; // Aumentado para 10 tentativas
 const RECONNECT_DELAY = 3000;
+const DEBOUNCE_DELAY = 300; // Debounce de 300ms para atualizações
 
 interface Lead {
   id: string;
@@ -47,6 +50,56 @@ interface UseLeadsSyncOptions {
   showNotifications?: boolean;
 }
 
+// Status da conexão realtime
+export type RealtimeStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting';
+
+// Status global da conexão (compartilhado entre componentes)
+let globalConnectionStatus: RealtimeStatus = 'disconnected';
+const statusListeners = new Set<(status: RealtimeStatus) => void>();
+
+// Função auxiliar para validar dados do lead
+const validateLead = (lead: any): lead is Lead => {
+  if (!lead || typeof lead !== 'object') {
+    console.warn('❌ [useLeadsSync] Lead inválido: não é um objeto', lead);
+    return false;
+  }
+  
+  if (!lead.id || typeof lead.id !== 'string') {
+    console.warn('❌ [useLeadsSync] Lead inválido: id ausente ou inválido', lead);
+    return false;
+  }
+  
+  if (!lead.name || typeof lead.name !== 'string') {
+    console.warn('❌ [useLeadsSync] Lead inválido: name ausente ou inválido', lead);
+    return false;
+  }
+  
+  // Validar campos obrigatórios
+  const requiredFields = ['status', 'stage', 'created_at'];
+  for (const field of requiredFields) {
+    if (!lead[field]) {
+      console.warn(`❌ [useLeadsSync] Lead inválido: ${field} ausente`, lead);
+      return false;
+    }
+  }
+  
+  return true;
+};
+
+// Função para atualizar status global e notificar listeners
+const setGlobalConnectionStatus = (status: RealtimeStatus) => {
+  if (globalConnectionStatus !== status) {
+    globalConnectionStatus = status;
+    statusListeners.forEach(listener => {
+      try {
+        listener(status);
+      } catch (error) {
+        console.error('❌ [useLeadsSync] Erro ao notificar listener:', error);
+      }
+    });
+  }
+};
+
 /**
  * Hook global de sincronização de leads em tempo real
  * Usa Supabase Realtime com canal compartilhado (singleton) para otimizar recursos
@@ -54,7 +107,11 @@ interface UseLeadsSyncOptions {
  * 
  * OTIMIZAÇÕES:
  * - Canal compartilhado entre todos os componentes (evita múltiplas conexões)
- * - Reconexão automática em caso de perda de conexão
+ * - Reconexão automática robusta em caso de perda de conexão
+ * - Debounce nas atualizações para evitar spam
+ * - Validação de dados recebidos
+ * - Logs detalhados para debug
+ * - Indicador visual de status de conexão
  * - Gerenciamento de subscribers para cleanup correto
  */
 export const useLeadsSync = ({
@@ -65,69 +122,144 @@ export const useLeadsSync = ({
   companyId // 🔒 ISOLAMENTO: company_id obrigatório para isolamento
 }: UseLeadsSyncOptions & { companyId?: string } = {}) => {
   const handlersRef = useRef({ onInsert, onUpdate, onDelete, showNotifications });
+  const [connectionStatus, setConnectionStatus] = useState<RealtimeStatus>(globalConnectionStatus);
+  const debounceTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
   
   // Atualizar referências sem causar re-subscrição
   useEffect(() => {
     handlersRef.current = { onInsert, onUpdate, onDelete, showNotifications };
   }, [onInsert, onUpdate, onDelete, showNotifications]);
-  
-  const handleChange = useCallback((payload: any) => {
-    console.log('📡 [useLeadsSync] Mudança detectada:', payload);
 
-    const { eventType, new: newRecord, old: oldRecord } = payload;
-    const handlers = handlersRef.current;
+  // Listener para status global de conexão
+  useEffect(() => {
+    const statusListener = (status: RealtimeStatus) => {
+      setConnectionStatus(status);
+    };
+    statusListeners.add(statusListener);
+    setConnectionStatus(globalConnectionStatus); // Atualizar com status atual
 
-    // 🔒 SEGURANÇA: Filtrar apenas leads da empresa atual
-    if (companyId) {
-      const recordCompanyId = newRecord?.company_id || oldRecord?.company_id;
-      if (recordCompanyId !== companyId) {
-        console.log('🚫 [useLeadsSync] Lead ignorado - empresa diferente:', {
-          recordCompanyId,
-          userCompanyId: companyId
-        });
-        return; // Ignorar leads de outras empresas
-      }
-    }
-    
-    switch (eventType) {
-      case 'INSERT':
-        if (handlers.onInsert) {
-          handlers.onInsert(newRecord);
-        }
-        if (handlers.showNotifications) {
-          toast.success(`Novo lead adicionado: ${newRecord.name}`);
-        }
-        break;
-        
-      case 'UPDATE':
-        if (handlers.onUpdate) {
-          handlers.onUpdate(newRecord, oldRecord);
-        }
-        if (handlers.showNotifications) {
-          toast.info(`Lead atualizado: ${newRecord.name}`);
-        }
-        break;
-        
-      case 'DELETE':
-        if (handlers.onDelete) {
-          handlers.onDelete(oldRecord);
-        }
-        if (handlers.showNotifications) {
-          toast.info(`Lead removido: ${oldRecord.name}`);
-        }
-        break;
-        
-      default:
-        console.warn('[useLeadsSync] Evento desconhecido:', eventType);
-    }
+    return () => {
+      statusListeners.delete(statusListener);
+    };
   }, []);
+  
+  // Função com debounce para processar atualizações
+  const processUpdate = useCallback((payload: any) => {
+    try {
+      const { eventType, new: newRecord, old: oldRecord } = payload;
+      const handlers = handlersRef.current;
+
+      // ✅ VALIDAÇÃO: Validar dados recebidos
+      if (eventType === 'INSERT' || eventType === 'UPDATE') {
+        if (!validateLead(newRecord)) {
+          console.error('❌ [useLeadsSync] Lead inválido ignorado:', newRecord);
+          return;
+        }
+      }
+      
+      if (eventType === 'DELETE' || eventType === 'UPDATE') {
+        if (!validateLead(oldRecord)) {
+          console.error('❌ [useLeadsSync] Lead antigo inválido ignorado:', oldRecord);
+          return;
+        }
+      }
+
+      // 🔒 SEGURANÇA: Filtrar apenas leads da empresa atual
+      if (companyId) {
+        const recordCompanyId = newRecord?.company_id || oldRecord?.company_id;
+        if (recordCompanyId !== companyId) {
+          console.log('🚫 [useLeadsSync] Lead ignorado - empresa diferente:', {
+            recordCompanyId,
+            userCompanyId: companyId,
+            leadId: newRecord?.id || oldRecord?.id
+          });
+          return; // Ignorar leads de outras empresas
+        }
+      }
+      
+      switch (eventType) {
+        case 'INSERT':
+          if (handlers.onInsert) {
+            handlers.onInsert(newRecord);
+          }
+          if (handlers.showNotifications) {
+            toast.success(`Novo lead adicionado: ${newRecord.name}`);
+          }
+          console.log('✅ [useLeadsSync] INSERT processado:', newRecord.id);
+          break;
+          
+        case 'UPDATE':
+          if (handlers.onUpdate) {
+            handlers.onUpdate(newRecord, oldRecord);
+          }
+          if (handlers.showNotifications) {
+            toast.info(`Lead atualizado: ${newRecord.name}`);
+          }
+          console.log('✅ [useLeadsSync] UPDATE processado:', newRecord.id);
+          break;
+          
+        case 'DELETE':
+          if (handlers.onDelete) {
+            handlers.onDelete(oldRecord);
+          }
+          if (handlers.showNotifications) {
+            toast.info(`Lead removido: ${oldRecord.name}`);
+          }
+          console.log('✅ [useLeadsSync] DELETE processado:', oldRecord.id);
+          break;
+          
+        default:
+          console.warn('⚠️ [useLeadsSync] Evento desconhecido:', eventType);
+      }
+    } catch (error) {
+      console.error('❌ [useLeadsSync] Erro ao processar mudança:', error, payload);
+    }
+  }, [companyId]);
+
+  // Handler com debounce para evitar spam de atualizações
+  const handleChange = useCallback((payload: any) => {
+    const leadId = payload.new?.id || payload.old?.id || 'unknown';
+    console.log('📡 [useLeadsSync] Mudança detectada:', {
+      eventType: payload.eventType,
+      leadId,
+      timestamp: new Date().toISOString()
+    });
+
+    // Limpar timeout anterior para este lead (debounce)
+    if (debounceTimeoutRef.current[leadId]) {
+      clearTimeout(debounceTimeoutRef.current[leadId]);
+    }
+
+    // Criar novo timeout com debounce
+    debounceTimeoutRef.current[leadId] = setTimeout(() => {
+      processUpdate(payload);
+      delete debounceTimeoutRef.current[leadId];
+    }, DEBOUNCE_DELAY);
+  }, [processUpdate]);
 
   const setupChannel = useCallback(async () => {
-    if (!sharedChannel) {
+    if (sharedChannel && sharedChannel.state === 'joined') {
+      console.log('✅ [useLeadsSync] Canal já existe e está conectado');
+      return;
+    }
+
+    try {
+      // Limpar canal anterior se existir
+      if (sharedChannel) {
+        await supabase.removeChannel(sharedChannel);
+        sharedChannel = null;
+      }
+
       console.log('🔄 [useLeadsSync] Criando canal compartilhado...');
+      setGlobalConnectionStatus('connecting');
       
       sharedChannel = supabase
-        .channel('leads_shared_channel')
+        .channel('leads_shared_channel', {
+          config: {
+            broadcast: { self: true },
+            presence: { key: '' }
+          }
+        })
         .on(
           'postgres_changes',
           {
@@ -138,42 +270,137 @@ export const useLeadsSync = ({
           handleChange
         )
         .subscribe((status) => {
-          console.log('📡 [useLeadsSync] Status da conexão compartilhada:', status);
+          console.log('📡 [useLeadsSync] Status da conexão:', {
+            status,
+            timestamp: new Date().toISOString(),
+            subscribers: subscriberCount
+          });
           
           if (status === 'SUBSCRIBED') {
             console.log(`✅ [useLeadsSync] Canal compartilhado ativo (${subscriberCount} subscribers)`);
-            reconnectAttempts = 0; // Reset contador de reconexão
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ [useLeadsSync] Erro na conexão realtime');
+            reconnectAttempts = 0;
+            isReconnecting = false;
+            setGlobalConnectionStatus('connected');
             
-            // Tentar reconectar automaticamente
-            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            // Limpar timeout de reconexão se existir
+            if (reconnectTimeoutId) {
+              clearTimeout(reconnectTimeoutId);
+              reconnectTimeoutId = null;
+            }
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('❌ [useLeadsSync] Erro na conexão realtime:', {
+              timestamp: new Date().toISOString(),
+              attempts: reconnectAttempts,
+              maxAttempts: MAX_RECONNECT_ATTEMPTS
+            });
+            setGlobalConnectionStatus('error');
+            // Usar função inline para evitar dependência circular
+            if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+              isReconnecting = true;
               reconnectAttempts++;
-              console.log(`🔄 [useLeadsSync] Tentando reconectar (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+              setGlobalConnectionStatus('reconnecting');
+              const delay = Math.min(RECONNECT_DELAY * reconnectAttempts, 30000);
               
-              setTimeout(async () => {
-                if (sharedChannel) {
-                  await supabase.removeChannel(sharedChannel);
-                  sharedChannel = null;
+              if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+              reconnectTimeoutId = setTimeout(async () => {
+                try {
+                  if (sharedChannel) {
+                    await supabase.removeChannel(sharedChannel);
+                    sharedChannel = null;
+                  }
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  await setupChannel();
+                } catch (err) {
+                  console.error('❌ [useLeadsSync] Erro durante reconexão:', err);
+                  isReconnecting = false;
+                  if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    reconnectAttempts = 0; // Reset para tentar novamente
+                  } else {
+                    setGlobalConnectionStatus('error');
+                  }
                 }
-                setupChannel();
-              }, RECONNECT_DELAY * reconnectAttempts); // Aumentar delay a cada tentativa
-            } else {
-              console.error('❌ [useLeadsSync] Máximo de tentativas de reconexão atingido');
-              if (handlersRef.current.showNotifications) {
-                toast.error('Erro ao conectar sincronização. Por favor, recarregue a página.');
-              }
+              }, delay);
             }
           } else if (status === 'CLOSED') {
-            console.log('🔌 [useLeadsSync] Canal fechado');
+            console.log('🔌 [useLeadsSync] Canal fechado:', {
+              timestamp: new Date().toISOString()
+            });
+            setGlobalConnectionStatus('disconnected');
+            
+            // Tentar reconectar automaticamente se houver subscribers
+            if (subscriberCount > 0 && !isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+              isReconnecting = true;
+              reconnectAttempts++;
+              setGlobalConnectionStatus('reconnecting');
+              const delay = Math.min(RECONNECT_DELAY * reconnectAttempts, 30000);
+              
+              if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+              reconnectTimeoutId = setTimeout(async () => {
+                try {
+                  if (sharedChannel) {
+                    await supabase.removeChannel(sharedChannel);
+                    sharedChannel = null;
+                  }
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  await setupChannel();
+                } catch (err) {
+                  console.error('❌ [useLeadsSync] Erro durante reconexão:', err);
+                  isReconnecting = false;
+                  if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    reconnectAttempts = 0;
+                  } else {
+                    setGlobalConnectionStatus('error');
+                  }
+                }
+              }, delay);
+            }
+          } else if (status === 'TIMED_OUT') {
+            console.warn('⏱️ [useLeadsSync] Timeout na conexão:', {
+              timestamp: new Date().toISOString()
+            });
+            setGlobalConnectionStatus('error');
+            // Mesma lógica de reconexão
+            if (!isReconnecting && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+              isReconnecting = true;
+              reconnectAttempts++;
+              setGlobalConnectionStatus('reconnecting');
+              const delay = Math.min(RECONNECT_DELAY * reconnectAttempts, 30000);
+              
+              if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+              reconnectTimeoutId = setTimeout(async () => {
+                try {
+                  if (sharedChannel) {
+                    await supabase.removeChannel(sharedChannel);
+                    sharedChannel = null;
+                  }
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  await setupChannel();
+                } catch (err) {
+                  console.error('❌ [useLeadsSync] Erro durante reconexão:', err);
+                  isReconnecting = false;
+                  if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    reconnectAttempts = 0;
+                  } else {
+                    setGlobalConnectionStatus('error');
+                  }
+                }
+              }, delay);
+            }
           }
         });
+    } catch (error) {
+      console.error('❌ [useLeadsSync] Erro ao criar canal:', error);
+      setGlobalConnectionStatus('error');
+      isReconnecting = false;
     }
   }, [handleChange]);
 
   useEffect(() => {
     subscriberCount++;
-    console.log(`🔄 [useLeadsSync] Registrando subscriber (${subscriberCount} total)`);
+    console.log(`🔄 [useLeadsSync] Registrando subscriber (${subscriberCount} total)`, {
+      timestamp: new Date().toISOString(),
+      companyId: companyId || 'não definido'
+    });
     
     setupChannel();
 
@@ -182,12 +409,26 @@ export const useLeadsSync = ({
       subscriberCount--;
       console.log(`🔌 [useLeadsSync] Removendo subscriber (${subscriberCount} restantes)`);
       
+      // Limpar timeouts de debounce
+      Object.values(debounceTimeoutRef.current).forEach(timeout => {
+        if (timeout) clearTimeout(timeout);
+      });
+      debounceTimeoutRef.current = {};
+      
+      // Limpar timeout de reconexão
+      if (reconnectTimeoutId) {
+        clearTimeout(reconnectTimeoutId);
+        reconnectTimeoutId = null;
+      }
+      
       // Só remover canal se não houver mais subscribers
       if (subscriberCount === 0 && sharedChannel) {
         console.log('🔌 [useLeadsSync] Último subscriber, fechando canal compartilhado...');
+        setGlobalConnectionStatus('disconnected');
         supabase.removeChannel(sharedChannel);
         sharedChannel = null;
         reconnectAttempts = 0;
+        isReconnecting = false;
       }
     };
   }, [setupChannel]);
@@ -218,6 +459,7 @@ export const useLeadsSync = ({
   }, [showNotifications]);
 
   return {
-    reloadLeads
+    reloadLeads,
+    connectionStatus // ✅ Retornar status para indicador visual
   };
 };

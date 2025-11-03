@@ -46,9 +46,16 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Configuração do backoff exponencial para retry (em horas)
+    // Tentativa 1: 1h, Tentativa 2: 3h, Tentativa 3: 24h
+    const BACKOFF_TIMES_HOURS = [1, 3, 24];
+
     // Buscar lembretes pendentes ou em retry que devem ser enviados agora
     const agora = new Date().toISOString();
-    const { data: lembretes, error: lembretesError } = await supabase
+    
+    // Buscar lembretes pendentes com data_envio <= agora OU em retry com proxima_tentativa <= agora
+    // Máximo 3 tentativas (0, 1, 2 = 3 tentativas)
+    const { data: lembretesPendentes, error: pendentesError } = await supabase
       .from('lembretes')
       .select(`
         *,
@@ -65,14 +72,43 @@ serve(async (req) => {
           )
         )
       `)
-      .or('status_envio.eq.pendente,status_envio.eq.retry')
-      .or(`data_envio.lte.${agora},proxima_tentativa.lte.${agora}`)
-      .lte('tentativas', 2); // Máximo 3 tentativas (0, 1, 2)
-
-    if (lembretesError) {
+      .eq('status_envio', 'pendente')
+      .lte('data_envio', agora)
+      .lte('tentativas', 2);
+    
+    const { data: lembretesRetry, error: retryError } = await supabase
+      .from('lembretes')
+      .select(`
+        *,
+        compromisso:compromissos (
+          id,
+          data_hora_inicio,
+          tipo_servico,
+          lead_id,
+          company_id,
+          lead:leads (
+            name,
+            phone,
+            telefone
+          )
+        )
+      `)
+      .eq('status_envio', 'retry')
+      .lte('proxima_tentativa', agora)
+      .lte('tentativas', 2);
+    
+    if (pendentesError || retryError) {
+      const lembretesError = pendentesError || retryError;
       console.error('❌ Erro ao buscar lembretes:', lembretesError);
       throw lembretesError;
     }
+    
+    // Combinar resultados e remover duplicatas
+    const lembretesMap = new Map();
+    [...(lembretesPendentes || []), ...(lembretesRetry || [])].forEach(lembrete => {
+      lembretesMap.set(lembrete.id, lembrete);
+    });
+    const lembretes = Array.from(lembretesMap.values());
 
     console.log(`📋 ${lembretes?.length || 0} lembretes pendentes encontrados`);
 
@@ -152,20 +188,62 @@ serve(async (req) => {
         continue;
       }
 
-      const evolutionUrl = whatsappConfig.evolution_api_url || Deno.env.get('EVOLUTION_API_URL');
-      const evolutionApiKey = whatsappConfig.evolution_api_key || Deno.env.get('EVOLUTION_API_KEY');
-      const instanceName = whatsappConfig.instance_name || Deno.env.get('EVOLUTION_INSTANCE');
+      console.log(`📱 Usando configuração WhatsApp da empresa ${companyId}`);
 
-      console.log(`📱 Usando configuração WhatsApp: ${instanceName} para empresa ${companyId}`);
+      // Processar lembretes desta empresa
+      for (const lembrete of lembretesEmpresa as Lembrete[]) {
+        try {
+          console.log(`📤 Processando lembrete ${lembrete.id}`);
 
-        // Processar lembretes desta empresa
-        for (const lembrete of lembretesEmpresa as Lembrete[]) {
-          try {
-            console.log(`📤 Processando lembrete ${lembrete.id}`);
+          // Validar dados do compromisso
+          if (!lembrete.compromisso) {
+            console.error(`❌ Compromisso não encontrado para lembrete ${lembrete.id}`);
+            await supabase
+              .from('lembretes')
+              .update({
+                status_envio: 'erro',
+                data_envio: new Date().toISOString()
+              })
+              .eq('id', lembrete.id);
+            totalErros++;
+            continue;
+          }
 
-            // Validar dados do compromisso
-            if (!lembrete.compromisso) {
-              console.error(`❌ Compromisso não encontrado para lembrete ${lembrete.id}`);
+          // Validar dados do lead
+          if (!lembrete.compromisso.lead) {
+            console.error(`❌ Lead não encontrado para compromisso ${lembrete.compromisso_id}`);
+            await supabase
+              .from('lembretes')
+              .update({
+                status_envio: 'erro',
+                data_envio: new Date().toISOString()
+              })
+              .eq('id', lembrete.id);
+            totalErros++;
+            continue;
+          }
+
+          // Enviar mensagem via edge function enviar-whatsapp
+          if (lembrete.canal === 'whatsapp') {
+            const destinatario = lembrete.destinatario || 'lead';
+            const telefones: string[] = [];
+
+            // Determinar quais telefones enviar baseado no destinatário
+            if (destinatario === 'lead' || destinatario === 'ambos') {
+              const leadTelefone = lembrete.compromisso.lead.phone || lembrete.compromisso.lead.telefone;
+              if (leadTelefone) {
+                telefones.push(leadTelefone);
+              }
+            }
+
+            if (destinatario === 'responsavel' || destinatario === 'ambos') {
+              if (lembrete.telefone_responsavel) {
+                telefones.push(lembrete.telefone_responsavel);
+              }
+            }
+
+            if (telefones.length === 0) {
+              console.error(`❌ Nenhum telefone disponível para lembrete ${lembrete.id}`);
               await supabase
                 .from('lembretes')
                 .update({
@@ -177,152 +255,68 @@ serve(async (req) => {
               continue;
             }
 
-            // Validar dados do lead
-            if (!lembrete.compromisso.lead) {
-              console.error(`❌ Lead não encontrado para compromisso ${lembrete.compromisso_id}`);
-              await supabase
-                .from('lembretes')
-                .update({
-                  status_envio: 'erro',
-                  data_envio: new Date().toISOString()
-                })
-                .eq('id', lembrete.id);
-              totalErros++;
-              continue;
-            }
+            // Enviar para todos os telefones usando edge function enviar-whatsapp
+            let todosEnviados = true;
+            const mensagemLembrete = lembrete.mensagem || `Olá! Lembramos do compromisso de ${lembrete.compromisso.tipo_servico} agendado para ${new Date(lembrete.compromisso.data_hora_inicio).toLocaleString('pt-BR')}.`;
+            
+            for (const telefone of telefones) {
+              const telefoneFormatado = telefone.replace(/\D/g, '');
 
-            // Enviar mensagem via Evolution API
-            if (lembrete.canal === 'whatsapp') {
-              const destinatario = lembrete.destinatario || 'lead';
-              const telefones: string[] = [];
+              console.log(`📱 Enviando WhatsApp para: ${telefoneFormatado} via edge function`);
 
-              // Determinar quais telefones enviar baseado no destinatário
-              if (destinatario === 'lead' || destinatario === 'ambos') {
-                const leadTelefone = lembrete.compromisso.lead.phone || lembrete.compromisso.lead.telefone;
-                if (leadTelefone) {
-                  telefones.push(leadTelefone);
-                }
-              }
+              try {
+                // Chamar edge function enviar-whatsapp
+                const { data: sendResult, error: sendError } = await supabase.functions.invoke(
+                  'enviar-whatsapp',
+                  {
+                    body: {
+                      numero: telefoneFormatado,
+                      mensagem: mensagemLembrete,
+                      company_id: lembrete.compromisso.company_id || companyId,
+                    },
+                  }
+                );
 
-              if (destinatario === 'responsavel' || destinatario === 'ambos') {
-                if (lembrete.telefone_responsavel) {
-                  telefones.push(lembrete.telefone_responsavel);
-                }
-              }
-
-              if (telefones.length === 0) {
-                console.error(`❌ Nenhum telefone disponível para lembrete ${lembrete.id}`);
-                await supabase
-                  .from('lembretes')
-                  .update({
-                    status_envio: 'erro',
-                    data_envio: new Date().toISOString()
-                  })
-                  .eq('id', lembrete.id);
-                totalErros++;
-                continue;
-              }
-
-              // Enviar para todos os telefones
-              let todosEnviados = true;
-              for (const telefone of telefones) {
-                const telefoneFormatado = telefone.replace(/\D/g, '');
-
-                console.log(`📱 Enviando WhatsApp para: ${telefoneFormatado}`);
-
-                const whatsappUrl = `${evolutionUrl}/message/sendText/${instanceName}`;
-                const whatsappPayload = {
-                  number: telefoneFormatado,
-                  text: lembrete.mensagem || `Olá! Lembramos do compromisso de ${lembrete.compromisso.tipo_servico} agendado para ${new Date(lembrete.compromisso.data_hora_inicio).toLocaleString('pt-BR')}.`,
-                };
-
-                console.log(`🌐 Chamando Evolution API: ${whatsappUrl}`);
-
-                const whatsappResponse = await fetch(whatsappUrl, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'apikey': evolutionApiKey,
-                  },
-                  body: JSON.stringify(whatsappPayload),
-                });
-
-                console.log(`📥 Status da resposta: ${whatsappResponse.status}`);
-
-                if (!whatsappResponse.ok) {
-                  const errorText = await whatsappResponse.text();
-                  console.error(`❌ Erro ao enviar WhatsApp:`, errorText);
+                if (sendError || !sendResult?.success) {
+                  console.error(`❌ Erro ao enviar WhatsApp via edge function:`, sendError || sendResult);
                   todosEnviados = false;
                 } else {
-                  const whatsappResult = await whatsappResponse.json();
-                  console.log(`✅ WhatsApp enviado com sucesso:`, whatsappResult);
+                  console.log(`✅ WhatsApp enviado com sucesso via edge function`);
                 }
+              } catch (error) {
+                console.error(`❌ Erro ao chamar edge function enviar-whatsapp:`, error);
+                todosEnviados = false;
               }
+            }
 
-              if (todosEnviados) {
-                // Atualizar status do lembrete para enviado
-                await supabase
-                  .from('lembretes')
-                  .update({
-                    status_envio: 'enviado',
-                    data_envio: new Date().toISOString(),
-                    tentativas: (lembrete.tentativas || 0) + 1
-                  })
-                  .eq('id', lembrete.id);
+            if (todosEnviados) {
+              // Atualizar status do lembrete para enviado (sucesso)
+              // Não incrementar tentativas em caso de sucesso
+              await supabase
+                .from('lembretes')
+                .update({
+                  status_envio: 'enviado',
+                  data_envio: new Date().toISOString()
+                })
+                .eq('id', lembrete.id);
 
-                // Atualizar flag no compromisso
-                await supabase
-                  .from('compromissos')
-                  .update({ lembrete_enviado: true })
-                  .eq('id', lembrete.compromisso_id);
+              // Atualizar flag no compromisso
+              await supabase
+                .from('compromissos')
+                .update({ lembrete_enviado: true })
+                .eq('id', lembrete.compromisso_id);
 
-                totalProcessados++;
-                console.log(`✅ Lembrete ${lembrete.id} processado com sucesso`);
-              } else {
-                // Sistema de retry com backoff exponencial
-                const tentativasAtuais = (lembrete.tentativas || 0) + 1;
-
-                if (tentativasAtuais < 3) {
-                  // Calcular próxima tentativa com backoff: 5min, 15min, 60min
-                  const backoffTimes = [5, 15, 60]; // minutos
-                  const proximaTentativa = new Date();
-                  proximaTentativa.setMinutes(proximaTentativa.getMinutes() + backoffTimes[tentativasAtuais - 1]);
-
-                  await supabase
-                    .from('lembretes')
-                    .update({
-                      status_envio: 'retry',
-                      tentativas: tentativasAtuais,
-                      proxima_tentativa: proximaTentativa.toISOString(),
-                      data_envio: new Date().toISOString()
-                    })
-                    .eq('id', lembrete.id);
-
-                  console.log(`🔄 Lembrete ${lembrete.id} agendado para retry ${tentativasAtuais}/3 em ${proximaTentativa.toISOString()}`);
-                } else {
-                  // Máximo de tentativas atingido
-                  await supabase
-                    .from('lembretes')
-                    .update({
-                      status_envio: 'erro',
-                      tentativas: tentativasAtuais,
-                      data_envio: new Date().toISOString()
-                    })
-                    .eq('id', lembrete.id);
-
-                  totalErros++;
-                  console.log(`❌ Lembrete ${lembrete.id} falhou após ${tentativasAtuais} tentativas`);
-                }
-              }
+              totalProcessados++;
+              console.log(`✅ Lembrete ${lembrete.id} processado com sucesso`);
             } else {
-              console.log(`⚠️ Canal ${lembrete.canal} não suportado ainda`);
-              // Mesmo para canais não suportados, aplicar retry se ainda houver tentativas
+              // Sistema de retry com backoff exponencial
               const tentativasAtuais = (lembrete.tentativas || 0) + 1;
 
               if (tentativasAtuais < 3) {
-                const backoffTimes = [5, 15, 60];
+                // Calcular próxima tentativa com backoff exponencial: 1h, 3h, 24h
                 const proximaTentativa = new Date();
-                proximaTentativa.setMinutes(proximaTentativa.getMinutes() + backoffTimes[tentativasAtuais - 1]);
+                const horasBackoff = BACKOFF_TIMES_HOURS[tentativasAtuais - 1];
+                proximaTentativa.setHours(proximaTentativa.getHours() + horasBackoff);
 
                 await supabase
                   .from('lembretes')
@@ -334,8 +328,9 @@ serve(async (req) => {
                   })
                   .eq('id', lembrete.id);
 
-                console.log(`🔄 Lembrete ${lembrete.id} (canal não suportado) agendado para retry ${tentativasAtuais}/3`);
+                console.log(`🔄 Lembrete ${lembrete.id} agendado para retry ${tentativasAtuais}/3 em ${proximaTentativa.toISOString()} (backoff: ${horasBackoff}h)`);
               } else {
+                // Máximo de tentativas atingido
                 await supabase
                   .from('lembretes')
                   .update({
@@ -344,20 +339,21 @@ serve(async (req) => {
                     data_envio: new Date().toISOString()
                   })
                   .eq('id', lembrete.id);
+
                 totalErros++;
+                console.log(`❌ Lembrete ${lembrete.id} falhou após ${tentativasAtuais} tentativas`);
               }
             }
-
-          } catch (error) {
-            console.error(`❌ Erro ao processar lembrete ${lembrete.id}:`, error);
-
-            // Sistema de retry para erros de processamento
+          } else {
+            console.log(`⚠️ Canal ${lembrete.canal} não suportado ainda`);
+            // Mesmo para canais não suportados, aplicar retry se ainda houver tentativas
             const tentativasAtuais = (lembrete.tentativas || 0) + 1;
 
             if (tentativasAtuais < 3) {
-              const backoffTimes = [5, 15, 60];
+              // Backoff exponencial: 1h, 3h, 24h
               const proximaTentativa = new Date();
-              proximaTentativa.setMinutes(proximaTentativa.getMinutes() + backoffTimes[tentativasAtuais - 1]);
+              const horasBackoff = BACKOFF_TIMES_HOURS[tentativasAtuais - 1];
+              proximaTentativa.setHours(proximaTentativa.getHours() + horasBackoff);
 
               await supabase
                 .from('lembretes')
@@ -369,7 +365,7 @@ serve(async (req) => {
                 })
                 .eq('id', lembrete.id);
 
-              console.log(`🔄 Lembrete ${lembrete.id} (erro de processamento) agendado para retry ${tentativasAtuais}/3`);
+              console.log(`🔄 Lembrete ${lembrete.id} (canal não suportado) agendado para retry ${tentativasAtuais}/3 em ${proximaTentativa.toISOString()} (backoff: ${horasBackoff}h)`);
             } else {
               await supabase
                 .from('lembretes')
@@ -379,10 +375,45 @@ serve(async (req) => {
                   data_envio: new Date().toISOString()
                 })
                 .eq('id', lembrete.id);
-
               totalErros++;
-              console.log(`❌ Lembrete ${lembrete.id} falhou após ${tentativasAtuais} tentativas (erro de processamento)`);
             }
+          }
+
+        } catch (error) {
+          console.error(`❌ Erro ao processar lembrete ${lembrete.id}:`, error);
+
+          // Sistema de retry para erros de processamento
+          const tentativasAtuais = (lembrete.tentativas || 0) + 1;
+
+          if (tentativasAtuais < 3) {
+            // Backoff exponencial: 1h, 3h, 24h
+            const proximaTentativa = new Date();
+            const horasBackoff = BACKOFF_TIMES_HOURS[tentativasAtuais - 1];
+            proximaTentativa.setHours(proximaTentativa.getHours() + horasBackoff);
+
+            await supabase
+              .from('lembretes')
+              .update({
+                status_envio: 'retry',
+                tentativas: tentativasAtuais,
+                proxima_tentativa: proximaTentativa.toISOString(),
+                data_envio: new Date().toISOString()
+              })
+              .eq('id', lembrete.id);
+
+            console.log(`🔄 Lembrete ${lembrete.id} (erro de processamento) agendado para retry ${tentativasAtuais}/3 em ${proximaTentativa.toISOString()} (backoff: ${horasBackoff}h)`);
+          } else {
+            await supabase
+              .from('lembretes')
+              .update({
+                status_envio: 'erro',
+                tentativas: tentativasAtuais,
+                data_envio: new Date().toISOString()
+              })
+              .eq('id', lembrete.id);
+
+            totalErros++;
+            console.log(`❌ Lembrete ${lembrete.id} falhou após ${tentativasAtuais} tentativas (erro de processamento)`);
           }
         }
       }

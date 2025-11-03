@@ -13,6 +13,18 @@ import { LeadComments } from "./LeadComments";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
+/**
+ * ✅ BACKUP ATUALIZADO - 2024-11-01 (TARDE)
+ * IMPORTANTE: 
+ * 1. Deve passar initialNotes={lead.notes ?? null} ao LeadComments
+ * 2. useDraggable DEVE passar etapaId no data (linha 105)
+ * 
+ * Se este arquivo retroceder, verificar:
+ * 1. Interface LeadCardProps inclui notes?: string | null
+ * 2. LeadComments recebe initialNotes={lead.notes ?? null}
+ * 3. useDraggable data inclui etapaId: lead.etapa_id (CRÍTICO para identificar destino)
+ */
+
 interface LeadCardProps {
   lead: {
     id: string;
@@ -25,6 +37,7 @@ interface LeadCardProps {
     tags?: string[];
     funil_id?: string;
     etapa_id?: string;
+    notes?: string | null;
   };
   onDelete: (leadId: string) => void;
   onLeadMoved?: () => void;
@@ -92,7 +105,8 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
     id: lead.id,
     data: {
       type: 'lead',
-      lead: lead
+      lead: lead,
+      etapaId: lead.etapa_id // ✅ CRÍTICO: Passar etapaId para identificar etapa de destino
     }
   });
 
@@ -345,8 +359,10 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
               </Badge>
             )}
 
+            {/* ✅ CRÍTICO: Passa notes do lead ao LeadComments - Se retroceder, verificar se passa initialNotes */}
             <LeadComments
               leadId={lead.id}
+              initialNotes={lead.notes ?? null} // ✅ IMPORTANTE: Passa notes do lead
               onCommentAdded={() => onLeadMoved?.()}
             />
           </div>

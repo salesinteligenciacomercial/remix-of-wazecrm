@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Calendar as CalendarIcon, Plus, Clock, User, Filter, Settings, Bell, CheckCircle2, XCircle, AlertCircle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,27 +91,70 @@ export default function Agenda() {
   const [activeTab, setActiveTab] = useState<string>("agenda");
   const [filtroStatusLembrete, setFiltroStatusLembrete] = useState<string>("all");
   const [filtroCanalLembrete, setFiltroCanalLembrete] = useState<string>("all");
+  
+  // Cache de meses carregados para lazy loading
+  const [loadedMonths, setLoadedMonths] = useState<Set<string>>(new Set());
 
   // Sistema de eventos globais para comunicação entre módulos
   const { emitGlobalEvent } = useGlobalSync({
     callbacks: {
       // Receber eventos de outros módulos
       onLeadUpdated: (data) => {
-        console.log('🌍 [Agenda] Lead atualizado via evento global:', data);
-        // Atualizar compromissos relacionados ao lead
-        setCompromissos(prev => prev.map(comp => {
-          if (comp.lead_id === data.id) {
+        console.log('🌍 [Agenda] Lead atualizado via evento global:', { id: data.id, name: data.name });
+        
+        // Validar se dados do lead são válidos
+        if (!data || !data.id) {
+          console.warn('⚠️ [Agenda] Evento global de lead inválido:', data);
+          return;
+        }
+        
+        // Atualizar lista de leads também
+        setLeads(prev => prev.map(lead => {
+          if (lead.id === data.id) {
+            console.log('✅ [Agenda] Lead atualizado na lista via evento global:', data.id);
             return {
-              ...comp,
-              lead: {
-                ...comp.lead,
-                name: data.name,
-                phone: data.phone
-              }
+              ...lead,
+              name: data.name || lead.name,
+              phone: data.phone || lead.phone,
+              email: data.email || lead.email,
             };
           }
-          return comp;
+          return lead;
         }));
+        
+        // Atualizar compromissos relacionados ao lead - VALIDAÇÃO MELHORADA
+        setCompromissos(prev => {
+          let updated = false;
+          const updatedComps = prev.map(comp => {
+            // Validar se lead_id existe e corresponde ao lead atualizado
+            if (comp.lead_id && comp.lead_id === data.id) {
+              console.log('🔄 [Agenda] Atualizando compromisso via evento global:', comp.id, 'com novo lead:', data.name);
+              
+              // Criar objeto lead completo se não existir
+              const leadData = {
+                name: data.name || comp.lead?.name || '',
+                phone: data.phone || comp.lead?.phone,
+                telefone: data.phone || comp.lead?.telefone,
+              };
+              
+              updated = true;
+              return {
+                ...comp,
+                lead: {
+                  ...comp.lead,
+                  ...leadData,
+                }
+              };
+            }
+            return comp;
+          });
+          
+          if (updated) {
+            console.log('✅ [Agenda] Compromissos atualizados via evento global:', updatedComps.filter(c => c.lead_id === data.id).length);
+          }
+          
+          return updatedComps;
+        });
       },
       onTaskCreated: (data) => {
         console.log('🌍 [Agenda] Nova tarefa criada, verificar se afeta agenda:', data);
@@ -138,46 +181,103 @@ export default function Agenda() {
   // Integrar sincronização de leads em tempo real
   useLeadsSync({
     onInsert: (newLead) => {
-      console.log('📡 [Agenda] Novo lead adicionado via sync:', newLead);
-      setLeads(prev => [newLead, ...prev]);
+      console.log('📡 [Agenda] Novo lead adicionado via sync:', { id: newLead.id, name: newLead.name });
+      setLeads(prev => {
+        // Verificar se lead já existe para evitar duplicatas
+        const existingIndex = prev.findIndex(l => l.id === newLead.id);
+        if (existingIndex >= 0) {
+          console.log('⚠️ [Agenda] Lead já existe, atualizando:', newLead.id);
+          const updated = [...prev];
+          updated[existingIndex] = newLead;
+          return updated;
+        }
+        return [newLead, ...prev];
+      });
     },
     onUpdate: (updatedLead, oldLead) => {
-      console.log('📡 [Agenda] Lead atualizado via sync:', updatedLead);
+      console.log('📡 [Agenda] Lead atualizado via sync:', { 
+        id: updatedLead.id, 
+        name: updatedLead.name, 
+        oldName: oldLead?.name,
+        phone: updatedLead.phone 
+      });
+      
+      // Atualizar lista de leads
       setLeads(prev => prev.map(lead => {
         if (lead.id === updatedLead.id) {
+          console.log('✅ [Agenda] Lead atualizado na lista:', updatedLead.id);
           return updatedLead;
         }
         return lead;
       }));
-      // Atualizar compromissos relacionados
-      setCompromissos(prev => prev.map(comp => {
-        if (comp.lead_id === updatedLead.id) {
-          return {
-            ...comp,
-            lead: {
-              ...comp.lead,
+      
+      // Atualizar compromissos relacionados - VALIDAÇÃO MELHORADA
+      setCompromissos(prev => {
+        let updated = false;
+        const updatedComps = prev.map(comp => {
+          // Validar se lead_id existe e corresponde ao lead atualizado
+          if (comp.lead_id && comp.lead_id === updatedLead.id) {
+            console.log('🔄 [Agenda] Atualizando compromisso:', comp.id, 'com novo lead:', updatedLead.name);
+            
+            // Criar objeto lead completo se não existir
+            const leadData = {
               name: updatedLead.name,
-              phone: updatedLead.phone
-            }
-          };
+              phone: updatedLead.phone || comp.lead?.phone,
+              telefone: updatedLead.phone || comp.lead?.telefone,
+            };
+            
+            updated = true;
+            return {
+              ...comp,
+              lead: {
+                ...comp.lead,
+                ...leadData,
+              }
+            };
+          }
+          return comp;
+        });
+        
+        if (updated) {
+          console.log('✅ [Agenda] Compromissos atualizados:', updatedComps.filter(c => c.lead_id === updatedLead.id).length);
         }
-        return comp;
-      }));
+        
+        return updatedComps;
+      });
     },
     onDelete: (deletedLead) => {
-      console.log('📡 [Agenda] Lead removido via sync:', deletedLead);
-      setLeads(prev => prev.filter(lead => lead.id !== deletedLead.id));
-      // Limpar referências em compromissos
-      setCompromissos(prev => prev.map(comp => {
-        if (comp.lead_id === deletedLead.id) {
-          return {
-            ...comp,
-            lead_id: null,
-            lead: undefined
-          };
+      console.log('📡 [Agenda] Lead removido via sync:', { id: deletedLead.id, name: deletedLead.name });
+      
+      // Remover da lista de leads
+      setLeads(prev => {
+        const filtered = prev.filter(lead => lead.id !== deletedLead.id);
+        console.log(`✅ [Agenda] Lead removido da lista. Total antes: ${prev.length}, depois: ${filtered.length}`);
+        return filtered;
+      });
+      
+      // Limpar referências em compromissos - VALIDAÇÃO MELHORADA
+      setCompromissos(prev => {
+        let updated = false;
+        const updatedComps = prev.map(comp => {
+          // Validar se lead_id existe antes de limpar
+          if (comp.lead_id && comp.lead_id === deletedLead.id) {
+            console.log('🔄 [Agenda] Limpando referência ao lead no compromisso:', comp.id);
+            updated = true;
+            return {
+              ...comp,
+              lead_id: null,
+              lead: undefined
+            };
+          }
+          return comp;
+        });
+        
+        if (updated) {
+          console.log('✅ [Agenda] Referências ao lead removidas dos compromissos');
         }
-        return comp;
-      }));
+        
+        return updatedComps;
+      });
     },
     showNotifications: false
   });
@@ -197,9 +297,11 @@ export default function Agenda() {
   });
 
   useEffect(() => {
-    carregarCompromissos();
+    // Carregar apenas compromissos do mês atual inicialmente (otimização)
+    carregarCompromissosDoMes();
     carregarLeads();
     carregarLembretes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     
     // Subscrever para atualizações em tempo real
     const compromissosChannel = supabase
@@ -212,7 +314,8 @@ export default function Agenda() {
           table: 'compromissos'
         },
         () => {
-          carregarCompromissos();
+          // Ao receber atualização em tempo real, recarregar apenas mês atual
+          carregarCompromissosDoMes();
         }
       )
       .subscribe();
@@ -237,11 +340,24 @@ export default function Agenda() {
       supabase.removeChannel(compromissosChannel);
       supabase.removeChannel(lembretesChannel);
     };
-  }, []);
+  }, [carregarCompromissosDoMes]);
+  
+  // Efeito para carregar compromissos quando mudar de mês
+  useEffect(() => {
+    const currentMonth = format(selectedDate, 'yyyy-MM');
+    const monthKey = format(startOfMonth(selectedDate), 'yyyy-MM');
+    
+    // Verificar se precisa carregar o mês atual
+    if (!loadedMonths.has(monthKey)) {
+      console.log(`📅 [Performance] Mês atual não carregado: ${monthKey}, carregando...`);
+      carregarCompromissosDoMes(selectedDate);
+    }
+  }, [selectedDate, loadedMonths, carregarCompromissosDoMes]);
 
-  const carregarCompromissos = async () => {
+  // Função otimizada para carregar compromissos com range de datas
+  const carregarCompromissos = useCallback(async (startDate?: Date, endDate?: Date) => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('compromissos')
         .select(`
           *,
@@ -249,13 +365,60 @@ export default function Agenda() {
         `)
         .order('data_hora_inicio', { ascending: true });
 
+      // Se range de datas fornecido, filtrar
+      if (startDate && endDate) {
+        query = query
+          .gte('data_hora_inicio', startDate.toISOString())
+          .lte('data_hora_inicio', endDate.toISOString());
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
-      setCompromissos(data || []);
+      
+      if (startDate && endDate) {
+        // Lazy loading: adicionar ao cache existente
+        setCompromissos(prev => {
+          const existingIds = new Set(prev.map(c => c.id));
+          const newCompromissos = (data || []).filter(c => !existingIds.has(c.id));
+          return [...prev, ...newCompromissos];
+        });
+      } else {
+        // Carregamento inicial: substituir todos
+        setCompromissos(data || []);
+      }
     } catch (error) {
       console.error('Erro ao carregar compromissos:', error);
       toast.error("Erro ao carregar compromissos");
     }
-  };
+  }, []);
+
+  // Função para carregar compromissos do mês atual ou específico
+  const carregarCompromissosDoMes = useCallback(async (month?: Date) => {
+    const targetMonth = month || selectedDate;
+    const monthKey = format(targetMonth, 'yyyy-MM');
+    
+    // Verificar se o mês já foi carregado usando função de setter
+    setLoadedMonths(prev => {
+      if (prev.has(monthKey)) {
+        console.log(`📅 [Performance] Mês ${monthKey} já carregado, pulando...`);
+        return prev; // Não atualizar se já existe
+      }
+      
+      console.log(`📅 [Performance] Carregando compromissos do mês ${monthKey}...`);
+      
+      const inicio = startOfMonth(targetMonth);
+      const fim = endOfMonth(targetMonth);
+      
+      // Carregar compromissos de forma assíncrona
+      carregarCompromissos(inicio, fim).then(() => {
+        // Marcar mês como carregado após carregar
+        setLoadedMonths(current => new Set(current).add(monthKey));
+      });
+      
+      return prev; // Retornar estado atual enquanto carrega
+    });
+  }, [selectedDate, carregarCompromissos]);
 
   const carregarLeads = async () => {
     try {
@@ -298,15 +461,39 @@ export default function Agenda() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
+      console.log('🔍 [DEBUG] Criando compromisso para usuário:', user.id);
+
+      // Obter company_id do usuário ANTES de criar compromisso
+      const { data: userRole, error: userRoleError } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (userRoleError) {
+        console.error('❌ [DEBUG] Erro ao buscar user_role:', userRoleError);
+        throw new Error(`Erro ao obter informações da empresa: ${userRoleError.message}`);
+      }
+
+      if (!userRole || !userRole.company_id) {
+        console.error('❌ [DEBUG] userRole ou company_id não encontrado:', { userRole });
+        toast.error("Erro: Usuário não está associado a nenhuma empresa. Por favor, entre em contato com o administrador.");
+        throw new Error("Usuário não está associado a nenhuma empresa. company_id é obrigatório.");
+      }
+
+      console.log('✅ [DEBUG] company_id obtido:', userRole.company_id);
+
       const dataHoraInicio = new Date(`${formData.data}T${formData.hora_inicio}`);
       const dataHoraFim = new Date(`${formData.data}T${formData.hora_fim}`);
 
+      // Criar compromisso COM company_id
       const { data: compromisso, error } = await supabase
         .from('compromissos')
         .insert({
           lead_id: formData.lead_id || null,
           usuario_responsavel_id: user.id,
           owner_id: user.id,
+          company_id: userRole.company_id, // Adicionar company_id ao compromisso
           data_hora_inicio: dataHoraInicio.toISOString(),
           data_hora_fim: dataHoraFim.toISOString(),
           tipo_servico: formData.tipo_servico,
@@ -317,22 +504,28 @@ export default function Agenda() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [DEBUG] Erro ao criar compromisso:', error);
+        throw error;
+      }
+
+      console.log('✅ [DEBUG] Compromisso criado com sucesso:', compromisso?.id);
 
       // Criar lembrete se solicitado
       if (formData.enviar_lembrete && compromisso) {
-        const { data: { user } } = await supabase.auth.getUser();
+        console.log('📝 [DEBUG] Criando lembrete para compromisso:', compromisso.id);
+
+        // Validar que company_id existe (já obtido anteriormente)
+        if (!userRole.company_id) {
+          console.error('❌ [DEBUG] company_id não disponível para criar lembrete');
+          toast.error("Erro: Não foi possível criar o lembrete. Usuário não está associado a uma empresa.");
+          throw new Error("company_id é obrigatório para criar lembretes.");
+        }
+
         const { data: profile } = await supabase
           .from('profiles')
           .select('full_name')
-          .eq('id', user?.id)
-          .single();
-
-        // Obter company_id do usuário
-        const { data: userRole } = await supabase
-          .from('user_roles')
-          .select('company_id')
-          .eq('user_id', user?.id)
+          .eq('id', user.id)
           .single();
 
         // Calcular data de envio do lembrete
@@ -341,7 +534,7 @@ export default function Agenda() {
 
         const leadSelecionado = leads.find(l => l.id === formData.lead_id);
 
-        await supabase.from('lembretes').insert({
+        const lembreteData = {
           compromisso_id: compromisso.id,
           canal: 'whatsapp',
           horas_antecedencia: parseInt(formData.horas_antecedencia),
@@ -350,8 +543,22 @@ export default function Agenda() {
           data_envio: dataEnvio.toISOString(),
           destinatario: formData.destinatario_lembrete,
           telefone_responsavel: profile?.full_name || user?.email,
-          company_id: userRole?.company_id,
-        });
+          company_id: userRole.company_id, // Usar company_id validado
+        };
+
+        console.log('📝 [DEBUG] Dados do lembrete:', { ...lembreteData, mensagem: '[oculta]' });
+
+        const { error: lembreteError } = await supabase
+          .from('lembretes')
+          .insert(lembreteData);
+
+        if (lembreteError) {
+          console.error('❌ [DEBUG] Erro ao criar lembrete:', lembreteError);
+          toast.error("Compromisso criado, mas houve erro ao criar o lembrete. Por favor, tente novamente.");
+          throw lembreteError;
+        }
+
+        console.log('✅ [DEBUG] Lembrete criado com sucesso para compromisso:', compromisso.id);
       }
 
       toast.success("Compromisso criado com sucesso!");
@@ -438,20 +645,27 @@ export default function Agenda() {
     });
   };
 
-  const compromissosDoMes = compromissos.filter((c) => {
-    const dataCompromisso = parseISO(c.data_hora_inicio);
+  // Memoizar compromissos do mês para evitar recálculos desnecessários
+  const compromissosDoMes = useMemo(() => {
     const inicio = startOfMonth(selectedDate);
     const fim = endOfMonth(selectedDate);
-    return dataCompromisso >= inicio && dataCompromisso <= fim;
-  });
+    
+    return compromissos.filter((c) => {
+      const dataCompromisso = parseISO(c.data_hora_inicio);
+      return dataCompromisso >= inicio && dataCompromisso <= fim;
+    });
+  }, [compromissos, selectedDate]);
 
-  const compromissosDoDia = compromissos.filter((c) => {
-    const dataCompromisso = parseISO(c.data_hora_inicio);
-    return isSameDay(dataCompromisso, selectedDate);
-  }).filter(c => {
-    if (filterStatus === "all") return true;
-    return c.status === filterStatus;
-  });
+  // Memoizar compromissos do dia com filtro de status
+  const compromissosDoDia = useMemo(() => {
+    return compromissos.filter((c) => {
+      const dataCompromisso = parseISO(c.data_hora_inicio);
+      return isSameDay(dataCompromisso, selectedDate);
+    }).filter(c => {
+      if (filterStatus === "all") return true;
+      return c.status === filterStatus;
+    });
+  }, [compromissos, selectedDate, filterStatus]);
 
   const getStatusBadge = (status: string) => {
     const badges = {
@@ -484,12 +698,13 @@ export default function Agenda() {
     return true;
   });
 
-  const estatisticas = {
+  // Memoizar estatísticas para evitar recálculos
+  const estatisticas = useMemo(() => ({
     total: compromissosDoMes.length,
     agendados: compromissosDoMes.filter(c => c.status === 'agendado').length,
     concluidos: compromissosDoMes.filter(c => c.status === 'concluido').length,
     cancelados: compromissosDoMes.filter(c => c.status === 'cancelado').length,
-  };
+  }), [compromissosDoMes]);
 
   const estatisticasLembretes = {
     total: lembretes.length,
@@ -788,7 +1003,23 @@ export default function Agenda() {
                 <Calendar
                   mode="single"
                   selected={selectedDate}
-                  onSelect={(date) => date && setSelectedDate(date)}
+                  onSelect={(date) => {
+                    if (date) {
+                      setSelectedDate(date);
+                      // Lazy loading: carregar compromissos do mês quando mudar de data
+                      const newMonth = format(date, 'yyyy-MM');
+                      const currentMonth = format(selectedDate, 'yyyy-MM');
+                      if (newMonth !== currentMonth) {
+                        console.log(`📅 [Performance] Mudança de mês detectada: ${currentMonth} -> ${newMonth}`);
+                        carregarCompromissosDoMes(date);
+                      }
+                    }
+                  }}
+                  onMonthChange={(date) => {
+                    // Lazy loading: carregar compromissos quando usuário navegar para novo mês
+                    console.log(`📅 [Performance] Navegação para mês: ${format(date, 'yyyy-MM')}`);
+                    carregarCompromissosDoMes(date);
+                  }}
                   locale={ptBR}
                   className="rounded-md border"
                 />

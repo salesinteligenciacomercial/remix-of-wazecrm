@@ -151,6 +151,28 @@ serve(async (req) => {
 
       case "criar_coluna": {
         const validatedData = createColumnSchema.parse(data);
+        
+        // ✅ SEGURANÇA: Verificar se o board pertence à mesma company_id
+        const { data: board, error: boardError } = await supabase
+          .from("task_boards")
+          .select("id, company_id")
+          .eq("id", validatedData.board_id)
+          .single();
+
+        if (boardError || !board) {
+          return new Response(
+            JSON.stringify({ error: "Board não encontrado", code: "NOT_FOUND" }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (board.company_id !== companyId) {
+          return new Response(
+            JSON.stringify({ error: "Você não tem permissão para criar coluna neste board", code: "FORBIDDEN" }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         const { data: column, error } = await supabase
           .from("task_columns")
           .insert([{ 
@@ -240,10 +262,54 @@ serve(async (req) => {
 
       case "mover_tarefa": {
         const validatedData = moveTaskSchema.parse(data);
+        
+        // ✅ SEGURANÇA: Verificar se a tarefa pertence à mesma company_id
+        const { data: existingTask, error: fetchError } = await supabase
+          .from("tasks")
+          .select("id, company_id")
+          .eq("id", validatedData.task_id)
+          .single();
+
+        if (fetchError || !existingTask) {
+          return new Response(
+            JSON.stringify({ error: "Tarefa não encontrada", code: "NOT_FOUND" }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (existingTask.company_id !== companyId) {
+          return new Response(
+            JSON.stringify({ error: "Você não tem permissão para mover esta tarefa", code: "FORBIDDEN" }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Verificar se a nova coluna pertence à mesma company_id
+        const { data: column, error: columnError } = await supabase
+          .from("task_columns")
+          .select("id, company_id")
+          .eq("id", validatedData.nova_coluna_id)
+          .single();
+
+        if (columnError || !column) {
+          return new Response(
+            JSON.stringify({ error: "Coluna não encontrada", code: "NOT_FOUND" }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (column.company_id !== companyId) {
+          return new Response(
+            JSON.stringify({ error: "Você não tem permissão para mover para esta coluna", code: "FORBIDDEN" }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         const { error } = await supabase
           .from("tasks")
           .update({ column_id: validatedData.nova_coluna_id })
-          .eq("id", validatedData.task_id);
+          .eq("id", validatedData.task_id)
+          .eq("company_id", companyId);
 
         if (error) {
           console.error("Error moving task:", error);
@@ -261,10 +327,33 @@ serve(async (req) => {
 
       case "deletar_tarefa": {
         const validatedData = deleteTaskSchema.parse(data);
+        
+        // ✅ SEGURANÇA: Verificar se a tarefa pertence à mesma company_id
+        const { data: existingTask, error: fetchError } = await supabase
+          .from("tasks")
+          .select("id, company_id")
+          .eq("id", validatedData.task_id)
+          .single();
+
+        if (fetchError || !existingTask) {
+          return new Response(
+            JSON.stringify({ error: "Tarefa não encontrada", code: "NOT_FOUND" }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (existingTask.company_id !== companyId) {
+          return new Response(
+            JSON.stringify({ error: "Você não tem permissão para deletar esta tarefa", code: "FORBIDDEN" }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         const { error } = await supabase
           .from("tasks")
           .delete()
-          .eq("id", validatedData.task_id);
+          .eq("id", validatedData.task_id)
+          .eq("company_id", companyId);
 
         if (error) {
           console.error("Error deleting task:", error);
@@ -282,29 +371,54 @@ serve(async (req) => {
 
       case "editar_tarefa": {
         const validatedData = editTaskSchema.parse(data);
+        
+        // ✅ SEGURANÇA: Verificar se a tarefa pertence à mesma company_id
+        const { data: existingTask, error: fetchError } = await supabase
+          .from("tasks")
+          .select("id, company_id")
+          .eq("id", validatedData.task_id)
+          .single();
+
+        if (fetchError || !existingTask) {
+          return new Response(
+            JSON.stringify({ error: "Tarefa não encontrada", code: "NOT_FOUND" }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (existingTask.company_id !== companyId) {
+          return new Response(
+            JSON.stringify({ error: "Você não tem permissão para editar esta tarefa", code: "FORBIDDEN" }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Preparar objeto de atualização apenas com campos fornecidos
+        const updateData: any = {};
+        if (validatedData.title !== undefined) updateData.title = validatedData.title;
+        if (validatedData.description !== undefined) updateData.description = validatedData.description;
+        if (validatedData.priority !== undefined) updateData.priority = validatedData.priority;
+        if (validatedData.due_date !== undefined) updateData.due_date = validatedData.due_date;
+        if (validatedData.assignee_id !== undefined) updateData.assignee_id = validatedData.assignee_id;
+        if (validatedData.lead_id !== undefined) updateData.lead_id = validatedData.lead_id;
+        if (validatedData.tags !== undefined) updateData.tags = validatedData.tags;
+        if (validatedData.checklist !== undefined) updateData.checklist = validatedData.checklist;
+        if (validatedData.comments !== undefined) updateData.comments = validatedData.comments;
+        if (validatedData.attachments !== undefined) updateData.attachments = validatedData.attachments;
+        if (validatedData.responsaveis !== undefined) updateData.responsaveis = validatedData.responsaveis;
+
         const { data: task, error } = await supabase
           .from("tasks")
-          .update({
-            title: validatedData.title,
-            description: validatedData.description,
-            priority: validatedData.priority,
-            due_date: validatedData.due_date,
-            assignee_id: validatedData.assignee_id,
-            lead_id: validatedData.lead_id,
-            tags: validatedData.tags,
-            checklist: validatedData.checklist,
-            comments: validatedData.comments,
-            attachments: validatedData.attachments,
-            responsaveis: validatedData.responsaveis,
-          })
+          .update(updateData)
           .eq("id", validatedData.task_id)
+          .eq("company_id", companyId)
           .select()
           .single();
 
         if (error) {
           console.error("Error updating task:", error);
           return new Response(
-            JSON.stringify({ error: "Erro ao atualizar tarefa", code: "DATABASE_ERROR" }),
+            JSON.stringify({ error: "Erro ao atualizar tarefa", code: "DATABASE_ERROR", details: error.message }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -317,10 +431,33 @@ serve(async (req) => {
 
       case "editar_board": {
         const validatedData = editBoardSchema.parse(data);
+        
+        // ✅ SEGURANÇA: Verificar se o board pertence à mesma company_id
+        const { data: existingBoard, error: fetchError } = await supabase
+          .from("task_boards")
+          .select("id, company_id")
+          .eq("id", validatedData.board_id)
+          .single();
+
+        if (fetchError || !existingBoard) {
+          return new Response(
+            JSON.stringify({ error: "Board não encontrado", code: "NOT_FOUND" }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (existingBoard.company_id !== companyId) {
+          return new Response(
+            JSON.stringify({ error: "Você não tem permissão para editar este board", code: "FORBIDDEN" }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         const { data: board, error } = await supabase
           .from("task_boards")
           .update({ nome: validatedData.nome })
           .eq("id", validatedData.board_id)
+          .eq("company_id", companyId)
           .select()
           .single();
 
@@ -341,14 +478,40 @@ serve(async (req) => {
       case "deletar_board": {
         const validatedData = deleteBoardSchema.parse(data);
         
-        // Primeiro deletar todas as colunas do board
-        await supabase.from("task_columns").delete().eq("board_id", validatedData.board_id);
+        // ✅ SEGURANÇA: Verificar se o board pertence à mesma company_id
+        const { data: existingBoard, error: fetchError } = await supabase
+          .from("task_boards")
+          .select("id, company_id")
+          .eq("id", validatedData.board_id)
+          .single();
+
+        if (fetchError || !existingBoard) {
+          return new Response(
+            JSON.stringify({ error: "Board não encontrado", code: "NOT_FOUND" }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (existingBoard.company_id !== companyId) {
+          return new Response(
+            JSON.stringify({ error: "Você não tem permissão para deletar este board", code: "FORBIDDEN" }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Primeiro deletar todas as colunas do board (apenas da mesma company)
+        await supabase
+          .from("task_columns")
+          .delete()
+          .eq("board_id", validatedData.board_id)
+          .eq("company_id", companyId);
         
         // Depois deletar o board
         const { error } = await supabase
           .from("task_boards")
           .delete()
-          .eq("id", validatedData.board_id);
+          .eq("id", validatedData.board_id)
+          .eq("company_id", companyId);
 
         if (error) {
           console.error("Error deleting board:", error);
@@ -366,10 +529,37 @@ serve(async (req) => {
 
       case "editar_coluna": {
         const validatedData = editColumnSchema.parse(data);
+        
+        // ✅ SEGURANÇA: Verificar se a coluna pertence à mesma company_id
+        const { data: existingColumn, error: fetchError } = await supabase
+          .from("task_columns")
+          .select("id, company_id")
+          .eq("id", validatedData.column_id)
+          .single();
+
+        if (fetchError || !existingColumn) {
+          return new Response(
+            JSON.stringify({ error: "Coluna não encontrada", code: "NOT_FOUND" }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (existingColumn.company_id !== companyId) {
+          return new Response(
+            JSON.stringify({ error: "Você não tem permissão para editar esta coluna", code: "FORBIDDEN" }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const updateData: any = {};
+        if (validatedData.nome !== undefined) updateData.nome = validatedData.nome;
+        if (validatedData.cor !== undefined) updateData.cor = validatedData.cor;
+
         const { data: column, error } = await supabase
           .from("task_columns")
-          .update({ nome: validatedData.nome, cor: validatedData.cor })
+          .update(updateData)
           .eq("id", validatedData.column_id)
+          .eq("company_id", companyId)
           .select()
           .single();
 
@@ -389,10 +579,33 @@ serve(async (req) => {
 
       case "deletar_coluna": {
         const validatedData = deleteColumnSchema.parse(data);
+        
+        // ✅ SEGURANÇA: Verificar se a coluna pertence à mesma company_id
+        const { data: existingColumn, error: fetchError } = await supabase
+          .from("task_columns")
+          .select("id, company_id")
+          .eq("id", validatedData.column_id)
+          .single();
+
+        if (fetchError || !existingColumn) {
+          return new Response(
+            JSON.stringify({ error: "Coluna não encontrada", code: "NOT_FOUND" }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (existingColumn.company_id !== companyId) {
+          return new Response(
+            JSON.stringify({ error: "Você não tem permissão para deletar esta coluna", code: "FORBIDDEN" }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         const { error } = await supabase
           .from("task_columns")
           .delete()
-          .eq("id", validatedData.column_id);
+          .eq("id", validatedData.column_id)
+          .eq("company_id", companyId);
 
         if (error) {
           console.error("Error deleting column:", error);
