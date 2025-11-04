@@ -80,13 +80,13 @@ export function SubcontasManager() {
       const effectiveCompany = masterCompany || (companiesSet || [])[0];
 
       setCurrentCompanyId(effectiveCompany?.id || null);
-      setIsMasterAccount(!!effectiveCompany?.is_master_account);
+      setIsMasterAccount(false); // Temporariamente desabilitado
       setCurrentPlan(effectiveCompany?.plan || "free");
 
       // Calcular limite de subcontas baseado no plano
-      const limit = currentCompany?.plan === 'free' ? 0 :
-                   currentCompany?.plan === 'basic' ? 3 :
-                   currentCompany?.plan === 'premium' ? 10 : 0;
+      const limit = effectiveCompany?.plan === 'free' ? 0 :
+                   effectiveCompany?.plan === 'basic' ? 3 :
+                   effectiveCompany?.plan === 'premium' ? 10 : 0;
       setSubcompaniesLimit(limit);
 
       // Carregar empresas baseado na hierarquia

@@ -264,11 +264,11 @@ function MessageItemComponent({
                   size="sm"
                   variant="outline"
                   onClick={() => onTranscribe(message.id, message.mediaUrl!)}
-                  disabled={isTranscribing || transcriptionStatus === "processing"}
+                  disabled={isTranscribing}
                   className="w-full"
                 >
                   <Mic className="h-3 w-3 mr-2" />
-                  {isTranscribing || transcriptionStatus === "processing" ? 'Transcrevendo...' : 'Transcrever Áudio'}
+                  {isTranscribing ? 'Transcrevendo...' : 'Transcrever Áudio'}
                 </Button>
               )}
               
