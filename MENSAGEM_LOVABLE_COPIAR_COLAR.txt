@@ -1,10 +1,34 @@
-Assunto: Menu Conversas - 6 Micro-Prompts Implementados com Sucesso
+Assunto: Atualizações entregues – Funil de Vendas, Leads e Dashboard (com correções de hoje)
 
 Olá equipe Lovable,
 
-Enviamos as atualizações do Menu Conversas com todas as melhorias dos 6 micro-prompts implementadas para o repositório GitHub.
+Segue o pacote de atualizações aplicadas hoje e já validadas localmente (Vite dev e build). Inclui restauração de snapshots 100% funcionais, correções de UX/Realtime e melhorias solicitadas.
 
 RESUMO DAS ALTERAÇÕES:
+
+1) Funil de Vendas (Kanban)
+- Restaurado o backup 100% funcional (com fallbacks de RPC e campos corretos de banco – uso de `atualizado_em`).
+- Correções de realtime e drag (bloqueio inteligente; liberação garantida em todos os retornos).
+- Comentários de lead usam `leads.notes` via `LeadComments` (não depende mais de tabela externa).
+- Adicionado menu de “três pontinhos” no cartão do lead (editar, ver conversas, excluir).
+- “Ver Conversas” agora abre um popup no próprio Funil (sem redirecionar), reutilizando o `ConversaPopup` do menu Leads.
+- Correção de validação de telefone no popup (uso de `safeFormatPhoneNumber`, evitando crash com números fora do padrão).
+
+2) Leads
+- Restaurada a versão com micro‑prompts e componentes atualizados.
+- `ConversaPopup` consolidado: histórico, envio de mensagens (texto/mídia/áudio), mensagens rápidas e agendamento.
+
+3) Dashboard
+- “Pipeline por Etapa” com seletor de funil no cabeçalho (sempre visível). Seleciona automaticamente o primeiro funil quando houver dados e filtra as etapas por `funil_id`.
+- Carregamento de funis sem dependência de coluna específica de ordenação.
+
+4) Analytics
+- Removido o overlay de carregamento bloqueante – a página renderiza imediatamente (loading não bloqueia mais a tela).
+
+5) Realtime/UX
+- Resolvido loop de “Conexão em tempo real restaurada” (agora notifica uma única vez por ciclo de reconexão).
+
+DETALHES POR MICRO‑PROMPT (Menu Conversas – já entregue anteriormente, mantido):
 
 ✅ MICRO-PROMPT 1: MELHORIA DE SINCRONIZAÇÃO REALTIME
 - Reconexão automática implementada com backoff exponencial (máx 5 tentativas)
@@ -65,10 +89,14 @@ RESUMO DAS ALTERAÇÕES:
 - Funções: updateTranscriptionStatus, pollTranscriptionStatus, clearTranscriptionPolling
 
 ✅ ARQUIVOS MODIFICADOS:
-- src/pages/Conversas.tsx (melhorias principais)
-- src/components/conversas/ConversationListItem.tsx (React.memo adicionado)
-- src/components/conversas/MessageItem.tsx (React.memo adicionado)
-- src/components/conversas/MediaUpload.tsx (melhorias de upload)
+- src/pages/Kanban.tsx (restauração + correções realtime/drag)
+- src/components/funil/LeadCard.tsx (menu 3 pontos; popup de conversa; integrações)
+- src/components/funil/EditarLeadDialog.tsx (edição controlada; formatações)
+- src/components/leads/ConversaPopup.tsx (safeFormatPhoneNumber; ajustes de UI)
+- src/pages/Leads.tsx (snapshot funcional com micro‑prompts)
+- src/pages/Dashboard.tsx (seletor de funil; filtro por funil; carregamento resiliente)
+- src/pages/Analytics.tsx (remoção do overlay bloqueante)
+- src/utils/phoneFormatter.ts (funções de formatação/segurança)
 
 ✅ MELHORIAS DE PERFORMANCE:
 - Conversas limitadas a 50 inicialmente (lazy loading)
@@ -92,11 +120,14 @@ ESTATÍSTICAS:
 - 0 erros de sintaxe
 - 0 warnings
 
-⚠️ AÇÕES NECESSÁRIAS:
-Nenhuma ação adicional necessária. Todas as melhorias estão funcionais e prontas para uso.
+⚠️ AÇÕES NECESSÁRIAS NO LOVABLE:
+- Publicar deploy com as alterações acima.
+- Se a tabela `funis` estiver vazia no ambiente, criar um funil para que o seletor do Dashboard fique ativo.
 
-Status: ✅ Todas as atualizações foram implementadas com sucesso!
-O Menu Conversas está agora 100% funcional com todas as melhorias dos 6 micro-prompts.
+Status: ✅ Todas as atualizações foram aplicadas com sucesso.
+- Funil de Vendas: 100% funcional, com popup de conversas e edição pelo menu.
+- Leads: versão estável com micro‑prompts.
+- Dashboard: seletor de funil ativo e filtro por `funil_id`.
 
 Obrigado!
 Equipe de Desenvolvimento

@@ -1,12 +1,229 @@
+/**
+ * ✅ BACKUP ATUALIZADO - 2024-11-01
+ * IMPORTANTE: Este componente usa o campo 'notes' do lead diretamente (NÃO usa tabela lead_comments)
+ * Se este arquivo retroceder, verificar:
+ * 1. Usa leads.notes em vez de lead_comments
+ * 2. Aceita initialNotes como prop
+ * 3. Salva comentários como JSON no campo notes
+ */
+
+import React, { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { MessageCircle, Send, Trash2, User } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+interface Comment {
+  id: string;
+  comment: string;
+  created_at: string;
+  user_id: string;
+  user_name?: string | null;
+  user_email?: string | null;
+}
+
 interface LeadCommentsProps {
   leadId: string;
+  initialNotes?: string | null;
   onCommentAdded?: () => void;
 }
 
-export function LeadComments({ leadId }: LeadCommentsProps) {
+function generateId() {
+  if (typeof crypto !== "undefined" && (crypto as any).randomUUID) {
+    return (crypto as any).randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function parseComments(notes?: string | null): Comment[] {
+  if (!notes) return [];
+  try {
+    const parsed = JSON.parse(notes);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((c) => c && typeof c === "object" && c.comment);
+    }
+  } catch {
+    // Se não for JSON válido, trata como texto simples (comentário histórico)
+    return [{
+      id: generateId(),
+      comment: notes,
+      created_at: new Date().toISOString(),
+      user_id: "",
+      user_name: "Histórico",
+      user_email: null,
+    }];
+  }
+  return [];
+}
+
+export function LeadComments({ leadId, initialNotes, onCommentAdded }: LeadCommentsProps) {
+  const [comments, setComments] = useState<Comment[]>(() => parseComments(initialNotes));
+  const [newComment, setNewComment] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+
+  useEffect(() => {
+    setComments(parseComments(initialNotes));
+  }, [initialNotes]);
+
+  useEffect(() => {
+    if (showComments) {
+      loadComments();
+    }
+  }, [showComments, leadId]);
+
+  // ✅ CRÍTICO: Carrega comentários do campo notes do lead (NÃO da tabela lead_comments)
+  const loadComments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("leads") // ✅ IMPORTANTE: Usa leads.notes diretamente
+        .select("notes")
+        .eq("id", leadId)
+        .maybeSingle();
+      if (error) throw error;
+      setComments(parseComments(data?.notes));
+    } catch (error: any) {
+      console.error("Erro ao carregar comentários:", error);
+      toast.error(`Erro ao carregar comentários: ${error?.message || ''}`);
+    }
+  };
+
+  // ✅ CRÍTICO: Salva comentários no campo notes como JSON (NÃO na tabela lead_comments)
+  const persistComments = async (updated: Comment[]) => {
+    const { error } = await supabase
+      .from("leads") // ✅ IMPORTANTE: Atualiza leads.notes diretamente
+      .update({ notes: JSON.stringify(updated) })
+      .eq("id", leadId);
+    if (error) throw error;
+  };
+
+  const addComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Usuário não autenticado");
+        return;
+      }
+
+      const userName = (session.user.user_metadata as any)?.name || session.user.email || "Usuário";
+      const newEntry: Comment = {
+        id: generateId(),
+        comment: newComment.trim(),
+        created_at: new Date().toISOString(),
+        user_id: session.user.id,
+        user_name: userName,
+        user_email: session.user.email,
+      };
+
+      const updated = [newEntry, ...comments];
+      await persistComments(updated);
+      setComments(updated);
+      setNewComment("");
+      toast.success("Comentário adicionado");
+      onCommentAdded?.();
+    } catch (error: any) {
+      console.error("Erro ao adicionar comentário:", error);
+      toast.error(`Erro ao adicionar comentário: ${error?.message || 'Erro desconhecido'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteComment = async (commentId: string) => {
+    try {
+      const updated = comments.filter((c) => c.id !== commentId);
+      await persistComments(updated);
+      setComments(updated);
+      toast.success("Comentário removido");
+      onCommentAdded?.();
+    } catch (error: any) {
+      console.error("Erro ao remover comentário:", error);
+      toast.error(`Erro ao remover comentário: ${error?.message || 'Erro desconhecido'}`);
+    }
+  };
+
   return (
-    <div className="text-sm text-muted-foreground p-4">
-      Comentários: {leadId}
+    <div className="space-y-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setShowComments(!showComments)}
+        className="flex items-center gap-2 text-xs"
+      >
+        <MessageCircle className="h-3 w-3" />
+        Comentários ({comments.length})
+      </Button>
+
+      {showComments && (
+        <Card className="p-3 space-y-3">
+          <form onSubmit={addComment} className="flex gap-2">
+            <Input
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Digite seu comentário..."
+              className="flex-1 text-sm"
+            />
+            <Button
+              type="submit"
+              size="sm"
+              disabled={loading || !newComment.trim()}
+              className="px-3"
+            >
+              <Send className="h-3 w-3" />
+            </Button>
+          </form>
+
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {comments.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                Nenhum comentário ainda
+              </p>
+            ) : (
+              comments.map((comment) => (
+                <div key={comment.id} className="flex gap-2 p-2 bg-muted/50 rounded-md">
+                  <div className="flex-shrink-0">
+                    <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center">
+                      <User className="h-3 w-3 text-primary" />
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium">
+                        {comment.user_name || comment.user_email || "Usuário"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(comment.created_at), {
+                          addSuffix: true,
+                          locale: ptBR,
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-foreground break-words">
+                      {comment.comment}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 flex-shrink-0 hover:bg-destructive/10"
+                    onClick={() => deleteComment(comment.id)}
+                  >
+                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

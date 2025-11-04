@@ -269,6 +269,7 @@ function Conversas() {
   const realtimeChannelRef = useRef<any>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
+  const hasShownReconnectToastRef = useRef<boolean>(false);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // MELHORIA: Função auxiliar para chamar Edge Functions com retry, timeout e fallback
@@ -1702,7 +1703,10 @@ function Conversas() {
           console.log(`✅ [REALTIME] Reconectado com sucesso na tentativa ${attempt}`);
           setRealtimeConnectionStatus('connected');
           setRealtimeReconnectAttempts(0);
-          toast.success('Conexão em tempo real restaurada');
+          if (!hasShownReconnectToastRef.current) {
+            toast.success('Conexão em tempo real restaurada');
+            hasShownReconnectToastRef.current = true;
+          }
         } catch (error) {
           console.error(`❌ [REALTIME] Erro ao reconectar (tentativa ${attempt}):`, error);
           reconnectRealtime(attempt + 1, maxAttempts);
@@ -2095,11 +2099,13 @@ function Conversas() {
           setRealtimeReconnectAttempts(0);
         } else if (status === 'CHANNEL_ERROR') {
           console.error('❌ [REALTIME] Erro no canal - tentando reconectar...');
-          setRealtimeConnectionStatus('error');
+          setRealtimeConnectionStatus('error');   
+          hasShownReconnectToastRef.current = false;
           reconnectRealtime();
         } else if (status === 'TIMED_OUT' || status === 'CLOSED') {
           console.warn('⚠️ [REALTIME] Canal desconectado - tentando reconectar...');
-          setRealtimeConnectionStatus('disconnected');
+          setRealtimeConnectionStatus('disconnected');                                              
+          hasShownReconnectToastRef.current = false;
           reconnectRealtime();
         }
       });

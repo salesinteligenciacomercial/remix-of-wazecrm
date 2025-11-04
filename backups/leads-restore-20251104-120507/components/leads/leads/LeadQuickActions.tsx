@@ -25,9 +25,6 @@ interface LeadQuickActionsProps {
   leadPhone?: string;
   onEdit?: () => void;
   onDelete?: () => void;
-  onOpenConversa?: () => void;
-  onOpenAgenda?: () => void;
-  onOpenTarefa?: () => void;
 }
 
 export function LeadQuickActions({ 
@@ -35,37 +32,22 @@ export function LeadQuickActions({
   leadName, 
   leadPhone,
   onEdit, 
-  onDelete,
-  onOpenConversa,
-  onOpenAgenda,
-  onOpenTarefa
+  onDelete 
 }: LeadQuickActionsProps) {
   const navigate = useNavigate();
 
   const abrirConversa = () => {
-    if (onOpenConversa) {
-      onOpenConversa();
-    } else {
-      navigate('/conversas', { state: { leadId } });
-    }
+    navigate('/conversas', { state: { leadId } });
   };
 
   const criarAgendamento = () => {
-    if (onOpenAgenda) {
-      onOpenAgenda();
-    } else {
-      navigate('/agenda', { state: { leadId, leadName } });
-      toast.success("Criar novo agendamento");
-    }
+    navigate('/agenda', { state: { leadId, leadName } });
+    toast.success("Criar novo agendamento");
   };
 
   const criarTarefa = () => {
-    if (onOpenTarefa) {
-      onOpenTarefa();
-    } else {
-      navigate('/tarefas', { state: { leadId, leadName } });
-      toast.success("Criar nova tarefa");
-    }
+    navigate('/tarefas', { state: { leadId, leadName } });
+    toast.success("Criar nova tarefa");
   };
 
   const ligarWhatsApp = () => {
@@ -87,7 +69,7 @@ export function LeadQuickActions({
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem onClick={abrirConversa}>
           <MessageSquare className="h-4 w-4 mr-2" />
-          Abrir Conversa
+          Ver Conversas
         </DropdownMenuItem>
         
         <DropdownMenuItem onClick={ligarWhatsApp} disabled={!leadPhone}>
@@ -95,7 +77,7 @@ export function LeadQuickActions({
           Ligar no WhatsApp
         </DropdownMenuItem>
         
-        {(onEdit || onDelete) && <DropdownMenuSeparator />}
+        <DropdownMenuSeparator />
         
         <DropdownMenuItem onClick={criarAgendamento}>
           <Calendar className="h-4 w-4 mr-2" />
@@ -107,14 +89,13 @@ export function LeadQuickActions({
           Criar Tarefa
         </DropdownMenuItem>
         
+        <DropdownMenuSeparator />
+        
         {onEdit && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onEdit}>
-              <Edit className="h-4 w-4 mr-2" />
-              Editar Lead
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem onClick={onEdit}>
+            <Edit className="h-4 w-4 mr-2" />
+            Editar Lead
+          </DropdownMenuItem>
         )}
         
         {onDelete && (

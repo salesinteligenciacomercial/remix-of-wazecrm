@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,31 +9,22 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil } from "lucide-react";
+import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-interface EditarEtapaDialogProps {
-  etapaId: string;
-  nomeAtual: string;
-  corAtual: string;
-  onEtapaUpdated: () => void;
+interface AdicionarEtapaDialogProps {
+  funilId: string;
+  onEtapaAdded: () => void;
 }
 
 const CORES_PADRAO = ["#3b82f6", "#22c55e", "#eab308", "#f97316", "#ef4444", "#8b5cf6", "#ec4899"];
 
-export function EditarEtapaDialog({ etapaId, nomeAtual, corAtual, onEtapaUpdated }: EditarEtapaDialogProps) {
+export function AdicionarEtapaDialog({ funilId, onEtapaAdded }: AdicionarEtapaDialogProps) {
   const [open, setOpen] = useState(false);
-  const [nome, setNome] = useState(nomeAtual);
-  const [cor, setCor] = useState(corAtual);
+  const [nome, setNome] = useState("");
+  const [cor, setCor] = useState(CORES_PADRAO[0]);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setNome(nomeAtual);
-      setCor(corAtual);
-    }
-  }, [open, nomeAtual, corAtual]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,72 +49,61 @@ export function EditarEtapaDialog({ etapaId, nomeAtual, corAtual, onEtapaUpdated
     setLoading(true);
 
     try {
-      // Buscar funil_id da etapa atual
-      const { data: etapaAtual } = await supabase
-        .from("etapas")
-        .select("funil_id")
-        .eq("id", etapaId)
+      // Pegar company_id do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error("Usuário não autenticado");
+
+      const { data: userRole } = await supabase
+        .from("user_roles")
+        .select("company_id")
+        .eq("user_id", userData.user.id)
         .single();
 
-      if (!etapaAtual) throw new Error("Etapa não encontrada");
+      if (!userRole) throw new Error("Empresa não encontrada");
 
-      // Verificar duplicata apenas se mudou o nome
-      if (nomeFormatado.toLowerCase() !== nomeAtual.toLowerCase()) {
-        const { data: etapaExistente } = await supabase
-          .from("etapas")
-          .select("id")
-          .eq("funil_id", etapaAtual.funil_id)
-          .ilike("nome", nomeFormatado)
-          .neq("id", etapaId)
-          .maybeSingle();
+      // Verificar se já existe etapa com mesmo nome neste funil
+      const { data: etapaExistente } = await supabase
+        .from("etapas")
+        .select("id")
+        .eq("funil_id", funilId)
+        .ilike("nome", nomeFormatado)
+        .maybeSingle();
 
-        if (etapaExistente) {
-          toast.error("Já existe uma etapa com este nome neste funil");
-          setLoading(false);
-          return;
-        }
+      if (etapaExistente) {
+        toast.error("Já existe uma etapa com este nome neste funil");
+        setLoading(false);
+        return;
       }
 
-      // ✅ BACKUP ATUALIZADO - 2024-11-01: Tenta RPC primeiro, fallback para UPDATE direto
-      let error = null;
-      try {
-        // ✅ Tentar usar RPC se existir
-        const { error: rpcError } = await supabase.rpc("update_etapa", {
-          p_etapa_id: etapaId,
-          p_nome: nomeFormatado,
-          p_cor: cor,
-          p_posicao: null,
-        });
-        if (rpcError) {
-          console.warn("RPC update_etapa não disponível, usando UPDATE direto:", rpcError);
-          error = null; // Reset para tentar UPDATE direto
-        }
-      } catch (e) {
-        console.warn("RPC update_etapa não disponível, usando UPDATE direto");
-      }
+      // Buscar maior posição atual
+      const { data: etapas } = await supabase
+        .from("etapas")
+        .select("posicao")
+        .eq("funil_id", funilId)
+        .order("posicao", { ascending: false })
+        .limit(1);
 
-      // ✅ CRÍTICO: Fallback para UPDATE direto - NÃO REMOVER
-      // ✅ IMPORTANTE: Usa campo atualizado_em (NÃO updated_at)
-      if (!error) {
-        const { error: directUpdateError } = await supabase
-          .from("etapas")
-          .update({
-            nome: nomeFormatado,
-            cor: cor,
-            atualizado_em: new Date().toISOString() // ✅ CRÍTICO: atualizado_em não updated_at
-          })
-          .eq("id", etapaId);
-        error = directUpdateError;
-      }
+      const novaPosicao = etapas && etapas.length > 0 ? etapas[0].posicao + 1 : 0;
+
+      // Criar nova etapa
+      const { error } = await supabase.from("etapas").insert({
+        nome: nomeFormatado,
+        cor,
+        posicao: novaPosicao,
+        funil_id: funilId,
+        company_id: userRole.company_id,
+      });
 
       if (error) throw error;
 
-      toast.success(`Etapa "${nomeFormatado}" atualizada com sucesso!`);
+      toast.success(`Etapa "${nomeFormatado}" adicionada com sucesso!`);
+      setNome("");
+      setCor(CORES_PADRAO[0]);
       setOpen(false);
-      onEtapaUpdated();
+      onEtapaAdded();
     } catch (error: any) {
-      console.error("Erro ao atualizar etapa:", error);
-      toast.error(error.message || "Erro ao atualizar etapa");
+      console.error("Erro ao adicionar etapa:", error);
+      toast.error(error.message || "Erro ao adicionar etapa");
     } finally {
       setLoading(false);
     }
@@ -132,13 +112,14 @@ export function EditarEtapaDialog({ etapaId, nomeAtual, corAtual, onEtapaUpdated
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-7 w-7">
-          <Pencil className="h-3.5 w-3.5" />
+        <Button variant="outline" size="sm">
+          <Plus className="h-4 w-4 mr-2" />
+          Nova Etapa
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Editar Etapa</DialogTitle>
+          <DialogTitle>Adicionar Nova Etapa</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -147,7 +128,7 @@ export function EditarEtapaDialog({ etapaId, nomeAtual, corAtual, onEtapaUpdated
               id="nome"
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              placeholder="Ex: Qualificação, Negociação"
+              placeholder="Ex: Qualificação, Negociação, Fechamento"
               disabled={loading}
               maxLength={50}
               required
@@ -198,7 +179,7 @@ export function EditarEtapaDialog({ etapaId, nomeAtual, corAtual, onEtapaUpdated
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Salvando..." : "Salvar Alterações"}
+              {loading ? "Adicionando..." : "Adicionar Etapa"}
             </Button>
           </div>
         </form>

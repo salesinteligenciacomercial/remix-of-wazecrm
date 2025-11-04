@@ -74,57 +74,10 @@ export default function Leads() {
   const [showTarefaDialog, setShowTarefaDialog] = useState(false);
   const [leadAvatars, setLeadAvatars] = useState<Record<string, string>>({});
   const PAGE_SIZE = 50; // Carregar 50 leads por vez
-  const SEARCH_DEBOUNCE_MS = 500; // Debounce de 500ms para busca
-  // Cache de company_id para evitar múltiplas consultas
-  const companyIdCache = useRef<string | null>(null);
+  const MAX_TOTAL_LEADS = 1000; // Limite máximo para evitar problemas de performance
   const { toast } = useToast();
   const navigate = useNavigate();
   const observerRef = useRef<HTMLDivElement>(null);
-  const isInitialLoadRef = useRef(false); // Flag para evitar múltiplas cargas iniciais
-  const isLoadingRef = useRef(false); // Ref para evitar múltiplas chamadas simultâneas
-  const hasErrorRef = useRef(false); // Flag para desabilitar Observer quando há erro
-  const lastSearchParamsRef = useRef({ searchTerm: "", selectedStatus: "all", selectedTag: null }); // Cache dos últimos parâmetros de busca
-  // Refs para valores atuais (evitar recriações de função)
-  const currentPageRef = useRef(page);
-  const currentSearchTermRef = useRef(searchTerm);
-  const currentSelectedStatusRef = useRef(selectedStatus);
-  const currentSelectedTagRef = useRef(selectedTag);
-
-  // Função auxiliar para obter company_id do usuário (com cache)
-  const getCompanyId = async () => {
-    // Retornar cache se disponível
-    if (companyIdCache.current !== null) {
-      return companyIdCache.current;
-    }
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        companyIdCache.current = null;
-        return null;
-      }
-
-      const { data: userRole, error: roleError } = await supabase
-        .from("user_roles")
-        .select("company_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (roleError) {
-        console.error("Erro ao buscar company_id:", roleError);
-        companyIdCache.current = null;
-        return null;
-      }
-
-      const companyId = userRole?.company_id || null;
-      companyIdCache.current = companyId;
-      return companyId;
-    } catch (error) {
-      console.error("Erro ao obter company_id:", error);
-      companyIdCache.current = null;
-      return null;
-    }
-  };
 
   const abrirConversa = (lead: Lead) => {
     setLeadParaConversa(lead);
@@ -185,462 +138,104 @@ export default function Leads() {
     showNotifications: false
   });
 
-  // Sistema de workflows automatizados - obter companyId antes de usar
-  const [workflowCompanyId, setWorkflowCompanyId] = useState<string | undefined>(undefined);
-  
-  // Obter companyId para workflows
-  useEffect(() => {
-    const fetchCompanyId = async () => {
-      const companyId = await getCompanyId();
-      if (companyId) {
-        setWorkflowCompanyId(companyId);
-      }
-    };
-    fetchCompanyId();
-  }, []);
-
-  // Sistema de workflows automatizados - só inicializar quando tiver companyId
+  // Sistema de workflows automatizados
   useWorkflowAutomation({
-    companyId: workflowCompanyId,
     showNotifications: true
   });
 
   // Integrar sincronização de leads em tempo real
-  // IMPORTANTE: Usar useRef para callbacks estáveis e evitar loops
-  const leadsSyncCallbacksRef = useRef({
-    onInsert: (newLead: Lead) => {
-      console.log('📡 [Leads] Novo lead adicionado via sync:', newLead);
-      // Validar company_id antes de adicionar
-      const currentCompanyId = companyIdCache.current;
-      if (currentCompanyId && newLead.company_id !== currentCompanyId) {
-        console.log('🚫 [Leads] Lead ignorado - empresa diferente:', {
-          leadCompanyId: newLead.company_id,
-          userCompanyId: currentCompanyId,
-          leadId: newLead.id
-        });
-        return; // Ignorar leads de outras empresas
-      }
-      // Usar setTimeout para desacoplar da render atual e evitar loops
-      setTimeout(() => {
-        setLeads(prev => {
-          // Verificar se já existe para evitar duplicatas
-          if (prev.some(l => l.id === newLead.id)) {
-            return prev;
-          }
-          const updated = [newLead, ...prev];
-          // Atualizar filteredLeads apenas se não há filtros ativos
-          const hasNoFilters = !currentSearchTermRef.current && 
-                               currentSelectedStatusRef.current === "all" && 
-                               !currentSelectedTagRef.current;
-          if (hasNoFilters) {
-            setFilteredLeads(updated);
-          }
-          return updated;
-        });
-      }, 0);
-    },
-    onUpdate: (updatedLead: Lead) => {
-      console.log('📡 [Leads] Lead atualizado via sync:', updatedLead);
-      // Validar company_id antes de atualizar
-      const currentCompanyId = companyIdCache.current;
-      if (currentCompanyId && updatedLead.company_id !== currentCompanyId) {
-        console.log('🚫 [Leads] Lead ignorado - empresa diferente:', {
-          leadCompanyId: updatedLead.company_id,
-          userCompanyId: currentCompanyId,
-          leadId: updatedLead.id
-        });
-        return; // Ignorar leads de outras empresas
-      }
-      setTimeout(() => {
-        setLeads(prev => {
-          const exists = prev.some(l => l.id === updatedLead.id);
-          if (!exists) {
-            // Se não existe, pode ser que seja de outra empresa ou ainda não carregado
-            // Não adicionar automaticamente aqui, deixar carregar via query
-            return prev;
-          }
-          const updated = prev.map(lead => 
-        lead.id === updatedLead.id ? updatedLead : lead
-          );
-          // Atualizar filteredLeads apenas se não há filtros ativos
-          const hasNoFilters = !currentSearchTermRef.current && 
-                               currentSelectedStatusRef.current === "all" && 
-                               !currentSelectedTagRef.current;
-          if (hasNoFilters) {
-            setFilteredLeads(updated);
-          }
-          return updated;
-        });
-      }, 0);
-    },
-    onDelete: (deletedLead: Lead) => {
-      console.log('📡 [Leads] Lead removido via sync:', deletedLead);
-      setTimeout(() => {
-        setLeads(prev => {
-          const updated = prev.filter(lead => lead.id !== deletedLead.id);
-          // Atualizar filteredLeads apenas se não há filtros ativos
-          const hasNoFilters = !currentSearchTermRef.current && 
-                               currentSelectedStatusRef.current === "all" && 
-                               !currentSelectedTagRef.current;
-          if (hasNoFilters) {
-            setFilteredLeads(updated);
-          }
-          return updated;
-        });
-      }, 0);
-    }
-  });
-
   useLeadsSync({
-    onInsert: leadsSyncCallbacksRef.current.onInsert,
-    onUpdate: leadsSyncCallbacksRef.current.onUpdate,
-    onDelete: leadsSyncCallbacksRef.current.onDelete,
-    showNotifications: true,
-    companyId: workflowCompanyId || companyIdCache.current || undefined
+    onInsert: (newLead) => {
+      console.log('📡 [Leads] Novo lead adicionado via sync:', newLead);
+      setLeads(prev => [newLead, ...prev]);
+    },
+    onUpdate: (updatedLead) => {
+      console.log('📡 [Leads] Lead atualizado via sync:', updatedLead);
+      setLeads(prev => prev.map(lead => 
+        lead.id === updatedLead.id ? updatedLead : lead
+      ));
+    },
+    onDelete: (deletedLead) => {
+      console.log('📡 [Leads] Lead removido via sync:', deletedLead);
+      setLeads(prev => prev.filter(lead => lead.id !== deletedLead.id));
+    },
+    showNotifications: true
   });
 
-  // Atualizar refs quando valores mudarem
-  // IMPORTANTE: Este useEffect NÃO deve causar re-renders ou loops
   useEffect(() => {
-    // Atualizar refs sem causar re-renders
-    if (currentPageRef.current !== page) {
-      currentPageRef.current = page;
-    }
-    if (currentSearchTermRef.current !== searchTerm) {
-      currentSearchTermRef.current = searchTerm;
-    }
-    if (currentSelectedStatusRef.current !== selectedStatus) {
-      currentSelectedStatusRef.current = selectedStatus;
-    }
-    if (currentSelectedTagRef.current !== selectedTag) {
-      currentSelectedTagRef.current = selectedTag;
-    }
-    // Este useEffect NÃO deve causar nenhum loop porque apenas atualiza refs
-  }, [page, searchTerm, selectedStatus, selectedTag]);
+    carregarLeads();
+  }, []);
 
-  // Sincronizar filteredLeads com leads quando não há filtros ativos
-  // IMPORTANTE: Só sincronizar quando não há busca/filtros para evitar loops
   useEffect(() => {
-    // Só sincronizar se não há busca ou filtros ativos (os leads já vêm filtrados do servidor)
-    const hasNoFilters = !searchTerm && selectedStatus === "all" && !selectedTag;
-    
-    if (hasNoFilters) {
-      // Sincronizar se filteredLeads está vazio mas leads tem dados
-      // ou se os arrays são diferentes
-      const needsSync = filteredLeads.length === 0 && leads.length > 0 ||
-        filteredLeads.length !== leads.length ||
-        filteredLeads.some((lead, idx) => lead.id !== leads[idx]?.id);
-      
-      if (needsSync) {
-        console.log('🔄 [Leads] Sincronizando filteredLeads com leads:', leads.length);
-        setFilteredLeads([...leads]); // Criar nova referência para garantir atualização
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leads.length, searchTerm, selectedStatus, selectedTag]); // Quando leads ou filtros mudam
+    filterLeads();
+  }, [searchTerm, selectedStatus, selectedTag, leads]);
 
-  const carregarLeads = useCallback(async (reset = false) => {
-    // Prevenir múltiplas chamadas simultâneas usando ref
-    if (isLoadingRef.current) {
-      console.log('⏸️ [Leads] Carregamento já em andamento, ignorando chamada');
-      return;
-    }
+  const carregarLeads = async (reset = false) => {
+    if (loading) return;
 
-    isLoadingRef.current = true;
     setLoading(true);
     try {
-      // Validar company_id antes de carregar leads
-      const companyId = await getCompanyId();
-      console.log('🔍 [Leads] Carregando leads para company_id:', companyId);
-      
-      if (!companyId) {
-        console.error('❌ [Leads] company_id não encontrado!');
-        toast({
-          variant: "destructive",
-          title: "Acesso restrito",
-          description: "Você precisa estar vinculado a uma empresa para gerenciar leads.",
-        });
-        isLoadingRef.current = false;
-        setLoading(false);
-        setLeads([]);
-        setFilteredLeads([]);
-        return;
-      }
-      
-      // Atualizar cache se necessário
-      companyIdCache.current = companyId;
-
-      // Obter valores atuais dos refs (evita valores stale)
-      const currentPage = reset ? 0 : currentPageRef.current;
+      const currentPage = reset ? 0 : page;
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // Selecionar apenas campos necessários para listagem inicial (performance)
-      // REMOVIDO: avatar_url - não existe na tabela (causa erro 400)
-      const camposNecessarios = "id,name,email,phone,telefone,company,source,status,stage,value,created_at,tags,cpf,notes,funil_id,etapa_id";
-      
-      // Construir query com filtros server-side para melhor performance
-      let query = supabase
+      // Verificar se já atingiu o limite máximo
+      if (!reset && leads.length >= MAX_TOTAL_LEADS) {
+        setHasMore(false);
+        return;
+      }
+
+      const { data, error } = await supabase
         .from("leads")
-        .select(camposNecessarios)
-        .eq("company_id", companyId);
-
-      // Filtro por status server-side (usar ref)
-      const statusFilter = currentSelectedStatusRef.current;
-      if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter);
-      }
-
-      // Filtro por tag server-side (usar ref)
-      const tagFilter = currentSelectedTagRef.current;
-      if (tagFilter) {
-        query = query.contains("tags", [tagFilter]);
-      }
-
-      // Busca server-side quando houver searchTerm (usar ref)
-      const searchTermValue = currentSearchTermRef.current;
-      if (searchTermValue && searchTermValue.trim()) {
-        const searchTrimmed = searchTermValue.trim();
-        
-        // Busca por valor com operadores (> < = >= <=) - tem prioridade
-        // Regex melhorado para suportar: >, <, =, >=, <= com valores decimais
-        // Suporta: >1000, <500, =3000, >=1000.50, <=500.25
-        const valueMatch = searchTrimmed.match(/^([><=]{1,2})(\d+(?:\.\d+)?)$/);
-        if (valueMatch) {
-          const operator = valueMatch[1]; // Pode ser >, <, =, >=, <=
-          const valueStr = valueMatch[2];
-          const value = parseFloat(valueStr);
-          
-          // Validar se o valor é um número válido
-          if (isNaN(value) || !isFinite(value)) {
-            console.warn('⚠️ [Leads] Valor inválido na busca:', valueStr);
-            // Fallback para busca textual
-            const searchLower = searchTrimmed.toLowerCase();
-            query = query.or(`name.ilike.%${searchLower}%,email.ilike.%${searchLower}%,phone.ilike.%${searchTrimmed}%,telefone.ilike.%${searchTrimmed}%,company.ilike.%${searchLower}%,source.ilike.%${searchLower}%,cpf.ilike.%${searchTrimmed}%,notes.ilike.%${searchLower}%`);
-          } else {
-            // Aplicar filtro por valor usando operadores do Supabase
-            // O Supabase valida automaticamente se o valor é numérico antes de comparar
-            switch (operator) {
-              case '>':
-                query = query.gt("value", value);
-                console.log(`🔍 [Leads] Busca por valor: > ${value}`);
-                break;
-              case '<':
-                query = query.lt("value", value);
-                console.log(`🔍 [Leads] Busca por valor: < ${value}`);
-                break;
-              case '=':
-              case '==': // Suporta também == para compatibilidade
-                query = query.eq("value", value);
-                console.log(`🔍 [Leads] Busca por valor: = ${value}`);
-                break;
-              case '>=':
-                query = query.gte("value", value);
-                console.log(`🔍 [Leads] Busca por valor: >= ${value}`);
-                break;
-              case '<=':
-                query = query.lte("value", value);
-                console.log(`🔍 [Leads] Busca por valor: <= ${value}`);
-                break;
-              default:
-                console.warn('⚠️ [Leads] Operador não suportado:', operator);
-                // Fallback para busca textual
-                const searchLower = searchTrimmed.toLowerCase();
-                query = query.or(`name.ilike.%${searchLower}%,email.ilike.%${searchLower}%,phone.ilike.%${searchTrimmed}%,telefone.ilike.%${searchTrimmed}%,company.ilike.%${searchLower}%,source.ilike.%${searchLower}%,cpf.ilike.%${searchTrimmed}%,notes.ilike.%${searchLower}%`);
-            }
-          }
-        } else {
-          // Busca textual por múltiplos campos usando ilike
-          const searchLower = searchTrimmed.toLowerCase();
-          query = query.or(`name.ilike.%${searchLower}%,email.ilike.%${searchLower}%,phone.ilike.%${searchTrimmed}%,telefone.ilike.%${searchTrimmed}%,company.ilike.%${searchLower}%,source.ilike.%${searchLower}%,cpf.ilike.%${searchTrimmed}%,notes.ilike.%${searchLower}%`);
-        }
-      }
-
-      const { data, error } = await query
+        .select("*")
         .order("created_at", { ascending: false })
         .range(from, to);
 
       if (error) {
-        console.error('❌ [Leads] Erro ao carregar leads:', {
-          error,
-          companyId,
-          from,
-          to,
-          reset,
-          message: error.message
-        });
-        
-        // Marcar erro para desabilitar Observer
-        hasErrorRef.current = true;
-        
         toast({
           variant: "destructive",
           title: "Erro ao carregar leads",
-          description: error.message || "Erro desconhecido ao carregar leads",
+          description: error.message,
         });
-        
-        // Parar Observer se há erro
-        setHasMore(false);
-        isLoadingRef.current = false;
-        setLoading(false);
         return;
       }
-      
-      // Limpar flag de erro se sucesso
-      hasErrorRef.current = false;
-
-      const newLeads = data || [];
-      console.log('✅ [Leads] Leads carregados:', {
-        quantidade: newLeads.length,
-        companyId,
-        reset,
-        filtros: {
-          status: currentSelectedStatusRef.current,
-          tag: currentSelectedTagRef.current,
-          search: currentSearchTermRef.current
-        },
-        leadsIds: newLeads.map(l => l.id).slice(0, 5) // Primeiros 5 IDs para debug
-      });
 
       if (reset) {
-        // Reset: substituir todos os leads
-        setLeads(newLeads);
-        setFilteredLeads(newLeads);
-        console.log('🔄 [Leads] Reset aplicado, filteredLeads atualizado:', newLeads.length);
-        // Não atualizar page se já está em 0 (evitar re-render desnecessário)
-        if (currentPageRef.current !== 0) {
+        setLeads(data || []);
         setPage(0);
-          currentPageRef.current = 0;
-        }
-        setHasMore(newLeads.length === PAGE_SIZE);
+        setHasMore((data || []).length === PAGE_SIZE);
       } else {
-        // Paginação: adicionar novos leads
-        setLeads(prev => {
-          const existingIds = new Set(prev.map(l => l.id));
-          const uniqueNewLeads = newLeads.filter(l => !existingIds.has(l.id));
-          
-          // Se não há novos leads, retornar o estado anterior
-          if (uniqueNewLeads.length === 0) {
-            return prev;
-          }
-          
-          const updatedLeads = [...prev, ...uniqueNewLeads];
-          // Atualizar filteredLeads dentro do setState para sincronizar
-          // IMPORTANTE: Só atualizar filteredLeads se não há filtros ativos
-          // (se houver filtros, filteredLeads será atualizado no reset)
-          const hasNoFilters = !currentSearchTermRef.current && 
-                               currentSelectedStatusRef.current === "all" && 
-                               !currentSelectedTagRef.current;
-          if (hasNoFilters) {
-            setFilteredLeads(updatedLeads);
-          }
-          return updatedLeads;
-        });
-        
-        // Atualizar página e hasMore separadamente
-        // Só atualizar page se realmente mudou (evitar re-render)
-        setPage(prev => {
-          const newPage = prev + 1;
-          currentPageRef.current = newPage;
-          return newPage;
-        });
+        const newLeads = data || [];
+        const combinedLeads = [...leads, ...newLeads];
 
-        // Parar de carregar se não há mais dados
-        setHasMore(newLeads.length === PAGE_SIZE);
+        // Limitar ao máximo total para performance
+        const limitedLeads = combinedLeads.slice(0, MAX_TOTAL_LEADS);
+
+        setLeads(limitedLeads);
+        setPage(prev => prev + 1);
+
+        // Parar de carregar se atingiu o limite ou não há mais dados
+        setHasMore(newLeads.length === PAGE_SIZE && limitedLeads.length < MAX_TOTAL_LEADS);
       }
-      
-      // Limpar flag de erro em caso de sucesso
-      hasErrorRef.current = false;
-    } catch (error) {
-      // Erro capturado, já foi tratado acima
-      hasErrorRef.current = true;
-      setHasMore(false);
     } finally {
-      isLoadingRef.current = false;
       setLoading(false);
     }
-  }, []); // Sem dependências - usar valores atuais via closure
+  };
 
   const resetAndLoadLeads = useCallback(async () => {
-    if (isLoadingRef.current) {
-      console.log('⏸️ [Leads] Carregamento já em andamento, ignorando reset');
-      return; // Evitar múltiplas chamadas simultâneas
-    }
     setPage(0);
     setHasMore(true);
     await carregarLeads(true);
-  }, []); // SEM dependências - usar closure
-
-  // Carregar leads apenas uma vez no mount inicial - usar ref para evitar loops
-  useEffect(() => {
-    // Múltiplas verificações para garantir que só executa UMA vez
-    if (isInitialLoadRef.current) return;
-    if (isLoadingRef.current) return;
-    
-    // Marcar imediatamente para evitar múltiplas execuções
-    isInitialLoadRef.current = true;
-    
-    // Executar em timeout separado para garantir isolamento
-    const timeoutId = setTimeout(async () => {
-      if (isLoadingRef.current) return; // Verificar novamente
-      
-      isLoadingRef.current = true;
-      setLoading(true);
-      setPage(0);
-      setHasMore(true);
-      
-      try {
-        await carregarLeads(true);
-      } catch (error) {
-        console.error('❌ [Leads] Erro no carregamento inicial:', error);
-      } finally {
-        isLoadingRef.current = false;
-        setLoading(false);
-      }
-    }, 100); // Pequeno delay para garantir que tudo está inicializado
-
-    return () => clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Executar apenas uma vez no mount - SEM dependências
+  }, []);
 
   // Intersection Observer para carregamento infinito
   useEffect(() => {
-    // Múltiplas verificações para garantir que Observer só funciona quando apropriado
-    if (!isInitialLoadRef.current) return; // Não configurar até carregamento inicial
-    if (hasErrorRef.current) return; // Não configurar se há erro
-    if (isLoadingRef.current) return; // Não configurar se já está carregando
-    
-    // Não configurar Observer se não há mais dados ou se há erro
-    if (!hasMore || hasErrorRef.current) {
-      return;
-    }
-
     const observer = new IntersectionObserver(
       (entries) => {
         const target = entries[0];
-        // Verificações múltiplas ANTES de chamar carregarLeads
-        if (!target.isIntersecting) return;
-        if (!hasMore) return;
-        if (isLoadingRef.current) return;
-        if (loading) return;
-        if (hasErrorRef.current) return; // NÃO chamar se há erro
-        if (!isInitialLoadRef.current) return;
-        
-        console.log('📜 [Leads] Observer detectou intersecção, carregando mais leads');
-        
-        // Marcar como carregando ANTES de chamar
-        isLoadingRef.current = true;
-        setLoading(true);
-        
-        // Chamar carregarLeads
-        carregarLeads().catch(error => {
-          console.error('❌ [Leads] Erro no Observer ao carregar mais leads:', error);
-          hasErrorRef.current = true;
-          setHasMore(false);
-        }).finally(() => {
-          isLoadingRef.current = false;
-          setLoading(false);
-        });
+        if (target.isIntersecting && hasMore && !loading) {
+          carregarLeads();
+        }
       },
       {
         threshold: 0.1,
@@ -657,83 +252,70 @@ export default function Leads() {
         observer.unobserve(observerRef.current);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasMore, loading]); // NÃO incluir carregarLeads nas dependências
+  }, [hasMore, loading]);
 
-  // Reset quando filtros mudam com debounce de 500ms
+  // Reset quando filtros mudam
   useEffect(() => {
-    // Múltiplas verificações de segurança
-    if (!isInitialLoadRef.current) return; // Não fazer nada até carregamento inicial
-    if (isLoadingRef.current) return; // Não fazer nada se já está carregando
-
-    // Verificar se os parâmetros realmente mudaram para evitar chamadas desnecessárias
-    const currentParams = { searchTerm, selectedStatus, selectedTag };
-    const paramsChanged = 
-      currentParams.searchTerm !== lastSearchParamsRef.current.searchTerm ||
-      currentParams.selectedStatus !== lastSearchParamsRef.current.selectedStatus ||
-      currentParams.selectedTag !== lastSearchParamsRef.current.selectedTag;
-
-    if (!paramsChanged) {
-      return; // Parâmetros não mudaram, não fazer nada
-    }
-
-    // Atualizar cache dos parâmetros ANTES de resetar (para evitar loops)
-    lastSearchParamsRef.current = currentParams;
-
-    // Timeout com debounce
     const timeoutId = setTimeout(() => {
-      // Verificações múltiplas antes de executar
-      if (!isInitialLoadRef.current) return;
-      if (isLoadingRef.current) return;
-      
-      // Verificar se os parâmetros ainda são os mesmos (evitar race conditions)
-      const stillSame = 
-        currentParams.searchTerm === searchTerm &&
-        currentParams.selectedStatus === selectedStatus &&
-        currentParams.selectedTag === selectedTag;
-      
-      if (!stillSame) {
-        console.log('⏭️ [Leads] Filtros mudaram novamente durante debounce, ignorando');
-        return;
-      }
-
-      // Verificar novamente se não está carregando
-      if (isLoadingRef.current) {
-        console.log('⏸️ [Leads] Carregamento iniciado durante debounce, ignorando');
-        return;
-      }
-
-      console.log('🔄 [Leads] Filtros mudaram, resetando leads:', currentParams);
-      
-      // Marcar como carregando ANTES de chamar
-      isLoadingRef.current = true;
-      setLoading(true);
-      
-      // Chamar diretamente sem usar resetAndLoadLeads para evitar dependências
-      (async () => {
-        try {
-          setPage(0);
-          setHasMore(true);
-          await carregarLeads(true);
-        } catch (error) {
-          console.error('❌ [Leads] Erro ao resetar leads:', error);
-        } finally {
-          isLoadingRef.current = false;
-          setLoading(false);
-        }
-      })();
-    }, SEARCH_DEBOUNCE_MS);
+      resetAndLoadLeads();
+    }, 300); // Debounce de 300ms para busca
 
     return () => clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, selectedStatus, selectedTag]); // NÃO incluir carregarLeads nas dependências
+  }, [searchTerm, selectedStatus, selectedTag, resetAndLoadLeads]);
 
-  // filterLeads simplificado - a maioria dos filtros é feita server-side
-  // Este é usado apenas como fallback quando necessário
   const filterLeads = () => {
-    // Quando há busca/filtros, os leads já vêm filtrados do servidor
-    // Apenas aplicar filtro client-side adicional se necessário
-    setFilteredLeads(leads);
+    let filtered = leads;
+
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const searchTrimmed = searchTerm.trim();
+
+      filtered = filtered.filter(
+        (lead) => {
+          // Busca textual normal
+          const textMatch =
+            lead.name.toLowerCase().includes(searchLower) ||
+            lead.email?.toLowerCase().includes(searchLower) ||
+            lead.phone?.includes(searchTerm) ||
+            lead.telefone?.includes(searchTerm) ||
+            lead.company?.toLowerCase().includes(searchLower) ||
+            lead.cpf?.includes(searchTerm) ||
+            lead.source?.toLowerCase().includes(searchLower) ||
+            lead.value.toString().includes(searchTerm) ||
+            new Date(lead.created_at).toLocaleDateString('pt-BR').includes(searchTerm) ||
+            lead.notes?.toLowerCase().includes(searchLower);
+
+          // Busca por valor com operadores (> < =)
+          const valueMatch = (() => {
+            if (!searchTrimmed.match(/^[<>=]\d+(\.\d+)?$/)) return false;
+
+            const operator = searchTrimmed[0];
+            const value = parseFloat(searchTrimmed.slice(1));
+
+            switch (operator) {
+              case '>': return lead.value > value;
+              case '<': return lead.value < value;
+              case '=': return lead.value === value;
+              default: return false;
+            }
+          })();
+
+          return textMatch || valueMatch;
+        }
+      );
+    }
+
+    if (selectedStatus !== "all") {
+      filtered = filtered.filter((lead) => lead.status === selectedStatus);
+    }
+
+    if (selectedTag) {
+      filtered = filtered.filter((lead) =>
+        lead.tags?.includes(selectedTag)
+      );
+    }
+
+    setFilteredLeads(filtered);
   };
 
   const getStatusColor = (status: string) => {
@@ -845,53 +427,10 @@ export default function Leads() {
     if (!leadParaExcluir) return;
 
     try {
-      // Validar company_id antes de excluir
-      const companyId = await getCompanyId();
-      
-      if (!companyId) {
-        toast({
-          variant: "destructive",
-          title: "Acesso restrito",
-          description: "Você precisa estar vinculado a uma empresa para gerenciar leads.",
-        });
-        setLeadParaExcluir(null);
-        setShowDeleteDialog(false);
-        return;
-      }
-
-      // Verificar se o lead pertence à empresa do usuário
-      const { data: leadData, error: fetchError } = await supabase
-        .from("leads")
-        .select("company_id")
-        .eq("id", leadParaExcluir.id)
-        .maybeSingle();
-
-      if (fetchError || !leadData) {
-        toast({
-          variant: "destructive",
-          title: "Erro ao verificar lead",
-          description: "Não foi possível verificar o lead. Tente novamente.",
-        });
-        return;
-      }
-
-      if (leadData.company_id !== companyId) {
-        toast({
-          variant: "destructive",
-          title: "Acesso negado",
-          description: "Você não tem permissão para excluir este lead.",
-        });
-        setLeadParaExcluir(null);
-        setShowDeleteDialog(false);
-        return;
-      }
-
-      // Excluir o lead
       const { error } = await supabase
         .from("leads")
         .delete()
-        .eq("id", leadParaExcluir.id)
-        .eq("company_id", companyId);
+        .eq("id", leadParaExcluir.id);
 
       if (error) {
         throw error;
@@ -915,99 +454,37 @@ export default function Leads() {
     }
   };
 
-  // Função auxiliar para obter avatar do cache localStorage
-  const getCachedAvatar = (leadId: string): string | null => {
-    try {
-      const cached = localStorage.getItem(`avatar_${leadId}`);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        // Cache válido por 24 horas
-        if (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
-          return parsed.url;
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao ler cache de avatar:', error);
-    }
-    return null;
-  };
-
-  // Função auxiliar para salvar avatar no cache localStorage
-  const setCachedAvatar = (leadId: string, url: string) => {
-    try {
-      localStorage.setItem(`avatar_${leadId}`, JSON.stringify({
-        url,
-        timestamp: Date.now()
-      }));
-    } catch (error) {
-      console.error('Erro ao salvar cache de avatar:', error);
-    }
-  };
-
-  // Função para buscar foto de perfil do WhatsApp com retry e cache
-  const buscarFotoPerfil = async (lead: Lead, retryCount = 0) => {
+  // Função para buscar foto de perfil do WhatsApp
+  const buscarFotoPerfil = async (lead: Lead) => {
     const telefone = lead.phone || lead.telefone;
-    if (!telefone) {
-      // Sem telefone, usar fallback imediatamente
-      const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(lead.name)}&background=10b981&color=fff&size=128&bold=true`;
-      setLeadAvatars(prev => ({ ...prev, [lead.id]: avatarUrl }));
-      return;
-    }
-
-    // Verificar se já está em memória
-    if (leadAvatars[lead.id]) return;
-
-    // Verificar cache do localStorage
-    const cachedAvatar = getCachedAvatar(lead.id);
-    if (cachedAvatar) {
-      setLeadAvatars(prev => ({ ...prev, [lead.id]: cachedAvatar }));
-      return;
-    }
+    if (!telefone || leadAvatars[lead.id]) return;
 
     try {
       // Normalizar número (remover caracteres não numéricos)
       const telefoneNormalizado = telefone.replace(/\D/g, "");
       
-      // Criar promise com timeout de 5 segundos
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout na busca de avatar')), 5000);
-      });
-
-      // Promise para buscar foto via edge function
-      const fetchPromise = supabase.functions.invoke('get-profile-picture', {
+      // Tentar buscar foto via edge function
+      const { data, error } = await supabase.functions.invoke('get-profile-picture', {
         body: { number: telefoneNormalizado }
       });
 
-      // Race entre fetch e timeout
-      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
-
       if (!error && data?.profilePictureUrl) {
-        // Avatar encontrado - salvar no cache e no estado
-        const avatarUrl = data.profilePictureUrl;
-        setCachedAvatar(lead.id, avatarUrl);
+        setLeadAvatars(prev => ({
+          ...prev,
+          [lead.id]: data.profilePictureUrl
+        }));
+      } else {
+        // Fallback: usar UI Avatars com o nome do lead
+        const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(lead.name)}&background=10b981&color=fff&size=128&bold=true`;
         setLeadAvatars(prev => ({
           ...prev,
           [lead.id]: avatarUrl
         }));
-      } else {
-        // Erro na busca - usar fallback
-        throw new Error('Avatar não encontrado');
       }
-    } catch (error: any) {
-      console.error(`Erro ao buscar foto de perfil (tentativa ${retryCount + 1}):`, error);
-
-      // Retry automático (máximo 2 tentativas)
-      if (retryCount < 2 && error?.message !== 'Timeout na busca de avatar') {
-        // Aguardar 1 segundo antes de tentar novamente
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        return buscarFotoPerfil(lead, retryCount + 1);
-      }
-
-      // Após esgotar tentativas ou timeout, usar fallback sempre
+    } catch (error) {
+      console.error('Erro ao buscar foto de perfil:', error);
+      // Fallback em caso de erro
       const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(lead.name)}&background=10b981&color=fff&size=128&bold=true`;
-      
-      // Salvar fallback no cache para evitar tentativas futuras
-      setCachedAvatar(lead.id, avatarUrl);
       setLeadAvatars(prev => ({
         ...prev,
         [lead.id]: avatarUrl
@@ -1015,78 +492,29 @@ export default function Leads() {
     }
   };
 
-  // Buscar fotos de perfil quando os leads são carregados (com debounce)
-  // Usar ref para rastrear leads processados e evitar loops
-  const processedLeadsRef = useRef<Set<string>>(new Set());
-  const lastLeadsLengthRef = useRef(0);
-  
+  // Buscar fotos de perfil quando os leads são carregados
   useEffect(() => {
-    // Só executar se o número de leads realmente mudou (não apenas re-render)
-    if (leads.length === 0) return;
-    if (leads.length === lastLeadsLengthRef.current) return;
-    
-    lastLeadsLengthRef.current = leads.length;
-
-    // Carregar avatares do cache primeiro
-    const timeoutId1 = setTimeout(() => {
+    if (leads.length > 0) {
       leads.forEach(lead => {
-        if (processedLeadsRef.current.has(lead.id)) return; // Já processado
-        
-        const cachedAvatar = getCachedAvatar(lead.id);
-        if (cachedAvatar && !leadAvatars[lead.id]) {
-          setLeadAvatars(prev => {
-            if (prev[lead.id]) return prev; // Já tem avatar, não atualizar
-            return { ...prev, [lead.id]: cachedAvatar };
-          });
+        if ((lead.phone || lead.telefone) && !leadAvatars[lead.id]) {
+          buscarFotoPerfil(lead);
         }
       });
-    }, 100);
-
-    // Buscar avatares do WhatsApp com debounce para evitar muitas requisições simultâneas
-    const timeoutId2 = setTimeout(() => {
-      leads.forEach((lead, index) => {
-        // Espaçar requisições em 100ms cada para evitar sobrecarga
-        setTimeout(() => {
-          if (processedLeadsRef.current.has(lead.id)) return; // Já processado
-          
-          if ((lead.phone || lead.telefone) && !leadAvatars[lead.id] && !getCachedAvatar(lead.id)) {
-            processedLeadsRef.current.add(lead.id); // Marcar como processado
-            buscarFotoPerfil(lead);
-          } else {
-            processedLeadsRef.current.add(lead.id); // Marcar como processado mesmo sem buscar
-          }
-        }, index * 100);
-      });
-    }, 500);
-
-    return () => {
-      clearTimeout(timeoutId1);
-      clearTimeout(timeoutId2);
-    };
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leads.length]); // Apenas length, não o array completo
+  }, [leads.length]);
 
-  // Função para obter avatar do lead (com cache do localStorage)
-  const getLeadAvatar = (lead: Lead): string => {
+  // Função para obter avatar do lead
+  const getLeadAvatar = (lead: Lead): string | undefined => {
     // Primeiro tentar avatar do banco de dados
     if (lead.avatar_url) {
       return lead.avatar_url;
     }
-    
-    // Depois tentar avatar buscado do WhatsApp (em memória)
+    // Depois tentar avatar buscado do WhatsApp
     if (leadAvatars[lead.id]) {
       return leadAvatars[lead.id];
     }
-    
-    // Tentar buscar no cache do localStorage
-    const cachedAvatar = getCachedAvatar(lead.id);
-    if (cachedAvatar) {
-      // Atualizar estado em memória também
-      setLeadAvatars(prev => ({ ...prev, [lead.id]: cachedAvatar }));
-      return cachedAvatar;
-    }
-    
-    // Fallback sempre funcional: UI Avatars
+    // Fallback para UI Avatars
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(lead.name)}&background=10b981&color=fff&size=128&bold=true`;
   };
 
@@ -1118,16 +546,8 @@ export default function Leads() {
             <Download className="mr-2 h-4 w-4" />
             Exportar
           </Button>
-          <ImportarLeadsDialog onLeadsImported={() => {
-            // Recarregar leads do início após importar
-            console.log('🔄 [Leads] Recarregando leads após importar');
-            resetAndLoadLeads();
-          }} />
-          <NovoLeadDialog onLeadCreated={() => {
-            // Recarregar leads do início após criar novo lead
-            console.log('🔄 [Leads] Recarregando leads após criar novo lead');
-            resetAndLoadLeads();
-          }} />
+          <ImportarLeadsDialog onLeadsImported={carregarLeads} />
+          <NovoLeadDialog onLeadCreated={carregarLeads} />
         </div>
       </div>
 
@@ -1315,12 +735,17 @@ export default function Leads() {
             Role para baixo para carregar mais leads
           </div>
         )}
-        {!hasMore && leads.length > 0 && (
+        {!hasMore && leads.length >= MAX_TOTAL_LEADS && (
+          <div className="text-muted-foreground text-sm">
+            {leads.length} leads carregados (limite atingido para performance)
+          </div>
+        )}
+        {!hasMore && leads.length > 0 && leads.length < MAX_TOTAL_LEADS && (
           <div className="text-muted-foreground text-sm">
             Todos os {leads.length} leads foram carregados
           </div>
         )}
-          </div>
+      </div>
 
       {/* Dialog de Editar Lead */}
       {leadParaEditar && (
@@ -1347,9 +772,7 @@ export default function Leads() {
             }
           }}
           onLeadUpdated={() => {
-            // Recarregar leads após editar
-            console.log('🔄 [Leads] Recarregando leads após editar');
-            resetAndLoadLeads();
+            carregarLeads(true);
             setLeadParaEditar(null);
             setShowEditDialog(false);
           }}

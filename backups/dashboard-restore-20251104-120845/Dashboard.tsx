@@ -47,8 +47,6 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [etapas, setEtapas] = useState<any[]>([]);
-  const [funis, setFunis] = useState<any[]>([]);
-  const [selectedFunil, setSelectedFunil] = useState<string | null>(null);
 
   // Novos estados para relatórios
   const [reportFilters, setReportFilters] = useState<ReportFilters>({
@@ -70,15 +68,6 @@ export default function Dashboard() {
   useEffect(() => {
     fetchReportStats();
   }, [reportFilters]);
-
-  useEffect(() => {
-    if (selectedFunil) {
-      fetchEtapasDoFunil(selectedFunil);
-    } else {
-      setEtapas([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFunil]);
 
   const fetchStats = async () => {
     try {
@@ -104,31 +93,22 @@ export default function Dashboard() {
       // Mensagens IA
       const { count: iaCount } = await supabase.from("ia_training_data").select("*", { count: 'exact', head: true });
 
-      // Carregar funis de vendas (ordenar por nome para evitar dependência de coluna inexistente)
-      // Carregar funis sem dependência de coluna específica de ordenação
-      let funisData: any[] | null = null;
-      let funisError: any = null;
-      try {
-        const res = await supabase.from("funis").select("id, nome");
-        funisData = res.data as any[] | null;
-        funisError = res.error;
-      } catch (e) {
-        funisError = e;
-      }
-
-      if (funisError) {
-        console.error("Erro ao carregar lista de funis:", funisError);
-      }
+      // Etapas para gráfico de funil
+      const { data: etapasData } = await supabase
+        .from("etapas")
+        .select("id, nome, cor")
+        .order("posicao");
       
-      setFunis(funisData || []);
+      const etapasComContagem = await Promise.all((etapasData || []).map(async (etapa) => {
+        const leadsNaEtapa = leads?.filter(l => l.etapa_id === etapa.id) || [];
+        return {
+          ...etapa,
+          quantidade: leadsNaEtapa.length,
+          valor: leadsNaEtapa.reduce((sum, l) => sum + (Number(l.value) || 0), 0),
+        };
+      }));
 
-      // Selecionar automaticamente o primeiro funil quando houver dados
-      if (!funisData || funisData.length === 0) {
-        setEtapas([]);
-        setSelectedFunil(null);
-      } else if (!selectedFunil) {
-        setSelectedFunil(funisData[0].id);
-      }
+      setEtapas(etapasComContagem);
 
       setStats({
         totalLeads,
@@ -144,36 +124,6 @@ export default function Dashboard() {
       console.error("Erro ao carregar estatísticas:", error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchEtapasDoFunil = async (funilId: string) => {
-    try {
-      // Carregar leads para cálculos
-      const { data: leads } = await supabase.from("leads").select("value, status, etapa_id, funil_id");
-
-      // Carregar etapas do funil selecionado
-      const { data: etapasData } = await supabase
-        .from("etapas")
-        .select("id, nome, cor, funil_id")
-        .eq("funil_id", funilId)
-        .order("posicao");
-      
-      // Filtrar leads do funil selecionado
-      const leadsDoFunil = leads?.filter(l => l.funil_id === funilId) || [];
-
-      const etapasComContagem = await Promise.all((etapasData || []).map(async (etapa) => {
-        const leadsNaEtapa = leadsDoFunil.filter(l => l.etapa_id === etapa.id) || [];
-        return {
-          ...etapa,
-          quantidade: leadsNaEtapa.length,
-          valor: leadsNaEtapa.reduce((sum, l) => sum + (Number(l.value) || 0), 0),
-        };
-      }));
-
-      setEtapas(etapasComContagem);
-    } catch (error) {
-      console.error("Erro ao carregar etapas do funil:", error);
     }
   };
 
@@ -366,77 +316,36 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Pipeline por Etapa */}
-          <Card className="border-0 shadow-card">
-            <CardHeader>
-              <div className="flex items-center justify-between">
+          {/* Funil de Vendas Visualizado */}
+          {etapas.length > 0 && (
+            <Card className="border-0 shadow-card">
+              <CardHeader>
                 <CardTitle>Pipeline por Etapa</CardTitle>
-                <Select
-                  value={selectedFunil || ""}
-                  onValueChange={(value) => setSelectedFunil(value)}                                
-                  disabled={funis.length === 0}
-                >
-                  <SelectTrigger className="w-[250px]">                                            
-                    <SelectValue placeholder={funis.length === 0 ? "Nenhum funil encontrado" : "Selecione o funil de vendas"} />                     
-                  </SelectTrigger>
-                  <SelectContent>
-                    {funis.map((funil) => (
-                      <SelectItem key={funil.id} value={funil.id}>                                  
-                        {funil.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!selectedFunil ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Target className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">
-                    {funis.length === 0 
-                      ? "Nenhum funil de vendas encontrado. Crie um funil para visualizar os dados."
-                      : "Selecione um funil de vendas para visualizar as etapas"}
-                  </p>
-                </div>
-              ) : etapas.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Target className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">Nenhuma etapa encontrada para este funil</p>
-                </div>
-              ) : (
-                <>
-                  {etapas
-                    .filter((e: any) => !selectedFunil || e.funil_id === selectedFunil)
-                    .map((etapa) => {        
-                    const totalLeadsDoFunil = etapas
-                      .filter((e: any) => e.funil_id === etapa.funil_id)
-                      .reduce((sum: number, e: any) => sum + e.quantidade, 0);
-                    return (
-                      <div key={etapa.id} className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-2">
-                            <div 
-                              className="w-3 h-3 rounded-full" 
-                              style={{ backgroundColor: etapa.cor }}
-                            />
-                            <span className="font-medium">{etapa.nome}</span>
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {etapa.quantidade} leads • R$ {etapa.valor.toLocaleString("pt-BR")}
-                          </div>
-                        </div>
-                        <Progress 
-                          value={totalLeadsDoFunil > 0 ? (etapa.quantidade / totalLeadsDoFunil) * 100 : 0} 
-                          className="h-2"
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {etapas.map((etapa) => (
+                  <div key={etapa.id} className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: etapa.cor }}
                         />
+                        <span className="font-medium">{etapa.nome}</span>
                       </div>
-                    );
-                  })}
-                </>
-              )}
-            </CardContent>
-          </Card>
+                      <div className="text-sm text-muted-foreground">
+                        {etapa.quantidade} leads • R$ {etapa.valor.toLocaleString("pt-BR")}
+                      </div>
+                    </div>
+                    <Progress 
+                      value={stats.totalLeads > 0 ? (etapa.quantidade / stats.totalLeads) * 100 : 0} 
+                      className="h-2"
+                    />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-0 shadow-card overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-primary opacity-5 rounded-full blur-3xl" />
@@ -848,4 +757,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

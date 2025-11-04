@@ -5,78 +5,36 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Tag, X, Plus } from "lucide-react";
+import { Plus, Tag, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-interface EditarLeadDialogProps {
-  lead: {
-    id: string;
-    nome: string;
-    telefone?: string;
-    email?: string;
-    cpf?: string;
-    value?: number;
-    company?: string;
-    source?: string;
-    notes?: string;
-    tags?: string[];
-    funil_id?: string;
-    etapa_id?: string;
-  };
-  onLeadUpdated: () => void;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+interface NovoLeadDialogProps {
+  onLeadCreated: () => void;
   triggerButton?: React.ReactNode;
 }
 
-export function EditarLeadDialog({ 
-  lead, 
-  onLeadUpdated,
-  open: openProp,
-  onOpenChange: onOpenChangeProp,
-  triggerButton
-}: EditarLeadDialogProps) {
-  const [internalOpen, setInternalOpen] = useState(false);
-  const open = openProp !== undefined ? openProp : internalOpen;
-  const setOpen = onOpenChangeProp || setInternalOpen;
+export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogProps) {
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(false);
   const [funis, setFunis] = useState<any[]>([]);
   const [etapas, setEtapas] = useState<any[]>([]);
   const [etapasFiltradas, setEtapasFiltradas] = useState<any[]>([]);
   const [formData, setFormData] = useState({
-    nome: lead.nome || "",
-    telefone: lead.telefone || "",
-    email: lead.email || "",
-    cpf: lead.cpf || "",
-    valor: lead.value?.toString() || "",
-    company: lead.company || "",
-    source: lead.source || "",
-    notes: lead.notes || "",
-    funil_id: lead.funil_id || "",
-    etapa_id: lead.etapa_id || "",
-    tags: lead.tags || []
+    nome: "",
+    telefone: "",
+    email: "",
+    cpf: "",
+    valor: "",
+    company: "",
+    source: "",
+    notes: "",
+    funil_id: "",
+    etapa_id: "",
+    tags: [] as string[]
   });
   const [newTag, setNewTag] = useState("");
-
-  // Reset form data when lead changes
-  useEffect(() => {
-    setFormData({
-      nome: lead.nome || "",
-      telefone: lead.telefone || "",
-      email: lead.email || "",
-      cpf: lead.cpf || "",
-      valor: lead.value?.toString() || "",
-      company: lead.company || "",
-      source: lead.source || "",
-      notes: lead.notes || "",
-      funil_id: lead.funil_id || "",
-      etapa_id: lead.etapa_id || "",
-      tags: lead.tags || []
-    });
-  }, [lead]);
 
   useEffect(() => {
     if (open) {
@@ -95,21 +53,14 @@ export function EditarLeadDialog({
   }, [formData.funil_id, etapas]);
 
   const carregarDados = async () => {
-    try {
-      setInitialLoading(true);
-      const { data: funisData, error: funisError } = await supabase.from("funis").select("*").order("criado_em");
-      const { data: etapasData, error: etapasError } = await supabase.from("etapas").select("*").order("posicao");
-
-      if (funisError) throw funisError;
-      if (etapasError) throw etapasError;
-
-      setFunis(funisData || []);
-      setEtapas(etapasData || []);
-    } catch (error) {
-      console.error("Erro ao carregar dados do funil:", error);
-      toast.error("Erro ao carregar dados do funil");
-    } finally {
-      setInitialLoading(false);
+    const { data: funisData } = await supabase.from("funis").select("*").order("criado_em");
+    const { data: etapasData } = await supabase.from("etapas").select("*").order("posicao");
+    
+    setFunis(funisData || []);
+    setEtapas(etapasData || []);
+    
+    if (funisData && funisData.length > 0 && !formData.funil_id) {
+      setFormData(prev => ({ ...prev, funil_id: funisData[0].id }));
     }
   };
 
@@ -137,8 +88,24 @@ export function EditarLeadDialog({
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
-        toast.error("❌ Usuário não autenticado. Faça login e tente novamente.");
-        setLoading(false);
+        toast.error("Usuário não autenticado");
+        return;
+      }
+
+      // Buscar company_id do usuário com tratamento de erro explícito
+      const { data: userRole, error: roleError } = await supabase
+        .from("user_roles")
+        .select("company_id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (roleError) {
+        toast.error("Não foi possível verificar sua empresa. Tente novamente ou contate o suporte.");
+        return;
+      }
+
+      if (!userRole?.company_id) {
+        toast.error("Sua conta não está vinculada a uma empresa. Solicite configuração ao administrador.");
         return;
       }
 
@@ -151,9 +118,9 @@ export function EditarLeadDialog({
         }
       }
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("leads")
-        .update({
+        .insert([{
           name: formData.nome,
           telefone: telefoneFormatado || null,
           phone: telefoneFormatado || null,
@@ -165,22 +132,39 @@ export function EditarLeadDialog({
           notes: formData.notes || null,
           etapa_id: formData.etapa_id,
           funil_id: formData.funil_id,
-          tags: formData.tags,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", lead.id);
+          owner_id: session.user.id,
+          company_id: userRole.company_id,
+          status: "novo",
+          stage: "prospeccao",
+          tags: formData.tags
+        }])
+        .select();
 
       if (error) {
-        console.error("Erro ao atualizar lead:", error);
+        console.error("Erro ao criar lead:", error);
         throw error;
       }
 
-      toast.success("✅ Lead atualizado com sucesso!");
+      toast.success("Lead criado com sucesso!");
+      setFormData({
+        nome: "",
+        telefone: "",
+        email: "",
+        cpf: "",
+        valor: "",
+        company: "",
+        source: "",
+        notes: "",
+        funil_id: funis.length > 0 ? funis[0].id : "",
+        etapa_id: "",
+        tags: []
+      });
+      setNewTag("");
       setOpen(false);
-      onLeadUpdated();
+      onLeadCreated();
     } catch (error) {
-      console.error("Erro ao atualizar lead:", error);
-      toast.error("Erro ao atualizar lead. Tente novamente.");
+      console.error("Erro ao criar lead:", error);
+      toast.error("Erro ao criar lead. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -188,24 +172,19 @@ export function EditarLeadDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {triggerButton && (
-        <DialogTrigger asChild>
-          {triggerButton}
-        </DialogTrigger>
-      )}
+      <DialogTrigger asChild>
+        {triggerButton || (
+          <Button size="sm" variant="ghost" className="w-full">
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Lead
+          </Button>
+        )}
+      </DialogTrigger>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Editar Lead</DialogTitle>
+          <DialogTitle>Novo Lead</DialogTitle>
         </DialogHeader>
-        {initialLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
-              <p className="text-muted-foreground">Carregando dados...</p>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="funil">Funil *</Label>
             <Select 
@@ -393,11 +372,10 @@ export function EditarLeadDialog({
               Cancelar
             </Button>
             <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? "Salvando..." : "Salvar Alterações"}
+              {loading ? "Criando..." : "Criar Lead"}
             </Button>
           </div>
-          </form>
-        )}
+        </form>
       </DialogContent>
     </Dialog>
   );

@@ -248,14 +248,13 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
       // ✅ CRÍTICO: Fallback para UPDATE direto - NÃO REMOVER
       if (!funilError) {
         const { error: updateError } = await supabase
-          .from("funis")
-          .update({
-            nome: nomeFunil
-          })
-          .eq("id", funilId);
+        .from("funis")
+        .update({
+          nome: nomeFunil
+        })
+        .eq("id", funilId);
         funilError = updateError;
       }
-
       if (funilError) {
         console.error("❌ Erro ao atualizar nome do funil:", funilError);
         throw funilError;
@@ -295,11 +294,11 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
           try {
             // ✅ Tentar usar RPC se existir
             const { error: rpcError } = await supabase.rpc("update_etapa", {
-              p_etapa_id: etapa.id,
-              p_nome: etapa.nome,
-              p_cor: etapa.cor,
-              p_posicao: i,
-            });
+            p_etapa_id: etapa.id,
+            p_nome: etapa.nome,
+            p_cor: etapa.cor,
+            p_posicao: i,
+          });
             if (rpcError) {
               console.warn("RPC update_etapa não disponível, usando UPDATE direto:", rpcError);
               updateError = null; // Reset para tentar UPDATE direto
@@ -309,7 +308,8 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
           }
 
           // ✅ CRÍTICO: Fallback para UPDATE direto - NÃO REMOVER
-          // ✅ IMPORTANTE: Usa campo atualizado_em (NÃO updated_at)
+          // ✅ IMPORTANTE: Tabela etapas usa campo "atualizado_em" (NÃO "updated_at")
+          // Schema: migration 20251022210449_fa6c8264-1153-40d0-a942-f85e5035729b.sql linha 59
           if (!updateError) {
             const { error: directUpdateError } = await supabase
               .from("etapas")
@@ -317,7 +317,7 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
                 nome: etapa.nome,
                 cor: etapa.cor,
                 posicao: i,
-                atualizado_em: new Date().toISOString() // ✅ CRÍTICO: atualizado_em não updated_at
+                atualizado_em: new Date().toISOString() // ✅ Schema: atualizado_em TIMESTAMP
               })
               .eq("id", etapa.id);
             updateError = directUpdateError;

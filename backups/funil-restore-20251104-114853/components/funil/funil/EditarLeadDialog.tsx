@@ -26,21 +26,10 @@ interface EditarLeadDialogProps {
     etapa_id?: string;
   };
   onLeadUpdated: () => void;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  triggerButton?: React.ReactNode;
 }
 
-export function EditarLeadDialog({ 
-  lead, 
-  onLeadUpdated,
-  open: openProp,
-  onOpenChange: onOpenChangeProp,
-  triggerButton
-}: EditarLeadDialogProps) {
-  const [internalOpen, setInternalOpen] = useState(false);
-  const open = openProp !== undefined ? openProp : internalOpen;
-  const setOpen = onOpenChangeProp || setInternalOpen;
+export function EditarLeadDialog({ lead, onLeadUpdated }: EditarLeadDialogProps) {
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
   const [funis, setFunis] = useState<any[]>([]);
@@ -137,8 +126,7 @@ export function EditarLeadDialog({
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
-        toast.error("❌ Usuário não autenticado. Faça login e tente novamente.");
-        setLoading(false);
+        toast.error("Usuário não autenticado");
         return;
       }
 
@@ -175,7 +163,7 @@ export function EditarLeadDialog({
         throw error;
       }
 
-      toast.success("✅ Lead atualizado com sucesso!");
+      toast.success("Lead atualizado com sucesso!");
       setOpen(false);
       onLeadUpdated();
     } catch (error) {
@@ -188,11 +176,15 @@ export function EditarLeadDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {triggerButton && (
-        <DialogTrigger asChild>
-          {triggerButton}
-        </DialogTrigger>
-      )}
+      <DialogTrigger asChild>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-8 w-8 p-0"
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Lead</DialogTitle>

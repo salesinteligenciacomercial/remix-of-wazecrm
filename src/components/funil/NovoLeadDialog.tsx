@@ -88,7 +88,8 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
-        toast.error("Usuário não autenticado");
+        toast.error("❌ Usuário não autenticado. Faça login e tente novamente.");
+        setLoading(false);
         return;
       }
 
@@ -100,12 +101,14 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
         .maybeSingle();
 
       if (roleError) {
-        toast.error("Não foi possível verificar sua empresa. Tente novamente ou contate o suporte.");
+        toast.error("❌ Não foi possível verificar sua empresa. Tente novamente ou contate o suporte.");
+        setLoading(false);
         return;
       }
 
       if (!userRole?.company_id) {
-        toast.error("Sua conta não está vinculada a uma empresa. Solicite configuração ao administrador.");
+        toast.error("⚠️ Sua conta não está vinculada a uma empresa. Solicite configuração ao administrador.");
+        setLoading(false);
         return;
       }
 
@@ -145,7 +148,7 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
         throw error;
       }
 
-      toast.success("Lead criado com sucesso!");
+      toast.success("✅ Lead criado com sucesso!");
       setFormData({
         nome: "",
         telefone: "",

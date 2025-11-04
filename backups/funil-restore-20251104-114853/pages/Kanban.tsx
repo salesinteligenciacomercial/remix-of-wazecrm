@@ -1,3 +1,25 @@
+/**
+ * ✅ BACKUP ATUALIZADO - 2024-11-01 (TARDE)
+ * CORREÇÕES CRÍTICAS DE BLOQUEIO DE DRAG:
+ * 
+ * 1. Sistema de bloqueio inteligente implementado
+ *    - currentDragIdRef rastreia qual item está sendo arrastado
+ *    - Permite mesmo drag continuar, bloqueia drags diferentes
+ *    - Verificar: linha 134 (currentDragIdRef), linha 438-482 (handleDragStart), linha 502-542 (handleDragEnd)
+ * 
+ * 2. LeadCard agora passa etapaId no data do drag
+ *    - Verificar: src/components/funil/LeadCard.tsx linha 105
+ * 
+ * 3. Todos os returns liberam bloqueio + currentDragIdRef
+ *    - Verificar: todos os returns no handleDragEnd liberam ambos
+ * 
+ * 4. Lógica de identificação de destino melhorada
+ *    - Prioridade: etapa > etapaId > lead com etapaId
+ *    - Verificar: linha 574-596
+ * 
+ * Se retroceder, verificar estes pontos críticos.
+ */
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { DndContext, DragEndEvent, closestCenter, DragStartEvent, DragOverEvent, DragOverlay } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
@@ -34,12 +56,20 @@ interface Lead {
   updated_at?: string;
 }
 
+/**
+ * ✅ IMPORTANTE: Campos de timestamp por tabela:
+ * - Tabela "etapas": usa campo "atualizado_em" (NÃO "updated_at")
+ *   Schema: migration 20251022210449_fa6c8264-1153-40d0-a942-f85e5035729b.sql linha 59
+ * - Tabela "leads": usa campo "updated_at" (NÃO "atualizado_em")
+ * - Tabela "funis": usa campo "atualizado_em" (NÃO "updated_at")
+ */
 interface Etapa {
   id: string;
   nome: string;
   posicao: number;
   cor: string;
   funil_id: string;
+  atualizado_em?: string; // ✅ Campo correto para tabela etapas
 }
 
 interface Funil {
@@ -116,9 +146,15 @@ export default function KanbanPage() {
   });
   const [leadsPerEtapa, setLeadsPerEtapa] = useState<Record<string, number>>({});
   const [activeColumn, setActiveColumn] = useState<Etapa | null>(null);
+  const [calculatingMetrics, setCalculatingMetrics] = useState(false); // ✅ Indicador de loading
   const LEADS_PER_PAGE = 10;
+  const MAX_LEADS_TO_PROCESS = 500; // ✅ Limite de leads processados por vez
   const isMovingRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const blockTimeoutRef = useRef<NodeJS.Timeout | null>(null); // ✅ Timeout de segurança
+  const metricsDebounceRef = useRef<NodeJS.Timeout | null>(null); // ✅ Debounce para cálculo de métricas
+  // ✅ CRÍTICO - BACKUP 2024-11-01: Rastrear qual item está sendo arrastado para permitir mesmo drag continuar
+  const currentDragIdRef = useRef<string | null>(null); // ✅ Identificar qual item está sendo arrastado
 
   useEffect(() => {
     let mounted = true;
@@ -331,9 +367,13 @@ export default function KanbanPage() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, (payload: any) => {
           console.log('📡 [REALTIME] Leads:', payload.eventType, payload.new?.id || payload.old?.id);
           
-          // Evitar atualizar durante operações de drag
+          // ✅ CRÍTICO: Ignorar atualizações durante operações de drag
           if (isMovingRef.current) {
-            console.log('⏸️ [REALTIME] Ignorando atualização durante drag');
+            console.log('⏸️ [REALTIME] 🚫 BLOQUEIO ATIVO - Ignorando atualização durante drag:', {
+              eventType: payload.eventType,
+              leadId: payload.new?.id || payload.old?.id,
+              isMoving: isMovingRef.current
+            });
             return;
           }
 
@@ -358,8 +398,10 @@ export default function KanbanPage() {
               payload.new[key] !== payload.old[key]
             );
 
-            // Ignorar mudanças apenas de posição ou timestamp
-            if (changedFields.length === 1 && (changedFields[0] === 'posicao' || changedFields[0] === 'updated_at')) {
+            // ✅ CRÍTICO: Ignorar mudanças apenas de posição ou timestamp
+            // NOTA: Tabela etapas usa campo "atualizado_em" (NÃO "updated_at")
+            // Ver migration: 20251031221500_reorder_etapas_function.sql linha 64
+            if (changedFields.length === 1 && (changedFields[0] === 'posicao' || changedFields[0] === 'atualizado_em')) {
               console.log('⏭️ [REALTIME] Ignorando mudança de posição/timestamp');
               return;
             }
@@ -418,16 +460,48 @@ export default function KanbanPage() {
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    const leadId = active.id as string;
-    const lead = leads.find(l => l.id === leadId);
+    const dragId = active.id as string;
+    
+    // ✅ CRÍTICO: Identificar qual item está sendo arrastado
+    currentDragIdRef.current = dragId;
+    
+    const activeData = active.data.current;
+    
+    // ✅ Se for drag de etapa, não precisa bloquear aqui (handleEtapaReorder gerencia)
+    if (activeData?.type === 'etapa') {
+      console.log('[DRAG START] Drag de etapa iniciado:', dragId);
+      return;
+    }
 
+    // ✅ Para drag de lead: Ativar bloqueio e configurar timeout
+    isMovingRef.current = true;
+    console.log('🔒 [DRAG START] 🚫 BLOQUEIO ATIVADO - Bloqueando atualizações realtime:', {
+      dragId,
+      type: activeData?.type,
+      isMoving: isMovingRef.current
+    });
+
+    const lead = leads.find(l => l.id === dragId);
     setDragOperation({
       isDragging: true,
-      leadId,
+      leadId: dragId,
       sourceEtapa: lead?.etapa_id || null,
     });
 
-    console.log('[DRAG START] Iniciando drag:', { leadId, sourceEtapa: lead?.etapa_id });
+    // ✅ Timeout de segurança (5s) para liberar bloqueio caso algo dê errado
+    if (blockTimeoutRef.current) {
+      clearTimeout(blockTimeoutRef.current);
+    }
+    blockTimeoutRef.current = setTimeout(() => {
+      if (isMovingRef.current && currentDragIdRef.current === dragId) {
+        console.warn('⚠️ [DRAG TIMEOUT] Liberando bloqueio após 5s de segurança');
+        isMovingRef.current = false;
+        currentDragIdRef.current = null;
+        blockTimeoutRef.current = null;
+      }
+    }, 5000);
+
+    console.log('[DRAG START] Iniciando drag:', { dragId, sourceEtapa: lead?.etapa_id });
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -448,11 +522,47 @@ export default function KanbanPage() {
       overType: over?.data.current?.type 
     });
 
-    // 🔒 Prevenir operações concorrentes de drag
+    const dragId = active.id as string;
+    const activeData = active.data.current;
+
+    // ✅ CRÍTICO - BACKUP 2024-11-01: Verificar se é uma operação concorrente ou o mesmo drag
+    // Sistema de bloqueio inteligente que permite mesmo drag continuar, bloqueia drags diferentes
     if (isMovingRef.current) {
-      console.warn('[DRAG END] ⚠️ Operação de drag já em andamento - bloqueado');
-      toast.warning("Aguarde a operação anterior finalizar");
+      // Se é o mesmo item sendo arrastado, é o mesmo drag - permitir continuar
+      if (currentDragIdRef.current === dragId) {
+        console.log('[DRAG END] ✅ Mesmo drag - continuando operação:', dragId);
+        // Não fazer nada, o bloqueio já está ativo e é o mesmo drag
+      } else {
+        // É um drag diferente - bloquear
+        console.warn('[DRAG END] ⚠️ Operação de drag já em andamento - bloqueado:', {
+          isMoving: isMovingRef.current,
+          currentDragId: currentDragIdRef.current,
+          newDragId: dragId,
+          activeType: activeData?.type
+        });
+        toast.warning("Aguarde a operação anterior finalizar", {
+          description: "Tente novamente em alguns segundos"
+        });
       return;
+      }
+    } else {
+      // ✅ Bloqueio não está ativo - ativar agora (caso handleDragStart não tenha sido chamado)
+      isMovingRef.current = true;
+      currentDragIdRef.current = dragId; // ✅ CRÍTICO: Rastrear drag atual
+      console.log('🔒 [DRAG END] 🚫 BLOQUEIO ATIVADO - Iniciando operação de drag');
+      
+      // ✅ Timeout de segurança (5s) - só libera se for o mesmo drag
+      if (blockTimeoutRef.current) {
+        clearTimeout(blockTimeoutRef.current);
+      }
+      blockTimeoutRef.current = setTimeout(() => {
+        if (isMovingRef.current && currentDragIdRef.current === dragId) {
+          console.warn('⚠️ [DRAG TIMEOUT] Liberando bloqueio após 5s de segurança');
+          isMovingRef.current = false;
+          currentDragIdRef.current = null; // ✅ CRÍTICO: Limpar rastreamento
+          blockTimeoutRef.current = null;
+        }
+      }, 5000);
     }
 
     try {
@@ -467,6 +577,13 @@ export default function KanbanPage() {
       // ✅ Validação básica - sem destino
       if (!over) {
         console.log('[DRAG END] ❌ Drag cancelado - nenhum destino válido');
+        // ✅ CRÍTICO: Liberar bloqueio antes de retornar
+        isMovingRef.current = false;
+        currentDragIdRef.current = null; // ✅ BACKUP 2024-11-01: Limpar rastreamento
+        if (blockTimeoutRef.current) {
+          clearTimeout(blockTimeoutRef.current);
+          blockTimeoutRef.current = null;
+        }
         return;
       }
 
@@ -476,77 +593,204 @@ export default function KanbanPage() {
         toast.error("Sem conexão - operação não pode ser realizada", {
           description: "Verifique sua conexão e tente novamente"
         });
+        // ✅ CRÍTICO: Liberar bloqueio antes de retornar
+        isMovingRef.current = false;
+        currentDragIdRef.current = null; // ✅ BACKUP 2024-11-01: Limpar rastreamento
+        if (blockTimeoutRef.current) {
+          clearTimeout(blockTimeoutRef.current);
+          blockTimeoutRef.current = null;
+        }
         return;
       }
 
-      const activeData = active.data.current;
       const overData = over.data.current;
 
       // 🔀 FLUXO 1: Reordenação de etapas (drag horizontal)
       if (activeData?.type === 'etapa') {
         console.log('[DRAG END] 🔄 Detectado drag de etapa - reordenação');
+        // ✅ handleEtapaReorder gerencia seu próprio bloqueio, mas precisamos garantir que este está liberado
+        // O bloqueio deste contexto será liberado no finally
         await handleEtapaReorder(active.id as string, over.id as string);
+        // ✅ Liberar bloqueio deste contexto (handleEtapaReorder usa seu próprio bloqueio)
+        isMovingRef.current = false;
+        currentDragIdRef.current = null;
+        if (blockTimeoutRef.current) {
+          clearTimeout(blockTimeoutRef.current);
+          blockTimeoutRef.current = null;
+        }
         return;
       }
 
       // 🎯 FLUXO 2: Movimentação de lead entre etapas
       const leadId = active.id as string;
 
-      // 🔍 Determinar etapa de destino com lógica clara
-      let newEtapaId: string | null = null;
-      
-      if (overData?.type === 'etapa') {
-        // Drop direto na área da coluna
-        newEtapaId = over.id as string;
-      } else if (overData?.etapaId) {
-        // Drop sobre um lead (pegar etapa desse lead)
-        newEtapaId = overData.etapaId as string;
-      } else if (overData?.type === 'lead' && overData?.lead?.etapa_id) {
-        // Drop sobre lead com etapa definida
-        newEtapaId = overData.lead.etapa_id;
-      }
-
-      // ✅ Validar etapa de destino
-      if (!newEtapaId) {
-        console.error('[DRAG END] ❌ Etapa de destino não identificada:', { 
-          overData, 
-          overId: over.id 
+      // ✅ Validar se o lead existe no estado ANTES de determinar destino
+      const lead = leads.find(l => l.id === leadId);
+      if (!lead) {
+        console.error('[DRAG END] ❌ Lead não encontrado no estado local:', {
+          leadId,
+          totalLeads: leads.length,
+          leadIdsDisponiveis: leads.slice(0, 10).map(l => l.id)
         });
-        toast.error("Não foi possível identificar a etapa de destino");
+        toast.error("Lead não encontrado", {
+          description: "O lead pode ter sido removido. Recarregue a página se necessário."
+        });
+        // ✅ Liberar bloqueio em caso de erro
+        isMovingRef.current = false;
+        currentDragIdRef.current = null;
+        if (blockTimeoutRef.current) {
+          clearTimeout(blockTimeoutRef.current);
+          blockTimeoutRef.current = null;
+        }
         return;
       }
 
-      // ✅ Validar se o lead existe no estado
-      const lead = leads.find(l => l.id === leadId);
-      if (!lead) {
-        console.error('[DRAG END] ❌ Lead não encontrado no estado local:', leadId);
-        toast.error("Lead não encontrado");
+      // ✅ BACKUP 2024-11-01: Determinar etapa de destino com lógica clara (melhorada)
+      // Prioridade: Drop direto na coluna > etapaId no data > lead com etapaId
+      let newEtapaId: string | null = null;
+      
+      // ✅ Prioridade 1: Drop direto na área da coluna (tipo 'etapa')
+      if (overData?.type === 'etapa') {
+        newEtapaId = over.id as string;
+        console.log('[DRAG END] 📍 Drop direto na etapa:', newEtapaId);
+      } 
+      // ✅ Prioridade 2: etapaId no data (DroppableColumn passa isso)
+      else if (overData?.etapaId) {
+        newEtapaId = overData.etapaId as string;
+        console.log('[DRAG END] 📍 Drop sobre coluna - etapaId:', newEtapaId);
+      } 
+      // ✅ Prioridade 3: Drop sobre lead - usar etapaId do data ou etapa_id do lead
+      // CRÍTICO: LeadCard agora passa etapaId no data (verificar LeadCard.tsx linha 105)
+      else if (overData?.type === 'lead') {
+        // Tentar etapaId do data primeiro (LeadCard agora passa)
+        newEtapaId = overData.etapaId || overData.lead?.etapa_id || null;
+        console.log('[DRAG END] 📍 Drop sobre lead:', {
+          etapaIdFromData: overData.etapaId,
+          etapaIdFromLead: overData.lead?.etapa_id,
+          selectedEtapaId: newEtapaId
+        });
+      }
+
+      // ✅ Validar etapa de destino identificada
+      if (!newEtapaId) {
+        console.error('[DRAG END] ❌ Etapa de destino não identificada:', { 
+          overData, 
+          overId: over.id,
+          activeId: active.id,
+          activeData: active.data.current,
+          leadsTotal: leads.length
+        });
+        toast.error("Etapa de destino não identificada", {
+          description: "Não foi possível identificar para qual etapa mover o lead. Tente novamente."
+        });
+        // ✅ Liberar bloqueio em caso de erro
+        isMovingRef.current = false;
+        currentDragIdRef.current = null;
+        if (blockTimeoutRef.current) {
+          clearTimeout(blockTimeoutRef.current);
+          blockTimeoutRef.current = null;
+        }
         return;
       }
 
       // ✅ Validar se a etapa de destino existe
       const etapaDestino = etapas.find(e => e.id === newEtapaId);
       if (!etapaDestino) {
-        console.error('[DRAG END] ❌ Etapa de destino não existe:', newEtapaId);
-        toast.error("Etapa de destino não existe");
+        console.error('[DRAG END] ❌ Etapa de destino não existe:', {
+          etapaId: newEtapaId,
+          etapasDisponiveis: etapas.map(e => ({ id: e.id, nome: e.nome }))
+        });
+        toast.error("Etapa de destino não encontrada", {
+          description: "A etapa selecionada não existe mais"
+        });
+        // ✅ Liberar bloqueio em caso de erro
+        isMovingRef.current = false;
+        currentDragIdRef.current = null;
+        if (blockTimeoutRef.current) {
+          clearTimeout(blockTimeoutRef.current);
+          blockTimeoutRef.current = null;
+        }
         return;
       }
 
-      // ✅ Validar se está tentando mover entre funis diferentes
+      // ✅ CRÍTICO: Validar se está tentando mover entre funis diferentes (ANTES de update otimista)
+      // Validação 1: Verificar se etapa destino pertence ao funil selecionado
       if (etapaDestino.funil_id !== selectedFunil) {
-        console.error('[DRAG END] ⚠️ Tentativa de mover entre funis diferentes:', {
-          etapaFunilId: etapaDestino.funil_id,
+        const funilDestino = funis.find(f => f.id === etapaDestino.funil_id);
+        const funilOrigem = funis.find(f => f.id === selectedFunil);
+        const etapaOrigem = etapas.find(e => e.id === lead.etapa_id);
+        const funilAtualLead = funis.find(f => f.id === lead.funil_id);
+        
+        console.warn('[DRAG END] ⚠️❌ TENTATIVA DE MOVER ENTRE FUNIS DIFERENTES - BLOQUEADO:', {
+          lead: {
+            id: leadId,
+            nome: lead.name,
+            etapaAtual: {
+              id: lead.etapa_id,
+              nome: etapaOrigem?.nome || 'N/A',
+              funilId: lead.funil_id,
+              funilNome: funilAtualLead?.nome || 'N/A'
+            }
+          },
+          etapaDestino: {
+            id: etapaDestino.id,
+            nome: etapaDestino.nome,
+            funilId: etapaDestino.funil_id,
+            funilNome: funilDestino?.nome || 'N/A'
+          },
+          funilSelecionado: {
+            id: selectedFunil,
+            nome: funilOrigem?.nome || 'N/A'
+          },
+          validacao: {
+            etapaDestinoPertenceFunilSelecionado: etapaDestino.funil_id === selectedFunil,
+            funilAtualLead: lead.funil_id,
           funilSelecionado: selectedFunil
+          },
+          timestamp: new Date().toISOString(),
+          userAction: 'drag_and_drop'
         });
-        toast.error("Não é possível mover leads entre funis diferentes", {
-          description: "Use a opção 'Mover para outro funil' no menu do lead"
+        
+        toast.error("Movimentação entre funis bloqueada", {
+          description: `Você está tentando mover "${lead.name}" de "${funilOrigem?.nome || 'Funil selecionado'}" para "${funilDestino?.nome || 'outro funil'}". Use o menu do lead (⋮) → "Mover para outro funil" para fazer essa operação de forma segura.`,
+          duration: 6000,
+          action: {
+            label: "Entendi",
+            onClick: () => {}
+          }
         });
+        
+        // ✅ Liberar bloqueio em caso de erro
+        isMovingRef.current = false;
+        currentDragIdRef.current = null;
+        if (blockTimeoutRef.current) {
+          clearTimeout(blockTimeoutRef.current);
+          blockTimeoutRef.current = null;
+        }
         return;
+      }
+
+      // ✅ Validação 2: Verificar se o lead está sendo movido para o mesmo funil (consistência)
+      if (lead.funil_id && lead.funil_id !== selectedFunil && lead.funil_id !== etapaDestino.funil_id) {
+        console.warn('[DRAG END] ⚠️ Lead está em funil diferente do selecionado:', {
+          leadFunilId: lead.funil_id,
+          selectedFunilId: selectedFunil,
+          etapaDestinoFunilId: etapaDestino.funil_id,
+          leadNome: lead.name
+        });
+        // Continuar com a movimentação, mas logar para debug
       }
 
       // ✅ Verificar se já está na mesma etapa (movimento desnecessário)
       if (lead.etapa_id === newEtapaId) {
         console.log('[DRAG END] ℹ️ Lead já está na etapa destino - ignorando');
+        // ✅ Liberar bloqueio mesmo quando ignora movimento desnecessário
+        isMovingRef.current = false;
+        currentDragIdRef.current = null;
+        if (blockTimeoutRef.current) {
+          clearTimeout(blockTimeoutRef.current);
+          blockTimeoutRef.current = null;
+        }
         return;
       }
 
@@ -572,8 +816,12 @@ export default function KanbanPage() {
         )
       );
 
-      // 🔒 Bloquear novas operações
+      // ✅ CRÍTICO: Bloqueio já deve estar ativo desde handleDragStart
+      // Se não estiver, ativar agora
+      if (!isMovingRef.current) {
       isMovingRef.current = true;
+        console.log('🔒 [DRAG END] 🚫 BLOQUEIO ATIVADO (movimento de lead)');
+      }
 
       // 💾 Atualizar no banco de dados
       const { error } = await supabase
@@ -582,16 +830,24 @@ export default function KanbanPage() {
           etapa_id: newEtapaId,
           funil_id: etapaDestino.funil_id,
           stage: etapaDestino.nome.toLowerCase(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString() // ✅ NOTA: Tabela leads usa "updated_at", não "atualizado_em"
         })
         .eq("id", leadId);
 
       if (error) {
         console.error('[DRAG END] ❌ Erro na atualização do banco:', error);
+        // ✅ Liberar bloqueio em caso de erro ANTES de lançar exceção
+        isMovingRef.current = false;
+        currentDragIdRef.current = null;
+        if (blockTimeoutRef.current) {
+          clearTimeout(blockTimeoutRef.current);
+          blockTimeoutRef.current = null;
+        }
         throw error;
       }
 
-      console.log('[DRAG END] ✅ Lead movido com sucesso no banco');
+      // ✅ CRÍTICO: Confirmar sucesso do servidor ANTES de liberar bloqueio
+      console.log('[DRAG END] ✅ Lead movido com sucesso no banco - Confirmado pelo servidor');
       toast.success(`Lead movido para "${etapaDestino.nome}"`, {
         description: `${lead.name} foi movido com sucesso`
       });
@@ -609,6 +865,15 @@ export default function KanbanPage() {
         },
         source: 'Funil'
       });
+
+      // ✅ CRÍTICO: Liberar bloqueio APÓS confirmação do servidor
+      isMovingRef.current = false;
+      currentDragIdRef.current = null;
+      if (blockTimeoutRef.current) {
+        clearTimeout(blockTimeoutRef.current);
+        blockTimeoutRef.current = null;
+      }
+      console.log('🔓 [DRAG END] ✅ BLOQUEIO LIBERADO - Após confirmação do servidor');
 
     } catch (error: any) {
       console.error('[DRAG END] ❌ Erro crítico ao mover lead:', error);
@@ -654,8 +919,17 @@ export default function KanbanPage() {
         );
       }
     } finally {
-      // 🔓 Liberar bloqueio de operações
+      // ✅ CRÍTICO: Garantir que bloqueio seja sempre liberado (mesmo em caso de erro)
+      if (isMovingRef.current && currentDragIdRef.current === dragId) {
+        console.log('🔓 [DRAG END] ✅ BLOQUEIO LIBERADO (finally) - Garantindo liberação segura');
       isMovingRef.current = false;
+        currentDragIdRef.current = null;
+      }
+      // ✅ Limpar timeout de segurança
+      if (blockTimeoutRef.current) {
+        clearTimeout(blockTimeoutRef.current);
+        blockTimeoutRef.current = null;
+      }
     }
   };
 
@@ -665,8 +939,28 @@ export default function KanbanPage() {
     [etapas, selectedFunil]
   );
 
+  // ✅ OTIMIZADO - Cálculo de métricas com debounce e limitação de processamento
   // 🎯 Pré-calcular totais e métricas avançadas de todas as etapas de uma vez (mais eficiente)
-  const etapaStats = useMemo(() => {
+  const [etapaStats, setEtapaStats] = useState<Record<string, { 
+    total: number; 
+    count: number; 
+    leads: Lead[];
+    valorMedio: number;
+    taxaConversao: number;
+    tempoMedio: number;
+  }>>({});
+
+  // ✅ Função otimizada para calcular métricas com limite de leads
+  const calcularMétricasOtimizado = useCallback((leadsParaProcessar: Lead[], etapasParaProcessar: Etapa[]) => {
+    console.log('📊 [MÉTRICAS] Iniciando cálculo otimizado:', {
+      totalLeads: leadsParaProcessar.length,
+      totalEtapas: etapasParaProcessar.length,
+      limite: MAX_LEADS_TO_PROCESS
+    });
+
+    setCalculatingMetrics(true);
+    const startTime = performance.now();
+
     const stats: Record<string, { 
       total: number; 
       count: number; 
@@ -676,36 +970,57 @@ export default function KanbanPage() {
       tempoMedio: number;
     }> = {};
     
-    etapasFiltradas.forEach((etapa, index) => {
-      const leadsNaEtapa = leads.filter(l => l.etapa_id === etapa.id);
-      const total = leadsNaEtapa.reduce((sum, lead) => sum + (lead.value || 0), 0);
+    // ✅ Limitar quantidade de leads processados
+    const leadsLimitados = leadsParaProcessar.slice(0, MAX_LEADS_TO_PROCESS);
+    const excedeuLimite = leadsParaProcessar.length > MAX_LEADS_TO_PROCESS;
+    
+    if (excedeuLimite) {
+      console.warn(`⚠️ [MÉTRICAS] Processando apenas ${MAX_LEADS_TO_PROCESS} de ${leadsParaProcessar.length} leads para manter performance`);
+    }
+
+    // ✅ Processar por etapas (chunks)
+    etapasParaProcessar.forEach((etapa, index) => {
+      // Filtrar leads da etapa (usando limite)
+      const leadsNaEtapa = leadsLimitados.filter(l => l.etapa_id === etapa.id);
       const count = leadsNaEtapa.length;
+      
+      // ✅ Calcular total apenas dos leads processados
+      const total = leadsNaEtapa.reduce((sum, lead) => sum + (lead.value || 0), 0);
       
       // 📊 Valor médio por lead
       const valorMedio = count > 0 ? total / count : 0;
       
       // 📈 Taxa de conversão (quantos leads avançaram para próxima etapa)
       let taxaConversao = 0;
-      if (index < etapasFiltradas.length - 1) {
-        const proximaEtapa = etapasFiltradas[index + 1];
-        const leadsProximaEtapa = leads.filter(l => l.etapa_id === proximaEtapa.id).length;
+      if (index < etapasParaProcessar.length - 1) {
+        const proximaEtapa = etapasParaProcessar[index + 1];
+        const leadsProximaEtapa = leadsLimitados.filter(l => l.etapa_id === proximaEtapa.id).length;
         taxaConversao = count > 0 ? (leadsProximaEtapa / count) * 100 : 0;
       }
       
-      // ⏱️ Tempo médio na etapa (simulado - em produção viria do histórico)
-      // Por enquanto, vamos calcular com base na idade dos leads
-      const tempoMedio = leadsNaEtapa.length > 0
-        ? leadsNaEtapa.reduce((sum, lead) => {
-            const createdAt = new Date(lead.created_at || Date.now());
+      // ⏱️ Tempo médio na etapa (otimizado - processa apenas leads visíveis)
+      let tempoMedio = 0;
+      if (count > 0) {
+        // ✅ Processar em lotes menores para não travar
+        const chunkSize = 50;
+        let totalDias = 0;
             const now = new Date();
+
+        for (let i = 0; i < leadsNaEtapa.length; i += chunkSize) {
+          const chunk = leadsNaEtapa.slice(i, i + chunkSize);
+          totalDias += chunk.reduce((sum, lead) => {
+            const createdAt = new Date(lead.created_at || Date.now());
             const dias = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
             return sum + dias;
-          }, 0) / leadsNaEtapa.length
-        : 0;
+          }, 0);
+        }
+        
+        tempoMedio = totalDias / count;
+      }
       
       stats[etapa.id] = {
         total,
-        count,
+        count: excedeuLimite && index === 0 ? count + (leadsParaProcessar.length - MAX_LEADS_TO_PROCESS) : count,
         leads: leadsNaEtapa,
         valorMedio,
         taxaConversao,
@@ -713,8 +1028,37 @@ export default function KanbanPage() {
       };
     });
     
-    return stats;
-  }, [etapasFiltradas, leads]);
+    const endTime = performance.now();
+    console.log(`✅ [MÉTRICAS] Cálculo concluído em ${(endTime - startTime).toFixed(2)}ms`);
+
+    setEtapaStats(stats);
+    setCalculatingMetrics(false);
+  }, []);
+
+  // ✅ useMemo com debounce para recalcular métricas apenas quando necessário
+  useEffect(() => {
+    // Limpar debounce anterior
+    if (metricsDebounceRef.current) {
+      clearTimeout(metricsDebounceRef.current);
+    }
+
+    // ✅ Debounce de 300ms para evitar cálculos excessivos
+    metricsDebounceRef.current = setTimeout(() => {
+      if (etapasFiltradas.length > 0 && leads.length > 0) {
+        calcularMétricasOtimizado(leads, etapasFiltradas);
+      } else {
+        setEtapaStats({});
+        setCalculatingMetrics(false);
+      }
+    }, 300);
+
+    // ✅ Cleanup ao desmontar ou quando dependências mudarem
+    return () => {
+      if (metricsDebounceRef.current) {
+        clearTimeout(metricsDebounceRef.current);
+      }
+    };
+  }, [etapasFiltradas, leads, calcularMétricasOtimizado]);
 
   // 🎯 Função otimizada para obter total de uma etapa
   const calcularTotalEtapa = useCallback((etapaId: string) => {
@@ -753,11 +1097,38 @@ export default function KanbanPage() {
 
     console.log('[REORDER] Iniciando reordenação:', { activeId, overId });
 
+    // ✅ CRÍTICO: Ativar bloqueio durante reordenação de etapas
+    if (isMovingRef.current) {
+      console.warn('[REORDER] ⚠️ Operação de drag já em andamento - aguardando');
+      return;
+    }
+
+    isMovingRef.current = true;
+    console.log('🔒 [REORDER] 🚫 BLOQUEIO ATIVADO - Reordenação de etapas');
+
+    // ✅ Timeout de segurança (5s) para reordenação de etapas
+    if (blockTimeoutRef.current) {
+      clearTimeout(blockTimeoutRef.current);
+    }
+    blockTimeoutRef.current = setTimeout(() => {
+      if (isMovingRef.current) {
+        console.warn('⚠️ [REORDER TIMEOUT] Liberando bloqueio após 5s de segurança');
+        isMovingRef.current = false;
+        blockTimeoutRef.current = null;
+      }
+    }, 5000);
+
     const activeIndex = etapasFiltradas.findIndex(etapa => etapa.id === activeId);
     const overIndex = etapasFiltradas.findIndex(etapa => etapa.id === overId);
 
     if (activeIndex === -1 || overIndex === -1) {
       console.error('[REORDER] Índices não encontrados:', { activeIndex, overIndex });
+      // ✅ Liberar bloqueio em caso de erro
+      isMovingRef.current = false;
+      if (blockTimeoutRef.current) {
+        clearTimeout(blockTimeoutRef.current);
+        blockTimeoutRef.current = null;
+      }
       return;
     }
 
@@ -800,8 +1171,15 @@ export default function KanbanPage() {
             console.warn('[REORDER] RPC reorder_etapas não disponível, usando updates individuais:', rpcErr);
             rpcError = rpcErr;
           } else {
-            console.log('[REORDER] Etapas reordenadas com sucesso via RPC');
+            console.log('[REORDER] Etapas reordenadas com sucesso via RPC - Confirmado pelo servidor');
             toast.success('Etapas reordenadas com sucesso');
+            // ✅ CRÍTICO: Liberar bloqueio APÓS confirmação do servidor (via RPC)
+            isMovingRef.current = false;
+            if (blockTimeoutRef.current) {
+              clearTimeout(blockTimeoutRef.current);
+              blockTimeoutRef.current = null;
+            }
+            console.log('🔓 [REORDER] ✅ BLOQUEIO LIBERADO - Após confirmação do servidor (RPC)');
             return; // Sucesso via RPC, não precisa fazer updates individuais
           }
         } catch (e) {
@@ -811,20 +1189,23 @@ export default function KanbanPage() {
       }
 
       // ✅ CRÍTICO: Fallback para updates individuais - NÃO REMOVER
-      // ✅ IMPORTANTE: Usa campo atualizado_em (NÃO updated_at)
+      // ✅ IMPORTANTE: Tabela etapas usa campo "atualizado_em" (NÃO "updated_at")
+      // Schema: Ver migration 20251022210449_fa6c8264-1153-40d0-a942-f85e5035729b.sql linha 59
+      // RPC function: Ver migration 20251031221500_reorder_etapas_function.sql linha 64
       const updates = updatedEtapas.map(etapa => ({
         id: etapa.id,
         posicao: etapa.posicao,
-        atualizado_em: new Date().toISOString() // ✅ CRÍTICO: atualizado_em não updated_at
+        atualizado_em: new Date().toISOString() // ✅ CRÍTICO: Campo correto é "atualizado_em"
       }));
 
       // Executar todas as atualizações em paralelo para ser mais rápido
+      // ✅ CRÍTICO: Usar campo "atualizado_em" (schema da tabela etapas)
       const updatePromises = updates.map(update =>
         supabase
           .from('etapas')
           .update({
             posicao: update.posicao,
-            atualizado_em: update.atualizado_em // ✅ CRÍTICO: atualizado_em não updated_at
+            atualizado_em: update.atualizado_em // ✅ Schema: atualizado_em TIMESTAMP (migration linha 59)
           })
           .eq('id', update.id)
       );
@@ -838,8 +1219,17 @@ export default function KanbanPage() {
         throw new Error('Erro ao atualizar posições das etapas');
       }
 
-      console.log('[REORDER] Etapas reordenadas com sucesso no banco');
+      // ✅ CRÍTICO: Confirmar sucesso do servidor ANTES de liberar bloqueio
+      console.log('[REORDER] Etapas reordenadas com sucesso no banco - Confirmado pelo servidor');
       toast.success('Etapas reordenadas com sucesso');
+
+      // ✅ CRÍTICO: Liberar bloqueio APÓS confirmação do servidor
+      isMovingRef.current = false;
+      if (blockTimeoutRef.current) {
+        clearTimeout(blockTimeoutRef.current);
+        blockTimeoutRef.current = null;
+      }
+      console.log('🔓 [REORDER] ✅ BLOQUEIO LIBERADO - Após confirmação do servidor');
 
     } catch (error) {
       console.error('[REORDER] Erro ao reordenar etapas:', error);
@@ -847,6 +1237,26 @@ export default function KanbanPage() {
 
       // Reverter mudanças locais em caso de erro
       await refreshEtapas();
+
+      // ✅ Liberar bloqueio em caso de erro
+      isMovingRef.current = false;
+      if (blockTimeoutRef.current) {
+        clearTimeout(blockTimeoutRef.current);
+        blockTimeoutRef.current = null;
+      }
+      console.log('🔓 [REORDER] ✅ BLOQUEIO LIBERADO - Após erro');
+
+    } finally {
+      // ✅ CRÍTICO: Garantir que bloqueio seja sempre liberado (mesmo em caso de erro)
+      if (isMovingRef.current) {
+        console.log('🔓 [REORDER] ✅ BLOQUEIO LIBERADO (finally) - Garantindo liberação segura');
+        isMovingRef.current = false;
+      }
+      // ✅ Limpar timeout de segurança
+      if (blockTimeoutRef.current) {
+        clearTimeout(blockTimeoutRef.current);
+        blockTimeoutRef.current = null;
+      }
     }
   }, [etapasFiltradas, selectedFunil]);
 
@@ -922,9 +1332,21 @@ export default function KanbanPage() {
             ) : (
               <WifiOff className="h-5 w-5 text-red-500" />
             )}
+            {/* ✅ Indicador de loading das métricas */}
+            {calculatingMetrics && (
+              <div className="flex items-center gap-2 ml-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                <span className="text-xs text-muted-foreground">Calculando métricas...</span>
+              </div>
+            )}
           </h1>
           <p className="text-muted-foreground">
             Gerencie seus leads por etapas • {isOnline ? 'Online' : 'Offline'}
+            {leads.length > MAX_LEADS_TO_PROCESS && (
+              <span className="ml-2 text-xs text-yellow-600">
+                • Processando {MAX_LEADS_TO_PROCESS} de {leads.length} leads
+              </span>
+            )}
           </p>
         </div>
         <div className="flex gap-2">

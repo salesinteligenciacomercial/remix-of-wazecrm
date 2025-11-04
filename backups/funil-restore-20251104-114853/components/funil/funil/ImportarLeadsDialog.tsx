@@ -165,11 +165,7 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("❌ Usuário não autenticado. Faça login e tente novamente.");
-        setLoading(false);
-        return;
-      }
+      if (!user) throw new Error("Usuário não autenticado");
 
       // Buscar company_id do usuário com tratamento de erro explícito
       const { data: userRole, error: roleError } = await supabase
@@ -179,14 +175,12 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
         .maybeSingle();
 
       if (roleError) {
-        toast.error("❌ Não foi possível verificar sua empresa. Tente novamente ou contate o suporte.");
-        setLoading(false);
+        toast.error("Não foi possível verificar sua empresa. Tente novamente ou contate o suporte.");
         return;
       }
 
       if (!userRole?.company_id) {
-        toast.error("⚠️ Sua conta não está vinculada a uma empresa. Solicite configuração ao administrador.");
-        setLoading(false);
+        toast.error("Sua conta não está vinculada a uma empresa. Solicite configuração ao administrador.");
         return;
       }
 

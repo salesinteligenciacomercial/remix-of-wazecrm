@@ -2,7 +2,7 @@ import React, { useEffect, useState, memo, useCallback } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Phone, Mail, User, Trash2, MessageCircle, Building2, Tag, Calendar, CheckSquare, ChevronDown, ChevronUp, MoreVertical } from "lucide-react";
+import { Phone, Mail, User, Trash2, MessageCircle, Building2, Tag, Calendar, CheckSquare, ChevronDown, ChevronUp } from "lucide-react";
 import { AgendaModal } from "@/components/agenda/AgendaModal";
 import { TarefaModal } from "@/components/tarefas/TarefaModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -10,17 +10,20 @@ import { Badge } from "@/components/ui/badge";
 import { EditarLeadDialog } from "./EditarLeadDialog";
 import { MoverLeadFunilDialog } from "./MoverLeadFunilDialog";
 import { LeadComments } from "./LeadComments";
-import { useNavigate } from "react-router-dom";
+import { ConversasModal } from "./ConversasModal";
 import { supabase } from "@/integrations/supabase/client";
-import { ConversaPopup } from "@/components/leads/ConversaPopup";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
 /**
- * ✅ BACKUP ATUALIZADO - 2024-11-01
- * IMPORTANTE: Deve passar initialNotes={lead.notes ?? null} ao LeadComments
+ * ✅ BACKUP ATUALIZADO - 2024-11-01 (TARDE)
+ * IMPORTANTE: 
+ * 1. Deve passar initialNotes={lead.notes ?? null} ao LeadComments
+ * 2. useDraggable DEVE passar etapaId no data (linha 105)
+ * 
  * Se este arquivo retroceder, verificar:
  * 1. Interface LeadCardProps inclui notes?: string | null
  * 2. LeadComments recebe initialNotes={lead.notes ?? null}
+ * 3. useDraggable data inclui etapaId: lead.etapa_id (CRÍTICO para identificar destino)
  */
 
 interface LeadCardProps {
@@ -43,14 +46,12 @@ interface LeadCardProps {
 }
 
 export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, isDragging: externalIsDragging }: LeadCardProps) {
-  const navigate = useNavigate();
   const [agendaModalOpen, setAgendaModalOpen] = useState(false);
   const [tarefaModalOpen, setTarefaModalOpen] = useState(false);
+  const [conversasModalOpen, setConversasModalOpen] = useState(false);
   const [proximoCompromisso, setProximoCompromisso] = useState<string | null>(null);
   const [proximaTarefa, setProximaTarefa] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [conversaOpen, setConversaOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
 
   const carregarProximasAtividades = useCallback(async () => {
     try {
@@ -105,7 +106,8 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
     id: lead.id,
     data: {
       type: 'lead',
-      lead: lead
+      lead: lead,
+      etapaId: lead.etapa_id // ✅ CRÍTICO: Passar etapaId para identificar etapa de destino
     }
   });
 
@@ -133,15 +135,17 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
     transition: 'all 200ms ease',
   };
 
+  // ✅ Novo: Abre modal de conversas ao invés de redirecionar
   const abrirConversa = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
     if (lead.telefone) {
-      setConversaOpen(true);
+      setConversasModalOpen(true);
     } else {
-      console.warn('Lead sem telefone:', lead.nome);
+      toast.error('Lead sem telefone cadastrado. Edite o lead para adicionar um número.');
     }
-  }, [lead.telefone, lead.nome]);
+  }, [lead.telefone]);
 
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -198,27 +202,8 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
             </div>
           </div>
 
-          {/* Ações (menu) + expandir */}
+          {/* Botão de expandir/colapsar */}
           <div className="flex items-center gap-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={(e) => { e.stopPropagation(); }}
-                  onMouseDown={(e) => { e.stopPropagation(); }}
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                <DropdownMenuItem onClick={() => setEditOpen(true)}>Editar lead</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setConversaOpen(true)}>Ver conversas</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={(e) => { handleDelete(e as any); }}>Excluir</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
             <Button
               variant="ghost"
               size="sm"
@@ -344,7 +329,7 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
                     size="sm"
                     className="h-7 px-2 text-success hover:text-success hover:bg-success/10 transition-all"
                     onClick={abrirConversa}
-                    title="Ver histórico de conversas"
+                    title="Ver histórico de conversas (popup)"
                   >
                     <MessageCircle className="h-3.5 w-3.5 mr-1" />
                     <span className="text-xs font-medium">Ver Conversas</span>
@@ -376,30 +361,20 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
               </Badge>
             )}
 
-            {/* ✅ CRÍTICO: Passa notes do lead ao LeadComments - Se retroceder, verificar se passa initialNotes */}
+            {/* Comentários do lead */}
             <LeadComments
               leadId={lead.id}
-              initialNotes={lead.notes ?? null} // ✅ IMPORTANTE: Passa notes do lead
               onCommentAdded={() => onLeadMoved?.()}
             />
           </div>
         )}
 
-        {/* Popup de Conversa (reutilizado do menu Leads) */}
-        <ConversaPopup
-          open={conversaOpen}
-          onOpenChange={setConversaOpen}
+        {/* Modal de Conversas */}
+        <ConversasModal
+          open={conversasModalOpen}
+          onOpenChange={setConversasModalOpen}
           leadId={lead.id}
           leadName={lead.nome}
-          leadPhone={lead.telefone}
-        />
-
-        {/* Dialogo de edição (controlado pelo menu) */}
-        <EditarLeadDialog
-          lead={lead}
-          onLeadUpdated={onLeadMoved || (() => {})}
-          open={editOpen}
-          onOpenChange={setEditOpen}
         />
       </div>
     </Card>
