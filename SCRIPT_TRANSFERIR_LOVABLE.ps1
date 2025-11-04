@@ -231,3 +231,5 @@ Write-Host "   - GUIA_TRANSFERENCIA_LOVABLE.md (guia completo)" -ForegroundColor
 Write-Host "   - CHECKLIST_TRANSFERENCIA_LOVABLE.md (checklist rápido)" -ForegroundColor White
 Write-Host ""
 
+
+

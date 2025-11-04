@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -43,18 +43,20 @@ export function ConversasModal({ open, onOpenChange, lead }: ConversasModalProps
 
   // Carregar mensagens do lead
   useEffect(() => {
-    if (open && lead.id) {
+    if (open && (lead.id || lead.telefone)) {
       carregarMensagens();
       // Configurar realtime para novas mensagens
+      const channelName = lead.id ? `conversas-lead-${lead.id}` : `conversas-telefone-${lead.telefone?.replace(/\D/g, "")}`;
+      
       const channel = supabase
-        .channel(`conversas-lead-${lead.id}`)
+        .channel(channelName)
         .on(
           'postgres_changes',
           {
             event: '*',
             schema: 'public',
             table: 'whatsapp_messages',
-            filter: `lead_id=eq.${lead.id}`
+            filter: lead.id ? `lead_id=eq.${lead.id}` : undefined
           },
           () => {
             carregarMensagens();
@@ -66,7 +68,7 @@ export function ConversasModal({ open, onOpenChange, lead }: ConversasModalProps
         supabase.removeChannel(channel);
       };
     }
-  }, [open, lead.id]);
+  }, [open, lead.id, lead.telefone]);
 
   // Scroll para última mensagem
   useEffect(() => {
@@ -82,12 +84,26 @@ export function ConversasModal({ open, onOpenChange, lead }: ConversasModalProps
     try {
       setLoading(true);
       
-      // Buscar mensagens do lead
-      const { data: messagesData, error } = await supabase
+      // Buscar mensagens do lead por lead_id ou telefone
+      let query = supabase
         .from("whatsapp_messages")
         .select("*")
-        .eq("lead_id", lead.id)
         .order("created_at", { ascending: true });
+
+      // Buscar por lead_id se disponível
+      if (lead.id) {
+        query = query.eq("lead_id", lead.id);
+      } else if (lead.telefone) {
+        // Se não tiver lead_id, buscar por telefone
+        const telefoneFormatado = lead.telefone.replace(/\D/g, "");
+        query = query.or(`to.eq.${telefoneFormatado},from.eq.${telefoneFormatado}`);
+      } else {
+        setMessages([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: messagesData, error } = await query;
 
       if (error) throw error;
 
@@ -97,7 +113,7 @@ export function ConversasModal({ open, onOpenChange, lead }: ConversasModalProps
         content: msg.content || msg.body || "",
         type: msg.type || "text",
         sender: msg.direction === "inbound" || msg.from_user === false ? "contact" : "user",
-        timestamp: new Date(msg.created_at || msg.timestamp),
+        timestamp: new Date(msg.created_at || msg.timestamp || Date.now()),
         delivered: msg.status === "delivered" || msg.status === "read",
         read: msg.status === "read",
         mediaUrl: msg.media_url || msg.mediaUrl,
@@ -106,7 +122,9 @@ export function ConversasModal({ open, onOpenChange, lead }: ConversasModalProps
       setMessages(formattedMessages);
     } catch (error: any) {
       console.error("Erro ao carregar mensagens:", error);
-      toast.error("Erro ao carregar conversas");
+      toast.error("Erro ao carregar conversas", {
+        description: error.message || "Tente novamente"
+      });
     } finally {
       setLoading(false);
     }
@@ -298,15 +316,33 @@ export function ConversasModal({ open, onOpenChange, lead }: ConversasModalProps
               placeholder={lead.telefone ? "Digite sua mensagem..." : "Lead sem telefone"}
               disabled={!lead.telefone || sending}
               className="flex-1"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (messageInput.trim() && lead.telefone && !sending) {
+                    enviarMensagem(e);
+                  }
+                }
+              }}
             />
             <Button
               type="submit"
               disabled={!messageInput.trim() || !lead.telefone || sending}
               size="icon"
+              title={lead.telefone ? "Enviar mensagem (Enter)" : "Lead sem telefone cadastrado"}
             >
-              <Send className="h-4 w-4" />
+              {sending ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
             </Button>
           </div>
+          {!lead.telefone && (
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              Adicione um telefone ao lead para enviar mensagens
+            </p>
+          )}
         </form>
       </DialogContent>
     </Dialog>

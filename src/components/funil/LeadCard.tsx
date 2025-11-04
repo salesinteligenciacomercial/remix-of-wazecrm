@@ -12,6 +12,7 @@ import { MoverLeadFunilDialog } from "./MoverLeadFunilDialog";
 import { LeadComments } from "./LeadComments";
 import { ConversasModal } from "./ConversasModal";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "react-toastify";
 
 /**
  * ✅ BACKUP ATUALIZADO - 2024-11-01 (TARDE)
@@ -138,13 +139,13 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
   const abrirConversa = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-
+    
     if (lead.telefone) {
       setConversasModalOpen(true);
     } else {
-      console.warn('Lead sem telefone:', lead.nome);
+      toast.error('Lead sem telefone cadastrado. Edite o lead para adicionar um número.');
     }
-  }, [lead.telefone, lead.nome]);
+  }, [lead.telefone]);
 
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -328,7 +329,7 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
                     size="sm"
                     className="h-7 px-2 text-success hover:text-success hover:bg-success/10 transition-all"
                     onClick={abrirConversa}
-                    title="Ver histórico de conversas"
+                    title="Ver histórico de conversas (popup)"
                   >
                     <MessageCircle className="h-3.5 w-3.5 mr-1" />
                     <span className="text-xs font-medium">Ver Conversas</span>
