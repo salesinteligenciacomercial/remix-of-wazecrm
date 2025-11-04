@@ -12,7 +12,7 @@ import { MoverLeadFunilDialog } from "./MoverLeadFunilDialog";
 import { LeadComments } from "./LeadComments";
 import { ConversasModal } from "./ConversasModal";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 
 /**
  * ✅ BACKUP ATUALIZADO - 2024-11-01 (TARDE)
@@ -361,20 +361,20 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
               </Badge>
             )}
 
-            {/* ✅ CRÍTICO: Passa notes do lead ao LeadComments - Se retroceder, verificar se passa initialNotes */}
+            {/* Comentários do lead */}
             <LeadComments
               leadId={lead.id}
-              initialNotes={lead.notes ?? null} // ✅ IMPORTANTE: Passa notes do lead
               onCommentAdded={() => onLeadMoved?.()}
             />
           </div>
         )}
 
-        {/* ✅ Modal de Conversas - Abre popup sem redirecionar */}
+        {/* Modal de Conversas */}
         <ConversasModal
           open={conversasModalOpen}
           onOpenChange={setConversasModalOpen}
-          lead={lead}
+          leadId={lead.id}
+          leadName={lead.nome}
         />
       </div>
     </Card>
