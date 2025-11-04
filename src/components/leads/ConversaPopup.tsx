@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { 
   Send, MessageSquare, Info, User, DollarSign, Tag, 
-  TrendingUp, Zap, Clock
+  TrendingUp, Zap, Clock, MoreVertical, Edit, Trash2, Save
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -22,6 +22,8 @@ import { TarefaModal } from "@/components/tarefas/TarefaModal";
 import { Dialog as UIDialog, DialogContent as UIDialogContent, DialogHeader as UIDialogHeader, DialogTitle as UIDialogTitle, DialogTrigger as UIDialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useGlobalSync } from "@/hooks/useGlobalSync";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { EditarLeadDialog } from "@/components/funil/EditarLeadDialog";
 
 interface ConversaPopupProps {
   open: boolean;
@@ -67,6 +69,7 @@ export function ConversaPopup({
   const [scheduledContent, setScheduledContent] = useState("");
   const [scheduledDatetime, setScheduledDatetime] = useState("");
   const [scheduledList, setScheduledList] = useState<any[]>([]);
+  const [editLeadOpen, setEditLeadOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Global events para sincronizar com Leads/Conversas
@@ -239,6 +242,56 @@ export function ConversaPopup({
       console.error("Erro ao carregar mensagens:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Ações rápidas do lead no cabeçalho
+  const salvarLeadRapido = async () => {
+    try {
+      if (leadVinculado) return;
+      const companyId = await getCompanyId();
+      const { data: { user } } = await supabase.auth.getSession();
+      if (!companyId || !user) {
+        toast.error('Não foi possível identificar a empresa ou usuário');
+        return;
+      }
+      const telefoneNormalizado = normalizePhoneBR(leadPhone || "");
+      const { data, error } = await supabase
+        .from('leads')
+        .insert([{
+          name: leadName,
+          telefone: telefoneNormalizado,
+          phone: telefoneNormalizado,
+          company_id: companyId,
+          owner_id: user.id,
+          status: 'novo',
+          stage: 'prospeccao'
+        }])
+        .select('*')
+        .maybeSingle();
+
+      if (error) throw error;
+      setLeadVinculado(data);
+      toast.success('Lead salvo no CRM');
+    } catch (err) {
+      console.error('Erro ao salvar lead:', err);
+      toast.error('Erro ao salvar lead');
+    }
+  };
+
+  const excluirLead = async () => {
+    try {
+      if (!leadVinculado?.id) return;
+      const { error } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', leadVinculado.id);
+      if (error) throw error;
+      setLeadVinculado(null);
+      toast.success('Lead excluído');
+    } catch (err) {
+      console.error('Erro ao excluir lead:', err);
+      toast.error('Erro ao excluir lead');
     }
   };
 
@@ -569,6 +622,50 @@ export function ConversaPopup({
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Menu de ações do lead */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 p-0"
+                  >
+                    <MoreVertical className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      if (!leadVinculado) {
+                        toast.error('Salve o lead antes de editar');
+                        return;
+                      }
+                      setEditLeadOpen(true);
+                    }}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Editar lead
+                  </DropdownMenuItem>
+                  {!leadVinculado && (
+                    <DropdownMenuItem onClick={salvarLeadRapido}>
+                      <Save className="h-4 w-4 mr-2" />
+                      Salvar lead no CRM
+                    </DropdownMenuItem>
+                  )}
+                  {leadVinculado && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={excluirLead}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir lead
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 variant="ghost"
                 size="icon"
@@ -848,6 +945,32 @@ export function ConversaPopup({
           </div>
         </UIDialogContent>
       </UIDialog>
+
+      {/* Dialog: Editar Lead (controle pelo menu do cabeçalho) */}
+      {leadVinculado && (
+        <EditarLeadDialog
+          lead={{
+            id: leadVinculado.id,
+            nome: leadVinculado.name || leadName,
+            telefone: leadVinculado.telefone || leadPhone || '',
+            email: leadVinculado.email || '',
+            cpf: leadVinculado.cpf || '',
+            value: leadVinculado.value || 0,
+            company: leadVinculado.company || '',
+            source: leadVinculado.source || '',
+            notes: leadVinculado.notes || '',
+            tags: leadVinculado.tags || [],
+            funil_id: leadVinculado.funil_id || undefined,
+            etapa_id: leadVinculado.etapa_id || undefined,
+          }}
+          open={editLeadOpen}
+          onOpenChange={(o) => setEditLeadOpen(o)}
+          onLeadUpdated={() => {
+            carregarLead();
+            toast.success('Lead atualizado');
+          }}
+        />
+      )}
 
       {/* Modais: Reunião e Tarefa */}
       <AgendaModal

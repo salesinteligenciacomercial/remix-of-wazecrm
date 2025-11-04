@@ -141,8 +141,8 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       toast.success("Comentário adicionado");
     } catch (e) {
       console.error("Erro ao adicionar comentário:", e);
-      setLocalComments(task.comments || []);
-      toast.error("Não foi possível adicionar o comentário");
+      // Manter comentário visível mesmo se a persistência falhar (otimismo)
+      toast.warning?.("Comentário salvo localmente. Sincronização pendente.") || toast.error("Não foi possível sincronizar o comentário");
     }
   }, [newComment, localComments, task.id, task.description, onUpdate]);
 

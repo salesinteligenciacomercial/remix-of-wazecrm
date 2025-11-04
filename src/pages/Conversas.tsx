@@ -37,6 +37,9 @@ import { useLeadsSync } from "@/hooks/useLeadsSync";
 import { useGlobalSync } from "@/hooks/useGlobalSync";
 import { useWorkflowAutomation } from "@/hooks/useWorkflowAutomation";
 
+// ID único para deduplicar o toast de reconexão
+const REALTIME_RESTORED_TOAST_ID = 'realtime-reconnected';
+
 interface Message {
   id: string;
   content: string;
@@ -1704,7 +1707,7 @@ function Conversas() {
           setRealtimeConnectionStatus('connected');
           setRealtimeReconnectAttempts(0);
           if (!hasShownReconnectToastRef.current) {
-            toast.success('Conexão em tempo real restaurada');
+            toast.success('Conexão em tempo real restaurada', { id: REALTIME_RESTORED_TOAST_ID, duration: 2500 });
             hasShownReconnectToastRef.current = true;
           }
         } catch (error) {
@@ -2100,11 +2103,13 @@ function Conversas() {
         } else if (status === 'CHANNEL_ERROR') {
           console.error('❌ [REALTIME] Erro no canal - tentando reconectar...');
           setRealtimeConnectionStatus('error');   
+          toast.dismiss(REALTIME_RESTORED_TOAST_ID);
           hasShownReconnectToastRef.current = false;
           reconnectRealtime();
         } else if (status === 'TIMED_OUT' || status === 'CLOSED') {
           console.warn('⚠️ [REALTIME] Canal desconectado - tentando reconectar...');
           setRealtimeConnectionStatus('disconnected');                                              
+          toast.dismiss(REALTIME_RESTORED_TOAST_ID);
           hasShownReconnectToastRef.current = false;
           reconnectRealtime();
         }

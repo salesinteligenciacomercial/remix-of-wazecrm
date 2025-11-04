@@ -31,6 +31,7 @@ import { useWorkflowAutomation } from "@/hooks/useWorkflowAutomation";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { EditarCompromissoDialog } from "@/components/agenda/EditarCompromissoDialog";
+import { AgendaColaboradores } from "@/components/agenda/AgendaColaboradores";
 
 interface Lembrete {
   id: string;
@@ -296,64 +297,6 @@ export default function Agenda() {
     destinatario_lembrete: "lead",
   });
 
-  useEffect(() => {
-    // Carregar apenas compromissos do mês atual inicialmente (otimização)
-    carregarCompromissosDoMes();
-    carregarLeads();
-    carregarLembretes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    
-    // Subscrever para atualizações em tempo real
-    const compromissosChannel = supabase
-      .channel('compromissos_realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'compromissos'
-        },
-        () => {
-          // Ao receber atualização em tempo real, recarregar apenas mês atual
-          carregarCompromissosDoMes();
-        }
-      )
-      .subscribe();
-
-    // Subscrever lembretes em tempo real
-    const lembretesChannel = supabase
-      .channel('lembretes_realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'lembretes'
-        },
-        () => {
-          carregarLembretes();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(compromissosChannel);
-      supabase.removeChannel(lembretesChannel);
-    };
-  }, [carregarCompromissosDoMes]);
-  
-  // Efeito para carregar compromissos quando mudar de mês
-  useEffect(() => {
-    const currentMonth = format(selectedDate, 'yyyy-MM');
-    const monthKey = format(startOfMonth(selectedDate), 'yyyy-MM');
-    
-    // Verificar se precisa carregar o mês atual
-    if (!loadedMonths.has(monthKey)) {
-      console.log(`📅 [Performance] Mês atual não carregado: ${monthKey}, carregando...`);
-      carregarCompromissosDoMes(selectedDate);
-    }
-  }, [selectedDate, loadedMonths, carregarCompromissosDoMes]);
-
   // Função otimizada para carregar compromissos com range de datas
   const carregarCompromissos = useCallback(async (startDate?: Date, endDate?: Date) => {
     try {
@@ -419,6 +362,65 @@ export default function Agenda() {
       return prev; // Retornar estado atual enquanto carrega
     });
   }, [selectedDate, carregarCompromissos]);
+
+  useEffect(() => {
+    // Carregar apenas compromissos do mês atual inicialmente (otimização)
+    carregarCompromissosDoMes();
+    carregarLeads();
+    carregarLembretes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
+    // Subscrever para atualizações em tempo real
+    const compromissosChannel = supabase
+      .channel('compromissos_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'compromissos'
+        },
+        () => {
+          // Ao receber atualização em tempo real, recarregar apenas mês atual
+          carregarCompromissosDoMes();
+        }
+      )
+      .subscribe();
+
+    // Subscrever lembretes em tempo real
+    const lembretesChannel = supabase
+      .channel('lembretes_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lembretes'
+        },
+        () => {
+          carregarLembretes();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(compromissosChannel);
+      supabase.removeChannel(lembretesChannel);
+    };
+  }, [carregarCompromissosDoMes]);
+  
+  // Efeito para carregar compromissos quando mudar de mês
+  useEffect(() => {
+    const currentMonth = format(selectedDate, 'yyyy-MM');
+    const monthKey = format(startOfMonth(selectedDate), 'yyyy-MM');
+    
+    // Verificar se precisa carregar o mês atual
+    if (!loadedMonths.has(monthKey)) {
+      console.log(`📅 [Performance] Mês atual não carregado: ${monthKey}, carregando...`);
+      carregarCompromissosDoMes(selectedDate);
+    }
+  }, [selectedDate, loadedMonths, carregarCompromissosDoMes]);
+
 
   const carregarLeads = async () => {
     try {
@@ -1391,17 +1393,7 @@ export default function Agenda() {
         </TabsContent>
 
         <TabsContent value="minhas-agendas">
-          <Card>
-            <CardHeader>
-              <CardTitle>Configurações de Agenda Individual</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12 text-muted-foreground">
-                <User className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>Configurações individuais em desenvolvimento</p>
-              </div>
-            </CardContent>
-          </Card>
+          <AgendaColaboradores />
         </TabsContent>
       </Tabs>
     </div>
