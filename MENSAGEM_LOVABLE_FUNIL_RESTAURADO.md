@@ -1,7 +1,7 @@
 # 📤 MENSAGEM PARA LOVABLE - Menu Funil Restaurado
 
-**Data:** 03/11/2025  
-**Commit:** `dea0aff`  
+**Data:** 04/11/2025  
+**Commit:** `88909f1`  
 **Branch:** `main`
 
 ---

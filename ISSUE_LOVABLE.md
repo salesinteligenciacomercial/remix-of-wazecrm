@@ -1,8 +1,8 @@
 # Menu Funil de Vendas Restaurado - Commit dea0aff
 
-**Commit:** `dea0aff`  
+**Commit:** `88909f1`  
 **Branch:** `main`  
-**Data:** 2025-11-03
+**Data:** 2025-11-04
 
 ---
 
