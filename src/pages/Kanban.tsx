@@ -1451,9 +1451,6 @@ export default function KanbanPage() {
             const hasMoreLeads = leadsNaEtapa.length > maxLeadsToShow;
 
             return (
-              <>
-                {/* key no Fragment evita erro de tipo no componente */}
-                {/* eslint-disable-next-line react/jsx-key */}
                 <React.Fragment key={etapa.id}>
                   <SortableColumn
                     id={etapa.id}
@@ -1519,7 +1516,6 @@ export default function KanbanPage() {
                   </DroppableColumn>
                   </SortableColumn>
                 </React.Fragment>
-              </>
             );
           })}
           </div>
