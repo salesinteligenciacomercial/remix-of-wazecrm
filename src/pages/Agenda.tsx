@@ -338,19 +338,17 @@ export default function Agenda() {
       supabase.removeChannel(compromissosChannel);
       supabase.removeChannel(lembretesChannel);
     };
-  }, [carregarCompromissosDoMes]);
+  }, []);
   
   // Efeito para carregar compromissos quando mudar de mês
   useEffect(() => {
-    const currentMonth = format(selectedDate, 'yyyy-MM');
     const monthKey = format(startOfMonth(selectedDate), 'yyyy-MM');
     
-    // Verificar se precisa carregar o mês atual
     if (!loadedMonths.has(monthKey)) {
       console.log(`📅 [Performance] Mês atual não carregado: ${monthKey}, carregando...`);
       carregarCompromissosDoMes(selectedDate);
     }
-  }, [selectedDate, loadedMonths, carregarCompromissosDoMes]);
+  }, [selectedDate, loadedMonths]);
 
   // Função otimizada para carregar compromissos com range de datas
   const carregarCompromissos = useCallback(async (startDate?: Date, endDate?: Date) => {
@@ -416,7 +414,7 @@ export default function Agenda() {
       
       return prev; // Retornar estado atual enquanto carrega
     });
-  }, [selectedDate, carregarCompromissos]);
+  }, [selectedDate]);
 
   const carregarLeads = async () => {
     try {

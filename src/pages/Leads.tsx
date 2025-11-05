@@ -1272,9 +1272,6 @@ export default function Leads() {
                       leadPhone={lead.phone || lead.telefone || undefined}
                       onEdit={() => handleEditarLead(lead)}
                       onDelete={() => handleExcluirLead(lead)}
-                      onOpenConversa={() => abrirConversa(lead)}
-                      onOpenAgenda={() => abrirAgenda(lead)}
-                      onOpenTarefa={() => abrirTarefa(lead)}
                     />
                     <LeadTagsDialog 
                       leadId={lead.id}
@@ -1340,13 +1337,6 @@ export default function Leads() {
             funil_id: leadParaEditar.funil_id || undefined,
             etapa_id: leadParaEditar.etapa_id || undefined,
           }}
-          open={showEditDialog}
-          onOpenChange={(open) => {
-            setShowEditDialog(open);
-            if (!open) {
-              setLeadParaEditar(null);
-            }
-          }}
           onLeadUpdated={() => {
             // Recarregar leads após editar
             console.log('🔄 [Leads] Recarregando leads após editar');
@@ -1393,9 +1383,11 @@ export default function Leads() {
               setLeadParaConversa(null);
             }
           }}
-          leadId={leadParaConversa.id}
-          leadName={leadParaConversa.name}
-          leadPhone={leadParaConversa.phone || leadParaConversa.telefone || undefined}
+          lead={{
+            id: leadParaConversa.id,
+            name: leadParaConversa.name,
+            phone: leadParaConversa.phone || leadParaConversa.telefone || ""
+          }}
         />
       )}
 
