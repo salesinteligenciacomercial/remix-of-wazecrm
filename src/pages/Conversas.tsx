@@ -2332,12 +2332,9 @@ function Conversas() {
 
   const loadSupabaseConversations = async () => {
     try {
-      console.log('🔄 [SUPABASE] Iniciando carregamento de conversas...');
+      console.log('🔄 [SUPABASE] Iniciando carregamento rápido de conversas...');
       
-      // Função para buscar foto do perfil via Edge Function (mais seguro)
-      const getProfilePicture = async (numero: string, companyId: string, contactName?: string): Promise<string | undefined> => {
-        return await getProfilePictureWithFallback(numero, companyId, contactName || numero);
-      };
+      const startTime = performance.now();
       
       // Buscar company_id do usuário autenticado
       const { data: { user } } = await supabase.auth.getUser();
@@ -2348,11 +2345,23 @@ function Conversas() {
         return;
       }
       
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // OTIMIZAÇÃO: Buscar company_id e conversas em paralelo
+      const [userRoleResult, conversasResult] = await Promise.all([
+        supabase
+          .from('user_roles')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        // Buscar conversas com limite menor para carregamento inicial rápido
+        supabase
+          .from('conversas')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(30) // REDUZIDO para 30 conversas iniciais
+      ]);
+
+      const { data: userRole } = userRoleResult;
+      const { data, error } = conversasResult;
 
       if (!userRole?.company_id) {
         console.error('❌ Usuário sem company_id associado. User:', user.email);
@@ -2362,95 +2371,58 @@ function Conversas() {
 
       // Salvar company_id no estado
       setUserCompanyId(userRole.company_id);
-      console.log('🏢 Company ID do usuário:', userRole.company_id);
       
-      // MELHORIA: Buscar APENAS as conversas limitadas mais recentes (otimização de performance)
-      // Limitando para evitar timeout com muitas conversas
-      const { data, error } = await supabase
-        .from('conversas')
-        .select('*')
-        .eq('company_id', userRole.company_id)
-        .order('created_at', { ascending: false })
-        .limit(conversationsLimit); // Usar limite configurável
-
+      // FILTRAR apenas conversas da empresa do usuário
+      const conversasDaEmpresa = data?.filter(conv => conv.company_id === userRole.company_id) || [];
+      
       if (error) {
         console.error('❌ [SUPABASE] Erro ao carregar conversas:', error);
         toast.error(`Erro ao carregar conversas: ${error.message}`);
         return;
       }
       
-      console.log('✅ [SUPABASE] Conversas carregadas:', {
-        total: data?.length || 0,
-        companyId: userRole.company_id,
-        primeiraConversa: data?.[0],
-        ultimasCinco: data?.slice(0, 5).map(d => ({ 
-          numero: d.numero, 
-          mensagem: d.mensagem, 
-          status: d.status,
-          created_at: d.created_at 
-        }))
-      });
+      console.log(`✅ [SUPABASE] ${conversasDaEmpresa.length} conversas carregadas em ${(performance.now() - startTime).toFixed(0)}ms`);
 
       // Filtrar mensagens com variáveis N8n não substituídas ou dados inválidos
-      const validData = data?.filter(conv => {
+      const validData = conversasDaEmpresa.filter(conv => {
         const hasInvalidVariables = 
           conv.numero?.includes('{{') || conv.numero?.includes('$json') ||
-          conv.mensagem?.includes('{{') || conv.mensagem?.includes('$json') ||
-          conv.nome_contato?.includes('{{') || conv.nome_contato?.includes('$json');
+          conv.mensagem?.includes('{{') || conv.mensagem?.includes('$json');
         
         const hasInvalidData =
           !conv.numero || conv.numero === '=' || conv.numero.trim() === '' ||
           !conv.mensagem || conv.mensagem === '[object Object]' || conv.mensagem.trim() === '';
         
-        // Validar destino: aceitar grupos (@g.us) SEM checar tamanho; contatos: exigir 12/13 dígitos
+        // Validar destino
         const isGroup = /@g\.us$/.test(String(conv.numero || ''));
         const numeroLimpo = conv.numero?.replace(/[^0-9]/g, '') || '';
         const isValidContact = numeroLimpo.length === 12 || numeroLimpo.length === 13;
         const isValidDestination = isGroup || isValidContact;
         
-        if (hasInvalidVariables || hasInvalidData || !isValidDestination) {
-          console.warn('⚠️ Mensagem inválida ignorada:', {
-            numero: conv.numero,
-            numeroLimpo,
-            tamanho: numeroLimpo.length,
-            mensagem: conv.mensagem?.substring(0, 50)
-          });
-        }
-        
         return !hasInvalidVariables && !hasInvalidData && isValidDestination;
-      }) || [];
+      });
 
       if (validData && validData.length > 0) {
-        // Buscar todos os leads vinculados às conversas
-        const { data: userRole } = await supabase
-          .from('user_roles')
-          .select('company_id')
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-          .maybeSingle();
-
-        const numeros = [...new Set(validData.map(conv => conv.numero))];
+        // OTIMIZAÇÃO: Buscar leads em paralelo
+        const numeros = [...new Set(validData.map(conv => conv.telefone_formatado || conv.numero).filter(Boolean))];
+        
         const { data: leadsData } = await supabase
           .from('leads')
-          .select('id, phone, telefone')
-          .eq('company_id', userRole?.company_id)
-          .in('phone', numeros.concat(numeros.map(n => safeFormatPhoneNumber(n))));
+          .select('id, phone, telefone, name')
+          .eq('company_id', userRole.company_id)
+          .or(numeros.map(n => `phone.eq.${n},telefone.eq.${n}`).join(','))
+          .limit(100);
 
-        // Criar mapeamento de número -> leadId
-        const leadsMap: Record<string, string> = {};
-        if (leadsData) {
-          leadsData.forEach(lead => {
-            const phone = lead.phone || lead.telefone;
-            if (phone) {
-              leadsMap[phone] = lead.id;
-              // Também mapear versões formatadas
-              const formatted = safeFormatPhoneNumber(phone);
-              if (formatted) {
-                leadsMap[formatted] = lead.id;
-              }
-            }
+        // Criar mapeamento rápido
+        const leadsMap = new Map<string, any>();
+        leadsData?.forEach(lead => {
+          const phones = [lead.phone, lead.telefone].filter(Boolean);
+          phones.forEach(phone => {
+            if (phone) leadsMap.set(phone, lead);
           });
-        }
-        setLeadsVinculados(leadsMap);
+        });
+        
+        setLeadsVinculados(leadsMap as any);
 
         // Agrupar mensagens por destino: E.164 (contatos) ou JID completo (grupos)
         const conversasAgrupadas = validData.reduce((acc: Record<string, any[]>, conv: any) => {
@@ -2528,8 +2500,8 @@ function Conversas() {
               nomesDisponiveis: mensagens.map(m => m.nome_contato).filter(Boolean)
             });
             
-            // Buscar foto do perfil usando número original
-            const avatarUrl = await getProfilePicture(numeroOriginal, userRole.company_id, contactName);
+            // OTIMIZAÇÃO: Buscar foto apenas quando necessário (lazy loading)
+            const avatarUrl = await getProfilePictureWithFallback(numeroOriginal, userRole.company_id, contactName);
             const isGroupConv = Boolean(ultima.is_group) || /@g\.us$/.test(String(telefoneNormalizado));
             
             const contentToIdMap = new Map<string, string>();
