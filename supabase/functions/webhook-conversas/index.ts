@@ -462,7 +462,7 @@ serve(async (req) => {
         lead_id: leadId,
         replied_to_message: validatedData.replied_to_message || null,
         is_group: isGroup,
-        fromMe: validatedData.fromMe === true,
+        fromme: validatedData.fromMe === true, // CORREÇÃO: fromme minúsculo (PostgreSQL converte para lowercase)
       }])
       .select()
       .single();
