@@ -136,43 +136,40 @@ serve(async (req) => {
         });
       }
 
-      console.log('📝 [CRIAR-USUARIO] Criando nova empresa...');
+      // CORREÇÃO: Subcontas usam o MESMO company_id da empresa master para compartilhar dados
+      console.log('📝 [CRIAR-USUARIO] Vinculando subconta à empresa master...');
       
-      // Criar nova empresa
-      const { data: newCompany, error: companyErr } = await supabaseAdmin
+      // Validar que parentCompanyId existe e é master
+      const { data: parentCompany, error: parentErr } = await supabaseAdmin
         .from('companies')
-        .insert({
-          name: companyName,
-          cnpj: cnpj || null,
-          parent_company_id: parentCompanyId,
-          is_master_account: false,
-          plan: plan || 'basic',
-          max_users: max_users || 5,
-          max_leads: max_leads || 1000,
-          status: 'active',
-          created_by: me.id,
-          settings: {
-            email,
-            telefone: telefone || null,
-            responsavel: responsavel || full_name,
-          }
-        })
-        .select('id')
+        .select('id, is_master_account')
+        .eq('id', parentCompanyId)
         .single();
 
-      if (companyErr || !newCompany) {
-        console.error('❌ [CRIAR-USUARIO] Erro ao criar empresa:', companyErr);
+      if (parentErr || !parentCompany) {
+        console.error('❌ [CRIAR-USUARIO] Empresa master não encontrada:', parentErr);
         return new Response(JSON.stringify({ 
-          error: 'Erro ao criar subconta',
-          details: companyErr?.message 
+          error: 'Empresa master não encontrada',
+          details: parentErr?.message 
         }), { 
-          status: 500, 
+          status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         });
       }
 
-      targetCompanyId = newCompany.id;
-      console.log('✅ [CRIAR-USUARIO] Empresa criada:', targetCompanyId);
+      if (!parentCompany.is_master_account) {
+        console.error('❌ [CRIAR-USUARIO] A empresa especificada não é master');
+        return new Response(JSON.stringify({ 
+          error: 'A empresa especificada não é uma conta master' 
+        }), { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+
+      // IMPORTANTE: Usar o company_id da empresa MASTER (não criar nova empresa)
+      targetCompanyId = parentCompanyId;
+      console.log('✅ [CRIAR-USUARIO] Subconta vinculada à empresa master:', targetCompanyId);
     } else {
       // Criar usuário em empresa existente
       const isCompanyAdminSameCompany = roles?.some(r => r.role === 'company_admin' && r.company_id === companyId) || false;
