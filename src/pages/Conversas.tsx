@@ -37,6 +37,7 @@ import { formatPhoneNumber, safeFormatPhoneNumber } from "@/utils/phoneFormatter
 import { useLeadsSync } from "@/hooks/useLeadsSync";
 import { useGlobalSync } from "@/hooks/useGlobalSync";
 import { useWorkflowAutomation } from "@/hooks/useWorkflowAutomation";
+import * as evolutionAPI from "@/services/evolutionApi";
 
 interface Message {
   id: string;
@@ -272,6 +273,10 @@ function Conversas() {
   const [taskColumns, setTaskColumns] = useState<any[]>([]);
   const [selectedTaskBoardId, setSelectedTaskBoardId] = useState<string>("");
   const [selectedTaskColumnId, setSelectedTaskColumnId] = useState<string>("");
+  
+  // Estados para sincronização WhatsApp e restauração de conversas
+  const [isContactInactive, setIsContactInactive] = useState(false);
+  const [restoringConversation, setRestoringConversation] = useState(false);
   
   // MELHORIA: Estados para sincronização realtime
   const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting' | 'error'>('disconnected');
@@ -2513,6 +2518,98 @@ function Conversas() {
     setConversations(initialConversations);
   };
 
+  // 🆕 SINCRONIZAR CONTATOS DO WHATSAPP
+  const syncWhatsAppContacts = async (companyId: string) => {
+    try {
+      const instanceName = await evolutionAPI.getInstanceName(companyId);
+      if (!instanceName) {
+        console.log("⚠️ Nenhuma instância WhatsApp configurada");
+        return;
+      }
+
+      console.log("🔄 Sincronizando contatos da instância:", instanceName);
+      const contacts = await evolutionAPI.getContacts(instanceName);
+      
+      if (contacts.length > 0) {
+        await evolutionAPI.syncContactsToDatabase(contacts, companyId);
+        console.log("✅ Contatos sincronizados:", contacts.length);
+      }
+    } catch (error) {
+      console.error("❌ Erro ao sincronizar contatos:", error);
+    }
+  };
+
+  // 🆕 RESTAURAR CONVERSA ANTIGA
+  const handleRestoreConversation = async () => {
+    if (!selectedConv?.phoneNumber || !userCompanyId) {
+      toast.error("Número de telefone ou empresa inválidos");
+      return;
+    }
+
+    try {
+      setRestoringConversation(true);
+      
+      const instanceName = await evolutionAPI.getInstanceName(userCompanyId);
+      if (!instanceName) {
+        toast.error("Instância WhatsApp não configurada");
+        return;
+      }
+
+      console.log("🔄 Restaurando conversa de:", selectedConv.phoneNumber);
+      
+      const messages = await evolutionAPI.getMessages(
+        instanceName,
+        selectedConv.phoneNumber,
+        15
+      );
+
+      if (messages.length === 0) {
+        toast.info("Nenhuma mensagem encontrada no WhatsApp");
+        return;
+      }
+
+      await evolutionAPI.saveMessagesToDatabase(
+        messages,
+        userCompanyId,
+        leadVinculado?.id
+      );
+
+      toast.success(`${messages.length} mensagens restauradas com sucesso!`);
+      
+      // Recarregar conversas
+      await loadSupabaseConversations();
+      setIsContactInactive(false);
+      
+    } catch (error) {
+      console.error("❌ Erro ao restaurar conversa:", error);
+      toast.error("Erro ao restaurar conversa");
+    } finally {
+      setRestoringConversation(false);
+    }
+  };
+
+  // 🆕 VERIFICAR SE CONTATO ESTÁ INATIVO (30+ DIAS)
+  useEffect(() => {
+    if (!selectedConv) {
+      setIsContactInactive(false);
+      return;
+    }
+
+    const messages = selectedConv.messages || [];
+    if (messages.length === 0) {
+      setIsContactInactive(true);
+      return;
+    }
+
+    const lastMessage = messages[messages.length - 1];
+    const lastMessageDate = new Date(lastMessage.timestamp);
+    const daysSinceLastMessage = Math.floor(
+      (Date.now() - lastMessageDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    setIsContactInactive(daysSinceLastMessage >= 30);
+  }, [selectedConv]);
+
   const loadSupabaseConversations = async () => {
     try {
       console.log('🚀 [PERFORMANCE] Carregamento ultra-rápido iniciado...');
@@ -2537,6 +2634,9 @@ function Conversas() {
       }
 
       setUserCompanyId(userRole.company_id);
+      
+      // 🆕 SINCRONIZAR CONTATOS DO WHATSAPP
+      await syncWhatsAppContacts(userRole.company_id);
       
       // ETAPA 2: Buscar APENAS colunas essenciais (não usar select('*'))
       const { data, error } = await supabase
@@ -5263,6 +5363,9 @@ function Conversas() {
               onCriarLead={criarLeadManualmente}
               onFinalizeAtendimento={finalizarAtendimento}
               onlineStatus={onlineStatus[selectedConv.id] || 'unknown'}
+              isContactInactive={isContactInactive}
+              onRestoreConversation={handleRestoreConversation}
+              restoringConversation={restoringConversation}
             />
 
             <div className="flex flex-1 overflow-hidden">

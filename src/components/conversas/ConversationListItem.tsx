@@ -180,7 +180,9 @@ function ConversationListItemComponent({
               </div>
             </div>
           </div>
-          <p className="text-sm text-muted-foreground truncate">{lastMessage}</p>
+          <p className="text-sm text-muted-foreground truncate">
+            {lastMessage || "Sem histórico de conversa"}
+          </p>
           
           {/* Informações do Lead */}
           <div className="mt-2 space-y-1.5">

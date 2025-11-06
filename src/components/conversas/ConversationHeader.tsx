@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Video, Info, User, MessageSquare, Instagram, Facebook, FileText, DollarSign, RefreshCw, CheckCircle2, AlertCircle, Loader2, Check, Plus } from "lucide-react";
+import { Phone, Video, Info, User, MessageSquare, Instagram, Facebook, FileText, DollarSign, RefreshCw, CheckCircle2, AlertCircle, Loader2, Check, Plus, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader as UIDialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useEffect, useState } from "react";
@@ -27,6 +27,9 @@ import { useEffect, useState } from "react";
    onCriarLead?: () => void;
    onFinalizeAtendimento?: (message: string) => void;
    onlineStatus?: OnlineStatus;
+   isContactInactive?: boolean;
+   onRestoreConversation?: () => void;
+   restoringConversation?: boolean;
  }
 
   export function ConversationHeader({
@@ -47,6 +50,9 @@ import { useEffect, useState } from "react";
    onCriarLead,
    onFinalizeAtendimento,
    onlineStatus = 'unknown',
+   isContactInactive = false,
+   onRestoreConversation,
+   restoringConversation = false,
   }: ConversationHeaderProps) {
    const [finalizeOpen, setFinalizeOpen] = useState(false);
    const [finalizeMessage, setFinalizeMessage] = useState("");
@@ -172,10 +178,33 @@ import { useEffect, useState } from "react";
                  )}
                </div>
              </div>
-           </div>
-            {/* Ações */}
-            <div className="flex items-center gap-1">
-             {onFinalizeAtendimento && (
+            </div>
+             {/* Ações */}
+             <div className="flex items-center gap-1">
+              {/* Botão Restaurar Conversa */}
+              {isContactInactive && onRestoreConversation && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onRestoreConversation}
+                  disabled={restoringConversation}
+                  className="mr-2 gap-1.5"
+                  title="Restaurar últimas mensagens do WhatsApp"
+                >
+                  {restoringConversation ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Restaurando...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="h-4 w-4" />
+                      Restaurar Conversa
+                    </>
+                  )}
+                </Button>
+              )}
+              {onFinalizeAtendimento && (
                <Dialog open={finalizeOpen} onOpenChange={setFinalizeOpen}>
                  <DialogTrigger asChild>
                    <Button 
