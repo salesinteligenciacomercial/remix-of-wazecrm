@@ -208,9 +208,9 @@ serve(async (req) => {
     const webhookSecret = Deno.env.get('WEBHOOK_SECRET');
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Extrair nome da instância da URL (ex: ?instance=DO2)
+    // Extrair nome da instância da URL (aceita ?instance= ou ?instanceName=)
     const url = new URL(req.url);
-    const instanceName = url.searchParams.get('instance');
+    const instanceName = url.searchParams.get('instance') || url.searchParams.get('instanceName');
 
     if (instanceName) {
       console.log('📡 Instância identificada:', instanceName);
