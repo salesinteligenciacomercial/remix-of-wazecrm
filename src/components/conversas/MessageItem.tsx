@@ -94,14 +94,22 @@ function MessageItemComponent({
   useEffect(() => {
     if (message.mediaUrl && (message.type === 'image' || message.type === 'video' || message.type === 'audio')) {
       setMediaLoading(true);
+      console.log('🔄 [MESSAGE-ITEM] Iniciando carregamento de mídia:', message.id);
+      
       getMediaUrl(message.id)
         .then((url) => {
+          console.log('✅ [MESSAGE-ITEM] Mídia carregada:', url);
           setMediaUrl(url);
           setMediaLoading(false);
         })
         .catch((error) => {
-          console.error('❌ Erro ao carregar mídia:', error);
+          console.error('❌ [MESSAGE-ITEM] Erro ao carregar mídia:', error);
           setMediaLoading(false);
+          toast({
+            title: "Erro ao carregar mídia",
+            description: "Não foi possível carregar a mídia. Tente novamente.",
+            variant: "destructive",
+          });
         });
     }
 
