@@ -309,15 +309,13 @@ export function EditarFunilDialog({ funilId, funilNome, onFunilUpdated }: Editar
           }
 
           // ✅ CRÍTICO: Fallback para UPDATE direto - NÃO REMOVER
-          // ✅ IMPORTANTE: Usa campo atualizado_em (NÃO updated_at)
           if (!updateError) {
             const { error: directUpdateError } = await supabase
               .from("etapas")
               .update({
                 nome: etapa.nome,
                 cor: etapa.cor,
-                posicao: i,
-                atualizado_em: new Date().toISOString() // ✅ CRÍTICO: atualizado_em não updated_at
+                posicao: i
               })
               .eq("id", etapa.id);
             updateError = directUpdateError;

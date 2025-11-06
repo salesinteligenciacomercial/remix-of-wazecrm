@@ -103,14 +103,12 @@ export function EditarEtapaDialog({ etapaId, nomeAtual, corAtual, onEtapaUpdated
       }
 
       // ✅ CRÍTICO: Fallback para UPDATE direto - NÃO REMOVER
-      // ✅ IMPORTANTE: Usa campo atualizado_em (NÃO updated_at)
       if (!error) {
         const { error: directUpdateError } = await supabase
           .from("etapas")
           .update({
             nome: nomeFormatado,
-            cor: cor,
-            atualizado_em: new Date().toISOString() // ✅ CRÍTICO: atualizado_em não updated_at
+            cor: cor
           })
           .eq("id", etapaId);
         error = directUpdateError;
