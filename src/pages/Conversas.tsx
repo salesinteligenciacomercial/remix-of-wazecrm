@@ -2649,10 +2649,22 @@ function Conversas() {
 
       if (leadsError) {
         console.error('❌ Erro ao buscar leads:', leadsError);
+        toast.error(`Erro ao buscar contatos: ${leadsError.message}`);
+        return;
       }
 
       const totalLeads = leadsData?.length || 0;
       console.log("📋 Total de leads/contatos encontrados:", totalLeads);
+      
+      if (totalLeads === 0) {
+        console.warn("⚠️ Nenhum lead encontrado no banco de dados!");
+        toast.info("Nenhum contato encontrado. Aguarde sincronização automática via webhook.");
+      }
+      
+      // Log dos primeiros 5 leads para debug
+      if (leadsData && leadsData.length > 0) {
+        console.log("📋 Primeiros leads:", leadsData.slice(0, 5));
+      }
       
       // ETAPA 2B: Buscar conversas com mensagens  
       const { data, error } = await supabase
@@ -2700,10 +2712,15 @@ function Conversas() {
       const todosContatos = new Map<string, { name: string; phone: string; leadId: string }>();
       
       // Adicionar TODOS os leads como contatos
+      console.log("🔄 Processando leads para criar mapa de contatos...");
       (leadsData || []).forEach(lead => {
         // Usar tanto 'phone' quanto 'telefone' (campos diferentes no banco)
         const phoneRaw = lead.phone || lead.telefone;
-        if (!phoneRaw) return;
+        
+        if (!phoneRaw) {
+          console.warn(`⚠️ Lead sem telefone:`, lead);
+          return;
+        }
         
         const phoneKey = phoneRaw.replace(/[^0-9]/g, '');
         if (phoneKey && !todosContatos.has(phoneKey)) {
@@ -2712,6 +2729,7 @@ function Conversas() {
             phone: phoneKey,
             leadId: lead.id
           });
+          console.log(`✅ Contato adicionado:`, { phoneKey, name: lead.name });
         }
       });
 
@@ -2719,6 +2737,13 @@ function Conversas() {
 
       // ETAPA 5: Criar lista de conversas (incluindo contatos sem mensagens)
       const novasConversas: Conversation[] = [];
+      
+      console.log("🔄 Criando lista de conversas...");
+      
+      if (todosContatos.size === 0) {
+        console.warn("⚠️ Nenhum contato mapeado para exibir!");
+        toast.warning("Nenhum contato encontrado. Verifique se há leads cadastrados.");
+      }
         
         // Processar TODOS os contatos mapeados
         for (const [telefone, contatoInfo] of todosContatos.entries()) {
