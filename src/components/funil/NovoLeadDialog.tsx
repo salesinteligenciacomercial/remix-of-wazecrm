@@ -9,6 +9,8 @@ import { Plus, Tag, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface NovoLeadDialogProps {
   onLeadCreated: () => void;
@@ -21,6 +23,8 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
   const [funis, setFunis] = useState<any[]>([]);
   const [etapas, setEtapas] = useState<any[]>([]);
   const [etapasFiltradas, setEtapasFiltradas] = useState<any[]>([]);
+  const [responsaveis, setResponsaveis] = useState<any[]>([]);
+  const [tagsExistentes, setTagsExistentes] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     nome: "",
     telefone: "",
@@ -32,9 +36,11 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
     notes: "",
     funil_id: "",
     etapa_id: "",
+    responsavel_id: "",
     tags: [] as string[]
   });
   const [newTag, setNewTag] = useState("");
+  const [tagsPopoverOpen, setTagsPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -53,14 +59,56 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
   }, [formData.funil_id, etapas]);
 
   const carregarDados = async () => {
-    const { data: funisData } = await supabase.from("funis").select("*").order("criado_em");
-    const { data: etapasData } = await supabase.from("etapas").select("*").order("posicao");
-    
-    setFunis(funisData || []);
-    setEtapas(etapasData || []);
-    
-    if (funisData && funisData.length > 0 && !formData.funil_id) {
-      setFormData(prev => ({ ...prev, funil_id: funisData[0].id }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Buscar company_id do usuário
+      const { data: userRole } = await supabase
+        .from("user_roles")
+        .select("company_id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (!userRole?.company_id) return;
+
+      // Buscar funis e etapas
+      const { data: funisData } = await supabase.from("funis").select("*").order("criado_em");
+      const { data: etapasData } = await supabase.from("etapas").select("*").order("posicao");
+      
+      // Buscar usuários da empresa (responsáveis)
+      const { data: responsaveisData } = await supabase
+        .from("user_roles")
+        .select("user_id, profiles(id, full_name, email)")
+        .eq("company_id", userRole.company_id);
+
+      const responsaveisList = responsaveisData?.map(r => ({
+        id: r.user_id,
+        name: (r.profiles as any)?.full_name || (r.profiles as any)?.email || "Sem nome"
+      })) || [];
+
+      // Buscar tags existentes
+      const { data: leadsData } = await supabase
+        .from("leads")
+        .select("tags")
+        .eq("company_id", userRole.company_id)
+        .not("tags", "is", null);
+
+      const allTags = new Set<string>();
+      leadsData?.forEach(lead => {
+        lead.tags?.forEach((tag: string) => allTags.add(tag));
+      });
+
+      setFunis(funisData || []);
+      setEtapas(etapasData || []);
+      setResponsaveis(responsaveisList);
+      setTagsExistentes(Array.from(allTags).sort());
+      
+      if (funisData && funisData.length > 0 && !formData.funil_id) {
+        setFormData(prev => ({ ...prev, funil_id: funisData[0].id }));
+      }
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error);
     }
   };
 
@@ -136,10 +184,11 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
           etapa_id: formData.etapa_id,
           funil_id: formData.funil_id,
           owner_id: session.user.id,
+          responsavel_id: formData.responsavel_id || null,
           company_id: userRole.company_id,
           status: "novo",
           stage: "prospeccao",
-          tags: formData.tags
+          tags: formData.tags.length > 0 ? formData.tags : null
         }])
         .select();
 
@@ -160,6 +209,7 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
         notes: "",
         funil_id: funis.length > 0 ? funis[0].id : "",
         etapa_id: "",
+        responsavel_id: "",
         tags: []
       });
       setNewTag("");
@@ -220,6 +270,26 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
                 {etapasFiltradas.map((etapa) => (
                   <SelectItem key={etapa.id} value={etapa.id}>
                     {etapa.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="responsavel">Responsável</Label>
+            <Select 
+              value={formData.responsavel_id} 
+              onValueChange={(value) => setFormData({ ...formData, responsavel_id: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o responsável" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Nenhum</SelectItem>
+                {responsaveis.map((resp) => (
+                  <SelectItem key={resp.id} value={resp.id}>
+                    {resp.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -313,60 +383,98 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
           </div>
 
           <div>
-            <Label htmlFor="tags">Tags</Label>
-            <div className="flex gap-2 mb-2">
-              <Input
-                id="tags"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
+            <Label>Tags</Label>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Popover open={tagsPopoverOpen} onOpenChange={setTagsPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" className="flex-1 justify-start">
+                      <Tag className="h-4 w-4 mr-2" />
+                      {tagsExistentes.length > 0 ? "Selecionar tag existente" : "Sem tags existentes"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar tag..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhuma tag encontrada.</CommandEmpty>
+                        <CommandGroup>
+                          {tagsExistentes.map((tag) => (
+                            <CommandItem
+                              key={tag}
+                              value={tag}
+                              onSelect={() => {
+                                if (!formData.tags.includes(tag)) {
+                                  setFormData({ ...formData, tags: [...formData.tags, tag] });
+                                }
+                                setTagsPopoverOpen(false);
+                              }}
+                            >
+                              <Tag className="h-4 w-4 mr-2" />
+                              {tag}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              
+              <div className="flex gap-2">
+                <Input
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const tagTrimmed = newTag.trim();
+                      if (tagTrimmed && !formData.tags.includes(tagTrimmed)) {
+                        setFormData({ ...formData, tags: [...formData.tags, tagTrimmed] });
+                        setNewTag("");
+                      }
+                    }
+                  }}
+                  placeholder="Nova tag (Enter para adicionar)"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={() => {
                     const tagTrimmed = newTag.trim();
                     if (tagTrimmed && !formData.tags.includes(tagTrimmed)) {
                       setFormData({ ...formData, tags: [...formData.tags, tagTrimmed] });
                       setNewTag("");
                     }
-                  }
-                }}
-                placeholder="Digite uma tag e pressione Enter"
-              />
-              <Button
-                type="button"
-                size="icon"
-                onClick={() => {
-                  const tagTrimmed = newTag.trim();
-                  if (tagTrimmed && !formData.tags.includes(tagTrimmed)) {
-                    setFormData({ ...formData, tags: [...formData.tags, tagTrimmed] });
-                    setNewTag("");
-                  }
-                }}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2 min-h-[60px] p-2 border rounded-md bg-muted/20">
-              {formData.tags.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nenhuma tag adicionada</p>
-              ) : (
-                formData.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="gap-1">
-                    <Tag className="h-3 w-3" />
-                    {tag}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-4 w-4 p-0 hover:bg-transparent"
-                      onClick={() => {
-                        setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) });
-                      }}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </Badge>
-                ))
-              )}
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="flex flex-wrap gap-2 min-h-[60px] p-2 border rounded-md bg-muted/20">
+                {formData.tags.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhuma tag adicionada</p>
+                ) : (
+                  formData.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="gap-1">
+                      <Tag className="h-3 w-3" />
+                      {tag}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-4 w-4 p-0 hover:bg-transparent"
+                        onClick={() => {
+                          setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) });
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  ))
+                )}
+              </div>
             </div>
           </div>
 
