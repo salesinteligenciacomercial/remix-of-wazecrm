@@ -4,9 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
  * Utilitário para carregar mídias do WhatsApp através da edge function
  */
 
-export async function getMediaUrl(messageId: string): Promise<string> {
+export async function getMediaUrl(messageId: string, type?: string): Promise<string> {
   try {
-    console.log('🔄 [MEDIA-LOADER] Carregando mídia:', messageId);
+    console.log('🔄 [MEDIA-LOADER] Carregando mídia:', { messageId, type });
     
     // Primeiro, buscar a mídia do banco
     const { data: message } = await supabase
@@ -16,14 +16,19 @@ export async function getMediaUrl(messageId: string): Promise<string> {
       .single();
 
     if (!message?.midia_url) {
+      console.error('❌ [MEDIA-LOADER] Mídia não encontrada no banco');
       throw new Error('Mídia não encontrada');
     }
 
-    console.log('📦 [MEDIA-LOADER] Tipo de mídia_url:', typeof message.midia_url);
+    console.log('📦 [MEDIA-LOADER] Dados da mídia:', {
+      tipo: typeof message.midia_url,
+      tamanho: message.midia_url.length,
+      inicio: message.midia_url.substring(0, 50)
+    });
 
     // Se já for data URI (base64), retornar direto
     if (message.midia_url.startsWith('data:')) {
-      console.log('✅ [MEDIA-LOADER] Usando data URI existente');
+      console.log('✅ [MEDIA-LOADER] Usando data URI existente (base64)');
       return message.midia_url;
     }
 
@@ -31,7 +36,11 @@ export async function getMediaUrl(messageId: string): Promise<string> {
     try {
       const mediaData = JSON.parse(message.midia_url);
       if (mediaData.messageId && mediaData.url) {
-        console.log('🔓 [MEDIA-LOADER] Baixando mídia via Evolution API');
+        console.log('🔓 [MEDIA-LOADER] Baixando mídia via Evolution API:', {
+          messageId: mediaData.messageId,
+          tipo: mediaData.type,
+          company_id: message.company_id
+        });
         
         // Chamar edge function que usa Evolution API
         const response = await fetch(
@@ -40,29 +49,37 @@ export async function getMediaUrl(messageId: string): Promise<string> {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
             },
             body: JSON.stringify({ 
               company_id: message.company_id,
               messageId: mediaData.messageId,
-              type: mediaData.type
+              type: mediaData.type || type || message.tipo_mensagem
             }),
           }
         );
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('❌ [MEDIA-LOADER] Erro:', response.status, errorText);
-          throw new Error(`Erro ao baixar mídia: ${response.status}`);
+          console.error('❌ [MEDIA-LOADER] Erro na edge function:', {
+            status: response.status,
+            error: errorText
+          });
+          throw new Error(`Erro ao baixar mídia: ${response.status} - ${errorText}`);
         }
 
+        // A edge function retorna o blob da mídia
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
-        console.log('✅ [MEDIA-LOADER] Mídia carregada com sucesso');
+        console.log('✅ [MEDIA-LOADER] Mídia carregada via Evolution API:', {
+          blobSize: blob.size,
+          blobType: blob.type
+        });
         return url;
       }
     } catch (jsonError) {
       // Não é JSON, pode ser URL simples
-      console.log('🌐 [MEDIA-LOADER] URL simples, tentando download direto');
+      console.log('🌐 [MEDIA-LOADER] Não é JSON, tentando como URL simples');
     }
 
     // Fallback: tentar carregar URL diretamente

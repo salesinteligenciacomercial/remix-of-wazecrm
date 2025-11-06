@@ -64,13 +64,15 @@ Deno.serve(async (req) => {
 
     console.log('✅ [DOWNLOAD-MEDIA] Instância encontrada:', whatsappConfig.instance_name);
     
-    // Endpoint correto da Evolution API para baixar mídia
-    const evolutionUrl = `${whatsappConfig.evolution_api_url}/message/downloadMedia/${whatsappConfig.instance_name}`;
+    // Endpoint correto da Evolution API v2 para baixar mídia em base64
+    const evolutionUrl = `${whatsappConfig.evolution_api_url}/chat/getBase64FromMediaMessage/${whatsappConfig.instance_name}`;
     
     console.log('📞 [DOWNLOAD-MEDIA] Chamando Evolution API:', evolutionUrl);
     console.log('📦 [DOWNLOAD-MEDIA] Payload:', JSON.stringify({
-      key: {
-        id: body.messageId
+      message: {
+        key: {
+          id: body.messageId
+        }
       }
     }));
     
@@ -81,8 +83,10 @@ Deno.serve(async (req) => {
         'apikey': whatsappConfig.evolution_api_key,
       },
       body: JSON.stringify({
-        key: {
-          id: body.messageId
+        message: {
+          key: {
+            id: body.messageId
+          }
         },
         convertToMp4: body.type === 'video'
       })

@@ -92,18 +92,31 @@ function MessageItemComponent({
 
   // Carregar mídia quando componente montar
   useEffect(() => {
-    if (message.mediaUrl && (message.type === 'image' || message.type === 'video' || message.type === 'audio')) {
+    // Carregar todas as mídias (incluindo PDF) via getMediaUrl
+    if (message.mediaUrl && (message.type === 'image' || message.type === 'video' || message.type === 'audio' || message.type === 'pdf')) {
       setMediaLoading(true);
-      console.log('🔄 [MESSAGE-ITEM] Iniciando carregamento de mídia:', message.id);
+      console.log('🔄 [MESSAGE-ITEM] Iniciando carregamento de mídia:', {
+        id: message.id,
+        type: message.type,
+        hasUrl: !!message.mediaUrl
+      });
       
-      getMediaUrl(message.id)
+      getMediaUrl(message.id, message.type)
         .then((url) => {
-          console.log('✅ [MESSAGE-ITEM] Mídia carregada:', url);
+          console.log('✅ [MESSAGE-ITEM] Mídia carregada:', { 
+            id: message.id, 
+            type: message.type,
+            urlPreview: url.substring(0, 100)
+          });
           setMediaUrl(url);
           setMediaLoading(false);
         })
         .catch((error) => {
-          console.error('❌ [MESSAGE-ITEM] Erro ao carregar mídia:', error);
+          console.error('❌ [MESSAGE-ITEM] Erro ao carregar mídia:', {
+            id: message.id,
+            type: message.type,
+            error: error?.message || String(error)
+          });
           setMediaLoading(false);
           toast({
             title: "Erro ao carregar mídia",
@@ -115,7 +128,7 @@ function MessageItemComponent({
 
     // Cleanup blob URL quando desmontar
     return () => {
-      if (mediaUrl) {
+      if (mediaUrl && mediaUrl.startsWith('blob:')) {
         URL.revokeObjectURL(mediaUrl);
       }
     };
@@ -358,78 +371,84 @@ function MessageItemComponent({
           {/* PDF Message */}
           {message.type === "pdf" && message.mediaUrl && (
             <div className="space-y-2 min-w-[200px]">
-              {pdfExpanded ? (
-                <div className="space-y-2">
-                  <iframe 
-                    src={message.mediaUrl} 
-                    className="w-full h-[500px] border border-border rounded"
-                    title="PDF Viewer"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setPdfExpanded(false)}
-                      className="flex-1"
-                    >
-                      Fechar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onDownload?.(message.mediaUrl!, message.fileName || 'documento.pdf')}
-                    >
-                      <Download className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onPdfClick?.(message.mediaUrl!, message.fileName || 'documento.pdf')}
-                    >
-                      <FileText className="h-3 w-3 mr-2" />
-                      Abrir no visor
-                    </Button>
-                  </div>
+              {mediaLoading ? (
+                <div className="flex items-center justify-center p-8 border border-border rounded bg-muted/50">
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                  <span>Carregando PDF...</span>
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  {/* Preview thumbnail do PDF */}
-                  <PDFPreview
-                    url={message.mediaUrl}
-                    fileName={message.fileName}
-                    onClick={() => setPdfExpanded(true)}
-                  />
-                  
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setPdfExpanded(true)}
-                      className="flex-1"
-                    >
-                      <FileText className="h-3 w-3 mr-2" />
-                      Abrir
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onDownload?.(message.mediaUrl!, message.fileName || 'documento.pdf')}
-                    >
-                      <Download className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onPdfClick?.(message.mediaUrl!, message.fileName || 'documento.pdf')}
-                    >
-                      <FileText className="h-3 w-3 mr-2" />
-                      Abrir no visor
-                    </Button>
+              ) : mediaUrl ? (
+                pdfExpanded ? (
+                  <div className="space-y-2">
+                    <iframe 
+                      src={mediaUrl} 
+                      className="w-full h-[500px] border border-border rounded"
+                      title="PDF Viewer"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPdfExpanded(false)}
+                        className="flex-1"
+                      >
+                        Fechar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onDownload?.(mediaUrl, message.fileName || 'documento.pdf')}
+                      >
+                        <Download className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onPdfClick?.(mediaUrl, message.fileName || 'documento.pdf')}
+                      >
+                        <FileText className="h-3 w-3 mr-2" />
+                        Abrir no visor
+                      </Button>
+                    </div>
                   </div>
+                ) : (
+                  <div className="space-y-2">
+                    {/* Preview thumbnail do PDF */}
+                    <PDFPreview
+                      url={mediaUrl}
+                      fileName={message.fileName}
+                      onClick={() => setPdfExpanded(true)}
+                    />
+                    
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPdfExpanded(true)}
+                        className="flex-1"
+                      >
+                        <FileText className="h-3 w-3 mr-2" />
+                        Abrir
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onDownload?.(mediaUrl, message.fileName || 'documento.pdf')}
+                      >
+                        <Download className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div className="flex items-center justify-center p-8 border border-border rounded bg-muted/50">
+                  <AlertCircle className="h-6 w-6 text-muted-foreground mr-2" />
+                  <span>Erro ao carregar PDF</span>
                 </div>
               )}
             </div>
           )}
+          
+          {/* Video Message */}
 
           {/* Video Message */}
           {message.type === "video" && message.mediaUrl && (
