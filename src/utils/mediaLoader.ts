@@ -11,7 +11,7 @@ export async function getMediaUrl(messageId: string): Promise<string> {
     // Primeiro, buscar a mídia do banco
     const { data: message } = await supabase
       .from('conversas')
-      .select('midia_url, tipo_mensagem')
+      .select('midia_url, tipo_mensagem, company_id')
       .eq('id', messageId)
       .single();
 
@@ -30,10 +30,10 @@ export async function getMediaUrl(messageId: string): Promise<string> {
     // Se for JSON com metadados de mídia criptografada
     try {
       const mediaData = JSON.parse(message.midia_url);
-      if (mediaData.url && mediaData.mediaKey) {
-        console.log('🔓 [MEDIA-LOADER] Descriptografando mídia via edge function');
+      if (mediaData.messageId && mediaData.url) {
+        console.log('🔓 [MEDIA-LOADER] Baixando mídia via Evolution API');
         
-        // Chamar edge function para descriptografar
+        // Chamar edge function que usa Evolution API
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/download-media`,
           {
@@ -42,9 +42,8 @@ export async function getMediaUrl(messageId: string): Promise<string> {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ 
-              url: mediaData.url,
-              mediaKey: mediaData.mediaKey,
-              mimetype: mediaData.mimetype,
+              company_id: message.company_id,
+              messageId: mediaData.messageId,
               type: mediaData.type
             }),
           }
@@ -53,12 +52,12 @@ export async function getMediaUrl(messageId: string): Promise<string> {
         if (!response.ok) {
           const errorText = await response.text();
           console.error('❌ [MEDIA-LOADER] Erro:', response.status, errorText);
-          throw new Error(`Erro ao descriptografar mídia: ${response.status}`);
+          throw new Error(`Erro ao baixar mídia: ${response.status}`);
         }
 
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
-        console.log('✅ [MEDIA-LOADER] Mídia descriptografada');
+        console.log('✅ [MEDIA-LOADER] Mídia carregada com sucesso');
         return url;
       }
     } catch (jsonError) {
