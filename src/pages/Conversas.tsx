@@ -2608,23 +2608,16 @@ function Conversas() {
   }, [selectedConv]);
 
   const loadSupabaseConversations = async () => {
-    if (loadingConversations) {
-      console.log('⚠️ Carregamento já em andamento, ignorando chamada duplicada');
-      return;
-    }
+    if (loadingConversations) return;
     
     try {
       setLoadingConversations(true);
-      console.log('🚀 [PERFORMANCE] Carregamento ultra-rápido iniciado...');
-      console.log('🔍 [DEBUG] Estado inicial - loadingConversations:', loadingConversations);
       const startTime = performance.now();
       
-      // ETAPA 1: Buscar user e company_id (cached)
+      // ETAPA 1: Buscar user e company_id
       const { data: { user } } = await supabase.auth.getUser();
-      console.log('👤 [DEBUG] Usuário obtido:', user?.id);
       
       if (!user) {
-        console.error('❌ [DEBUG] Usuário não logado');
         toast.error('Você precisa estar logado');
         setLoadingConversations(false);
         return;
@@ -2636,213 +2629,127 @@ function Conversas() {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      console.log('🏢 [DEBUG] User role encontrado:', userRole);
-
       if (!userRole?.company_id) {
-        console.error('❌ [DEBUG] Usuário sem empresa associada');
-        toast.error('Erro: Usuário sem empresa associada. Configure sua conta.');
+        toast.error('Erro: Usuário sem empresa associada');
         setLoadingConversations(false);
         return;
       }
 
-      console.log('✅ [DEBUG] Company ID:', userRole.company_id);
-      toast.success(`Carregando contatos da empresa...`);
       setUserCompanyId(userRole.company_id);
       
-      // ETAPA 2A: Buscar TODOS os leads (contatos) da empresa
-      console.log('🔍 [DEBUG] Buscando leads para company_id:', userRole.company_id);
-      const { data: leadsData, error: leadsError } = await supabase
-        .from('leads')
-        .select('id, phone, name, telefone')
-        .eq('company_id', userRole.company_id)
-        .order('created_at', { ascending: false });
+      // ETAPA 2: Buscar leads e conversas em paralelo
+      const [leadsResult, conversasResult] = await Promise.all([
+        supabase
+          .from('leads')
+          .select('id, phone, name, telefone')
+          .eq('company_id', userRole.company_id)
+          .order('created_at', { ascending: false })
+          .limit(50), // Limitar a 50 contatos
+        supabase
+          .from('conversas')
+          .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, midia_url, fromme')
+          .eq('company_id', userRole.company_id)
+          .order('created_at', { ascending: false })
+          .limit(500) // Limitar mensagens
+      ]);
 
-      console.log('📊 [DEBUG] Resultado da query de leads:', { 
-        data: leadsData?.length, 
-        error: leadsError,
-        primeiroLead: leadsData?.[0]
-      });
-
-      if (leadsError) {
-        console.error('❌ Erro ao buscar leads:', leadsError);
-        toast.error(`Erro ao buscar contatos: ${leadsError.message}`);
+      if (leadsResult.error) {
+        toast.error('Erro ao buscar contatos');
         setLoadingConversations(false);
         return;
       }
 
-      const totalLeads = leadsData?.length || 0;
-      console.log("📋 Total de leads/contatos encontrados:", totalLeads);
-      
-      if (totalLeads === 0) {
-        console.warn("⚠️ Nenhum lead encontrado no banco de dados!");
-        toast.warning("Nenhum contato encontrado. Verifique se há leads cadastrados.");
-      }
-      
-      // Log dos primeiros 5 leads para debug
-      if (leadsData && leadsData.length > 0) {
-        console.log("📋 Primeiros leads:", leadsData.slice(0, 5));
-      }
-      
-      // ETAPA 2B: Buscar conversas com mensagens
-      console.log('🔍 [DEBUG] Buscando conversas...');
-      const { data, error } = await supabase
-        .from('conversas')
-        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, updated_at, is_group, midia_url, fromme, lead_id')
-        .eq('company_id', userRole.company_id)
-        .order('created_at', { ascending: false});
-
-      console.log('📊 [DEBUG] Resultado da query de conversas:', { 
-        data: data?.length, 
-        error: error 
-      });
-
-      if (error) {
-        console.error('❌ Erro:', error);
-        toast.error(`Erro ao carregar conversas: ${error.message}`);
+      if (conversasResult.error) {
+        toast.error('Erro ao carregar conversas');
         setLoadingConversations(false);
         return;
       }
-      
-      console.log(`⚡ Query executada em ${(performance.now() - startTime).toFixed(0)}ms`);
 
-      // ETAPA 3: Filtrar e agrupar conversas (processamento local rápido)
-      const validData = (data || []).filter(conv => {
-        const isValid = 
-          conv.numero && 
-          !conv.numero.includes('{{') &&
-          conv.mensagem && 
-          !conv.mensagem.includes('{{');
-        return isValid;
-      });
+      const leadsData = leadsResult.data || [];
+      const conversasData = conversasResult.data || [];
+      
+      // ETAPA 3: Processar dados (otimizado)
+      const validConversas = conversasData.filter(conv => 
+        conv.numero && !conv.numero.includes('{{') &&
+        conv.mensagem && !conv.mensagem.includes('{{')
+      );
 
-      // ETAPA 3: Agrupar conversas existentes por telefone
-      const conversasAgrupadas = new Map<string, any[]>();
-      
-      if (validData && validData.length > 0) {
-        validData.forEach(conv => {
-          const isGroup = conv.is_group || /@g\.us$/.test(conv.numero || '');
-          const key = isGroup ? conv.numero : (conv.telefone_formatado || conv.numero.replace(/[^0-9]/g, ''));
-          
-          if (!conversasAgrupadas.has(key)) {
-            conversasAgrupadas.set(key, []);
-          }
-          conversasAgrupadas.get(key)!.push(conv);
-        });
-      }
-      
-      console.log(`📊 ${conversasAgrupadas.size} conversas com mensagens em ${(performance.now() - startTime).toFixed(0)}ms`);
-
-      // ETAPA 4: Criar mapa de todos os contatos únicos
-      const todosContatos = new Map<string, { name: string; phone: string; leadId: string }>();
-      
-      // Adicionar TODOS os leads como contatos
-      console.log("🔄 Processando leads para criar mapa de contatos...");
-      (leadsData || []).forEach(lead => {
-        // Usar tanto 'phone' quanto 'telefone' (campos diferentes no banco)
-        const phoneRaw = lead.phone || lead.telefone;
+      // Agrupar conversas por telefone
+      const conversasMap = new Map<string, any[]>();
+      validConversas.forEach(conv => {
+        const isGroup = conv.is_group || /@g\.us$/.test(conv.numero || '');
+        const key = isGroup ? conv.numero : (conv.telefone_formatado || conv.numero.replace(/[^0-9]/g, ''));
         
-        if (!phoneRaw) {
-          console.warn(`⚠️ Lead sem telefone:`, lead);
-          return;
-        }
+        if (!conversasMap.has(key)) conversasMap.set(key, []);
+        conversasMap.get(key)!.push(conv);
+      });
+
+      // Criar mapa de contatos
+      const contatosMap = new Map<string, { name: string; leadId: string }>();
+      leadsData.forEach(lead => {
+        const phoneRaw = lead.phone || lead.telefone;
+        if (!phoneRaw) return;
         
         const phoneKey = phoneRaw.replace(/[^0-9]/g, '');
-        if (phoneKey && !todosContatos.has(phoneKey)) {
-          todosContatos.set(phoneKey, {
+        if (phoneKey) {
+          contatosMap.set(phoneKey, {
             name: lead.name || phoneKey,
-            phone: phoneKey,
             leadId: lead.id
           });
-          console.log(`✅ Contato adicionado:`, { phoneKey, name: lead.name });
         }
       });
 
-      console.log(`📱 Contatos únicos mapeados: ${todosContatos.size}`);
-
-      // ETAPA 5: Criar lista de conversas (incluindo contatos sem mensagens)
-      const novasConversas: Conversation[] = [];
-      
-      console.log("🔄 Criando lista de conversas...");
-      
-      if (todosContatos.size === 0) {
-        console.warn("⚠️ Nenhum contato mapeado para exibir!");
-        toast.warning("Nenhum contato encontrado. Verifique se há leads cadastrados.");
-      }
+      // ETAPA 4: Criar lista de conversas (otimizado - limitar a 10 mensagens por conversa)
+      const novasConversas: Conversation[] = Array.from(contatosMap.entries()).map(([telefone, info]) => {
+        const mensagens = conversasMap.get(telefone) || [];
+        const temMensagens = mensagens.length > 0;
         
-        // Processar TODOS os contatos mapeados
-        for (const [telefone, contatoInfo] of todosContatos.entries()) {
-          const mensagens = conversasAgrupadas.get(telefone) || [];
-          const temMensagens = mensagens.length > 0;
-          
-          // Determinar nome do contato (priorizar nome do lead)
-          let contactName = contatoInfo.name;
-          
-          // Se tiver mensagens com nome melhor, usar
-          if (temMensagens) {
-            const nomeNaMensagem = mensagens.find(m => 
-              m.nome_contato && 
-              m.nome_contato.trim() !== '' && 
-              m.nome_contato !== telefone
-            )?.nome_contato;
-            
-            if (nomeNaMensagem) {
-              contactName = nomeNaMensagem;
-            }
-          }
-          
-          const isGroupConv = false;
-          
-          // Avatar placeholder (será atualizado depois)
-          const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName.substring(0, 2))}&background=0ea5e9&color=fff`;
-          
-          // Formatar mensagens (se houver)
-          const messagensFormatadas: Message[] = temMensagens 
-            ? mensagens.slice(0, 20).reverse().map(m => ({
-                id: m.id || `msg-${Date.now()}-${Math.random()}`,
-                content: m.mensagem || '',
-                type: (m.tipo_mensagem === 'texto' ? 'text' : (m.tipo_mensagem || 'text')) as any,
-                sender: ((m.fromme === true || m.status === 'Enviada') ? "user" : "contact") as "user" | "contact",
-                timestamp: new Date(m.created_at || Date.now()),
-                delivered: true,
-                read: m.status !== 'Recebida',
-                mediaUrl: m.midia_url,
-              }))
-            : [];
-
-          novasConversas.push({
-            id: telefone,
-            contactName,
-            channel: "whatsapp",
-            status: temMensagens ? "waiting" : "resolved", // Sem mensagens = resolved (inativo)
-            lastMessage: temMensagens 
-              ? (messagensFormatadas[messagensFormatadas.length - 1]?.content || '')
-              : 'Sem histórico de conversa',
-            unread: temMensagens ? mensagens.filter(m => m.status === 'Recebida' && m.fromme !== true).length : 0,
-            messages: messagensFormatadas,
-            tags: [],
-            phoneNumber: telefone,
-            avatarUrl,
-            isGroup: isGroupConv
-          });
+        let contactName = info.name;
+        if (temMensagens) {
+          const nomeMensagem = mensagens.find(m => m.nome_contato?.trim() && m.nome_contato !== telefone)?.nome_contato;
+          if (nomeMensagem) contactName = nomeMensagem;
         }
-
-        console.log(`✅ ${novasConversas.length} contatos/conversas processados em ${(performance.now() - startTime).toFixed(0)}ms total`);
-        console.log('📋 [DEBUG] Conversas prontas para exibir:', novasConversas.slice(0, 3));
         
-      setConversations(novasConversas);
-      console.log('✅ [DEBUG] setConversations chamado com', novasConversas.length, 'conversas');
-      
-      if (novasConversas.length > 0) {
-        toast.success(`✅ ${novasConversas.length} conversas carregadas com sucesso!`);
-      } else {
-        toast.info('Nenhuma conversa encontrada');
-      }
-      
-      loadCompanyMetrics();
+        const messagensFormatadas: Message[] = temMensagens 
+          ? mensagens.slice(0, 10).reverse().map(m => ({ // Reduzir para 10 mensagens
+              id: m.id || `msg-${Date.now()}-${Math.random()}`,
+              content: m.mensagem || '',
+              type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
+              sender: (m.fromme === true || m.status === 'Enviada') ? "user" : "contact",
+              timestamp: new Date(m.created_at || Date.now()),
+              delivered: true,
+              read: m.status !== 'Recebida',
+              mediaUrl: m.midia_url,
+            }))
+          : [];
 
-      // ETAPA 6: Buscar fotos de perfil de forma assíncrona (não bloquear UI)
-      console.log('📸 Buscando fotos de perfil de forma assíncrona...');
-      novasConversas.forEach(async (conv) => {
+        return {
+          id: telefone,
+          contactName,
+          channel: "whatsapp" as const,
+          status: temMensagens ? "waiting" as const : "resolved" as const,
+          lastMessage: temMensagens 
+            ? (messagensFormatadas[messagensFormatadas.length - 1]?.content || '')
+            : 'Sem histórico de conversa',
+          unread: temMensagens ? mensagens.filter(m => m.status === 'Recebida' && m.fromme !== true).length : 0,
+          messages: messagensFormatadas,
+          tags: [],
+          phoneNumber: telefone,
+          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName.substring(0, 2))}&background=0ea5e9&color=fff`,
+          isGroup: false
+        };
+      });
+
+      console.log(`✅ ${novasConversas.length} conversas carregadas em ${(performance.now() - startTime).toFixed(0)}ms`);
+      
+      setConversations(novasConversas);
+      toast.success(`${novasConversas.length} conversas carregadas`);
+      loadCompanyMetrics();
+      setLoadingConversations(false);
+
+      // OTIMIZAÇÃO: Carregar fotos apenas dos 10 primeiros contatos visíveis
+      const primeirosDez = novasConversas.slice(0, 10);
+      primeirosDez.forEach(async (conv) => {
         if (conv.phoneNumber) {
           try {
             const profilePicUrl = await getProfilePictureWithFallback(
@@ -2852,20 +2759,19 @@ function Conversas() {
             );
             
             if (profilePicUrl) {
-              // Atualizar apenas a conversa específica
               setConversations(prev => prev.map(c => 
                 c.id === conv.id ? { ...c, avatarUrl: profilePicUrl } : c
               ));
             }
           } catch (error) {
-            console.error(`❌ Erro ao buscar foto de perfil para ${conv.phoneNumber}:`, error);
+            // Silenciar erros de foto
           }
         }
       });
       
-      setLoadingConversations(false);
     } catch (error) {
       console.error('Erro ao carregar conversas:', error);
+      toast.error('Erro ao carregar conversas');
       setLoadingConversations(false);
     }
   };
