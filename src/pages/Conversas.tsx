@@ -543,6 +543,12 @@ function Conversas() {
 
   // MELHORIA: useMemo para filtros e buscas - otimização de performance
   const filteredConversations = useMemo(() => {
+    console.log('🔍 [DEBUG] Filtrando conversas:', {
+      total: conversations.length,
+      filtro: filter,
+      busca: debouncedSearchTerm
+    });
+    
     let filtered = conversations;
 
     // Aplicar filtro de status
@@ -557,6 +563,8 @@ function Conversas() {
       filtered = filtered.filter((conv) => conv.status === filter && conv.isGroup !== true);
     }
 
+    console.log('📊 [DEBUG] Após filtro de status:', filtered.length);
+
     // Aplicar busca debounced (mais agressivo)
     if (debouncedSearchTerm.trim()) {
       const searchLower = debouncedSearchTerm.toLowerCase();
@@ -566,6 +574,8 @@ function Conversas() {
         conv.phoneNumber?.includes(searchLower)
       );
     }
+
+    console.log('📊 [DEBUG] Após busca:', filtered.length);
 
     // Ordenar por última mensagem (mais recentes primeiro)
     filtered = filtered.sort((a, b) => {
@@ -1632,8 +1642,15 @@ function Conversas() {
     // Carregar conversas do Supabase imediatamente (evitar duplicado em StrictMode)
     if (!initialLoadRef.current) {
       initialLoadRef.current = true;
-    console.log('🔄 Carregando conversas iniciais do Supabase...');
-    loadSupabaseConversations();
+      console.log('🔄 [DEBUG] Carregando conversas iniciais do Supabase...');
+      console.log('🔄 [DEBUG] initialLoadRef antes:', initialLoadRef.current);
+      loadSupabaseConversations().then(() => {
+        console.log('✅ [DEBUG] loadSupabaseConversations concluído');
+      }).catch((err) => {
+        console.error('❌ [DEBUG] Erro em loadSupabaseConversations:', err);
+      });
+    } else {
+      console.log('⚠️ [DEBUG] initialLoadRef já é true, pulando carregamento');
     }
 
     // Verificar se veio de um lead (via state do navigate)
@@ -2599,11 +2616,15 @@ function Conversas() {
     try {
       setLoadingConversations(true);
       console.log('🚀 [PERFORMANCE] Carregamento ultra-rápido iniciado...');
+      console.log('🔍 [DEBUG] Estado inicial - loadingConversations:', loadingConversations);
       const startTime = performance.now();
       
       // ETAPA 1: Buscar user e company_id (cached)
       const { data: { user } } = await supabase.auth.getUser();
+      console.log('👤 [DEBUG] Usuário obtido:', user?.id);
+      
       if (!user) {
+        console.error('❌ [DEBUG] Usuário não logado');
         toast.error('Você precisa estar logado');
         setLoadingConversations(false);
         return;
@@ -2615,20 +2636,32 @@ function Conversas() {
         .eq('user_id', user.id)
         .maybeSingle();
 
+      console.log('🏢 [DEBUG] User role encontrado:', userRole);
+
       if (!userRole?.company_id) {
-        toast.error('Erro: Usuário sem empresa associada');
+        console.error('❌ [DEBUG] Usuário sem empresa associada');
+        toast.error('Erro: Usuário sem empresa associada. Configure sua conta.');
         setLoadingConversations(false);
         return;
       }
 
+      console.log('✅ [DEBUG] Company ID:', userRole.company_id);
+      toast.success(`Carregando contatos da empresa...`);
       setUserCompanyId(userRole.company_id);
       
       // ETAPA 2A: Buscar TODOS os leads (contatos) da empresa
+      console.log('🔍 [DEBUG] Buscando leads para company_id:', userRole.company_id);
       const { data: leadsData, error: leadsError } = await supabase
         .from('leads')
         .select('id, phone, name, telefone')
         .eq('company_id', userRole.company_id)
         .order('created_at', { ascending: false });
+
+      console.log('📊 [DEBUG] Resultado da query de leads:', { 
+        data: leadsData?.length, 
+        error: leadsError,
+        primeiroLead: leadsData?.[0]
+      });
 
       if (leadsError) {
         console.error('❌ Erro ao buscar leads:', leadsError);
@@ -2642,7 +2675,7 @@ function Conversas() {
       
       if (totalLeads === 0) {
         console.warn("⚠️ Nenhum lead encontrado no banco de dados!");
-        toast.info("Nenhum contato encontrado. Aguarde sincronização automática via webhook.");
+        toast.warning("Nenhum contato encontrado. Verifique se há leads cadastrados.");
       }
       
       // Log dos primeiros 5 leads para debug
@@ -2650,12 +2683,18 @@ function Conversas() {
         console.log("📋 Primeiros leads:", leadsData.slice(0, 5));
       }
       
-      // ETAPA 2B: Buscar conversas com mensagens  
+      // ETAPA 2B: Buscar conversas com mensagens
+      console.log('🔍 [DEBUG] Buscando conversas...');
       const { data, error } = await supabase
         .from('conversas')
         .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, updated_at, is_group, midia_url, fromme, lead_id')
         .eq('company_id', userRole.company_id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false});
+
+      console.log('📊 [DEBUG] Resultado da query de conversas:', { 
+        data: data?.length, 
+        error: error 
+      });
 
       if (error) {
         console.error('❌ Erro:', error);
@@ -2788,8 +2827,17 @@ function Conversas() {
         }
 
         console.log(`✅ ${novasConversas.length} contatos/conversas processados em ${(performance.now() - startTime).toFixed(0)}ms total`);
+        console.log('📋 [DEBUG] Conversas prontas para exibir:', novasConversas.slice(0, 3));
         
       setConversations(novasConversas);
+      console.log('✅ [DEBUG] setConversations chamado com', novasConversas.length, 'conversas');
+      
+      if (novasConversas.length > 0) {
+        toast.success(`✅ ${novasConversas.length} conversas carregadas com sucesso!`);
+      } else {
+        toast.info('Nenhuma conversa encontrada');
+      }
+      
       loadCompanyMetrics();
 
       // ETAPA 6: Buscar fotos de perfil de forma assíncrona (não bloquear UI)
