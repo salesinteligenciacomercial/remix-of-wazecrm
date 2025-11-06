@@ -264,6 +264,11 @@ serve(async (req) => {
     } else {
       // Enviar texto
       evolutionUrl = `${INSTANCE_API_URL || EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`;
+      
+      console.log("📤 Enviando para URL:", evolutionUrl);
+      console.log("📝 Instance name:", EVOLUTION_INSTANCE);
+      console.log("🔑 API URL:", INSTANCE_API_URL || EVOLUTION_API_URL);
+      
       bodyPayload = {
         ...(isGroup ? { groupId: (target as any).groupId } : { number: (target as any).number }),
         text: validatedData.mensagem,
@@ -307,20 +312,25 @@ serve(async (req) => {
     };
 
     // Montar candidatos de URL (ordem por probabilidade)
-    const base = (INSTANCE_API_URL || EVOLUTION_API_URL);
+    const base = (INSTANCE_API_URL || EVOLUTION_API_URL).replace(/\/$/, ''); // Remove trailing slash
     const candidates: string[] = [];
+    
     if (evolutionUrl.includes('/message/sendText/')) {
-      candidates.push(evolutionUrl);
-      // Fallbacks comuns em versões diferentes
+      // Tentar endpoints na ordem de compatibilidade
+      candidates.push(`${base}/message/sendText/${EVOLUTION_INSTANCE}`);
+      candidates.push(`${base}/v2/message/sendText/${EVOLUTION_INSTANCE}`);
+      candidates.push(`${base}/v1/message/sendText/${EVOLUTION_INSTANCE}`);
       candidates.push(`${base}/message/sendMessage/${EVOLUTION_INSTANCE}`);
-      candidates.push(`${base}/message/sendText?instanceId=${encodeURIComponent(EVOLUTION_INSTANCE)}`);
     } else if (evolutionUrl.includes('/message/sendMedia/')) {
-      candidates.push(evolutionUrl);
+      candidates.push(`${base}/message/sendMedia/${EVOLUTION_INSTANCE}`);
+      candidates.push(`${base}/v2/message/sendMedia/${EVOLUTION_INSTANCE}`);
+      candidates.push(`${base}/v1/message/sendMedia/${EVOLUTION_INSTANCE}`);
       candidates.push(`${base}/message/sendMessage/${EVOLUTION_INSTANCE}`);
-      candidates.push(`${base}/message/sendMedia?instanceId=${encodeURIComponent(EVOLUTION_INSTANCE)}`);
     } else {
       candidates.push(evolutionUrl);
     }
+    
+    console.log("🔍 Tentando endpoints:", candidates);
 
     const attempt = await tryPost(candidates, bodyPayload);
     if (!attempt.ok) {
