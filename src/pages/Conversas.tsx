@@ -1870,18 +1870,6 @@ function Conversas() {
                   tipo: novaConversa.tipo_mensagem
                 });
                 
-                // Buscar foto de perfil da nova mensagem
-                let profilePic: string | undefined;
-                try {
-                  profilePic = await getProfilePictureWithFallback(
-                    novaConversa.numero,
-                    userCompanyIdRef.current || '',
-                    nomeValido || String(novaConversa.numero)
-                  );
-                } catch (error) {
-                  console.error('❌ Erro ao buscar foto:', error);
-                }
-                
                 // Buscar se existe lead vinculado para usar o nome correto
                 const telefoneFormatado = telefoneNormalizado;
                 const { data: leadVinculadoRealtime } = await supabase
@@ -1897,6 +1885,18 @@ function Conversas() {
                                    novaConversa.nome_contato !== novaConversa.numero
                                     ? novaConversa.nome_contato 
                                     : novaConversa.numero);
+                
+                // Buscar foto de perfil da nova mensagem
+                let profilePic: string | undefined;
+                try {
+                  profilePic = await getProfilePictureWithFallback(
+                    novaConversa.numero,
+                    userCompanyIdRef.current || '',
+                    nomeValido || String(novaConversa.numero)
+                  );
+                } catch (error) {
+                  console.error('❌ Erro ao buscar foto:', error);
+                }
                 
                 // Converter para formato do componente
                 const novaConvFormatted: Conversation = {
@@ -2012,16 +2012,15 @@ function Conversas() {
                   setSelectedConv(conversaAtualizada);
                   // Marcar a mensagem recebida como lida imediatamente no Supabase
                   if (novaConversa.status === 'Recebida') {
-                    supabase
-                      .from('conversas')
-                      .update({ status: 'Lida' })
-                      .eq('id', novaConversa.id)
-                      .then(() => {
-                        console.log('✅ Mensagem marcada como lida');
-                      })
-                      .catch((e) => {
-                        console.error('Erro ao marcar mensagem como lida (realtime):', e);
-                      });
+                    try {
+                      await supabase
+                        .from('conversas')
+                        .update({ status: 'Lida' })
+                        .eq('id', novaConversa.id);
+                      console.log('✅ Mensagem marcada como lida');
+                    } catch (e: any) {
+                      console.error('Erro ao marcar mensagem como lida (realtime):', e);
+                    }
                   }
                 }
                 
@@ -2304,7 +2303,7 @@ function Conversas() {
           console.log('⏱️ [FALLBACK] Polling de conversas (jitter) por desconexão do realtime');
           await loadSupabaseConversations();
         } finally {
-          if (realtimeConnectionStatus !== 'connected') schedule();
+          if (realtimeConnectionStatus === 'disconnected' || realtimeConnectionStatus === 'error') schedule();
         }
       }, jitter);
     };
@@ -2404,7 +2403,7 @@ function Conversas() {
           !conv.mensagem || conv.mensagem === '[object Object]' || conv.mensagem.trim() === '';
         
         // Validar destino: aceitar grupos (@g.us) SEM checar tamanho; contatos: exigir 12/13 dígitos
-        const isGroup = Boolean(conv.is_group) || /@g\.us$/.test(String(conv.numero || ''));
+        const isGroup = /@g\.us$/.test(String(conv.numero || ''));
         const numeroLimpo = conv.numero?.replace(/[^0-9]/g, '') || '';
         const isValidContact = numeroLimpo.length === 12 || numeroLimpo.length === 13;
         const isValidDestination = isGroup || isValidContact;
@@ -4799,7 +4798,7 @@ function Conversas() {
     if (result && result.success) {
       return { data: result, error: null } as const;
     }
-    return { data: result, error: { message: result?.error || 'Falha ao enviar mensagem' } } as const;
+    return { data: result, error: { message: result?.message || 'Falha ao enviar mensagem' } } as const;
   };
 
   // Normaliza destino: preserva JID de grupo (@g.us). Para contatos, mantém apenas dígitos com prefixo 55.
@@ -5127,8 +5126,8 @@ function Conversas() {
                       selectedConv.messages.map((msg) => (
                         <MessageItem
                           key={msg.id}
-                          message={msg}
-                          allMessages={selectedConv.messages}
+                          message={msg as any}
+                          allMessages={selectedConv.messages as any}
                           onDownload={downloadMedia}
                           onTranscribe={transcreverAudio}
                           onImageClick={(url, name) => {
@@ -5182,7 +5181,7 @@ function Conversas() {
                     </div>
                   )}
                   <div className="flex items-center gap-2">
-                    <MediaUpload onSendMedia={handleSendMedia} />
+                    <MediaUpload onFileSelected={handleSendMedia as any} />
                     <Input
                       placeholder="Escreva sua mensagem..."
                       value={messageInput}

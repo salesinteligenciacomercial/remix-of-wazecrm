@@ -289,7 +289,7 @@ export function ConversaPopup({
     try {
       if (leadVinculado) return;
       const companyId = await getCompanyId();
-      const { data: { user } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!companyId || !user) {
         toast.error('Não foi possível identificar a empresa ou usuário');
         return;
@@ -441,7 +441,6 @@ export function ConversaPopup({
         timestamp: new Date(),
         delivered: true,
         read: false,
-        replyTo: replyingTo || undefined,
       };
 
       setMessages((prev) => [...prev, newMessage]);
@@ -449,7 +448,7 @@ export function ConversaPopup({
       setReplyingTo(null);
 
       // Emitir evento global para sincronizar conversas
-      emitGlobalEvent('onMessageSent', { numero: telefoneNormalizado, content: messageContent, type });
+      emitGlobalEvent({ type: 'conversation-updated', source: 'conversa-popup', data: { numero: telefoneNormalizado, content: messageContent, messageType: type } });
     } catch (error) {
       console.error("Erro ao enviar mensagem:", error);
       toast.error("Erro ao processar envio");
@@ -521,7 +520,7 @@ export function ConversaPopup({
       setMessages((prev) => [...prev, newMessage]);
       toast.success("Mídia enviada com sucesso!");
 
-      emitGlobalEvent('onMessageSent', { numero: telefoneNormalizado, content: caption || `Arquivo ${type}`, type });
+      emitGlobalEvent({ type: 'conversation-updated', source: 'conversa-popup', data: { numero: telefoneNormalizado, content: caption || `Arquivo ${type}`, messageType: type } });
     } catch (error) {
       console.error("Erro ao enviar mídia:", error);
       toast.error("Erro ao enviar mídia");
@@ -589,7 +588,7 @@ export function ConversaPopup({
       setMessages((prev) => [...prev, newMessage]);
       toast.success("Áudio enviado com sucesso!");
 
-      emitGlobalEvent('onMessageSent', { numero: telefoneNormalizado, content: 'Áudio enviado', type: 'audio' });
+      emitGlobalEvent({ type: 'conversation-updated', source: 'conversa-popup', data: { numero: telefoneNormalizado, content: 'Áudio enviado', messageType: 'audio' } });
     } catch (error) {
       console.error("Erro ao enviar áudio:", error);
       toast.error("Erro ao enviar áudio");
@@ -754,8 +753,8 @@ export function ConversaPopup({
                   messages.map((msg) => (
                     <MessageItem
                       key={msg.id}
-                      message={msg}
-                      allMessages={messages}
+                      message={msg as any}
+                      allMessages={messages as any}
                       onReply={(id) => setReplyingTo(id)}
                       onEdit={() => {}}
                       onDelete={() => {}}
@@ -795,7 +794,7 @@ export function ConversaPopup({
                 </div>
               )}
               <div className="flex items-center gap-2">
-                <MediaUpload onSendMedia={handleSendMedia} />
+                <MediaUpload onFileSelected={handleSendMedia as any} />
             {/* Mensagens Rápidas */}
             <Button variant="outline" size="sm" onClick={() => setQuickOpen(true)}>
               💡 Rápidas
@@ -1031,7 +1030,7 @@ export function ConversaPopup({
         lead={{ id: leadId, nome: leadName, telefone: leadPhone }}
         onAgendamentoCriado={() => {
           toast.success('Reunião agendada');
-          emitGlobalEvent('onMeetingScheduled', { lead_id: leadId });
+          emitGlobalEvent({ type: 'meeting-scheduled', source: 'conversa-popup', data: { lead_id: leadId } });
         }}
       />
       <TarefaModal
@@ -1040,7 +1039,7 @@ export function ConversaPopup({
         lead={{ id: leadId, nome: leadName }}
         onTarefaCriada={() => {
           toast.success('Tarefa criada');
-          emitGlobalEvent('onTaskCreated', { lead_id: leadId });
+          emitGlobalEvent({ type: 'task-created', source: 'conversa-popup', data: { lead_id: leadId } });
         }}
       />
       </DialogContent>

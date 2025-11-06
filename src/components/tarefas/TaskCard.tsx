@@ -134,7 +134,7 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       const { supabase } = await import("@/integrations/supabase/client");
       const { error } = await supabase
         .from('tasks')
-        .update({ comments: updated })
+        .update({ description: updated } as any)
         .eq('id', task.id);
       if (error) throw error;
       onUpdate();
