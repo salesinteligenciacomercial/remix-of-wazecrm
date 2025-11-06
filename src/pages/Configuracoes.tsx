@@ -736,8 +736,62 @@ export default function Configuracoes() {
         </Alert>
       )}
 
-      {/* Botões de elevação de privilégio - Aparece apenas se não for super admin */}
-      {!hasRole('super_admin') && (
+      {/* Status do usuário - Mostra privilégios atuais */}
+      <Card className={hasRole('super_admin') && isMasterAccount ? "border-green-500/50 bg-green-500/5" : "border-blue-500/50 bg-blue-500/5"}>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            {hasRole('super_admin') && isMasterAccount ? "✅" : "ℹ️"} Status da Conta
+          </CardTitle>
+          <CardDescription>
+            Informações sobre seus privilégios e tipo de conta
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Nível de Acesso:</div>
+              <div className="flex flex-wrap gap-2">
+                {userRoles.map((role) => (
+                  <Badge key={role} variant={role === 'super_admin' ? 'default' : 'secondary'}>
+                    {role === 'super_admin' ? '🔐 Super Admin' : role}
+                  </Badge>
+                ))}
+                {userRoles.length === 0 && <Badge variant="secondary">Usuário Padrão</Badge>}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Tipo de Conta:</div>
+              <Badge variant={isMasterAccount ? 'default' : 'secondary'}>
+                {isMasterAccount ? '🏢 Conta Mestre (SaaS)' : '📋 Conta Cliente'}
+              </Badge>
+            </div>
+          </div>
+          
+          {currentCompany && (
+            <div className="pt-2 border-t">
+              <div className="text-sm font-medium mb-1">Empresa Atual:</div>
+              <div className="text-sm text-muted-foreground">{currentCompany.name}</div>
+              <div className="text-xs text-muted-foreground">
+                Plano: {currentCompany.plan} • 
+                Usuários: {currentCompany.max_users} • 
+                Leads: {currentCompany.max_leads}
+              </div>
+            </div>
+          )}
+
+          {hasRole('super_admin') && isMasterAccount && (
+            <Alert className="border-green-500/50 bg-green-500/5">
+              <AlertDescription>
+                ✅ Você possui acesso completo como Super Admin de uma Conta Mestre. 
+                Você pode criar e gerenciar subcontas/licenças SaaS na aba "Subcontas".
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Botões de elevação de privilégio - Aparece apenas se não for super admin OU não for conta mestre */}
+      {(!hasRole('super_admin') || !isMasterAccount) && (
         <Card className="border-yellow-500/50 bg-yellow-500/5">
           <CardHeader>
             <CardTitle className="text-lg">🔐 Elevação de Privilégios</CardTitle>
@@ -747,14 +801,16 @@ export default function Configuracoes() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                onClick={elevateSuperAdmin}
-                className="border-primary/50 hover:bg-primary/10"
-              >
-                <UserCog className="mr-2 h-4 w-4" />
-                Tornar-me Super Admin
-              </Button>
+              {!hasRole('super_admin') && (
+                <Button
+                  variant="outline"
+                  onClick={elevateSuperAdmin}
+                  className="border-primary/50 hover:bg-primary/10"
+                >
+                  <UserCog className="mr-2 h-4 w-4" />
+                  Tornar-me Super Admin
+                </Button>
+              )}
               {!isMasterAccount && (
                 <Button
                   variant="outline"
