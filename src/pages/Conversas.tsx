@@ -528,6 +528,13 @@ function Conversas() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // Contador de conversas aguardando resposta
+  const waitingCount = useMemo(() => {
+    return conversations.filter(
+      (conv) => conv.status === "waiting" && conv.isGroup !== true
+    ).length;
+  }, [conversations]);
+
   // MELHORIA: useMemo para filtros e buscas - otimização de performance
   const filteredConversations = useMemo(() => {
     let filtered = conversations;
@@ -5010,8 +5017,17 @@ function Conversas() {
               variant={filter === "waiting" ? "default" : "ghost"}
               size="sm"
               onClick={() => setFilter("waiting")}
+              className="relative"
             >
               Aguardando
+              {waitingCount > 0 && (
+                <Badge 
+                  variant="destructive" 
+                  className="ml-2 bg-red-500 hover:bg-red-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center"
+                >
+                  {waitingCount}
+                </Badge>
+              )}
             </Button>
             <Button
               variant={filter === "answered" ? "default" : "ghost"}
