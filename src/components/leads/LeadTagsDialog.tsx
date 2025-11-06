@@ -10,8 +10,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tag, X, Plus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useTagsManager } from "@/hooks/useTagsManager";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface LeadTagsDialogProps {
   leadId: string;
@@ -25,6 +27,8 @@ export function LeadTagsDialog({ leadId, currentTags = [], onTagsUpdated, trigge
   const [tags, setTags] = useState<string[]>(Array.isArray(currentTags) ? currentTags : []);
   const [newTag, setNewTag] = useState("");
   const [loading, setLoading] = useState(false);
+  const [tagsPopoverOpen, setTagsPopoverOpen] = useState(false);
+  const { allTags: tagsExistentes, addTagToLead, removeTagFromLead } = useTagsManager();
 
   useEffect(() => {
     if (open) {
@@ -48,6 +52,15 @@ export function LeadTagsDialog({ leadId, currentTags = [], onTagsUpdated, trigge
     setNewTag("");
   };
 
+  const adicionarTagExistente = (tag: string) => {
+    if (tags.includes(tag)) {
+      toast.error("Tag já adicionada");
+      return;
+    }
+    setTags([...tags, tag]);
+    setTagsPopoverOpen(false);
+  };
+
   const removerTag = (tagToRemove: string) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
@@ -56,12 +69,17 @@ export function LeadTagsDialog({ leadId, currentTags = [], onTagsUpdated, trigge
     setLoading(true);
 
     try {
-      const { error } = await supabase
-        .from("leads")
-        .update({ tags })
-        .eq("id", leadId);
+      // Remover tags antigas que não estão mais na lista
+      const tagsToRemove = (currentTags || []).filter(tag => !tags.includes(tag));
+      for (const tag of tagsToRemove) {
+        await removeTagFromLead(leadId, tag);
+      }
 
-      if (error) throw error;
+      // Adicionar novas tags
+      const tagsToAdd = tags.filter(tag => !(currentTags || []).includes(tag));
+      for (const tag of tagsToAdd) {
+        await addTagToLead(leadId, tag);
+      }
 
       toast.success("Tags atualizadas com sucesso!");
       setOpen(false);
@@ -90,6 +108,37 @@ export function LeadTagsDialog({ leadId, currentTags = [], onTagsUpdated, trigge
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="space-y-2">
+            <Popover open={tagsPopoverOpen} onOpenChange={setTagsPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" className="w-full justify-start" disabled={loading}>
+                  <Tag className="h-4 w-4 mr-2" />
+                  {tagsExistentes.length > 0 ? "Selecionar tag existente" : "Sem tags existentes"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar tag..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhuma tag encontrada.</CommandEmpty>
+                    <CommandGroup>
+                      {tagsExistentes.map((tag) => (
+                        <CommandItem
+                          key={tag}
+                          value={tag}
+                          onSelect={() => adicionarTagExistente(tag)}
+                        >
+                          <Tag className="h-4 w-4 mr-2" />
+                          {tag}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
           <div className="flex gap-2">
             <Input
               placeholder="Nova tag..."
@@ -103,7 +152,7 @@ export function LeadTagsDialog({ leadId, currentTags = [], onTagsUpdated, trigge
               }}
               disabled={loading}
             />
-            <Button onClick={adicionarTag} disabled={loading}>
+            <Button onClick={adicionarTag} disabled={loading} size="icon">
               <Plus className="h-4 w-4" />
             </Button>
           </div>

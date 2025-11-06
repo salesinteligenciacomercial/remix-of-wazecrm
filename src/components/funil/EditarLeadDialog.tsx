@@ -9,6 +9,9 @@ import { Pencil, Tag, X, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useTagsManager } from "@/hooks/useTagsManager";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface EditarLeadDialogProps {
   lead: {
@@ -46,6 +49,7 @@ export function EditarLeadDialog({
   const [funis, setFunis] = useState<any[]>([]);
   const [etapas, setEtapas] = useState<any[]>([]);
   const [etapasFiltradas, setEtapasFiltradas] = useState<any[]>([]);
+  const { allTags: tagsExistentes } = useTagsManager();
   const [formData, setFormData] = useState({
     nome: lead.nome || "",
     telefone: lead.telefone || "",
@@ -60,6 +64,7 @@ export function EditarLeadDialog({
     tags: lead.tags || []
   });
   const [newTag, setNewTag] = useState("");
+  const [tagsPopoverOpen, setTagsPopoverOpen] = useState(false);
 
   // Reset form data when lead changes
   useEffect(() => {
@@ -331,60 +336,98 @@ export function EditarLeadDialog({
           </div>
 
           <div>
-            <Label htmlFor="tags">Tags</Label>
-            <div className="flex gap-2 mb-2">
-              <Input
-                id="tags"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
+            <Label>Tags</Label>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Popover open={tagsPopoverOpen} onOpenChange={setTagsPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" className="flex-1 justify-start">
+                      <Tag className="h-4 w-4 mr-2" />
+                      {tagsExistentes.length > 0 ? "Selecionar tag existente" : "Sem tags existentes"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar tag..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhuma tag encontrada.</CommandEmpty>
+                        <CommandGroup>
+                          {tagsExistentes.map((tag) => (
+                            <CommandItem
+                              key={tag}
+                              value={tag}
+                              onSelect={() => {
+                                if (!formData.tags.includes(tag)) {
+                                  setFormData({ ...formData, tags: [...formData.tags, tag] });
+                                }
+                                setTagsPopoverOpen(false);
+                              }}
+                            >
+                              <Tag className="h-4 w-4 mr-2" />
+                              {tag}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              
+              <div className="flex gap-2">
+                <Input
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const tagTrimmed = newTag.trim();
+                      if (tagTrimmed && !formData.tags.includes(tagTrimmed)) {
+                        setFormData({ ...formData, tags: [...formData.tags, tagTrimmed] });
+                        setNewTag("");
+                      }
+                    }
+                  }}
+                  placeholder="Nova tag (Enter para adicionar)"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={() => {
                     const tagTrimmed = newTag.trim();
                     if (tagTrimmed && !formData.tags.includes(tagTrimmed)) {
                       setFormData({ ...formData, tags: [...formData.tags, tagTrimmed] });
                       setNewTag("");
                     }
-                  }
-                }}
-                placeholder="Digite uma tag e pressione Enter"
-              />
-              <Button
-                type="button"
-                size="icon"
-                onClick={() => {
-                  const tagTrimmed = newTag.trim();
-                  if (tagTrimmed && !formData.tags.includes(tagTrimmed)) {
-                    setFormData({ ...formData, tags: [...formData.tags, tagTrimmed] });
-                    setNewTag("");
-                  }
-                }}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2 min-h-[60px] p-2 border rounded-md bg-muted/20">
-              {formData.tags.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nenhuma tag adicionada</p>
-              ) : (
-                formData.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="gap-1">
-                    <Tag className="h-3 w-3" />
-                    {tag}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-4 w-4 p-0 hover:bg-transparent"
-                      onClick={() => {
-                        setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) });
-                      }}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </Badge>
-                ))
-              )}
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="flex flex-wrap gap-2 min-h-[60px] p-2 border rounded-md bg-muted/20">
+                {formData.tags.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhuma tag adicionada</p>
+                ) : (
+                  formData.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="gap-1">
+                      <Tag className="h-3 w-3" />
+                      {tag}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-4 w-4 p-0 hover:bg-transparent"
+                        onClick={() => {
+                          setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) });
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  ))
+                )}
+              </div>
             </div>
           </div>
 

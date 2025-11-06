@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useTagsManager } from "@/hooks/useTagsManager";
 
 interface NovoLeadDialogProps {
   onLeadCreated: () => void;
@@ -24,7 +25,7 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
   const [etapas, setEtapas] = useState<any[]>([]);
   const [etapasFiltradas, setEtapasFiltradas] = useState<any[]>([]);
   const [responsaveis, setResponsaveis] = useState<any[]>([]);
-  const [tagsExistentes, setTagsExistentes] = useState<string[]>([]);
+  const { allTags: tagsExistentes } = useTagsManager();
   const [formData, setFormData] = useState({
     nome: "",
     telefone: "",
@@ -87,22 +88,9 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
         name: (r.profiles as any)?.full_name || (r.profiles as any)?.email || "Sem nome"
       })) || [];
 
-      // Buscar tags existentes
-      const { data: leadsData } = await supabase
-        .from("leads")
-        .select("tags")
-        .eq("company_id", userRole.company_id)
-        .not("tags", "is", null);
-
-      const allTags = new Set<string>();
-      leadsData?.forEach(lead => {
-        lead.tags?.forEach((tag: string) => allTags.add(tag));
-      });
-
       setFunis(funisData || []);
       setEtapas(etapasData || []);
       setResponsaveis(responsaveisList);
-      setTagsExistentes(Array.from(allTags).sort());
       
       if (funisData && funisData.length > 0 && !formData.funil_id) {
         setFormData(prev => ({ ...prev, funil_id: funisData[0].id }));
