@@ -671,19 +671,109 @@ function Conversas() {
   useEffect(() => {
     if (!userCompanyId) return;
 
+    console.log('📡 Configurando assinatura realtime para conversas...');
+
     const channel = supabase
       .channel(`conversas-company-${userCompanyId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'conversas', filter: `company_id=eq.${userCompanyId}` },
-        () => {
-          // Recarregar a lista de conversas ao chegar nova mensagem
-          loadSupabaseConversations();
+        { 
+          event: '*', // Escutar INSERT, UPDATE e DELETE
+          schema: 'public', 
+          table: 'conversas', 
+          filter: `company_id=eq.${userCompanyId}` 
+        },
+        (payload) => {
+          console.log('📨 Nova mensagem recebida via realtime:', payload);
+          
+          if (payload.eventType === 'INSERT') {
+            const novaMensagem = payload.new;
+            
+            // Verificar se é mensagem válida (sem variáveis não substituídas)
+            if (!novaMensagem.mensagem || novaMensagem.mensagem.includes('{{')) {
+              console.log('⚠️ Mensagem ignorada (inválida)');
+              return;
+            }
+
+            const isGroup = novaMensagem.is_group || /@g\.us$/.test(novaMensagem.numero || '');
+            const telefone = isGroup ? novaMensagem.numero : (novaMensagem.telefone_formatado || novaMensagem.numero?.replace(/[^0-9]/g, ''));
+            
+            // Se a conversa aberta corresponde a esta mensagem, adicionar diretamente
+            if (selectedConvRef.current && selectedConvRef.current.id === telefone) {
+              console.log('✅ Adicionando mensagem à conversa aberta');
+              
+              const newMessage: Message = {
+                id: novaMensagem.id || `msg-${Date.now()}-${Math.random()}`,
+                content: novaMensagem.mensagem || '',
+                type: (novaMensagem.tipo_mensagem === 'texto' ? 'text' : (novaMensagem.tipo_mensagem || 'text')) as any,
+                sender: ((novaMensagem.status === 'Enviada' || novaMensagem.fromme) ? "user" : "contact") as "user" | "contact",
+                timestamp: new Date(novaMensagem.created_at || Date.now()),
+                delivered: true,
+                read: novaMensagem.status !== 'Recebida',
+                mediaUrl: novaMensagem.midia_url,
+              };
+
+              // Atualizar conversa selecionada
+              setSelectedConv(prev => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  messages: [...prev.messages, newMessage],
+                  lastMessage: newMessage.content,
+                  unread: newMessage.sender === 'contact' ? (prev.unread || 0) + 1 : prev.unread
+                };
+              });
+
+              // Atualizar lista de conversas
+              setConversations(prev => prev.map(conv => {
+                if (conv.id === telefone) {
+                  return {
+                    ...conv,
+                    messages: [...conv.messages, newMessage],
+                    lastMessage: newMessage.content,
+                    unread: newMessage.sender === 'contact' ? (conv.unread || 0) + 1 : conv.unread
+                  };
+                }
+                return conv;
+              }));
+
+              // Scroll para o final
+              setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+              }, 100);
+            } else {
+              // Conversa não está aberta, apenas recarregar lista
+              console.log('📋 Recarregando lista de conversas');
+              loadSupabaseConversations();
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            // Atualizar mensagem existente se necessário
+            console.log('🔄 Mensagem atualizada');
+            const updatedMsg = payload.new;
+            
+            setSelectedConv(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                messages: prev.messages.map(msg => 
+                  msg.id === updatedMsg.id ? {
+                    ...msg,
+                    content: updatedMsg.mensagem || msg.content,
+                    read: updatedMsg.status !== 'Recebida',
+                    transcricao: updatedMsg.transcricao || msg.transcricao
+                  } : msg
+                )
+              };
+            });
+          }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Status do canal realtime:', status);
+      });
 
     return () => {
+      console.log('📡 Desconectando canal realtime');
       supabase.removeChannel(channel);
     };
   }, [userCompanyId]);
