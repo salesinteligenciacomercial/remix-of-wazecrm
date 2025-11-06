@@ -74,7 +74,14 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
 
       if (error) {
         console.error('❌ [NOVA-SUBCONTA] Erro da função:', error);
-        throw new Error(error.message || 'Erro ao criar subconta');
+        
+        // Verificar se é erro de email duplicado
+        const errorMsg = typeof error === 'string' ? error : error.message;
+        if (errorMsg?.includes('EMAIL_JA_CADASTRADO') || errorMsg?.includes('já está cadastrado')) {
+          throw new Error(`⚠️ O email ${formData.email} já está cadastrado no sistema. Use outro email ou remova o usuário existente.`);
+        }
+        
+        throw new Error(errorMsg || 'Erro ao criar subconta');
       }
 
       // Armazenar credenciais para exibição

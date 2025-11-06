@@ -136,6 +136,22 @@ serve(async (req) => {
         });
       }
 
+      // VERIFICAR SE EMAIL JÁ EXISTE ANTES DE CRIAR EMPRESA
+      console.log('🔍 [CRIAR-USUARIO] Verificando se email já existe...');
+      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+      const emailExists = existingUser?.users?.some(u => u.email?.toLowerCase() === email.toLowerCase());
+      
+      if (emailExists) {
+        console.error('❌ [CRIAR-USUARIO] Email já cadastrado:', email);
+        return new Response(JSON.stringify({ 
+          error: 'Este email já está cadastrado no sistema. Use outro email ou remova o usuário existente primeiro.',
+          code: 'EMAIL_JA_CADASTRADO'
+        }), { 
+          status: 409, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+
       console.log('📝 [CRIAR-USUARIO] Criando nova empresa...');
       
       // Criar nova empresa
