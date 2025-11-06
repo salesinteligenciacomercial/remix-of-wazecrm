@@ -32,23 +32,28 @@ export async function getInstanceName(companyId: string): Promise<string | null>
 
 export async function getContacts(instanceName: string): Promise<EvolutionContact[]> {
   try {
-    const response = await fetch(`${EVOLUTION_API_URL}/chat/findContacts/${instanceName}`, {
-      method: "GET",
-      headers: {
-        "apikey": EVOLUTION_API_KEY || "",
-        "Content-Type": "application/json",
-      },
+    console.log("🔄 Buscando contatos via edge function:", instanceName);
+    
+    // Usar edge function como proxy para evitar problemas de CORS
+    const { data, error } = await supabase.functions.invoke('sync-whatsapp-contacts', {
+      body: { instanceName }
     });
 
-    if (!response.ok) {
-      console.error("❌ Erro ao buscar contatos:", response.statusText);
+    if (error) {
+      console.error("❌ Erro ao chamar edge function:", error);
       return [];
     }
 
-    const data = await response.json();
-    return data || [];
+    if (!data?.contacts) {
+      console.warn("⚠️ Nenhum contato retornado");
+      return [];
+    }
+
+    console.log(`✅ ${data.contacts.length} contatos recebidos da Evolution API`);
+    return data.contacts || [];
+    
   } catch (error) {
-    console.error("❌ Erro ao buscar contatos da Evolution API:", error);
+    console.error("❌ Erro ao buscar contatos:", error);
     return [];
   }
 }
