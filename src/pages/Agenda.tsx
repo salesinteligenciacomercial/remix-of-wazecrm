@@ -77,7 +77,9 @@ interface Lead {
   id: string;
   name: string;
   phone?: string;
+  telefone?: string;
   email?: string;
+  tags?: string[];
 }
 
 export default function Agenda() {
@@ -294,6 +296,21 @@ export default function Agenda() {
     horas_antecedencia: "24",
     destinatario_lembrete: "lead",
   });
+  
+  const [leadSearch, setLeadSearch] = useState("");
+  const [selectedLeadName, setSelectedLeadName] = useState("");
+
+  const filteredLeads = useMemo(() => {
+    if (!leadSearch.trim()) return leads;
+    const search = leadSearch.toLowerCase();
+    return leads.filter((lead) => {
+      const name = lead.name?.toLowerCase() || "";
+      const phone = lead.phone?.toLowerCase() || "";
+      const telefone = lead.telefone?.toLowerCase() || "";
+      const tags = (lead.tags || []).join(" ").toLowerCase();
+      return name.includes(search) || phone.includes(search) || telefone.includes(search) || tags.includes(search);
+    });
+  }, [leads, leadSearch]);
 
   // Função otimizada para carregar compromissos com range de datas
   const carregarCompromissos = useCallback(async (startDate?: Date, endDate?: Date) => {
@@ -424,7 +441,7 @@ export default function Agenda() {
     try {
       const { data, error } = await supabase
         .from('leads')
-        .select('id, name, phone, email')
+        .select('id, name, phone, telefone, email, tags')
         .order('name');
 
       if (error) throw error;
@@ -643,6 +660,8 @@ export default function Agenda() {
       horas_antecedencia: "24",
       destinatario_lembrete: "lead",
     });
+    setLeadSearch("");
+    setSelectedLeadName("");
   };
 
   // Memoizar compromissos do mês para evitar recálculos desnecessários
@@ -778,18 +797,66 @@ export default function Agenda() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Cliente / Lead</Label>
-                  <Select value={formData.lead_id} onValueChange={(value) => setFormData({...formData, lead_id: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {leads.map((lead) => (
-                        <SelectItem key={lead.id} value={lead.id}>
-                          {lead.name} {lead.phone && `(${lead.phone})`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    value={leadSearch}
+                    onChange={(e) => setLeadSearch(e.target.value)}
+                    placeholder="Buscar por nome, telefone ou tag..."
+                  />
+                  {leadSearch && (
+                    <div className="border rounded-md max-h-40 overflow-y-auto">
+                      {filteredLeads.length > 0 ? (
+                        filteredLeads.map((lead) => (
+                          <button
+                            key={lead.id}
+                            type="button"
+                            onClick={() => {
+                              setFormData({...formData, lead_id: lead.id});
+                              setSelectedLeadName(lead.name);
+                              setLeadSearch("");
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-accent transition-colors text-sm"
+                          >
+                            <div className="font-medium">{lead.name}</div>
+                            {(lead.phone || lead.telefone) && (
+                              <div className="text-xs text-muted-foreground">
+                                {lead.phone || lead.telefone}
+                              </div>
+                            )}
+                            {lead.tags && lead.tags.length > 0 && (
+                              <div className="flex gap-1 mt-1">
+                                {lead.tags.slice(0, 3).map((tag: string) => (
+                                  <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          Nenhum lead encontrado
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {selectedLeadName && (
+                    <div className="flex items-center justify-between p-2 bg-primary/10 rounded-md">
+                      <span className="text-sm font-medium">{selectedLeadName}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setFormData({...formData, lead_id: ""});
+                          setSelectedLeadName("");
+                        }}
+                        className="h-6 px-2"
+                      >
+                        Remover
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
