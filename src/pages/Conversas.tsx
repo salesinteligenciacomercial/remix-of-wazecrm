@@ -2265,6 +2265,39 @@ function Conversas() {
                 return;
               }
 
+              // ATUALIZAÇÃO: Detectar mudança de status para sincronizar contador em tempo real
+              const conversaAntiga = payload.old as any;
+              if (conversaAntiga?.status !== conversaAtualizada?.status) {
+                console.log('📊 Mudança de status detectada:', {
+                  de: conversaAntiga?.status,
+                  para: conversaAtualizada?.status,
+                  telefone: conversaAtualizada?.telefone_formatado
+                });
+
+                // Atualizar status na conversa correspondente
+                setConversations((prevConvs) =>
+                  prevConvs.map((conv) => {
+                    const convPhone = conv.phoneNumber?.replace(/[^0-9]/g, '');
+                    const msgPhone = conversaAtualizada?.telefone_formatado?.replace(/[^0-9]/g, '');
+                    
+                    if (convPhone === msgPhone) {
+                      const newStatus = conversaAtualizada?.status === 'Enviada' ? 'answered' : 
+                                       conversaAtualizada?.status === 'Recebida' ? 'waiting' : 
+                                       conversaAtualizada?.status === 'Resolvida' ? 'resolved' : conv.status;
+                      
+                      console.log('🔄 Atualizando status da conversa:', {
+                        telefone: convPhone,
+                        statusAntigo: conv.status,
+                        statusNovo: newStatus
+                      });
+                      
+                      return { ...conv, status: newStatus };
+                    }
+                    return conv;
+                  })
+                );
+              }
+
               // MELHORIA: Usar debounce para evitar spam de atualizações
               debouncedUpdate(() => {
                 // Normalizar destino (E.164 para contatos; JID completo para grupos)
@@ -3332,6 +3365,24 @@ function Conversas() {
         messages: [...selectedConv.messages, newMessage],
       });
 
+      // Atualizar status no banco de dados para sincronização em tempo real
+      try {
+        const telefoneFormatado = selectedConv.phoneNumber?.replace(/[^0-9]/g, '') || selectedConv.id.replace(/[^0-9]/g, '');
+        const { error: updateError } = await supabase
+          .from('conversas')
+          .update({ status: 'Enviada' })
+          .eq('telefone_formatado', telefoneFormatado)
+          .eq('company_id', userCompanyId);
+
+        if (updateError) {
+          console.error('❌ Erro ao atualizar status no banco:', updateError);
+        } else {
+          console.log('✅ Status atualizado no banco para "Enviada"');
+        }
+      } catch (error) {
+        console.error('❌ Erro ao sincronizar status:', error);
+      }
+
       // já salvo acima
 
       setSyncStatus('synced');
@@ -3446,6 +3497,19 @@ function Conversas() {
         messages: [...selectedConv.messages, newMessage],
       });
 
+      // Atualizar status no banco de dados
+      try {
+        const telefoneFormatado = selectedConv.phoneNumber?.replace(/[^0-9]/g, '') || selectedConv.id.replace(/[^0-9]/g, '');
+        await supabase
+          .from('conversas')
+          .update({ status: 'Enviada' })
+          .eq('telefone_formatado', telefoneFormatado)
+          .eq('company_id', userCompanyId);
+        console.log('✅ Status atualizado no banco após enviar áudio');
+      } catch (error) {
+        console.error('❌ Erro ao sincronizar status do áudio:', error);
+      }
+
       // Iniciar transcrição automática
       try {
         await transcreverAudio(newMessage.id, newMessage.mediaUrl!);
@@ -3509,6 +3573,19 @@ function Conversas() {
       status: "answered",
     });
     setMessageInput("");
+
+    // Atualizar status no banco de dados para sincronização em tempo real
+    try {
+      const telefoneFormatado = (selectedConv.phoneNumber || selectedConv.id).replace(/[^0-9]/g, '');
+      await supabase
+        .from('conversas')
+        .update({ status: 'Enviada' })
+        .eq('telefone_formatado', telefoneFormatado)
+        .eq('company_id', userCompanyId);
+      console.log('✅ Status atualizado no banco após enviar mensagem');
+    } catch (error) {
+      console.error('❌ Erro ao sincronizar status:', error);
+    }
     
     // Preparar dados para envio via WhatsApp
     const mensagemParaEnviar = replyingTo && selectedConv.messages.find(m => m.id === replyingTo)
