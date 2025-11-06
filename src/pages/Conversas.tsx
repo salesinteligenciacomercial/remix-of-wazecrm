@@ -733,8 +733,8 @@ function Conversas() {
                   ...prev,
                   messages: [...prev.messages, newMessage],
                   lastMessage: newMessage.content,
-                  // CORREÇÃO: Só aumentar unread se for mensagem do contato
-                  unread: isFromContact ? (prev.unread || 0) + 1 : prev.unread
+                  // CORREÇÃO: NÃO incrementar unread quando conversa está aberta
+                  unread: 0
                 };
               });
 
@@ -745,8 +745,8 @@ function Conversas() {
                     ...conv,
                     messages: [...conv.messages, newMessage],
                     lastMessage: newMessage.content,
-                    // CORREÇÃO: Só aumentar unread se for mensagem do contato
-                    unread: isFromContact ? (conv.unread || 0) + 1 : conv.unread
+                    // CORREÇÃO: NÃO incrementar unread quando conversa está aberta
+                    unread: 0
                   };
                 }
                 return conv;
