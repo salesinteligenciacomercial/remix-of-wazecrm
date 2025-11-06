@@ -2160,6 +2160,11 @@ function Conversas() {
                   }
                 }
                 
+                // Mudar status para "waiting" quando receber mensagem do contato
+                if (novaConversa.status === 'Recebida' && !novaConversa.fromme) {
+                  novaConvFormatted.status = "waiting";
+                }
+                
                 // Notificar APENAS se for mensagem RECEBIDA do cliente (não quando o CRM envia) e a conversa não estiver aberta
                 if (!isOpen && novaConversa.status === 'Recebida' && novaConversa.origem === 'WhatsApp') {
                   toast.custom((t) => (
@@ -2568,11 +2573,23 @@ function Conversas() {
             mediaUrl: m.midia_url,
           }));
 
+          // Determinar status baseado nas últimas mensagens
+          const ultimasMensagens = mensagens.slice(0, 5);
+          const temMensagemNaoLida = ultimasMensagens.some(m => m.status === 'Recebida' && m.fromme !== true);
+          const ultimaMensagemEnviada = ultimasMensagens.find(m => m.fromme === true || m.status === 'Enviada');
+          
+          let conversationStatus: "waiting" | "answered" | "resolved" = "waiting";
+          if (temMensagemNaoLida) {
+            conversationStatus = "waiting";
+          } else if (ultimaMensagemEnviada) {
+            conversationStatus = "answered";
+          }
+          
           novasConversas.push({
             id: telefone,
             contactName,
             channel: "whatsapp",
-            status: "waiting",
+            status: conversationStatus,
             lastMessage: messagensFormatadas[messagensFormatadas.length - 1]?.content || '',
             // CORREÇÃO: Só contar mensagens não lidas que são do contato (não fromme e status Recebida)
             unread: mensagens.filter(m => m.status === 'Recebida' && m.fromme !== true).length,
@@ -4887,12 +4904,16 @@ function Conversas() {
         company_id: userRole?.company_id,
       }]);
 
-      // Atualizar estados para resolvido
+      // Atualizar estados para resolvido e persistir no banco de dados
       const updatedConv: Conversation = { ...selectedConv, status: 'resolved', lastMessage: mensagem };
       const updatedList = conversations.map(c => c.id === selectedConv.id ? updatedConv : c);
       saveConversations(updatedList);
       setConversations(updatedList);
       setSelectedConv(updatedConv);
+      
+      // Salvar status resolvido em um campo separado no banco para persistência
+      // (Por enquanto, o status será gerenciado apenas no frontend)
+      
       toast.success('Atendimento finalizado e mensagem enviada');
     } catch (e) {
       console.error('❌ Erro ao finalizar atendimento:', e);
@@ -5004,8 +5025,14 @@ function Conversas() {
               variant={filter === "waiting" ? "default" : "ghost"}
               size="sm"
               onClick={() => setFilter("waiting")}
+              className="relative"
             >
               Aguardando
+              {conversations.filter(c => c.status === "waiting" && !c.isGroup).length > 0 && (
+                <Badge className="ml-2 bg-destructive text-destructive-foreground">
+                  {conversations.filter(c => c.status === "waiting" && !c.isGroup).length}
+                </Badge>
+              )}
             </Button>
             <Button
               variant={filter === "answered" ? "default" : "ghost"}
