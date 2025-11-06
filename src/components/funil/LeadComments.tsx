@@ -113,7 +113,15 @@ export function LeadComments({ leadId, initialNotes, onCommentAdded }: LeadComme
         return;
       }
 
-      const userName = (session.user.user_metadata as any)?.name || session.user.email || "Usuário";
+      // Buscar o nome completo do perfil
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      const userName = profile?.full_name || session.user.email?.split('@')[0] || "Usuário";
+      
       const newEntry: Comment = {
         id: generateId(),
         comment: newComment.trim(),
@@ -196,8 +204,8 @@ export function LeadComments({ leadId, initialNotes, onCommentAdded }: LeadComme
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-medium">
-                        {comment.user_name || comment.user_email || "Usuário"}
+                      <span className="text-xs font-medium truncate">
+                        {comment.user_name || "Usuário"}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(comment.created_at), {

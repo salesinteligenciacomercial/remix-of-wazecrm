@@ -2,7 +2,7 @@ import React, { useEffect, useState, memo, useCallback } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Phone, Mail, User, Trash2, MessageCircle, Building2, Tag, Calendar, CheckSquare, ChevronDown, ChevronUp, MoreVertical } from "lucide-react";
+import { Phone, Mail, User, Trash2, MessageCircle, Building2, Tag, Calendar, CheckSquare, ChevronDown, ChevronUp, MoreVertical, UserPlus } from "lucide-react";
 import { AgendaModal } from "@/components/agenda/AgendaModal";
 import { TarefaModal } from "@/components/tarefas/TarefaModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -14,6 +14,10 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { ConversaPopup } from "@/components/leads/ConversaPopup";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { toast } from "sonner";
 
 /**
  * ✅ BACKUP ATUALIZADO - 2024-11-01
@@ -36,6 +40,7 @@ interface LeadCardProps {
     funil_id?: string;
     etapa_id?: string;
     notes?: string | null;
+    responsavel_id?: string | null;
   };
   onDelete: (leadId: string) => void;
   onLeadMoved?: () => void;
@@ -47,10 +52,15 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
   const [agendaModalOpen, setAgendaModalOpen] = useState(false);
   const [tarefaModalOpen, setTarefaModalOpen] = useState(false);
   const [proximoCompromisso, setProximoCompromisso] = useState<string | null>(null);
+  const [proximoCompromissoData, setProximoCompromissoData] = useState<string | null>(null);
   const [proximaTarefa, setProximaTarefa] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [conversaOpen, setConversaOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [responsavelNome, setResponsavelNome] = useState<string | null>(null);
+  const [responsavelDialogOpen, setResponsavelDialogOpen] = useState(false);
+  const [usuarios, setUsuarios] = useState<any[]>([]);
+  const [novoResponsavel, setNovoResponsavel] = useState<string>("");
 
   const carregarProximasAtividades = useCallback(async () => {
     try {
@@ -64,10 +74,13 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
         .limit(1);
 
       if (compromissos?.[0]) {
+        const dataFormatada = new Date(compromissos[0].data_hora_inicio).toLocaleDateString('pt-BR');
         const titulo = compromissos[0].tipo_servico || 'Compromisso';
-        setProximoCompromisso(
-          `${titulo} - ${new Date(compromissos[0].data_hora_inicio).toLocaleDateString()}`
-        );
+        setProximoCompromisso(`${titulo} - ${dataFormatada}`);
+        setProximoCompromissoData(dataFormatada);
+      } else {
+        setProximoCompromisso(null);
+        setProximoCompromissoData(null);
       }
 
       // Carregar próxima tarefa
@@ -81,7 +94,7 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
 
       if (tarefas?.[0]) {
         setProximaTarefa(
-          `${tarefas[0].title} - ${new Date(tarefas[0].due_date).toLocaleDateString()}`
+          `${tarefas[0].title} - ${new Date(tarefas[0].due_date).toLocaleDateString('pt-BR')}`
         );
       }
     } catch (error) {
@@ -89,11 +102,98 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
     }
   }, [lead.id]);
 
+  const carregarResponsavel = useCallback(async () => {
+    if (!lead.responsavel_id) {
+      setResponsavelNome(null);
+      return;
+    }
+    
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", lead.responsavel_id)
+        .maybeSingle();
+      
+      if (profile) {
+        setResponsavelNome(profile.full_name || profile.email || "Sem nome");
+      }
+    } catch (error) {
+      console.error("Erro ao carregar responsável:", error);
+    }
+  }, [lead.responsavel_id]);
+
+  const carregarUsuarios = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data: userRole } = await supabase
+        .from("user_roles")
+        .select("company_id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (!userRole?.company_id) return;
+
+      const { data: userRoles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("company_id", userRole.company_id);
+
+      if (!userRoles || userRoles.length === 0) return;
+
+      const userIds = userRoles.map(ur => ur.user_id);
+
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in('id', userIds);
+
+      if (profiles) {
+        setUsuarios(profiles);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar usuários:", error);
+    }
+  }, []);
+
+  const atribuirResponsavel = async () => {
+    if (!novoResponsavel) {
+      toast.error("Selecione um responsável");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("leads")
+        .update({ responsavel_id: novoResponsavel })
+        .eq("id", lead.id);
+
+      if (error) throw error;
+
+      toast.success("Responsável atribuído com sucesso");
+      setResponsavelDialogOpen(false);
+      carregarResponsavel();
+      onLeadMoved?.();
+    } catch (error) {
+      console.error("Erro ao atribuir responsável:", error);
+      toast.error("Erro ao atribuir responsável");
+    }
+  };
+
   useEffect(() => {
     if (lead.id) {
       carregarProximasAtividades();
+      carregarResponsavel();
     }
-  }, [lead.id, carregarProximasAtividades]);
+  }, [lead.id, carregarProximasAtividades, carregarResponsavel]);
+
+  useEffect(() => {
+    if (responsavelDialogOpen) {
+      carregarUsuarios();
+    }
+  }, [responsavelDialogOpen, carregarUsuarios]);
 
   const {
     attributes,
@@ -185,6 +285,17 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
             </div>
             <div className="flex-1 min-w-0">
               <h4 className="font-semibold text-sm text-foreground mb-1">{lead.nome}</h4>
+              
+              {/* Responsável */}
+              {responsavelNome && (
+                <div className="flex items-center gap-1 mb-1">
+                  <Badge variant="outline" className="text-xs bg-primary/5 border-primary/20">
+                    <User className="h-2.5 w-2.5 mr-1" />
+                    {responsavelNome}
+                  </Badge>
+                </div>
+              )}
+              
               {lead.tags && lead.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {lead.tags.map((tag) => (
@@ -198,8 +309,25 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
             </div>
           </div>
 
-          {/* Ações (menu) + expandir */}
+          {/* Ações (menu) + agenda + expandir */}
           <div className="flex items-center gap-1">
+            {/* Data da Agenda - Mostrar ao lado do botão apagar */}
+            {proximoCompromissoData && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="text-xs bg-success/10 border-success/20 text-success cursor-pointer">
+                      <Calendar className="h-2.5 w-2.5 mr-1" />
+                      {proximoCompromissoData}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="font-medium">{proximoCompromisso}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -215,6 +343,10 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
               <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenuItem onClick={() => setEditOpen(true)}>Editar lead</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setConversaOpen(true)}>Ver conversas</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setResponsavelDialogOpen(true)}>
+                  <UserPlus className="h-3 w-3 mr-2" />
+                  Atribuir responsável
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={(e) => { handleDelete(e as any); }}>Excluir</DropdownMenuItem>
               </DropdownMenuContent>
@@ -401,6 +533,54 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
           open={editOpen}
           onOpenChange={setEditOpen}
         />
+
+        {/* Dialog de atribuir responsável */}
+        <Dialog open={responsavelDialogOpen} onOpenChange={setResponsavelDialogOpen}>
+          <DialogContent className="max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <DialogHeader>
+              <DialogTitle>Atribuir Responsável</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <Select value={novoResponsavel} onValueChange={setNovoResponsavel}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um responsável" />
+                </SelectTrigger>
+                <SelectContent>
+                  {usuarios.map((usuario) => (
+                    <SelectItem key={usuario.id} value={usuario.id}>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                            {(usuario.full_name || usuario.email).charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{usuario.full_name || usuario.email}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setResponsavelDialogOpen(false)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={atribuirResponsavel}
+                  disabled={!novoResponsavel}
+                  className="flex-1"
+                >
+                  Atribuir
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </Card>
   );
@@ -416,6 +596,7 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
     prevProps.lead.source === nextProps.lead.source &&
     prevProps.lead.funil_id === nextProps.lead.funil_id &&
     prevProps.lead.etapa_id === nextProps.lead.etapa_id &&
+    prevProps.lead.responsavel_id === nextProps.lead.responsavel_id &&
     prevProps.isDragging === nextProps.isDragging &&
     JSON.stringify(prevProps.lead.tags) === JSON.stringify(nextProps.lead.tags)
   );
