@@ -791,16 +791,35 @@ function Conversas() {
                 };
               });
 
-              // Atualizar lista de conversas
+              // Atualizar lista de conversas (PRESERVAR nome do lead)
               setConversations(prev => prev.map(conv => {
                 if (conv.id === telefone) {
+                  // Lista de nomes proibidos que não devem sobrescrever o nome atual
+                  const nomesProibidos = [
+                    'jeohvah lima', 
+                    'jeohvah i.a', 
+                    'jeova costa de lima',
+                    'jeo'
+                  ];
+                  
+                  // Determinar se devemos atualizar o nome
+                  let novoNome = conv.contactName;
+                  
+                  // APENAS atualizar nome se:
+                  // 1. Nome atual é o telefone (não tem nome ainda)
+                  // 2. E o novo nome não está na lista de proibidos
+                  if (conv.contactName === telefone && novaMensagem.nome_contato) {
+                    const nomeMsgLower = novaMensagem.nome_contato.trim().toLowerCase();
+                    if (!nomesProibidos.includes(nomeMsgLower) && nomeMsgLower !== telefone) {
+                      novoNome = novaMensagem.nome_contato;
+                    }
+                  }
+                  
                   return {
                     ...conv,
                     messages: [...conv.messages, newMessage],
                     lastMessage: newMessage.content,
-                    contactName: (conv.contactName && conv.contactName !== telefone) 
-                      ? conv.contactName 
-                      : (novaMensagem.nome_contato || conv.contactName),
+                    contactName: novoNome, // Usar o nome determinado acima
                     unread: 0
                   };
                 }
@@ -813,7 +832,9 @@ function Conversas() {
               }, 100);
             } else {
               // Conversa não está aberta, recarregar lista completa
-              console.log('📋 [REALTIME] Nova mensagem de conversa não aberta, recarregando lista...');
+              console.log('📋 [REALTIME] Nova mensagem de conversa não aberta, recarregando...');
+              
+              // IMPORTANTE: Não confiar no nome da mensagem, recarregar tudo para pegar o nome do lead
               loadSupabaseConversations();
             }
           } else if (payload.eventType === 'UPDATE') {
@@ -2701,19 +2722,45 @@ function Conversas() {
         }
       });
 
-      // ETAPA 4: Criar lista de conversas (otimizado - limitar a 10 mensagens por conversa)
+      // ETAPA 4: Criar lista de conversas (CORREÇÃO: Priorizar nome do lead)
       const novasConversas: Conversation[] = Array.from(contatosMap.entries()).map(([telefone, info]) => {
         const mensagens = conversasMap.get(telefone) || [];
         const temMensagens = mensagens.length > 0;
         
+        // PRIORIDADE 1: Nome do Lead (SEMPRE usar se existir)
         let contactName = info.name;
-        if (temMensagens) {
-          const nomeMensagem = mensagens.find(m => m.nome_contato?.trim() && m.nome_contato !== telefone)?.nome_contato;
-          if (nomeMensagem) contactName = nomeMensagem;
+        
+        // PRIORIDADE 2: Nome da mensagem APENAS se:
+        // - Não houver nome do lead OU nome do lead for igual ao telefone
+        // - E nome da mensagem for diferente de "Jeohvah Lima", "jeohvah I.A" e do telefone
+        const nomesProibidos = [
+          'jeohvah lima', 
+          'jeohvah i.a', 
+          'jeova costa de lima',
+          'jeo',
+          telefone
+        ];
+        
+        if (temMensagens && (!contactName || contactName === telefone)) {
+          const nomeMensagem = mensagens.find(m => {
+            const nomeMsg = m.nome_contato?.trim().toLowerCase();
+            return nomeMsg && 
+                   nomeMsg !== telefone && 
+                   !nomesProibidos.includes(nomeMsg);
+          })?.nome_contato;
+          
+          if (nomeMensagem) {
+            contactName = nomeMensagem;
+          }
+        }
+        
+        // FALLBACK: Se ainda não tiver nome válido, usar telefone formatado
+        if (!contactName || contactName.trim() === '') {
+          contactName = telefone;
         }
         
         const messagensFormatadas: Message[] = temMensagens 
-          ? mensagens.slice(0, 10).reverse().map(m => ({ // Reduzir para 10 mensagens
+          ? mensagens.slice(0, 10).reverse().map(m => ({
               id: m.id || `msg-${Date.now()}-${Math.random()}`,
               content: m.mensagem || '',
               type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
@@ -2743,6 +2790,12 @@ function Conversas() {
       });
 
       console.log(`✅ ${novasConversas.length} conversas carregadas em ${(performance.now() - startTime).toFixed(0)}ms`);
+      
+      // LOG: Verificar nomes carregados
+      console.log('📋 [NOMES] Primeiras 10 conversas:', novasConversas.slice(0, 10).map(c => ({
+        telefone: c.phoneNumber,
+        nome: c.contactName
+      })));
       
       setConversations(novasConversas);
       toast.success(`${novasConversas.length} conversas carregadas`);
