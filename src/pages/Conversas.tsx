@@ -248,6 +248,7 @@ function Conversas() {
     whatsappConnected: 0,
   });
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingConversations, setLoadingConversations] = useState(true);
   const [historyStats, setHistoryStats] = useState<Record<string, { total: number; loaded: number }>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const selectedConvRef = useRef<Conversation | null>(null);
@@ -2518,29 +2519,6 @@ function Conversas() {
     setConversations(initialConversations);
   };
 
-  // 🆕 SINCRONIZAR CONTATOS DO WHATSAPP (SIMPLIFICADO - usa leads já no banco)
-  const syncWhatsAppContacts = async (companyId: string) => {
-    try {
-      console.log("📋 Carregando contatos WhatsApp do banco de dados...");
-      
-      // Buscar todos os leads da empresa (que já foram sincronizados via webhook)
-      const { data: allLeads, error } = await supabase
-        .from('leads')
-        .select('id, phone, name, created_at')
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error("❌ Erro ao buscar leads:", error);
-        return;
-      }
-
-      console.log(`✅ Total de ${allLeads?.length || 0} leads encontrados no banco`);
-    } catch (error) {
-      console.error("❌ Erro ao carregar contatos:", error);
-    }
-  };
-
   // 🆕 RESTAURAR CONVERSA ANTIGA
   const handleRestoreConversation = async () => {
     if (!selectedConv?.phoneNumber || !userCompanyId) {
@@ -2613,7 +2591,13 @@ function Conversas() {
   }, [selectedConv]);
 
   const loadSupabaseConversations = async () => {
+    if (loadingConversations) {
+      console.log('⚠️ Carregamento já em andamento, ignorando chamada duplicada');
+      return;
+    }
+    
     try {
+      setLoadingConversations(true);
       console.log('🚀 [PERFORMANCE] Carregamento ultra-rápido iniciado...');
       const startTime = performance.now();
       
@@ -2621,6 +2605,7 @@ function Conversas() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Você precisa estar logado');
+        setLoadingConversations(false);
         return;
       }
       
@@ -2632,13 +2617,11 @@ function Conversas() {
 
       if (!userRole?.company_id) {
         toast.error('Erro: Usuário sem empresa associada');
+        setLoadingConversations(false);
         return;
       }
 
       setUserCompanyId(userRole.company_id);
-      
-      // 🆕 Notificar sincronização
-      await syncWhatsAppContacts(userRole.company_id);
       
       // ETAPA 2A: Buscar TODOS os leads (contatos) da empresa
       const { data: leadsData, error: leadsError } = await supabase
@@ -2650,6 +2633,7 @@ function Conversas() {
       if (leadsError) {
         console.error('❌ Erro ao buscar leads:', leadsError);
         toast.error(`Erro ao buscar contatos: ${leadsError.message}`);
+        setLoadingConversations(false);
         return;
       }
 
@@ -2676,6 +2660,7 @@ function Conversas() {
       if (error) {
         console.error('❌ Erro:', error);
         toast.error(`Erro ao carregar conversas: ${error.message}`);
+        setLoadingConversations(false);
         return;
       }
       
@@ -2829,8 +2814,11 @@ function Conversas() {
           }
         }
       });
+      
+      setLoadingConversations(false);
     } catch (error) {
       console.error('Erro ao carregar conversas:', error);
+      setLoadingConversations(false);
     }
   };
 
@@ -5303,8 +5291,19 @@ function Conversas() {
 
         {/* Conversations List */}
         <ScrollArea className="flex-1">
-          {filteredConversations.map((conv) => (
-            <ConversationListItem
+          {loadingConversations ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Carregando conversas...</p>
+            </div>
+          ) : filteredConversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3">
+              <MessageSquare className="h-12 w-12 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">Nenhuma conversa encontrada</p>
+            </div>
+          ) : (
+            filteredConversations.map((conv) => (
+              <ConversationListItem
               key={conv.id}
               contactName={conv.contactName}
               channel={conv.channel}
@@ -5408,7 +5407,8 @@ function Conversas() {
                 }
               }}
             />
-          ))}
+          ))
+          )}
         </ScrollArea>
       </div>
 
