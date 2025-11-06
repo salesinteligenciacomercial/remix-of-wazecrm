@@ -48,6 +48,12 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
 
       if (!userRole) throw new Error('Empresa não encontrada');
 
+      console.log('📤 [NOVA-SUBCONTA] Enviando dados:', {
+        parentCompanyId: userRole.company_id,
+        companyName: formData.name,
+        email: formData.email
+      });
+
       // Criar subconta usando edge function
       const { data, error } = await supabase.functions.invoke('criar-usuario-subconta', {
         body: {
@@ -63,7 +69,12 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
         },
       });
 
-      if (error) throw error;
+      console.log('📥 [NOVA-SUBCONTA] Resposta:', { data, error });
+
+      if (error) {
+        console.error('❌ [NOVA-SUBCONTA] Erro da função:', error);
+        throw new Error(error.message || 'Erro ao criar subconta');
+      }
 
       // Armazenar credenciais para exibição
       if (data?.credentials) {
@@ -89,10 +100,10 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
 
       if (onSuccess) onSuccess();
     } catch (error: any) {
-      console.error('Erro ao criar subconta:', error);
+      console.error('❌ [NOVA-SUBCONTA] Erro completo:', error);
       toast({
         title: "Erro ao criar subconta",
-        description: error.message,
+        description: error.message || 'Erro desconhecido ao criar subconta',
         variant: "destructive",
       });
     } finally {

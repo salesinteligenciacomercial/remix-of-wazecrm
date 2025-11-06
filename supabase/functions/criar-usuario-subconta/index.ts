@@ -30,12 +30,22 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🔧 [CRIAR-USUARIO] Iniciando processamento...');
+    
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error('❌ [CRIAR-USUARIO] Sem autorização');
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const body: CriarUsuarioRequest = await req.json();
+    console.log('📦 [CRIAR-USUARIO] Dados recebidos:', { 
+      hasParentCompanyId: !!body.parentCompanyId,
+      hasCompanyId: !!body.companyId,
+      email: body.email,
+      companyName: body.companyName 
+    });
+    
     const { companyId, email, full_name, role, parentCompanyId, companyName, cnpj, telefone, responsavel, plan, max_users, max_leads } = body;
 
     if (!email || !full_name) {
@@ -64,7 +74,14 @@ serve(async (req) => {
     const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
+    console.log('🔑 [CRIAR-USUARIO] Variáveis disponíveis:', { 
+      hasUrl: !!SUPABASE_URL, 
+      hasServiceRole: !!SERVICE_ROLE, 
+      hasAnonKey: !!ANON_KEY 
+    });
+
     if (!SUPABASE_URL || !SERVICE_ROLE || !ANON_KEY) {
+      console.error('❌ [CRIAR-USUARIO] Configuração incompleta');
       return new Response(
         JSON.stringify({ error: 'Configuração do servidor incompleta' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -78,7 +95,10 @@ serve(async (req) => {
 
     // Verificar permissões do usuário chamador
     const { data: me, error: meErr } = await supabase.auth.getUser();
+    console.log('👤 [CRIAR-USUARIO] Usuário:', { userId: me?.user?.id, error: meErr });
+    
     if (meErr || !me?.user) {
+      console.error('❌ [CRIAR-USUARIO] Falha ao identificar usuário:', meErr);
       return new Response(JSON.stringify({ error: 'Falha ao identificar usuário' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
@@ -87,11 +107,15 @@ serve(async (req) => {
       .select('role, company_id')
       .eq('user_id', me.user.id);
 
+    console.log('🔐 [CRIAR-USUARIO] Roles:', { roles, error: rolesErr });
+
     if (rolesErr) {
+      console.error('❌ [CRIAR-USUARIO] Falha ao validar permissões:', rolesErr);
       return new Response(JSON.stringify({ error: 'Falha ao validar permissões' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const isSuperAdmin = roles?.some(r => r.role === 'super_admin') || false;
+    console.log('👑 [CRIAR-USUARIO] É super admin?', isSuperAdmin);
     
     let targetCompanyId: string;
 
@@ -200,9 +224,13 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('❌ Erro geral:', error);
+    console.error('❌ [CRIAR-USUARIO] Erro geral:', error);
+    console.error('❌ [CRIAR-USUARIO] Stack:', error instanceof Error ? error.stack : 'N/A');
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro desconhecido' }),
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+        details: error instanceof Error ? error.stack : undefined
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
