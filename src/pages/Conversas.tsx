@@ -5919,35 +5919,7 @@ function Conversas() {
                           </DialogContent>
                         </Dialog>
 
-                        {/* Schedule Meeting */}
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={async () => {
-                            // CORREÇÃO: Criar lead automaticamente ao abrir o modal
-                            if (!leadVinculado?.id && selectedConv) {
-                              setSyncStatus('syncing');
-                              const lead = await findOrCreateLead(selectedConv);
-                              if (lead) {
-                                setLeadVinculado(lead);
-                                setMostrarBotaoCriarLead(false);
-                                const phoneKey = selectedConv.phoneNumber || selectedConv.id;
-                                const formatted = safeFormatPhoneNumber(phoneKey);
-                                setLeadsVinculados(prev => ({
-                                  ...prev,
-                                  [phoneKey]: lead.id,
-                                  ...(formatted ? { [formatted]: lead.id } : {})
-                                }));
-                                toast.success('Lead vinculado automaticamente!');
-                              }
-                              setSyncStatus('idle');
-                            }
-                            setAgendaModalOpen(true);
-                          }}
-                        >
-                          <Calendar className="h-4 w-4 mr-2" /> Agendar Compromisso
-                        </Button>
-
+                        {/* Compromissos e Reuniões */}
                         <Dialog open={reunioesDialogOpen} onOpenChange={setReunioesDialogOpen}>
                           <DialogTrigger asChild>
                             <Button 
@@ -5975,7 +5947,7 @@ function Conversas() {
                                 setReunioesDialogOpen(true);
                               }}
                             >
-                              <Calendar className="h-4 w-4 mr-2" /> Histórico de Reuniões
+                              <Calendar className="h-4 w-4 mr-2" /> Compromissos
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -6115,34 +6087,6 @@ function Conversas() {
                         </Dialog>
 
                         {/* Tarefas do Lead */}
-                        <Button 
-                          variant="outline" 
-                          className="w-full justify-start"
-                          onClick={async () => {
-                            // CORREÇÃO: Criar lead automaticamente ao abrir o modal
-                            if (!leadVinculado?.id && selectedConv) {
-                              setSyncStatus('syncing');
-                              const lead = await findOrCreateLead(selectedConv);
-                              if (lead) {
-                                setLeadVinculado(lead);
-                                setMostrarBotaoCriarLead(false);
-                                const phoneKey = selectedConv.phoneNumber || selectedConv.id;
-                                const formatted = safeFormatPhoneNumber(phoneKey);
-                                setLeadsVinculados(prev => ({
-                                  ...prev,
-                                  [phoneKey]: lead.id,
-                                  ...(formatted ? { [formatted]: lead.id } : {})
-                                }));
-                                toast.success('Lead vinculado automaticamente!');
-                              }
-                              setSyncStatus('idle');
-                            }
-                            setTarefaModalOpen(true);
-                          }}
-                        >
-                          <CheckSquare className="h-4 w-4 mr-2" /> Criar Tarefa
-                        </Button>
-
                         <Dialog open={tarefasDialogOpen} onOpenChange={setTarefasDialogOpen}>
                           <DialogTrigger asChild>
                             <Button 
@@ -6171,7 +6115,7 @@ function Conversas() {
                               }}
                               type="button"
                             >
-                              <CheckSquare className="h-4 w-4 mr-2" /> Histórico de Tarefas
+                              <CheckSquare className="h-4 w-4 mr-2" /> Tarefas
                               {leadTasks.length > 0 && (
                                 <Badge variant="secondary" className="ml-auto">
                                   {leadTasks.filter(t => t.status !== 'concluida').length}
@@ -6181,178 +6125,174 @@ function Conversas() {
                           </DialogTrigger>
                           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                             <DialogHeader>
-                              <DialogTitle>📋 Tarefas do Lead</DialogTitle>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                Gerencie as tarefas relacionadas a este lead
-                              </p>
+                              <DialogTitle>Tarefas do Lead</DialogTitle>
                             </DialogHeader>
 
-                            {!leadVinculado?.id ? (
-                              <div className="text-center py-8 text-muted-foreground">
-                                <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                <p className="mb-4">O lead será criado automaticamente ao abrir este modal.</p>
-                                <p className="text-sm text-muted-foreground mb-4">Tente abrir novamente ou clique no botão abaixo.</p>
-                                <Button 
-                                  onClick={async () => {
-                                    if (selectedConv) {
-                                      setSyncStatus('syncing');
-                                      const lead = await findOrCreateLead(selectedConv);
-                                      if (lead) {
-                                        setLeadVinculado(lead);
-                                        setMostrarBotaoCriarLead(false);
-                                        const phoneKey = selectedConv.phoneNumber || selectedConv.id;
-                                        const formatted = safeFormatPhoneNumber(phoneKey);
-                                        setLeadsVinculados(prev => ({
-                                          ...prev,
-                                          [phoneKey]: lead.id,
-                                          ...(formatted ? { [formatted]: lead.id } : {})
-                                        }));
-                                        toast.success('Lead criado! Você pode criar tarefas agora.');
-                                        // Recarregar tarefas
-                                        await carregarTarefasDoLead(lead.id);
-                                      }
-                                      setSyncStatus('idle');
-                                    }
-                                  }}
-                                  variant="default"
-                                >
-                                  Criar Lead Agora
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="space-y-4">
-                                {/* Criar nova tarefa */}
-                                <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
-                                  <h4 className="text-sm font-semibold">Criar Nova Tarefa</h4>
-                                  
-                                  {/* CORREÇÃO: Select de Quadro no topo (igual ao Funil de Vendas) */}
-                                  {taskBoards.length > 0 && (
-                                    <div className="space-y-2">
-                                      <Label>Quadro</Label>
-                                      <Select
-                                        value={selectedTaskBoardId}
-                                        onValueChange={(value) => {
-                                          setSelectedTaskBoardId(value);
-                                          setSelectedTaskColumnId(""); // Limpar etapa ao mudar quadro
-                                        }}
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Selecione o quadro" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {taskBoards.map((board) => (
-                                            <SelectItem key={board.id} value={board.id}>
-                                              {board.nome}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  )}
+                            <Tabs defaultValue="criar" className="w-full">
+                              <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="criar">Criar Nova</TabsTrigger>
+                                <TabsTrigger value="historico">
+                                  Histórico ({leadTasks.length})
+                                </TabsTrigger>
+                              </TabsList>
 
-                                  {/* CORREÇÃO: Select de Etapa (filtrado pelo quadro) - NÃO REMOVER */}
-                                  {selectedTaskBoardId && taskColumns.filter(c => c.board_id === selectedTaskBoardId).length > 0 && (
-                                    <div className="space-y-2">
-                                      <Label>Etapa</Label>
-                                      <Select
-                                        value={selectedTaskColumnId}
-                                        onValueChange={setSelectedTaskColumnId}
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Selecione a etapa" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {taskColumns
-                                            .filter(c => c.board_id === selectedTaskBoardId)
-                                            .map((column) => (
-                                              <SelectItem key={column.id} value={column.id}>
-                                                {column.nome}
+                              <TabsContent value="criar" className="space-y-4">
+                                {!leadVinculado?.id ? (
+                                  <div className="text-center py-8 text-muted-foreground">
+                                    <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                    <p className="mb-4">O lead será criado automaticamente ao abrir este modal.</p>
+                                    <Button 
+                                      onClick={async () => {
+                                        if (selectedConv) {
+                                          setSyncStatus('syncing');
+                                          const lead = await findOrCreateLead(selectedConv);
+                                          if (lead) {
+                                            setLeadVinculado(lead);
+                                            setMostrarBotaoCriarLead(false);
+                                            const phoneKey = selectedConv.phoneNumber || selectedConv.id;
+                                            const formatted = safeFormatPhoneNumber(phoneKey);
+                                            setLeadsVinculados(prev => ({
+                                              ...prev,
+                                              [phoneKey]: lead.id,
+                                              ...(formatted ? { [formatted]: lead.id } : {})
+                                            }));
+                                            toast.success('Lead criado! Você pode criar tarefas agora.');
+                                            await carregarTarefasDoLead(lead.id);
+                                          }
+                                          setSyncStatus('idle');
+                                        }
+                                      }}
+                                      variant="default"
+                                    >
+                                      Criar Lead Agora
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    {taskBoards.length > 0 && (
+                                      <div>
+                                        <Label>Quadro</Label>
+                                        <Select
+                                          value={selectedTaskBoardId}
+                                          onValueChange={(value) => {
+                                            setSelectedTaskBoardId(value);
+                                            setSelectedTaskColumnId("");
+                                          }}
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Selecione o quadro" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {taskBoards.map((board) => (
+                                              <SelectItem key={board.id} value={board.id}>
+                                                {board.nome}
                                               </SelectItem>
                                             ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  )}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    )}
 
-                                  <div className="space-y-2">
-                                    <Label>Título *</Label>
-                                    <Input
-                                      value={newTaskTitle}
-                                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                                      placeholder="Ex: Enviar proposta comercial"
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label>Descrição</Label>
-                                    <Textarea
-                                      value={newTaskDescription}
-                                      onChange={(e) => setNewTaskDescription(e.target.value)}
-                                      placeholder="Detalhes da tarefa..."
-                                      rows={2}
-                                    />
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-2">
-                                      <Label>Prioridade</Label>
-                                      <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
-                                        <SelectTrigger>
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="baixa">🟢 Baixa</SelectItem>
-                                          <SelectItem value="media">🟡 Média</SelectItem>
-                                          <SelectItem value="alta">🔴 Alta</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label>Data de Vencimento</Label>
+                                    {selectedTaskBoardId && taskColumns.filter(c => c.board_id === selectedTaskBoardId).length > 0 && (
+                                      <div>
+                                        <Label>Etapa</Label>
+                                        <Select
+                                          value={selectedTaskColumnId}
+                                          onValueChange={setSelectedTaskColumnId}
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Selecione a etapa" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {taskColumns
+                                              .filter(c => c.board_id === selectedTaskBoardId)
+                                              .map((column) => (
+                                                <SelectItem key={column.id} value={column.id}>
+                                                  {column.nome}
+                                                </SelectItem>
+                                              ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    )}
+
+                                    <div>
+                                      <Label>Título *</Label>
                                       <Input
-                                        type="date"
-                                        value={newTaskDueDate}
-                                        onChange={(e) => setNewTaskDueDate(e.target.value)}
+                                        value={newTaskTitle}
+                                        onChange={(e) => setNewTaskTitle(e.target.value)}
+                                        placeholder="Ex: Enviar proposta comercial"
                                       />
                                     </div>
-                                  </div>
-                                  <Button 
-                                    onClick={async () => {
-                                      // CORREÇÃO: Garantir lead antes de criar tarefa
-                                      if (!leadVinculado?.id && selectedConv) {
-                                        setSyncStatus('syncing');
-                                        const lead = await findOrCreateLead(selectedConv);
-                                        if (lead) {
-                                          setLeadVinculado(lead);
-                                          setMostrarBotaoCriarLead(false);
-                                          const phoneKey = selectedConv.phoneNumber || selectedConv.id;
-                                          const formatted = safeFormatPhoneNumber(phoneKey);
-                                          setLeadsVinculados(prev => ({
-                                            ...prev,
-                                            [phoneKey]: lead.id,
-                                            ...(formatted ? { [formatted]: lead.id } : {})
-                                          }));
-                                          toast.success('Lead vinculado automaticamente!');
+                                    <div>
+                                      <Label>Descrição</Label>
+                                      <Textarea
+                                        value={newTaskDescription}
+                                        onChange={(e) => setNewTaskDescription(e.target.value)}
+                                        placeholder="Detalhes da tarefa..."
+                                        rows={2}
+                                      />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div>
+                                        <Label>Prioridade</Label>
+                                        <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
+                                          <SelectTrigger>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="baixa">🟢 Baixa</SelectItem>
+                                            <SelectItem value="media">🟡 Média</SelectItem>
+                                            <SelectItem value="alta">🔴 Alta</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div>
+                                        <Label>Data de Vencimento</Label>
+                                        <Input
+                                          type="date"
+                                          value={newTaskDueDate}
+                                          onChange={(e) => setNewTaskDueDate(e.target.value)}
+                                        />
+                                      </div>
+                                    </div>
+                                    <Button 
+                                      onClick={async () => {
+                                        if (!leadVinculado?.id && selectedConv) {
+                                          setSyncStatus('syncing');
+                                          const lead = await findOrCreateLead(selectedConv);
+                                          if (lead) {
+                                            setLeadVinculado(lead);
+                                            setMostrarBotaoCriarLead(false);
+                                            const phoneKey = selectedConv.phoneNumber || selectedConv.id;
+                                            const formatted = safeFormatPhoneNumber(phoneKey);
+                                            setLeadsVinculados(prev => ({
+                                              ...prev,
+                                              [phoneKey]: lead.id,
+                                              ...(formatted ? { [formatted]: lead.id } : {})
+                                            }));
+                                            toast.success('Lead vinculado automaticamente!');
+                                          }
+                                          setSyncStatus('idle');
                                         }
-                                        setSyncStatus('idle');
-                                      }
-                                      await criarTarefaDoLead();
-                                    }} 
-                                    className="w-full"
-                                    disabled={!newTaskTitle.trim()}
-                                  >
-                                    <CheckSquare className="h-4 w-4 mr-2" />
-                                    Criar Tarefa
-                                  </Button>
-                                </div>
+                                        await criarTarefaDoLead();
+                                      }} 
+                                      className="w-full"
+                                      disabled={!newTaskTitle.trim()}
+                                    >
+                                      Criar Tarefa
+                                    </Button>
+                                  </>
+                                )}
+                              </TabsContent>
 
-                                {/* Lista de tarefas */}
-                                <div className="border-t pt-4">
-                                  <h4 className="text-sm font-medium mb-3">
-                                    Tarefas ({leadTasks.length})
-                                  </h4>
+                              <TabsContent value="historico" className="space-y-4">
+                                <ScrollArea className="h-[400px]">
                                   {leadTasks.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground text-center py-8">
-                                      Nenhuma tarefa criada ainda
-                                    </p>
+                                    <div className="text-center py-12 text-muted-foreground">
+                                      <CheckSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                                      <p>Nenhuma tarefa criada</p>
+                                    </div>
                                   ) : (
                                     <div className="space-y-2">
                                       {leadTasks.map((task) => (
@@ -6424,9 +6364,9 @@ function Conversas() {
                                       ))}
                                     </div>
                                   )}
-                                </div>
-                              </div>
-                            )}
+                                </ScrollArea>
+                              </TabsContent>
+                            </Tabs>
                           </DialogContent>
                         </Dialog>
 
