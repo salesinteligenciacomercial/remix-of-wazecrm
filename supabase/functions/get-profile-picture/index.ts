@@ -14,6 +14,8 @@ serve(async (req) => {
   try {
     const { number, company_id } = await req.json();
 
+    console.log('📥 [PROFILE-PICTURE] Requisição recebida:', { number, company_id: company_id || 'NÃO FORNECIDO' });
+
     if (!number) {
       console.error('❌ Número não fornecido');
       return new Response(
@@ -41,6 +43,12 @@ serve(async (req) => {
     let instanceApiKey: string | null = globalApiKey || null;
     let instanceApiUrl: string | null = null;
 
+    console.log('🔍 [PROFILE-PICTURE] Resolvendo instância...', { 
+      hasCompanyId: !!company_id, 
+      hasDefaultInstance: !!defaultInstance,
+      hasGlobalApiKey: !!globalApiKey 
+    });
+
     if (company_id && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       try {
         const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
@@ -51,12 +59,22 @@ serve(async (req) => {
           .eq('company_id', company_id)
           .eq('status', 'connected')
           .maybeSingle();
+        
+        console.log('🔍 [PROFILE-PICTURE] Conexão encontrada:', { 
+          found: !!conn, 
+          instanceName: conn?.instance_name,
+          hasApiKey: !!conn?.evolution_api_key,
+          apiUrl: conn?.evolution_api_url 
+        });
+        
         if (conn?.instance_name) instanceName = conn.instance_name;
         if (conn?.evolution_api_key) instanceApiKey = conn.evolution_api_key;
         if (conn?.evolution_api_url) instanceApiUrl = conn.evolution_api_url;
       } catch (e) {
-        console.warn('⚠️ Falha ao resolver instância por company_id:', e);
+        console.error('❌ [PROFILE-PICTURE] Erro ao buscar conexão por company_id:', e);
       }
+    } else {
+      console.log('⚠️ [PROFILE-PICTURE] Usando configuração global (company_id não fornecido ou sem env vars)');
     }
 
     if (!instanceName) {
