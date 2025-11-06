@@ -91,12 +91,20 @@ export function AdicionarLeadExistenteDialog({ funilId, etapaInicial, onLeadAdde
     setLoading(true);
 
     try {
+      // 🔒 Buscar lead para preservar company_id
+      const { data: leadData } = await supabase
+        .from("leads")
+        .select("company_id")
+        .eq("id", selectedLead)
+        .single();
+
       const { error } = await supabase
         .from("leads")
         .update({
           funil_id: funilId,
           etapa_id: etapaInicial.id,
-          status: "ativo"
+          status: "ativo",
+          company_id: leadData?.company_id // 🔒 Preservar company_id
         })
         .eq("id", selectedLead);
 

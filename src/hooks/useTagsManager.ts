@@ -61,7 +61,7 @@ export function useTagsManager(): TagsManagerHook {
     try {
       const { data: lead } = await supabase
         .from("leads")
-        .select("tags")
+        .select("tags, company_id") // 🔒 Incluir company_id na busca
         .eq("id", leadId)
         .single();
 
@@ -74,7 +74,10 @@ export function useTagsManager(): TagsManagerHook {
 
       await supabase
         .from("leads")
-        .update({ tags: newTags })
+        .update({ 
+          tags: newTags,
+          company_id: lead.company_id // 🔒 Preservar company_id
+        })
         .eq("id", leadId);
 
       await refreshTags();
@@ -88,7 +91,7 @@ export function useTagsManager(): TagsManagerHook {
     try {
       const { data: lead } = await supabase
         .from("leads")
-        .select("tags")
+        .select("tags, company_id") // 🔒 Incluir company_id na busca
         .eq("id", leadId)
         .single();
 
@@ -99,7 +102,10 @@ export function useTagsManager(): TagsManagerHook {
 
       await supabase
         .from("leads")
-        .update({ tags: newTags.length > 0 ? newTags : null })
+        .update({ 
+          tags: newTags.length > 0 ? newTags : null,
+          company_id: lead.company_id // 🔒 Preservar company_id
+        })
         .eq("id", leadId);
 
       await refreshTags();

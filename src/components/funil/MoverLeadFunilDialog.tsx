@@ -158,12 +158,20 @@ export function MoverLeadFunilDialog({
         ? etapaSelecionada.nome.toLowerCase()
         : 'ativo';
 
+      // 🔒 Buscar lead para preservar company_id
+      const { data: leadData } = await supabase
+        .from("leads")
+        .select("company_id")
+        .eq("id", leadId)
+        .single();
+
       const { error } = await supabase
         .from("leads")
         .update({
           funil_id: selectedFunil,
           etapa_id: selectedEtapa,
           status: novoStatus,
+          company_id: leadData?.company_id // 🔒 Preservar company_id
         })
         .eq("id", leadId);
 

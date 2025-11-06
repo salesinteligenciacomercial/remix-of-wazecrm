@@ -165,9 +165,19 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
     }
 
     try {
+      // 🔒 Buscar lead para preservar company_id
+      const { data: leadData } = await supabase
+        .from("leads")
+        .select("company_id")
+        .eq("id", lead.id)
+        .single();
+
       const { error } = await supabase
         .from("leads")
-        .update({ responsavel_id: novoResponsavel })
+        .update({ 
+          responsavel_id: novoResponsavel,
+          company_id: leadData?.company_id // 🔒 Preservar company_id
+        })
         .eq("id", lead.id);
 
       if (error) throw error;

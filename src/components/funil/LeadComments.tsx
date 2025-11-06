@@ -94,9 +94,19 @@ export function LeadComments({ leadId, initialNotes, onCommentAdded }: LeadComme
 
   // ✅ CRÍTICO: Salva comentários no campo notes como JSON (NÃO na tabela lead_comments)
   const persistComments = async (updated: Comment[]) => {
+    // 🔒 Buscar lead para preservar company_id
+    const { data: leadData } = await supabase
+      .from("leads")
+      .select("company_id")
+      .eq("id", leadId)
+      .single();
+
     const { error } = await supabase
       .from("leads") // ✅ IMPORTANTE: Atualiza leads.notes diretamente
-      .update({ notes: JSON.stringify(updated) })
+      .update({ 
+        notes: JSON.stringify(updated),
+        company_id: leadData?.company_id // 🔒 Preservar company_id
+      })
       .eq("id", leadId);
     if (error) throw error;
   };

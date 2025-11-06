@@ -22,6 +22,7 @@ interface EditarLeadDialogProps {
     cpf?: string;
     value?: number;
     company?: string;
+    company_id?: string;
     source?: string;
     notes?: string;
     tags?: string[];
@@ -156,6 +157,18 @@ export function EditarLeadDialog({
         }
       }
 
+      // 🔒 CRÍTICO: Preservar company_id para manter isolamento multi-tenant
+      let companyId = lead.company_id;
+      if (!companyId) {
+        // Obter company_id do usuário atual se o lead não tiver
+        const { data: userRole } = await supabase
+          .from('user_roles')
+          .select('company_id')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        companyId = userRole?.company_id;
+      }
+
       const { error } = await supabase
         .from("leads")
         .update({
@@ -166,6 +179,7 @@ export function EditarLeadDialog({
           cpf: formData.cpf || null,
           value: formData.valor ? parseFloat(formData.valor) : 0,
           company: formData.company || null,
+          company_id: companyId, // 🔒 CRÍTICO: Manter company_id
           source: formData.source || null,
           notes: formData.notes || null,
           etapa_id: formData.etapa_id,
