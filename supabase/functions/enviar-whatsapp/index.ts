@@ -187,7 +187,7 @@ serve(async (req) => {
 
     // Verificar se é mídia (base64, URL) ou texto
     if (validatedData.mediaBase64) {
-      // Enviar mídia via base64 - Formato Evolution API v1
+      // Enviar mídia via base64 - Formato Evolution API
       evolutionUrl = `${INSTANCE_API_URL || EVOLUTION_API_URL}/message/sendMedia/${EVOLUTION_INSTANCE}`;
       
       // Normalizar tipo de mídia
@@ -235,42 +235,36 @@ serve(async (req) => {
       
       bodyPayload = {
         ...(isGroup ? { groupId: (target as any).groupId } : { number: (target as any).number }),
-        mediaMessage: {
-          mediatype: mediaType,
-          mimetype: mimeType,
-          caption: validatedData.caption || validatedData.mensagem || "",
-          fileName: validatedData.fileName || 'arquivo',
-          media: validatedData.mediaBase64,
-        }
+        mediatype: mediaType,
+        mimetype: mimeType,
+        caption: validatedData.caption || validatedData.mensagem || "",
+        fileName: validatedData.fileName || 'arquivo',
+        media: validatedData.mediaBase64,
       };
       console.log(`📸 Enviando mídia base64 (${mediaType})`);
     } else if (validatedData.mediaUrl) {
-      // Enviar mídia via URL - Formato Evolution API v1
+      // Enviar mídia via URL - Formato Evolution API
       evolutionUrl = `${INSTANCE_API_URL || EVOLUTION_API_URL}/message/sendMedia/${EVOLUTION_INSTANCE}`;
       bodyPayload = {
         ...(isGroup ? { groupId: (target as any).groupId } : { number: (target as any).number }),
-        mediaMessage: {
-          mediaUrl: validatedData.mediaUrl,
-          caption: validatedData.mensagem || validatedData.caption || ""
-        }
+        mediaUrl: validatedData.mediaUrl,
+        caption: validatedData.mensagem || validatedData.caption || ""
       };
       console.log("📸 Enviando mídia via URL");
     } else {
-      // Enviar texto - Formato correto da Evolution API v1
+      // Enviar texto - Formato Evolution API
       evolutionUrl = `${INSTANCE_API_URL || EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`;
       
       bodyPayload = {
         ...(isGroup ? { groupId: (target as any).groupId } : { number: (target as any).number }),
-        textMessage: {
-          text: validatedData.mensagem
-        },
+        text: validatedData.mensagem,
         ...(validatedData.quoted ? { 
           options: {
             quoted: validatedData.quoted 
           }
         } : {}),
       };
-      console.log("💬 Enviando texto no formato Evolution API v1");
+      console.log("💬 Enviando texto com formato correto da Evolution API");
     }
 
     // Função auxiliar para tentativas com endpoints alternativos (compatibilidade Evolution)
@@ -306,15 +300,15 @@ serve(async (req) => {
       return { ok: false as const, lastError };
     };
 
-    // Usar apenas o endpoint correto da Evolution API v1
+    // Usar apenas o endpoint correto da Evolution API
     const base = (INSTANCE_API_URL || EVOLUTION_API_URL).replace(/\/$/, '');
-    const candidates: string[] = [evolutionUrl]; // Apenas o endpoint principal
+    const candidates: string[] = [evolutionUrl];
     
     console.log("📤 Enviando para:", evolutionUrl);
 
     const attempt = await tryPost(candidates, bodyPayload);
     if (!attempt.ok) {
-      console.error("❌ Evolution API falhou em todos os endpoints candidatos:", attempt.lastError);
+      console.error("❌ Evolution API falhou:", attempt.lastError);
       
       // Se der erro 404 de instância não existir, tentar listar instâncias disponíveis
       if (attempt.lastError?.parsed?.response?.message?.[0]?.includes('does not exist')) {
