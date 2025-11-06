@@ -2486,7 +2486,7 @@ function Conversas() {
         
         console.log(`📊 ${conversasAgrupadas.size} conversas agrupadas em ${(performance.now() - startTime).toFixed(0)}ms`);
 
-        // ETAPA 5: Converter para UI (SEM await - fotos lazy load)
+        // ETAPA 5: Converter para UI (COM placeholders primeiro)
         const novasConversas: Conversation[] = [];
         
         for (const [telefone, mensagens] of conversasAgrupadas.entries()) {
@@ -2496,7 +2496,7 @@ function Conversas() {
           // Nome do contato
           const contactName = mensagens.find(m => m.nome_contato)?.nome_contato || telefone;
           
-          // Avatar placeholder (sem buscar foto)
+          // Avatar placeholder (será atualizado depois)
           const avatarUrl = isGroupConv 
             ? `https://ui-avatars.com/api/?name=Grupo&background=10b981&color=fff`
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName.substring(0, 2))}&background=0ea5e9&color=fff`;
@@ -2532,6 +2532,29 @@ function Conversas() {
         
         setConversations(novasConversas);
         loadCompanyMetrics();
+
+        // ETAPA 6: Buscar fotos de perfil de forma assíncrona (não bloquear UI)
+        console.log('📸 Buscando fotos de perfil de forma assíncrona...');
+        novasConversas.forEach(async (conv) => {
+          if (!conv.isGroup && conv.phoneNumber) {
+            try {
+              const profilePicUrl = await getProfilePictureWithFallback(
+                conv.phoneNumber, 
+                userRole.company_id, 
+                conv.contactName
+              );
+              
+              if (profilePicUrl) {
+                // Atualizar apenas a conversa específica
+                setConversations(prev => prev.map(c => 
+                  c.id === conv.id ? { ...c, avatarUrl: profilePicUrl } : c
+                ));
+              }
+            } catch (error) {
+              console.error(`❌ Erro ao buscar foto de perfil para ${conv.phoneNumber}:`, error);
+            }
+          }
+        });
       }
     } catch (error) {
       console.error('Erro ao carregar conversas:', error);
