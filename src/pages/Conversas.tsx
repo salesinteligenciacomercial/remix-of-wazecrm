@@ -2012,13 +2012,16 @@ function Conversas() {
                   .or(`phone.eq.${telefoneFormatado},telefone.eq.${telefoneFormatado}`)
                   .maybeSingle();
                 
-                // PRIORIZAR NOME DO LEAD, depois nome da mensagem, depois número
+                // PRIORIZAR NOME DO LEAD, depois nome da conversa existente, depois nome da mensagem
+                const conversaExistenteRealtime = conversations.find(c => c.id === telefoneNormalizado);
                 const nomeValido = leadVinculadoRealtime?.name || 
-                                  (novaConversa.nome_contato && 
-                                   novaConversa.nome_contato.trim() !== '' && 
-                                   novaConversa.nome_contato !== novaConversa.numero
-                                    ? novaConversa.nome_contato 
-                                    : novaConversa.numero);
+                                  (conversaExistenteRealtime?.contactName && conversaExistenteRealtime.contactName !== telefoneNormalizado
+                                    ? conversaExistenteRealtime.contactName
+                                    : (novaConversa.nome_contato && 
+                                       novaConversa.nome_contato.trim() !== '' && 
+                                       novaConversa.nome_contato !== novaConversa.numero
+                                        ? novaConversa.nome_contato 
+                                        : novaConversa.numero));
                 
                 // Buscar foto de perfil da nova mensagem
                 let profilePic: string | undefined;
@@ -2500,7 +2503,7 @@ function Conversas() {
       // ETAPA 2: Buscar APENAS colunas essenciais (não usar select('*'))
       const { data, error } = await supabase
         .from('conversas')
-        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, updated_at, is_group, midia_url, fromme')
+        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, updated_at, is_group, midia_url, fromme, lead_id')
         .eq('company_id', userRole.company_id)
         .order('created_at', { ascending: false })
         .limit(20); // REDUZIDO para 20 conversas
@@ -2541,19 +2544,50 @@ function Conversas() {
         // ETAPA 5: Converter para UI (COM placeholders primeiro)
         const novasConversas: Conversation[] = [];
         
+        // Buscar todos os lead_ids únicos para carregar nomes de uma vez
+        const leadIds = Array.from(new Set(
+          validData
+            .map(conv => conv.lead_id)
+            .filter(Boolean)
+        ));
+        
+        // Buscar todos os leads de uma vez (performance)
+        const leadsMap = new Map<string, any>();
+        if (leadIds.length > 0) {
+          const { data: leadsData } = await supabase
+            .from('leads')
+            .select('id, name, phone, telefone')
+            .in('id', leadIds);
+          
+          (leadsData || []).forEach(lead => {
+            leadsMap.set(lead.id, lead);
+          });
+        }
+        
         for (const [telefone, mensagens] of conversasAgrupadas.entries()) {
           const ultima = mensagens[0];
           const isGroupConv = ultima.is_group || /@g\.us$/.test(telefone);
           
-          // Nome do contato - preservar nome editado manualmente se existir no state
+          // Buscar lead vinculado (se houver)
+          const leadVinculadoParaConversa = ultima.lead_id ? leadsMap.get(ultima.lead_id) : null;
+          
+          // Nome do contato - PRIORIZAR LEAD VINCULADO
           const conversaExistente = conversations.find(c => c.id === telefone);
           const nomeDoState = conversaExistente?.contactName;
-          const nomeDoBanco = ultima.nome_contato || 
-                             mensagens.find(m => m.nome_contato && m.nome_contato.trim() !== '')?.nome_contato || 
-                             telefone;
           
-          // Se já existe um nome no state E é diferente do telefone, preservar o nome editado
-          const contactName = (nomeDoState && nomeDoState !== telefone) ? nomeDoState : nomeDoBanco;
+          // Ordem de prioridade: 1) Nome do Lead, 2) Nome do State (editado), 3) Nome do Banco, 4) Telefone
+          let contactName = telefone;
+          if (leadVinculadoParaConversa?.name) {
+            contactName = leadVinculadoParaConversa.name;
+          } else if (nomeDoState && nomeDoState !== telefone) {
+            contactName = nomeDoState;
+          } else {
+            const nomeDoBanco = ultima.nome_contato || 
+                               mensagens.find(m => m.nome_contato && m.nome_contato.trim() !== '' && m.nome_contato !== telefone)?.nome_contato;
+            if (nomeDoBanco && nomeDoBanco !== telefone) {
+              contactName = nomeDoBanco;
+            }
+          }
           
           // Avatar placeholder (será atualizado depois)
           const avatarUrl = isGroupConv 
