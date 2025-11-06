@@ -816,10 +816,7 @@ export default function KanbanPage() {
       const updatePromises = updatedEtapas.map(etapa =>
         supabase
           .from('etapas')
-          .update({
-            posicao: etapa.posicao,
-            atualizado_em: new Date().toISOString()
-          })
+          .update({ posicao: etapa.posicao })
           .eq('id', etapa.id)
       );
 
