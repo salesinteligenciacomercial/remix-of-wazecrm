@@ -124,10 +124,11 @@ function transformEvolutionPayload(body: any) {
       const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
       midia_url = `data:${img.mimetype || 'image/jpeg'};base64,${cleanBase64}`;
     } else if (img.url) {
-      // Para URLs criptografadas, salvar metadados necessários para download posterior
+      // Salvar messageId para download via Evolution API
       midia_url = JSON.stringify({
         url: img.url,
         mediaKey: img.mediaKey,
+        messageId: data.key.id,
         mimetype: img.mimetype || 'image/jpeg',
         type: 'image'
       });
@@ -144,6 +145,7 @@ function transformEvolutionPayload(body: any) {
       midia_url = JSON.stringify({
         url: audio.url,
         mediaKey: audio.mediaKey,
+        messageId: data.key.id,
         mimetype: audio.mimetype || 'audio/ogg',
         type: 'audio'
       });
@@ -160,6 +162,7 @@ function transformEvolutionPayload(body: any) {
       midia_url = JSON.stringify({
         url: video.url,
         mediaKey: video.mediaKey,
+        messageId: data.key.id,
         mimetype: video.mimetype || 'video/mp4',
         type: 'video'
       });
@@ -177,6 +180,7 @@ function transformEvolutionPayload(body: any) {
       midia_url = JSON.stringify({
         url: doc.url,
         mediaKey: doc.mediaKey,
+        messageId: data.key.id,
         mimetype: doc.mimetype || 'application/pdf',
         type: 'document'
       });
