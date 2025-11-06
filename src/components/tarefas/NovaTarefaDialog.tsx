@@ -165,11 +165,11 @@ export function NovaTarefaDialog({
           Nova Tarefa
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Nova Tarefa</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto pr-2 flex-1" style={{ maxHeight: 'calc(90vh - 120px)' }}>
           <div>
             <Label>Título *</Label>
             <Input
@@ -314,9 +314,11 @@ export function NovaTarefaDialog({
             </Select>
           </div>
 
-          <Button onClick={handleSubmit} className="w-full">
-            Criar Tarefa
-          </Button>
+          <div className="border-t sticky bottom-0 bg-background pt-4 pb-2">
+            <Button onClick={handleSubmit} className="w-full">
+              Criar Tarefa
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
