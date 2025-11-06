@@ -123,8 +123,14 @@ function transformEvolutionPayload(body: any) {
     if (base64Content) {
       const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
       midia_url = `data:${img.mimetype || 'image/jpeg'};base64,${cleanBase64}`;
-    } else {
-      midia_url = img.url || null;
+    } else if (img.url) {
+      // Para URLs criptografadas, salvar metadados necessários para download posterior
+      midia_url = JSON.stringify({
+        url: img.url,
+        mediaKey: img.mediaKey,
+        mimetype: img.mimetype || 'image/jpeg',
+        type: 'image'
+      });
     }
   } else if (data.message.audioMessage) {
     const audio = data.message.audioMessage;
@@ -134,8 +140,13 @@ function transformEvolutionPayload(body: any) {
     if (base64Content) {
       const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
       midia_url = `data:${audio.mimetype || 'audio/ogg'};base64,${cleanBase64}`;
-    } else {
-      midia_url = audio.url || null;
+    } else if (audio.url) {
+      midia_url = JSON.stringify({
+        url: audio.url,
+        mediaKey: audio.mediaKey,
+        mimetype: audio.mimetype || 'audio/ogg',
+        type: 'audio'
+      });
     }
   } else if (data.message.videoMessage) {
     const video = data.message.videoMessage;
@@ -145,8 +156,13 @@ function transformEvolutionPayload(body: any) {
     if (base64Content) {
       const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
       midia_url = `data:${video.mimetype || 'video/mp4'};base64,${cleanBase64}`;
-    } else {
-      midia_url = video.url || null;
+    } else if (video.url) {
+      midia_url = JSON.stringify({
+        url: video.url,
+        mediaKey: video.mediaKey,
+        mimetype: video.mimetype || 'video/mp4',
+        type: 'video'
+      });
     }
   } else if (data.message.documentMessage) {
     const doc = data.message.documentMessage;
@@ -157,8 +173,13 @@ function transformEvolutionPayload(body: any) {
     if (base64Content) {
       const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
       midia_url = `data:${doc.mimetype || 'application/pdf'};base64,${cleanBase64}`;
-    } else {
-      midia_url = doc.url || null;
+    } else if (doc.url) {
+      midia_url = JSON.stringify({
+        url: doc.url,
+        mediaKey: doc.mediaKey,
+        mimetype: doc.mimetype || 'application/pdf',
+        type: 'document'
+      });
     }
   } else {
     mensagem = '[Mensagem não suportada]';
