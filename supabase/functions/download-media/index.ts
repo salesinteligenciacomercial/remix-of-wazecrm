@@ -64,10 +64,15 @@ Deno.serve(async (req) => {
 
     console.log('✅ [DOWNLOAD-MEDIA] Instância encontrada:', whatsappConfig.instance_name);
     
-    // Usar endpoint correto da Evolution API para baixar mídia
-    const evolutionUrl = `${whatsappConfig.evolution_api_url}/chat/downloadMediaMessage/${whatsappConfig.instance_name}`;
+    // Endpoint correto da Evolution API para baixar mídia
+    const evolutionUrl = `${whatsappConfig.evolution_api_url}/message/downloadMedia/${whatsappConfig.instance_name}`;
     
     console.log('📞 [DOWNLOAD-MEDIA] Chamando Evolution API:', evolutionUrl);
+    console.log('📦 [DOWNLOAD-MEDIA] Payload:', JSON.stringify({
+      key: {
+        id: body.messageId
+      }
+    }));
     
     const response = await fetch(evolutionUrl, {
       method: 'POST',
