@@ -246,6 +246,8 @@ function Conversas() {
     whatsappConnections: 0,
     whatsappConnected: 0,
   });
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyStats, setHistoryStats] = useState<Record<string, { total: number; loaded: number }>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const selectedConvRef = useRef<Conversation | null>(null);
   const userCompanyIdRef = useRef<string | null>(null);
@@ -2553,8 +2555,8 @@ function Conversas() {
             ? `https://ui-avatars.com/api/?name=Grupo&background=10b981&color=fff`
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName.substring(0, 2))}&background=0ea5e9&color=fff`;
           
-          // Formatar mensagens (limitar a 50)
-          const messagensFormatadas: Message[] = mensagens.slice(0, 50).reverse().map(m => ({
+          // Formatar mensagens recentes (primeiras 20 para lista)
+          const messagensFormatadas: Message[] = mensagens.slice(0, 20).reverse().map(m => ({
             id: m.id || `msg-${Date.now()}-${Math.random()}`,
             content: m.mensagem || '',
             type: (m.tipo_mensagem === 'texto' ? 'text' : (m.tipo_mensagem || 'text')) as any,
@@ -2701,6 +2703,79 @@ function Conversas() {
       setMeetings(data || []);
     } catch (error) {
       console.error('Erro ao carregar reuniões:', error);
+    }
+  };
+
+  // 📜 Carregar TODO o histórico de mensagens de um contato
+  const loadFullConversationHistory = async (phoneNumber: string, contactName: string) => {
+    if (!userCompanyId) return;
+    
+    setLoadingHistory(true);
+    console.log(`📜 Carregando histórico completo para ${contactName} (${phoneNumber})...`);
+    
+    try {
+      // Buscar TODAS as mensagens do contato (sem limite)
+      const { data: allMessages, error } = await supabase
+        .from('conversas')
+        .select('*')
+        .eq('company_id', userCompanyId)
+        .eq('telefone_formatado', phoneNumber)
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      
+      if (allMessages && allMessages.length > 0) {
+        console.log(`✅ ${allMessages.length} mensagens carregadas do histórico`);
+        
+        // Formatar todas as mensagens
+        const messagensCompletas: Message[] = allMessages.map(m => ({
+          id: m.id || `msg-${Date.now()}-${Math.random()}`,
+          content: m.mensagem || '',
+          type: (m.tipo_mensagem === 'texto' ? 'text' : (m.tipo_mensagem || 'text')) as any,
+          sender: ((m.fromme === true || m.status === 'Enviada') ? "user" : "contact") as "user" | "contact",
+          timestamp: new Date(m.created_at || Date.now()),
+          delivered: true,
+          read: m.status !== 'Recebida',
+          mediaUrl: m.midia_url,
+          fileName: m.arquivo_nome,
+        }));
+        
+        // Atualizar a conversa selecionada
+        setSelectedConv(prev => {
+          if (prev && prev.phoneNumber === phoneNumber) {
+            return {
+              ...prev,
+              messages: messagensCompletas
+            };
+          }
+          return prev;
+        });
+        
+        // Atualizar conversa na lista
+        setConversations(prev => prev.map(conv => 
+          conv.phoneNumber === phoneNumber 
+            ? { ...conv, messages: messagensCompletas }
+            : conv
+        ));
+        
+        // Estatísticas
+        setHistoryStats(prev => ({
+          ...prev,
+          [phoneNumber]: { total: allMessages.length, loaded: allMessages.length }
+        }));
+        
+        // Scroll
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        
+        toast.success(`📜 ${allMessages.length} mensagens carregadas`);
+      } else {
+        toast.info('Nenhum histórico anterior encontrado');
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar histórico:', error);
+      toast.error('Erro ao carregar histórico');
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -5005,6 +5080,15 @@ function Conversas() {
                 
                 setSelectedConv(updatedConv);
                 
+                // 📜 Carregar histórico completo automaticamente
+                if (conv.phoneNumber && userCompanyId) {
+                  const stats = historyStats[conv.phoneNumber];
+                  // Se não tem stats ou tem poucas mensagens carregadas, buscar histórico
+                  if (!stats || conv.messages.length < 20) {
+                    loadFullConversationHistory(conv.phoneNumber, conv.contactName);
+                  }
+                }
+                
                 // Verificar se existe lead vinculado
                 verificarLeadVinculado(conv);
                 
@@ -5087,6 +5171,21 @@ function Conversas() {
               <div className="flex-1 flex flex-col">
                 {/* Messages */}
                 <ScrollArea className="flex-1 p-6 bg-[#e5ddd5]" style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d9d9d9' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')" }}>
+                  {/* Indicador de histórico */}
+                  {selectedConv.phoneNumber && historyStats[selectedConv.phoneNumber] && (
+                    <div className="flex justify-center mb-4">
+                      <Badge variant="secondary" className="gap-2">
+                        📜 {historyStats[selectedConv.phoneNumber].loaded} mensagens do histórico
+                      </Badge>
+                    </div>
+                  )}
+                  {loadingHistory && (
+                    <div className="flex justify-center items-center gap-2 mb-4 text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm">Carregando histórico completo...</span>
+                    </div>
+                  )}
+                  
                   <div className="space-y-2 min-h-[200px]">
                      {selectedConv.messages.length === 0 ? (
                       <div className="text-center text-muted-foreground py-8">
