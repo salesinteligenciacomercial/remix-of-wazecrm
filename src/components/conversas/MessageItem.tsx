@@ -439,11 +439,18 @@ END:VCARD`;
               })}
             </span>
             {message.sender === "user" && (
-              message.read ? 
-                <CheckCheck className="h-3 w-3 text-[#53bdeb]" /> : 
-                message.delivered ? 
-                  <CheckCheck className="h-3 w-3 text-muted-foreground" /> : 
-                  <Check className="h-3 w-3 text-muted-foreground" />
+              <div className="flex items-center gap-0.5" title={message.read ? 'Visualizado' : message.delivered ? 'Entregue' : 'Enviando'}>
+                {message.read ? (
+                  <>
+                    <CheckCheck className="h-3.5 w-3.5 text-[#53bdeb]" />
+                    <span className="text-[9px] text-[#53bdeb] font-medium">Visto</span>
+                  </>
+                ) : message.delivered ? (
+                  <CheckCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                ) : (
+                  <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+              </div>
             )}
           </div>
           

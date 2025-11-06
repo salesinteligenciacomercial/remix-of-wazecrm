@@ -229,6 +229,7 @@ function Conversas() {
   const [verificandoLead, setVerificandoLead] = useState(false);
   const [mostrarBotaoCriarLead, setMostrarBotaoCriarLead] = useState(false);
   const [leadsVinculados, setLeadsVinculados] = useState<Record<string, string>>({}); // conversationId -> leadId
+  const [onlineStatus, setOnlineStatus] = useState<Record<string, 'online' | 'offline' | 'unknown'>>({}); // telefone -> status
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null); // Company ID do usuário
   const [userName, setUserName] = useState<string>(""); // Nome do usuário logado
   const [companyMetrics, setCompanyMetrics] = useState<{
@@ -714,6 +715,22 @@ function Conversas() {
             // Se a conversa aberta corresponde a esta mensagem, adicionar diretamente
             if (selectedConvRef.current && selectedConvRef.current.id === telefone) {
               console.log('✅ Adicionando mensagem à conversa aberta');
+              
+              // Atualizar status online se mensagem é do contato
+              if (isFromContact) {
+                setOnlineStatus(prev => ({
+                  ...prev,
+                  [telefone]: 'online'
+                }));
+                
+                // Voltar para offline após 3 minutos sem atividade
+                setTimeout(() => {
+                  setOnlineStatus(prev => ({
+                    ...prev,
+                    [telefone]: 'offline'
+                  }));
+                }, 3 * 60 * 1000);
+              }
               
               const newMessage: Message = {
                 id: novaMensagem.id || `msg-${Date.now()}-${Math.random()}`,
@@ -5046,6 +5063,7 @@ function Conversas() {
               mostrarBotaoCriarLead={mostrarBotaoCriarLead}
               onCriarLead={criarLeadManualmente}
               onFinalizeAtendimento={finalizarAtendimento}
+              onlineStatus={onlineStatus[selectedConv.id] || 'unknown'}
             />
 
             <div className="flex flex-1 overflow-hidden">

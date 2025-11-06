@@ -10,6 +10,7 @@ import { EditarInformacoesLeadDialog } from "@/components/conversas/EditarInform
 import { toast } from "sonner";
 
  type SyncStatus = 'synced' | 'syncing' | 'error' | 'idle';
+ type OnlineStatus = 'online' | 'offline' | 'unknown';
 
  interface ConversationHeaderProps {
    contactName: string;
@@ -28,9 +29,10 @@ import { toast } from "sonner";
    mostrarBotaoCriarLead?: boolean;
    onCriarLead?: () => void;
    onFinalizeAtendimento?: (message: string) => void;
+   onlineStatus?: OnlineStatus;
  }
 
- export function ConversationHeader({
+  export function ConversationHeader({
    contactName,
    channel,
    avatarUrl,
@@ -47,6 +49,7 @@ import { toast } from "sonner";
    mostrarBotaoCriarLead = false,
    onCriarLead,
    onFinalizeAtendimento,
+   onlineStatus = 'unknown',
  }: ConversationHeaderProps) {
    const [finalizeOpen, setFinalizeOpen] = useState(false);
    const [finalizeMessage, setFinalizeMessage] = useState("");
@@ -116,32 +119,37 @@ import { toast } from "sonner";
        <div className="p-4 space-y-3">
          <div className="flex items-center justify-between">
            <div className="flex items-center gap-3">
-             {/* Avatar do Lead com Indicador de Rede */}
-             <div className="relative">
-               <Avatar className="h-14 w-14 border-2 border-primary/20">
-                 <AvatarImage src={avatarUrl} alt={contactName} />
-                 <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-semibold text-lg">
-                   {getInitials(contactName)}
-                 </AvatarFallback>
-               </Avatar>
-               {/* Badge da Rede Social */}
-               <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-1 border-2 border-background shadow-sm">
-                 {getChannelIcon()}
-               </div>
-             </div>
-             {/* Nome e Canal */}
-             <div className="flex flex-col">
-               <div className="flex items-center gap-2">
-                 <h2 className="font-bold text-lg text-foreground">
-                   {contactName}
-                 </h2>
-                 {getSyncStatusBadge()}
-               </div>
-               <div className="flex items-center gap-2 text-xs">
-                 <div className="flex items-center gap-1.5 text-muted-foreground">
-                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                   <span className="capitalize font-medium">{channel}</span>
-                 </div>
+              {/* Avatar do Lead com Indicador de Status Online/Offline */}
+              <div className="relative">
+                <Avatar className="h-14 w-14 border-2 border-primary/20">
+                  <AvatarImage src={avatarUrl} alt={contactName} />
+                  <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-semibold text-lg">
+                    {getInitials(contactName)}
+                  </AvatarFallback>
+                </Avatar>
+                {/* Badge da Rede Social */}
+                <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-1 border-2 border-background shadow-sm">
+                  {getChannelIcon()}
+                </div>
+                {/* Indicador de Status Online/Offline */}
+                {onlineStatus !== 'unknown' && (
+                  <div className={`absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-background shadow-sm ${
+                    onlineStatus === 'online' ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                  }`} title={onlineStatus === 'online' ? 'Online' : 'Offline'} />
+                )}
+              </div>
+              {/* Nome e Canal */}
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <h2 className="font-bold text-lg text-foreground">
+                    {contactName}
+                  </h2>
+                  {getSyncStatusBadge()}
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <span className="capitalize font-medium">{channel}</span>
+                  </div>
                  {/* Badge de Lead Vinculado */}
                  {verificandoLead && (
                    <Badge variant="outline" className="gap-1">
