@@ -48,6 +48,7 @@ export default function Configuracoes() {
   const [audimaToken, setAudimaToken] = useState("");
   const [elevenlabsKey, setElevenlabsKey] = useState("");
   const [isMasterAccount, setIsMasterAccount] = useState(false);
+  const [isSubAccount, setIsSubAccount] = useState(false);
   const [userRoles, setUserRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentCompany, setCurrentCompany] = useState<any | null>(null);
@@ -82,18 +83,24 @@ export default function Configuracoes() {
       if (companyIds.length > 0) {
         const { data: companies } = await (supabase as any)
           .from('companies')
-          .select('id, name, plan, is_master_account')
+          .select('id, name, plan, is_master_account, parent_company_id')
           .in('id', companyIds as any);
-
-        const anyMaster = (companies || []).some((c: any) => c.is_master_account);
-        setIsMasterAccount(anyMaster);
 
         // Empresa atual padrão: prioriza master; senão, usa a mais recente do user_roles
         const latestRole = (roles || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
         const preferred = (companies || []).find((c: any) => c.is_master_account) || (companies || []).find((c: any) => c.id === latestRole?.company_id) || null;
         setCurrentCompany(preferred || null);
+
+        // 🔒 SEGURANÇA: Verificar se a empresa atual é subconta
+        const isCurrentSubAccount = preferred?.parent_company_id !== null && preferred?.parent_company_id !== undefined;
+        setIsSubAccount(isCurrentSubAccount);
+
+        // 🔒 SEGURANÇA: Apenas mostrar opções de master se NÃO for subconta E for master account
+        const canAccessMasterFeatures = !isCurrentSubAccount && preferred?.is_master_account === true;
+        setIsMasterAccount(canAccessMasterFeatures);
       } else {
         setIsMasterAccount(false);
+        setIsSubAccount(false);
         setCurrentCompany(null);
       }
     } catch (error) {
@@ -790,8 +797,8 @@ export default function Configuracoes() {
         </CardContent>
       </Card>
 
-      {/* Botões de elevação de privilégio - Aparece apenas se não for super admin OU não for conta mestre */}
-      {(!hasRole('super_admin') || !isMasterAccount) && (
+      {/* 🔒 SEGURANÇA: Apenas super admin da conta MESTRE pode elevar privilégios */}
+      {!isSubAccount && (!hasRole('super_admin') || !isMasterAccount) && (
         <Card className="border-yellow-500/50 bg-yellow-500/5">
           <CardHeader>
             <CardTitle className="text-lg">🔐 Elevação de Privilégios</CardTitle>
