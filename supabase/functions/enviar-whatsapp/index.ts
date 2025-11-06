@@ -278,6 +278,10 @@ serve(async (req) => {
       let lastError: any = null;
       for (const url of urls) {
         try {
+          if (!INSTANCE_API_KEY) {
+            throw new Error('API key não configurada');
+          }
+          
           const res = await fetch(url, {
             method: "POST",
             headers: {

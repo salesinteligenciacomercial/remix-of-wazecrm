@@ -140,7 +140,8 @@ serve(async (req) => {
 
     // Processar lembretes por empresa
     for (const [companyId, lembretesEmpresa] of Object.entries(lembretesPorEmpresa)) {
-      console.log(`🏢 Processando ${lembretesEmpresa.length} lembretes da empresa ${companyId}`);
+      const lembretes = lembretesEmpresa as any[];
+      console.log(`🏢 Processando ${lembretes.length} lembretes da empresa ${companyId}`);
 
       // Obter configuração WhatsApp da empresa
       let whatsappConfig = null;
@@ -175,7 +176,7 @@ serve(async (req) => {
       if (!whatsappConfig) {
         console.error(`❌ Nenhuma conexão WhatsApp ativa encontrada para empresa ${companyId}`);
         // Marcar todos os lembretes desta empresa como erro
-        for (const lembrete of lembretesEmpresa) {
+        for (const lembrete of lembretes) {
           await supabase
             .from('lembretes')
             .update({
@@ -184,7 +185,7 @@ serve(async (req) => {
             })
             .eq('id', lembrete.id);
         }
-        totalErros += lembretesEmpresa.length;
+        totalErros += lembretes.length;
         continue;
       }
 

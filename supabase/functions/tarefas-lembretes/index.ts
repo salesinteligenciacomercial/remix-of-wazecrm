@@ -149,7 +149,7 @@ serve(async (req) => {
       console.log(`📱 Usando configuração WhatsApp: ${instanceName} para empresa ${companyId}`);
 
       // Processar tarefas desta empresa
-      for (const tarefa of tarefasEmpresa as TarefaLembrete[]) {
+      for (const tarefa of tarefasEmpresa as unknown as TarefaLembrete[]) {
         try {
           console.log(`📤 Processando lembrete para tarefa ${tarefa.id}: ${tarefa.title}`);
 
