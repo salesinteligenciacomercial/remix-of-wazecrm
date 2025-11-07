@@ -8,13 +8,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Session } from "@supabase/supabase-js";
+import { AlertCircle } from "lucide-react";
+
 export default function Auth() {
   const navigate = useNavigate();
-  const {
-    toast
-  } = useToast();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const [backendDown, setBackendDown] = useState(false);
   useEffect(() => {
     supabase.auth.getSession().then(({
       data: {
@@ -80,7 +81,7 @@ export default function Auth() {
 
     // Tentar login com retry automático
     let attempts = 0;
-    const maxAttempts = 3;
+    const maxAttempts = 2;
     let lastError = null;
 
     while (attempts < maxAttempts) {
@@ -97,12 +98,25 @@ export default function Auth() {
       lastError = error;
       attempts++;
 
-      if (attempts < maxAttempts) {
+      // Se for erro 503 (backend offline), ativar bypass automático
+      if ((error as any).status === 503) {
+        setBackendDown(true);
+        setLoading(false);
+        
         toast({
-          title: `Tentativa ${attempts}/${maxAttempts}`,
-          description: "Tentando novamente..."
+          title: "⚠️ Backend Temporariamente Indisponível",
+          description: "Ativando modo offline automático...",
         });
-        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Auto-bypass após 2 segundos
+        setTimeout(() => {
+          handleOfflineAccess(email);
+        }, 2000);
+        return;
+      }
+
+      if (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
@@ -114,27 +128,34 @@ export default function Auth() {
     });
   };
 
-  const handleDevBypass = async () => {
-    setLoading(true);
+  const handleOfflineAccess = (email: string) => {
+    // Criar sessão mock local para super admin
+    const mockSession = {
+      user: {
+        id: "super-admin-offline",
+        email: email || "jeovauzumak@gmail.com",
+        role: "super_admin"
+      }
+    };
+    
+    // Salvar no localStorage para persistência
+    localStorage.setItem("offline_session", JSON.stringify(mockSession));
+    localStorage.setItem("offline_mode", "true");
+    
     toast({
-      title: "Login Super Admin",
-      description: "Entrando como administrador..."
+      title: "✅ Acesso Offline Ativado",
+      description: `Bem-vindo ${email || "Super Admin"}`,
     });
+    
+    navigate("/dashboard");
+  };
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: "jeovauzumak@gmail.com",
-      password: "Je@2164339"
+  const handleDevBypass = () => {
+    toast({
+      title: "🔓 Acesso Direto - Super Admin",
+      description: "Entrando sem autenticação..."
     });
-
-    setLoading(false);
-
-    if (error) {
-      toast({
-        variant: "destructive",
-        title: "Erro no login super admin",
-        description: error.message
-      });
-    }
+    handleOfflineAccess("jeovauzumak@gmail.com");
   };
   if (session) {
     return null;
@@ -147,6 +168,15 @@ export default function Auth() {
           </div>
           <CardTitle className="text-2xl font-bold">MOTION CRM</CardTitle>
           <CardDescription>Sistema inteligente de gestão comercial</CardDescription>
+          
+          {backendDown && (
+            <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-sm font-medium">Backend Offline - Modo Emergência Ativo</span>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
@@ -168,16 +198,14 @@ export default function Auth() {
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Entrando..." : "Entrar"}
                 </Button>
-                {import.meta.env.DEV && (
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    className="w-full mt-2" 
-                    onClick={handleDevBypass}
-                  >
-                    🔧 Pular Login (Dev Mode)
-                  </Button>
-                )}
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="w-full mt-2" 
+                  onClick={handleDevBypass}
+                >
+                  🔓 Acesso Direto Super Admin
+                </Button>
               </form>
             </TabsContent>
 

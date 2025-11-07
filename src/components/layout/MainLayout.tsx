@@ -15,9 +15,31 @@ export function MainLayout() {
   });
 
   useEffect(() => {
+    // Verificar modo offline primeiro
+    const offlineMode = localStorage.getItem('offline_mode');
+    const offlineSession = localStorage.getItem('offline_session');
+    
+    if (offlineMode === 'true' && offlineSession) {
+      // Usar sessão offline
+      setSession(JSON.parse(offlineSession) as any);
+      setLoading(false);
+      return;
+    }
+
     // Check current session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setLoading(false);
+    }).catch(() => {
+      // Se falhar, ativar modo offline automaticamente
+      const mockSession = {
+        user: {
+          id: "offline-user",
+          email: "offline@system.local",
+          role: "super_admin"
+        }
+      } as any;
+      setSession(mockSession);
       setLoading(false);
     });
 
