@@ -15,31 +15,35 @@ export function MainLayout() {
   });
 
   useEffect(() => {
-    // Verificar modo offline primeiro
+    // Verificar modo offline SUPER ADMIN primeiro
     const offlineMode = localStorage.getItem('offline_mode');
     const offlineSession = localStorage.getItem('offline_session');
+    const isSuperAdmin = localStorage.getItem('is_super_admin');
     
-    if (offlineMode === 'true' && offlineSession) {
-      // Usar sessão offline
-      setSession(JSON.parse(offlineSession) as any);
+    console.log("🔍 [MainLayout] Verificando autenticação...", {
+      offlineMode,
+      isSuperAdmin,
+      hasOfflineSession: !!offlineSession
+    });
+    
+    if (offlineMode === 'true' && offlineSession && isSuperAdmin === 'true') {
+      // Usar sessão offline de super admin
+      const parsedSession = JSON.parse(offlineSession);
+      console.log("✅ [MainLayout] Usando sessão offline SUPER ADMIN:", parsedSession.user.email);
+      setSession(parsedSession as any);
       setLoading(false);
       return;
     }
 
-    // Check current session
+    // Check current session via Supabase
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("🔐 [MainLayout] Sessão Supabase:", session?.user?.email || "Nenhuma");
       setSession(session);
       setLoading(false);
-    }).catch(() => {
-      // Se falhar, ativar modo offline automaticamente
-      const mockSession = {
-        user: {
-          id: "offline-user",
-          email: "offline@system.local",
-          role: "super_admin"
-        }
-      } as any;
-      setSession(mockSession);
+    }).catch((error) => {
+      console.error("❌ [MainLayout] Erro ao buscar sessão:", error);
+      // Se falhar, NÃO ativar modo offline automaticamente
+      // Redirecionar para auth
       setLoading(false);
     });
 
@@ -47,6 +51,7 @@ export function MainLayout() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("🔄 [MainLayout] Auth state changed:", session?.user?.email || "Logout");
       setSession(session);
     });
 

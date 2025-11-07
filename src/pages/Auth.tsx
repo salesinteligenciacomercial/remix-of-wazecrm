@@ -129,31 +129,51 @@ export default function Auth() {
   };
 
   const handleOfflineAccess = (email: string) => {
-    // Criar sessão mock local para super admin
+    // SEMPRE usar credenciais do super admin
+    const superAdminEmail = "jeovauzumak@gmail.com";
+    const superAdminId = "super-admin-jeovauzumak";
+    
     const mockSession = {
       user: {
-        id: "super-admin-offline",
-        email: email || "jeovauzumak@gmail.com",
-        role: "super_admin"
-      }
+        id: superAdminId,
+        email: superAdminEmail,
+        user_metadata: {
+          full_name: "Super Admin",
+          role: "super_admin"
+        },
+        app_metadata: {
+          role: "super_admin"
+        }
+      },
+      access_token: "offline-super-admin-token",
+      expires_at: Date.now() + (365 * 24 * 60 * 60 * 1000) // 1 ano
     };
     
-    // Salvar no localStorage para persistência
+    // Salvar no localStorage com flag específico de super admin
     localStorage.setItem("offline_session", JSON.stringify(mockSession));
     localStorage.setItem("offline_mode", "true");
+    localStorage.setItem("is_super_admin", "true");
+    localStorage.setItem("super_admin_email", superAdminEmail);
+    
+    console.log("🔓 [OFFLINE ACCESS] Super Admin ativado:", superAdminEmail);
     
     toast({
-      title: "✅ Acesso Offline Ativado",
-      description: `Bem-vindo ${email || "Super Admin"}`,
+      title: "✅ Super Admin - Acesso Offline",
+      description: `Bem-vindo ${superAdminEmail}`,
     });
     
-    navigate("/dashboard");
+    // Forçar navegação direta
+    setTimeout(() => {
+      navigate("/dashboard");
+      window.location.reload(); // Forçar reload para aplicar sessão
+    }, 500);
   };
 
   const handleDevBypass = () => {
+    console.log("🚀 [BYPASS] Ativando acesso direto super admin");
     toast({
       title: "🔓 Acesso Direto - Super Admin",
-      description: "Entrando sem autenticação..."
+      description: "Entrando como jeovauzumak@gmail.com..."
     });
     handleOfflineAccess("jeovauzumak@gmail.com");
   };
