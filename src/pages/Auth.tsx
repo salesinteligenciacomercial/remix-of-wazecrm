@@ -114,12 +114,27 @@ export default function Auth() {
     });
   };
 
-  const handleDevBypass = () => {
+  const handleDevBypass = async () => {
+    setLoading(true);
     toast({
-      title: "Modo Desenvolvimento",
-      description: "Acessando sem autenticação..."
+      title: "Login Super Admin",
+      description: "Entrando como administrador..."
     });
-    navigate("/dashboard");
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: "jeovauzumak@gmail.com",
+      password: "Je@2164339"
+    });
+
+    setLoading(false);
+
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro no login super admin",
+        description: error.message
+      });
+    }
   };
   if (session) {
     return null;
