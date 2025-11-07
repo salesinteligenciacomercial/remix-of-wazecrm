@@ -89,7 +89,7 @@ export function Sidebar({
             </div>
             <div>
               <span className="text-sidebar-foreground font-bold text-lg block leading-tight">​MOTION</span>
-              <span className="text-sidebar-foreground/60 text-xs">CRM & Automação</span>
+              <span className="text-sidebar-foreground/60 text-xs">Sistema inteligente de gestão comercial</span>
             </div>
           </div>}
       </div>
