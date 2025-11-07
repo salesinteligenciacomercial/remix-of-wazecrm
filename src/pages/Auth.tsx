@@ -98,11 +98,38 @@ export default function Auth() {
 
         if (!error && data.session) {
           console.log("✅ [LOGIN] Login bem-sucedido:", email);
+          
+          // CRÍTICO: Se for o super admin, elevar permissões imediatamente
+          if (email === "jeovauzumak@gmail.com") {
+            console.log("👑 [LOGIN] Elevando para Super Admin...");
+            
+            try {
+              const { data: elevateData, error: elevateError } = await supabase.functions.invoke('elevate-super-admin', {
+                body: { action: 'elevate_super_admin' }
+              });
+
+              if (elevateError) {
+                console.error("❌ [LOGIN] Erro ao elevar super admin:", elevateError);
+              } else {
+                console.log("✅ [LOGIN] Super Admin elevado com sucesso:", elevateData);
+              }
+            } catch (elevateErr) {
+              console.error("❌ [LOGIN] Exceção ao elevar:", elevateErr);
+            }
+
+            // Forçar flag local de super admin
+            localStorage.setItem("is_super_admin", "true");
+            localStorage.setItem("super_admin_email", email);
+          }
+          
           setLoading(false);
           toast({
             title: "✅ Login bem-sucedido!",
             description: `Bem-vindo ${email}`
           });
+          
+          // Aguardar 1s para garantir que a elevação foi processada
+          await new Promise(resolve => setTimeout(resolve, 1000));
           return;
         }
 
