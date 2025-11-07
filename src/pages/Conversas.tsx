@@ -3030,8 +3030,8 @@ function Conversas() {
       loadCompanyMetrics();
       setLoadingConversations(false);
 
-      // ⚡ LAZY LOADING DE AVATARES: Carregar apenas dos 6 primeiros visíveis
-      const primeiros = novasConversas.slice(0, 6);
+      // ⚡ LAZY LOADING DE AVATARES: Carregar primeiros 10 visíveis
+      const primeiros = novasConversas.slice(0, 10);
       primeiros.forEach(async (conv) => {
         if (conv.phoneNumber) {
           try {
@@ -3051,6 +3051,36 @@ function Conversas() {
           }
         }
       });
+
+      // ⚡ CARREGAR RESTANTES EM BACKGROUND (baixa prioridade)
+      const restantes = novasConversas.slice(10);
+      if (restantes.length > 0) {
+        // Aguardar 2 segundos antes de começar a carregar o restante
+        setTimeout(() => {
+          restantes.forEach(async (conv, index) => {
+            // Espaçar requisições em 500ms para não sobrecarregar
+            setTimeout(async () => {
+              if (conv.phoneNumber) {
+                try {
+                  const profilePicUrl = await getProfilePictureWithFallback(
+                    conv.phoneNumber, 
+                    userRole.company_id, 
+                    conv.contactName
+                  );
+                  
+                  if (profilePicUrl) {
+                    setConversations(prev => prev.map(c => 
+                      c.id === conv.id ? { ...c, avatarUrl: profilePicUrl } : c
+                    ));
+                  }
+                } catch (error) {
+                  // Silenciar erros de foto
+                }
+              }
+            }, index * 500);
+          });
+        }, 2000);
+      }
       
     } catch (error) {
       console.error('Erro ao carregar conversas:', error);
