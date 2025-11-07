@@ -2801,35 +2801,22 @@ function Conversas() {
         userCompanyIdRef.current = userRole.company_id;
       }
       
-      // ETAPA 2: ⚡ PAGINAÇÃO REAL - Buscar apenas leads necessários para esta página de conversas
+      // ETAPA 2: ⚡ BUSCAR TODAS AS CONVERSAS (não apenas de leads)
       const offset = append ? conversationsOffset : 0;
-      const limit = conversationsLimit;
+      const limit = 100; // Aumentar limite para garantir que pegamos todas as conversas únicas
       
-      // Contar total de leads para saber se há mais conversas
-      const { count: totalLeads } = await supabase
-        .from('leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('company_id', userRole.company_id);
-      
-      // Buscar leads com paginação
+      // Buscar TODAS as conversas e todos os leads em paralelo
       const [leadsResult, conversasResult] = await Promise.all([
         supabase
           .from('leads')
           .select('id, phone, name, telefone')
-          .eq('company_id', userRole.company_id)
-          .order('created_at', { ascending: false })
-          .range(offset, offset + limit - 1), // ⚡ PAGINAÇÃO
+          .eq('company_id', userRole.company_id),
         supabase
           .from('conversas')
           .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, midia_url, fromme')
           .eq('company_id', userRole.company_id)
           .order('created_at', { ascending: false })
-          .limit(50) // ⚡ OTIMIZADO: Apenas 50 mensagens mais recentes para carregamento rápido
       ]);
-      
-      // Atualizar flags de paginação
-      setHasMoreConversations(totalLeads ? (offset + limit < totalLeads) : false);
-      setConversationsOffset(offset + limit);
 
       if (leadsResult.error) {
         toast.error('Erro ao buscar contatos');
@@ -2846,13 +2833,15 @@ function Conversas() {
       const leadsData = leadsResult.data || [];
       const conversasData = conversasResult.data || [];
       
+      console.log(`📊 [LOAD] ${conversasData.length} mensagens totais, ${leadsData.length} leads cadastrados`);
+      
       // ETAPA 3: Processar dados (otimizado)
       const validConversas = conversasData.filter(conv => 
         conv.numero && !conv.numero.includes('{{') &&
         conv.mensagem && !conv.mensagem.includes('{{')
       );
 
-      // Agrupar conversas por telefone
+      // Agrupar conversas por telefone (PRIORIDADE: Todas as conversas existentes)
       const conversasMap = new Map<string, any[]>();
       validConversas.forEach(conv => {
         const isGroup = conv.is_group || /@g\.us$/.test(conv.numero || '');
@@ -2862,32 +2851,30 @@ function Conversas() {
         conversasMap.get(key)!.push(conv);
       });
 
-      // Criar mapa de contatos
-      const contatosMap = new Map<string, { name: string; leadId: string }>();
+      // Criar mapa de leads para buscar nomes
+      const leadsMap = new Map<string, { name: string; leadId: string }>();
       leadsData.forEach(lead => {
         const phoneRaw = lead.phone || lead.telefone;
         if (!phoneRaw) return;
         
         const phoneKey = phoneRaw.replace(/[^0-9]/g, '');
         if (phoneKey) {
-          contatosMap.set(phoneKey, {
+          leadsMap.set(phoneKey, {
             name: lead.name || phoneKey,
             leadId: lead.id
           });
         }
       });
 
-      // ETAPA 4: Criar lista de conversas (CORREÇÃO: Priorizar nome do lead)
-      const novasConversas: Conversation[] = Array.from(contatosMap.entries()).map(([telefone, info]) => {
-        const mensagens = conversasMap.get(telefone) || [];
-        const temMensagens = mensagens.length > 0;
+      // ETAPA 4: Criar lista de conversas BASEANDO-SE NAS CONVERSAS (não nos leads)
+      // ✅ CORREÇÃO: Agora todas as conversas aparecem, tenham lead vinculado ou não
+      const novasConversas: Conversation[] = Array.from(conversasMap.entries()).map(([telefone, mensagens]) => {
+        const leadInfo = leadsMap.get(telefone); // Pode ser undefined se não tiver lead
         
-        // PRIORIDADE 1: Nome do Lead (SEMPRE usar se existir)
-        let contactName = info.name;
+        // PRIORIDADE 1: Nome do Lead (se existir)
+        let contactName = leadInfo?.name;
         
-        // PRIORIDADE 2: Nome da mensagem APENAS se:
-        // - Não houver nome do lead OU nome do lead for igual ao telefone
-        // - E nome da mensagem for diferente de "Jeohvah Lima", "jeohvah I.A" e do telefone
+        // PRIORIDADE 2: Nome da mensagem
         const nomesProibidos = [
           'jeohvah lima', 
           'jeohvah i.a', 
@@ -2896,7 +2883,7 @@ function Conversas() {
           telefone
         ];
         
-        if (temMensagens && (!contactName || contactName === telefone)) {
+        if (!contactName || contactName === telefone) {
           const nomeMensagem = mensagens.find(m => {
             const nomeMsg = m.nome_contato?.trim().toLowerCase();
             return nomeMsg && 
@@ -2909,33 +2896,29 @@ function Conversas() {
           }
         }
         
-        // FALLBACK: Se ainda não tiver nome válido, usar telefone formatado
+        // FALLBACK: Usar telefone
         if (!contactName || contactName.trim() === '') {
           contactName = telefone;
         }
         
-        const messagensFormatadas: Message[] = temMensagens 
-          ? mensagens.slice(0, 10).reverse().map(m => ({ // ⚡ OTIMIZADO: Apenas 10 mensagens mais recentes por conversa
-              id: m.id || `msg-${Date.now()}-${Math.random()}`,
-              content: m.mensagem || '',
-              type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
-              sender: (m.fromme === true || m.status === 'Enviada') ? "user" : "contact",
-              timestamp: new Date(m.created_at || Date.now()),
-              delivered: true,
-              read: m.status !== 'Recebida',
-              mediaUrl: m.midia_url,
-            }))
-          : [];
+        const messagensFormatadas: Message[] = mensagens.slice(0, 20).reverse().map(m => ({
+          id: m.id || `msg-${Date.now()}-${Math.random()}`,
+          content: m.mensagem || '',
+          type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
+          sender: (m.fromme === true || m.status === 'Enviada') ? "user" : "contact",
+          timestamp: new Date(m.created_at || Date.now()),
+          delivered: true,
+          read: m.status !== 'Recebida',
+          mediaUrl: m.midia_url,
+        }));
 
         return {
           id: telefone,
           contactName,
           channel: "whatsapp" as const,
-          status: temMensagens ? "waiting" as const : "resolved" as const,
-          lastMessage: temMensagens 
-            ? (messagensFormatadas[messagensFormatadas.length - 1]?.content || '')
-            : 'Sem histórico de conversa',
-          unread: temMensagens ? mensagens.filter(m => m.status === 'Recebida' && m.fromme !== true).length : 0,
+          status: "waiting" as const,
+          lastMessage: messagensFormatadas[messagensFormatadas.length - 1]?.content || '',
+          unread: mensagens.filter(m => m.status === 'Recebida' && m.fromme !== true).length,
           messages: messagensFormatadas,
           tags: [],
           phoneNumber: telefone,
