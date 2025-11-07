@@ -256,6 +256,10 @@ function Conversas() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const selectedConvRef = useRef<Conversation | null>(null);
   const userCompanyIdRef = useRef<string | null>(null);
+  
+  // 🔊 Ref para som de notificação
+  const notificationSound = useRef<HTMLAudioElement | null>(null);
+  
   const location = useLocation();
   
   // Estados para modais de visualização
@@ -925,9 +929,21 @@ function Conversas() {
                 }
               });
               
-              // Mostrar notificação se for mensagem do contato
+              // 🔊 Mostrar notificação sonora e visual se for mensagem do contato
               if (isFromContact) {
-                toast.success(`Nova mensagem de ${nomeCorreto}`);
+                // Tocar som de notificação
+                try {
+                  notificationSound.current?.play().catch(err => 
+                    console.warn('⚠️ Não foi possível tocar som:', err)
+                  );
+                } catch (error) {
+                  console.warn('⚠️ Erro ao tocar som:', error);
+                }
+                
+                // Toast visual
+                toast.success(`Nova mensagem de ${nomeCorreto}`, {
+                  duration: 4000,
+                });
               }
             }
           } else if (payload.eventType === 'UPDATE') {
@@ -1750,6 +1766,13 @@ function Conversas() {
     
     carregarPerfilUsuario();
     
+    // 🔊 Inicializar som de notificação
+    if (!notificationSound.current) {
+      notificationSound.current = new Audio('data:audio/wav;base64,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');
+      notificationSound.current.volume = 0.5; // Volume de 50%
+      console.log('🔊 Som de notificação inicializado');
+    }
+    
     // Não carregar do localStorage - apenas Supabase
     loadQuickMessages();
     loadQuickCategories();
@@ -2320,8 +2343,18 @@ function Conversas() {
                   }
                 }
                 
-                // Notificar APENAS se for mensagem RECEBIDA do cliente (não quando o CRM envia) e a conversa não estiver aberta
+                // 🔊 Notificar APENAS se for mensagem RECEBIDA do cliente (não quando o CRM envia) e a conversa não estiver aberta
                 if (!isOpen && novaConversa.status === 'Recebida' && novaConversa.origem === 'WhatsApp') {
+                  // Tocar som de notificação
+                  try {
+                    notificationSound.current?.play().catch(err => 
+                      console.warn('⚠️ Não foi possível tocar som:', err)
+                    );
+                  } catch (error) {
+                    console.warn('⚠️ Erro ao tocar som:', error);
+                  }
+                  
+                  // Toast visual personalizado
                   toast.custom((t) => (
                     <div className="bg-card border border-border rounded-lg shadow-lg p-4 max-w-md animate-slide-in-right">
                       <div className="flex items-start gap-3">
