@@ -210,8 +210,11 @@ function Conversas() {
   // MELHORIA: Estado para busca debounced (otimização de performance)
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   // MELHORIA: Estados para paginação e cache
-  const [conversationsLimit, setConversationsLimit] = useState(50); // Limitar conversas iniciais
-  const [messagesLimit, setMessagesLimit] = useState(50); // Lazy loading de mensagens
+  const [conversationsLimit, setConversationsLimit] = useState(30); // ⚡ Limitar conversas iniciais para 30
+  const [conversationsOffset, setConversationsOffset] = useState(0); // Offset para paginação
+  const [hasMoreConversations, setHasMoreConversations] = useState(true); // Flag se há mais conversas
+  const [loadingMore, setLoadingMore] = useState(false); // Loading state para "carregar mais"
+  const [messagesLimit, setMessagesLimit] = useState(50); // Limite de mensagens exibidas
   const conversationsCacheRef = useRef<Map<string, Conversation>>(new Map()); // Cache de conversas abertas
   const messagesCacheRef = useRef<Map<string, Message[]>>(new Map()); // Cache de mensagens carregadas
   const [messageInput, setMessageInput] = useState("");
@@ -718,7 +721,7 @@ function Conversas() {
           table: 'conversas', 
           filter: `company_id=eq.${userCompanyId}` 
         },
-        (payload) => {
+        async (payload) => {
           console.log('📨 [REALTIME] Nova mensagem recebida:', payload);
           
           if (payload.eventType === 'INSERT') {
@@ -831,11 +834,101 @@ function Conversas() {
                 messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
               }, 100);
             } else {
-              // Conversa não está aberta, recarregar lista completa
-              console.log('📋 [REALTIME] Nova mensagem de conversa não aberta, recarregando...');
+              // Conversa não está aberta, atualizar lista SEM recarregar tudo
+              console.log('📋 [REALTIME] Nova mensagem de conversa não aberta, atualizando lista...');
               
-              // IMPORTANTE: Não confiar no nome da mensagem, recarregar tudo para pegar o nome do lead
-              loadSupabaseConversations();
+              // CORREÇÃO: Buscar apenas o lead vinculado para obter o nome correto
+              const { data: leadVinculadoMsg } = await supabase
+                .from('leads')
+                .select('name, id')
+                .or(`phone.eq.${telefone},telefone.eq.${telefone}`)
+                .maybeSingle();
+              
+              // Lista de nomes proibidos
+              const nomesProibidos = [
+                'jeohvah lima', 
+                'jeohvah i.a', 
+                'jeova costa de lima',
+                'jeo',
+                telefone
+              ];
+              
+              // Determinar nome correto (PRIORIZAR LEAD)
+              let nomeCorreto = telefone;
+              if (leadVinculadoMsg?.name) {
+                nomeCorreto = leadVinculadoMsg.name;
+              } else if (novaMensagem.nome_contato) {
+                const nomeMsgLower = novaMensagem.nome_contato.trim().toLowerCase();
+                if (!nomesProibidos.includes(nomeMsgLower) && nomeMsgLower !== telefone) {
+                  nomeCorreto = novaMensagem.nome_contato;
+                }
+              }
+              
+              const newMessage: Message = {
+                id: novaMensagem.id || `msg-${Date.now()}-${Math.random()}`,
+                content: novaMensagem.mensagem || '',
+                type: (novaMensagem.tipo_mensagem === 'texto' ? 'text' : (novaMensagem.tipo_mensagem || 'text')) as any,
+                sender: isFromUser ? "user" : "contact",
+                timestamp: new Date(novaMensagem.created_at || Date.now()),
+                delivered: true,
+                read: isFromUser ? true : (novaMensagem.status !== 'Recebida'),
+                mediaUrl: novaMensagem.midia_url,
+              };
+              
+              // Atualizar lista de conversas
+              setConversations(prev => {
+                const existingIndex = prev.findIndex(c => c.id === telefone);
+                
+                if (existingIndex >= 0) {
+                  // Conversa existe, adicionar mensagem
+                  const updated = [...prev];
+                  const conv = updated[existingIndex];
+                  
+                  // Não duplicar mensagem
+                  const msgExists = conv.messages.some(m => m.id === newMessage.id);
+                  if (msgExists) {
+                    return prev;
+                  }
+                  
+                  updated[existingIndex] = {
+                    ...conv,
+                    messages: [...conv.messages, newMessage],
+                    lastMessage: newMessage.content,
+                    contactName: nomeCorreto, // Usar nome correto do lead
+                    unread: conv.unread + (isFromContact ? 1 : 0)
+                  };
+                  
+                  // Mover para o topo
+                  const [item] = updated.splice(existingIndex, 1);
+                  updated.unshift(item);
+                  
+                  console.log('✅ [REALTIME] Conversa existente atualizada:', nomeCorreto);
+                  return updated;
+                } else {
+                  // Nova conversa, adicionar no topo
+                  const newConv: Conversation = {
+                    id: telefone,
+                    contactName: nomeCorreto,
+                    channel: "whatsapp" as const,
+                    status: "waiting" as const,
+                    lastMessage: newMessage.content,
+                    unread: isFromContact ? 1 : 0,
+                    messages: [newMessage],
+                    tags: [],
+                    phoneNumber: telefone,
+                    avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(nomeCorreto.substring(0, 2))}&background=0ea5e9&color=fff`,
+                    isGroup: isGroup
+                  };
+                  
+                  console.log('➕ [REALTIME] Nova conversa criada:', nomeCorreto);
+                  return [newConv, ...prev];
+                }
+              });
+              
+              // Mostrar notificação se for mensagem do contato
+              if (isFromContact) {
+                toast.success(`Nova mensagem de ${nomeCorreto}`);
+              }
             }
           } else if (payload.eventType === 'UPDATE') {
             console.log('🔄 [REALTIME] Mensagem atualizada');
@@ -1664,12 +1757,12 @@ function Conversas() {
     loadMeetings();
     loadAiMode();
     
-    // Carregar conversas do Supabase imediatamente (evitar duplicado em StrictMode)
+    // ⚡ Carregar conversas do Supabase imediatamente com paginação (evitar duplicado em StrictMode)
     if (!initialLoadRef.current) {
       initialLoadRef.current = true;
-      console.log('🔄 [DEBUG] Carregando conversas iniciais do Supabase...');
+      console.log('🔄 [DEBUG] Carregando conversas iniciais do Supabase (primeiras 30)...');
       console.log('🔄 [DEBUG] initialLoadRef antes:', initialLoadRef.current);
-      loadSupabaseConversations().then(() => {
+      loadSupabaseConversations(false).then(() => {
         console.log('✅ [DEBUG] loadSupabaseConversations concluído');
       }).catch((err) => {
         console.error('❌ [DEBUG] Erro em loadSupabaseConversations:', err);
@@ -2632,7 +2725,7 @@ function Conversas() {
     setIsContactInactive(daysSinceLastMessage >= 30);
   }, [selectedConv]);
 
-  const loadSupabaseConversations = async () => {
+  const loadSupabaseConversations = async (append: boolean = false) => {
     if (loadingConversations) return;
     
     try {
@@ -2662,19 +2755,35 @@ function Conversas() {
 
       setUserCompanyId(userRole.company_id);
       
-      // ETAPA 2: Buscar leads e conversas em paralelo (SEM LIMITES)
+      // ETAPA 2: ⚡ PAGINAÇÃO REAL - Buscar apenas leads necessários para esta página de conversas
+      const offset = append ? conversationsOffset : 0;
+      const limit = conversationsLimit;
+      
+      // Contar total de leads para saber se há mais conversas
+      const { count: totalLeads } = await supabase
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', userRole.company_id);
+      
+      // Buscar leads com paginação
       const [leadsResult, conversasResult] = await Promise.all([
         supabase
           .from('leads')
           .select('id, phone, name, telefone')
           .eq('company_id', userRole.company_id)
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1), // ⚡ PAGINAÇÃO
         supabase
           .from('conversas')
           .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, midia_url, fromme')
           .eq('company_id', userRole.company_id)
           .order('created_at', { ascending: false })
+          .limit(limit * 20) // ⚡ Limite proporcional (20 msgs por lead aprox.)
       ]);
+      
+      // Atualizar flags de paginação
+      setHasMoreConversations(totalLeads ? (offset + limit < totalLeads) : false);
+      setConversationsOffset(offset + limit);
 
       if (leadsResult.error) {
         toast.error('Erro ao buscar contatos');
@@ -2760,7 +2869,7 @@ function Conversas() {
         }
         
         const messagensFormatadas: Message[] = temMensagens 
-          ? mensagens.slice(0, 10).reverse().map(m => ({
+          ? mensagens.slice(0, 20).reverse().map(m => ({ // ⚡ Limitar a 20 mensagens iniciais por conversa
               id: m.id || `msg-${Date.now()}-${Math.random()}`,
               content: m.mensagem || '',
               type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
@@ -2797,14 +2906,21 @@ function Conversas() {
         nome: c.contactName
       })));
       
-      setConversations(novasConversas);
-      toast.success(`${novasConversas.length} conversas carregadas`);
+      // ⚡ APPEND ou REPLACE conversas
+      if (append) {
+        setConversations(prev => [...prev, ...novasConversas]);
+        toast.success(`+${novasConversas.length} conversas carregadas`);
+      } else {
+        setConversations(novasConversas);
+        toast.success(`${novasConversas.length} conversas carregadas`);
+      }
+      
       loadCompanyMetrics();
       setLoadingConversations(false);
 
-      // OTIMIZAÇÃO: Carregar fotos apenas dos 10 primeiros contatos visíveis
-      const primeirosDez = novasConversas.slice(0, 10);
-      primeirosDez.forEach(async (conv) => {
+      // ⚡ LAZY LOADING DE AVATARES: Carregar apenas dos 6 primeiros visíveis
+      const primeiros = novasConversas.slice(0, 6);
+      primeiros.forEach(async (conv) => {
         if (conv.phoneNumber) {
           try {
             const profilePicUrl = await getProfilePictureWithFallback(
@@ -5417,6 +5533,34 @@ function Conversas() {
               }}
             />
           ))
+          )}
+          
+          {/* ⚡ Botão Carregar Mais Conversas */}
+          {!loadingConversations && filteredConversations.length > 0 && hasMoreConversations && (
+            <div className="p-4 flex justify-center">
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  setLoadingMore(true);
+                  await loadSupabaseConversations(true); // Append mode
+                  setLoadingMore(false);
+                }}
+                disabled={loadingMore}
+                className="w-full"
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Carregando mais...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Carregar Mais Conversas ({conversationsLimit} por vez)
+                  </>
+                )}
+              </Button>
+            </div>
           )}
         </ScrollArea>
       </div>
