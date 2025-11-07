@@ -2097,6 +2097,15 @@ function Conversas() {
 
     // MELHORIA: Função para configurar canal realtime
     const setupRealtimeChannel = async () => {
+      // ⚡ CRÍTICO: Aguardar userCompanyIdRef estar disponível antes de configurar
+      if (!userCompanyIdRef.current) {
+        console.warn('⚠️ [REALTIME] Aguardando userCompanyId...');
+        setTimeout(() => setupRealtimeChannel(), 1000);
+        return;
+      }
+
+      console.log('🔌 [REALTIME] Configurando canal com company_id:', userCompanyIdRef.current);
+
       // Evitar múltiplas assinaturas: sempre remover canal anterior antes de criar
       if (realtimeChannelRef.current) {
         try {
@@ -2109,15 +2118,12 @@ function Conversas() {
         .channel('conversas_realtime')
       .on(
         'postgres_changes',
-        (() => {
-          const cid = userCompanyIdRef.current;
-          return {
+        {
           event: 'INSERT',
           schema: 'public',
-            table: 'conversas',
-            ...(cid ? { filter: `company_id=eq.${cid}` } : {})
-          } as any;
-        })(),
+          table: 'conversas',
+          filter: `company_id=eq.${userCompanyIdRef.current}` // ⚡ FILTRO OBRIGATÓRIO
+        },
         async (payload) => {
           try {
             console.log('📩 [REALTIME] Nova mensagem recebida (INSERT):', payload);
@@ -2378,15 +2384,12 @@ function Conversas() {
       )
       .on(
         'postgres_changes',
-        (() => {
-          const cid = userCompanyIdRef.current;
-          return {
+        {
           event: 'UPDATE',
           schema: 'public',
-            table: 'conversas',
-            ...(cid ? { filter: `company_id=eq.${cid}` } : {})
-          } as any;
-        })(),
+          table: 'conversas',
+          filter: `company_id=eq.${userCompanyIdRef.current}` // ⚡ FILTRO OBRIGATÓRIO
+        },
         async (payload) => {
           try {
             console.log('🔄 [REALTIME] Mensagem atualizada (UPDATE):', payload);
