@@ -105,10 +105,23 @@ export default function Auth() {
           console.log("✅ Super Admin autenticado com sucesso!");
           
           // Definir a sessão manualmente
-          await supabase.auth.setSession({
+          const { error: sessionError } = await supabase.auth.setSession({
             access_token: loginData.session.access_token,
             refresh_token: loginData.session.refresh_token
           });
+
+          if (sessionError) {
+            console.error("❌ Erro ao definir sessão:", sessionError);
+            toast({
+              variant: "destructive",
+              title: "Erro ao fazer login",
+              description: "Não foi possível criar a sessão"
+            });
+            setLoading(false);
+            return;
+          }
+          
+          console.log("✅ Sessão definida, navegando para dashboard...");
           
           toast({
             title: "Login bem-sucedido!",
@@ -116,6 +129,12 @@ export default function Auth() {
           });
           
           setLoading(false);
+          
+          // Navegar explicitamente para o dashboard
+          setTimeout(() => {
+            navigate("/dashboard");
+          }, 500);
+          
           return;
         }
       } catch (err: any) {
