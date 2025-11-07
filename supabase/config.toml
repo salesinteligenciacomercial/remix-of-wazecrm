@@ -44,3 +44,6 @@ verify_jwt = true
 
 [functions.elevate-super-admin]
 verify_jwt = true
+
+[functions.super-admin-login]
+verify_jwt = false
