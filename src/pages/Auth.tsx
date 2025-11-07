@@ -79,6 +79,51 @@ export default function Auth() {
     const email = formData.get("signin-email") as string;
     const password = formData.get("signin-password") as string;
 
+    console.log("🔐 Tentando login:", email);
+
+    // Se for o super admin, usar edge function especial
+    if (email === "jeovauzumak@gmail.com") {
+      console.log("👑 Usando autenticação super admin...");
+      
+      try {
+        const { data: loginData, error: loginError } = await supabase.functions.invoke('super-admin-login', {
+          body: { email, password }
+        });
+
+        if (loginError) {
+          console.error("❌ Erro super admin login:", loginError);
+          toast({
+            variant: "destructive",
+            title: "Erro ao fazer login",
+            description: "Credenciais inválidas"
+          });
+          setLoading(false);
+          return;
+        }
+
+        if (loginData?.success && loginData?.session) {
+          console.log("✅ Super Admin autenticado com sucesso!");
+          
+          // Definir a sessão manualmente
+          await supabase.auth.setSession({
+            access_token: loginData.session.access_token,
+            refresh_token: loginData.session.refresh_token
+          });
+          
+          toast({
+            title: "Login bem-sucedido!",
+            description: `Bem-vindo Super Admin!`
+          });
+          
+          setLoading(false);
+          return;
+        }
+      } catch (err: any) {
+        console.error("❌ Exceção super admin login:", err);
+      }
+    }
+
+    // Login normal para outros usuários
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
