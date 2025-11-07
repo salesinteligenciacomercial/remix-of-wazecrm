@@ -2168,21 +2168,41 @@ function Conversas() {
           try {
             console.log('📩 [REALTIME] Nova mensagem recebida (INSERT):', {
               id: payload.new?.id,
-              numero: payload.new?.numero,
-              mensagem: payload.new?.mensagem?.substring(0, 50),
-              status: payload.new?.status,
-              company_id: payload.new?.company_id
+              timestamp: new Date().toISOString()
             });
             
-            // MELHORIA: Validar dados recebidos antes de processar
-            if (!payload.new || !validateRealtimeData(payload.new)) {
-              console.warn('⚠️ [REALTIME] Dados inválidos ignorados');
+            // ⚡ CORREÇÃO CRÍTICA: Não usar payload.new diretamente (pode ter mídia grande = erro 413)
+            // Buscar apenas os campos necessários do banco
+            if (!payload.new?.id) {
+              console.warn('⚠️ [REALTIME] ID não encontrado no payload');
               return;
             }
 
-            // Processar apenas a nova mensagem, sem recarregar tudo
-            if (payload.eventType === 'INSERT' && payload.new) {
-              const novaConversa = payload.new;
+            // Buscar a mensagem do banco SEM campos de mídia muito grande (base64)
+            const { data: novaConversa, error: fetchError } = await supabase
+              .from('conversas')
+              .select('id, numero, mensagem, nome_contato, status, tipo_mensagem, telefone_formatado, is_group, company_id, created_at, origem, fromme, midia_url, arquivo_nome, replied_to_message')
+              .eq('id', payload.new.id)
+              .single();
+
+            if (fetchError || !novaConversa) {
+              console.error('❌ [REALTIME] Erro ao buscar mensagem do banco:', fetchError);
+              return;
+            }
+
+            console.log('📩 [REALTIME] Mensagem carregada do banco:', {
+              id: novaConversa.id,
+              numero: novaConversa.numero,
+              mensagem: novaConversa.mensagem?.substring(0, 50),
+              status: novaConversa.status,
+              company_id: novaConversa.company_id
+            });
+            
+            // MELHORIA: Validar dados recebidos antes de processar
+            if (!validateRealtimeData(novaConversa)) {
+              console.warn('⚠️ [REALTIME] Dados inválidos ignorados');
+              return;
+            }
 
               // 🔒 SEGURANÇA: Filtrar por empresa quando informado; permitir sem company_id (integração externa)
               if (novaConversa.company_id && novaConversa.company_id !== userCompanyIdRef.current) {
@@ -2440,7 +2460,6 @@ function Conversas() {
                   });
                 }
               }, 300); // Delay de 300ms para debounce
-            }
           } catch (error) {
             console.error('❌ [REALTIME] Erro ao processar mensagem INSERT:', error);
             // Logar erro completo para debug
