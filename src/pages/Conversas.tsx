@@ -1631,54 +1631,91 @@ function Conversas() {
         try { await supabase.removeChannel(realtimeChannelRef.current); } catch {}
         realtimeChannelRef.current = null;
       }
-      const channel = supabase.channel('conversas_realtime').on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'conversas',
-        filter: `company_id=eq.${userCompanyIdRef.current}`
-      }, async (payload) => {
-        try {
-          console.log('📩 [REALTIME] Nova mensagem recebida (INSERT)');
-          if (!payload.new?.id) return;
-          const { data: novaConversa, error } = await supabase.from('conversas')
-            .select('id, numero, mensagem, nome_contato, status, tipo_mensagem, telefone_formatado, is_group, company_id, created_at, origem, fromme, midia_url, arquivo_nome')
-            .eq('id', payload.new.id).single();
-          if (error || !novaConversa || !validateRealtimeData(novaConversa)) return;
-          if (novaConversa.company_id && novaConversa.company_id !== userCompanyIdRef.current) return;
-          debouncedUpdate(async () => {
-            const isGroup = Boolean((novaConversa as any)?.is_group) || /@g\.us$/.test(String(novaConversa.numero || ''));
-            const telefoneNormalizado = isGroup ? String(novaConversa.numero) : (novaConversa.telefone_formatado || normalizePhoneForWA(novaConversa.numero));
-            const { data: leadVinculadoRealtime } = await supabase.from('leads').select('name')
-              .or(`phone.eq.${telefoneNormalizado},telefone.eq.${telefoneNormalizado}`).maybeSingle();
-            const nomeValido = leadVinculadoRealtime?.name || (novaConversa.nome_contato && novaConversa.nome_contato.trim() !== '' && novaConversa.nome_contato !== novaConversa.numero ? novaConversa.nome_contato : novaConversa.numero);
-            let profilePic: string | undefined;
-            try { profilePic = await getProfilePictureWithFallback(novaConversa.numero, userCompanyIdRef.current || '', nomeValido || String(novaConversa.numero)); } catch {}
-            const numeroLimpo = String(novaConversa.numero || '').replace(/\D/g, '');
-            const isRealGroup = Boolean((novaConversa as any)?.is_group) || (numeroLimpo.length >= 17 && /@g\.us$/.test(String(novaConversa.numero || '')));
-            const novaConvFormatted: Conversation = {
-              id: telefoneNormalizado, contactName: nomeValido,
-              avatarUrl: profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(nomeValido)}&background=10b981&color=fff`,
-              channel: 'whatsapp' as const, status: 'waiting' as const, isGroup: isRealGroup,
-              messages: [{
-                id: novaConversa.id, content: novaConversa.mensagem,
-                sender: (novaConversa.fromme === true || novaConversa.status === 'Enviada') ? 'user' : 'contact',
-                timestamp: new Date(novaConversa.created_at), delivered: true,
-                type: (novaConversa.tipo_mensagem === 'audio' ? 'audio' : novaConversa.tipo_mensagem === 'image' ? 'image' : novaConversa.tipo_mensagem === 'video' ? 'video' : novaConversa.tipo_mensagem === 'pdf' || (novaConversa.tipo_mensagem === 'document' && novaConversa.mensagem?.includes('[Documento:')) ? 'pdf' : novaConversa.tipo_mensagem === 'document' ? 'document' : 'text') as Message["type"],
-                mediaUrl: novaConversa.midia_url, fileName: novaConversa.arquivo_nome
-              }],
-              lastMessage: novaConversa.mensagem,
-              unread: (novaConversa.fromme === true || novaConversa.status === 'Enviada') ? 0 : 1,
-              tags: [], phoneNumber: telefoneNormalizado
-            };
-            setConversations(prev => {
-              const exists = prev.find(c => c.id === telefoneNormalizado);
-              if (exists) return prev.map(c => c.id === telefoneNormalizado ? { ...c, messages: [...c.messages, novaConvFormatted.messages[0]], lastMessage: novaConvFormatted.lastMessage, unread: c.unread + novaConvFormatted.unread } : c);
-              return [novaConvFormatted, ...prev];
+      // ✅ CRITICAL: Escutar TODOS os eventos (INSERT e UPDATE) para sincronização total
+      const channel = supabase.channel('conversas_realtime_full')
+        .on('postgres_changes', {
+          event: '*', // Escutar INSERT, UPDATE e DELETE
+          schema: 'public', 
+          table: 'conversas',
+          filter: `company_id=eq.${userCompanyIdRef.current}`
+        }, async (payload) => {
+          try {
+            const eventType = payload.eventType;
+            const recordId = (payload.new as any)?.id || (payload.old as any)?.id;
+            console.log(`📩 [REALTIME] Evento detectado: ${eventType}`, { 
+              id: recordId,
+              timestamp: new Date().toISOString() 
             });
-            if (novaConvFormatted.unread > 0) {
-              try { notificationSound.current?.play().catch(() => {}); } catch {}
-              toast.success(`Nova mensagem de ${nomeValido}`, { duration: 4000 });
+            
+            // Processar INSERT e UPDATE
+            if (eventType === 'INSERT' || eventType === 'UPDATE') {
+              if (!payload.new?.id) return;
+              
+              const { data: novaConversa, error } = await supabase.from('conversas')
+                .select('id, numero, mensagem, nome_contato, status, tipo_mensagem, telefone_formatado, is_group, company_id, created_at, origem, fromme, midia_url, arquivo_nome')
+                .eq('id', payload.new.id)
+                .single();
+              
+              if (error) {
+                console.error('❌ [REALTIME] Erro ao buscar conversa:', error);
+                return;
+              }
+              
+              if (!novaConversa || !validateRealtimeData(novaConversa)) {
+                console.warn('⚠️ [REALTIME] Dados inválidos ignorados');
+                return;
+              }
+              
+              if (novaConversa.company_id && novaConversa.company_id !== userCompanyIdRef.current) {
+                console.warn('⚠️ [REALTIME] Conversa de outra empresa ignorada');
+                return;
+              }
+              
+              debouncedUpdate(async () => {
+                const isGroup = Boolean((novaConversa as any)?.is_group) || /@g\.us$/.test(String(novaConversa.numero || ''));
+                const telefoneNormalizado = isGroup 
+                  ? String(novaConversa.numero) 
+                  : (novaConversa.telefone_formatado || normalizePhoneForWA(novaConversa.numero));
+                
+                const { data: leadVinculadoRealtime } = await supabase.from('leads')
+                  .select('name')
+                  .or(`phone.eq.${telefoneNormalizado},telefone.eq.${telefoneNormalizado}`)
+                  .maybeSingle();
+                  
+                const nomeValido = leadVinculadoRealtime?.name || (novaConversa.nome_contato && novaConversa.nome_contato.trim() !== '' && novaConversa.nome_contato !== novaConversa.numero ? novaConversa.nome_contato : novaConversa.numero);
+                let profilePic: string | undefined;
+                try { profilePic = await getProfilePictureWithFallback(novaConversa.numero, userCompanyIdRef.current || '', nomeValido || String(novaConversa.numero)); } catch {}
+                const numeroLimpo = String(novaConversa.numero || '').replace(/\D/g, '');
+                const isRealGroup = Boolean((novaConversa as any)?.is_group) || (numeroLimpo.length >= 17 && /@g\.us$/.test(String(novaConversa.numero || '')));
+                const novaConvFormatted: Conversation = {
+                  id: telefoneNormalizado, contactName: nomeValido,
+                  avatarUrl: profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(nomeValido)}&background=10b981&color=fff`,
+                  channel: 'whatsapp' as const, status: 'waiting' as const, isGroup: isRealGroup,
+                  messages: [{
+                    id: novaConversa.id, content: novaConversa.mensagem,
+                    sender: (novaConversa.fromme === true || novaConversa.status === 'Enviada') ? 'user' : 'contact',
+                    timestamp: new Date(novaConversa.created_at), delivered: true,
+                    type: (novaConversa.tipo_mensagem === 'audio' ? 'audio' : novaConversa.tipo_mensagem === 'image' ? 'image' : novaConversa.tipo_mensagem === 'video' ? 'video' : novaConversa.tipo_mensagem === 'pdf' || (novaConversa.tipo_mensagem === 'document' && novaConversa.mensagem?.includes('[Documento:')) ? 'pdf' : novaConversa.tipo_mensagem === 'document' ? 'document' : 'text') as Message["type"],
+                    mediaUrl: novaConversa.midia_url, fileName: novaConversa.arquivo_nome
+                  }],
+                  lastMessage: novaConversa.mensagem,
+                  unread: (novaConversa.fromme === true || novaConversa.status === 'Enviada') ? 0 : 1,
+                  tags: [], phoneNumber: telefoneNormalizado
+                };
+                setConversations(prev => {
+                  const exists = prev.find(c => c.id === telefoneNormalizado);
+                  if (exists) return prev.map(c => c.id === telefoneNormalizado ? { ...c, messages: [...c.messages, novaConvFormatted.messages[0]], lastMessage: novaConvFormatted.lastMessage, unread: c.unread + novaConvFormatted.unread } : c);
+                  return [novaConvFormatted, ...prev];
+                });
+                if (novaConvFormatted.unread > 0) {
+                  try { notificationSound.current?.play().catch(() => {}); } catch {}
+                  toast.success(`Nova mensagem de ${nomeValido}`, { duration: 4000 });
+                }
+              });
             }
-          });
-        } catch (err) { console.error('❌ [REALTIME] Erro ao processar:', err); }
+          } catch (err) { 
+            console.error('❌ [REALTIME] Erro ao processar:', err); 
+          }
       }).subscribe((status) => {
         console.log('📡 [REALTIME] Status:', status);
         if (status === 'SUBSCRIBED') { console.log('✅ [REALTIME] Conectado!'); setRealtimeConnectionStatus('connected'); }
