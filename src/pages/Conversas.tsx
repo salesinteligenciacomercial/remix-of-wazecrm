@@ -1741,30 +1741,56 @@ function Conversas() {
     };
   }, [leadVinculado?.id]);
 
+  // 🔑 CRÍTICO: Carregar company_id PRIMEIRO antes de qualquer outra coisa
   useEffect(() => {
     console.log('🚀 Componente Conversas montado');
-    // Carregar nome do usuário
-    const carregarPerfilUsuario = async () => {
+    
+    const carregarDadosIniciais = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("full_name, email")
-            .eq("id", session.user.id)
-            .maybeSingle();
-          
-          if (profile) {
-            setUserName(profile.full_name || profile.email);
-            console.log('👤 Usuário logado:', profile.full_name || profile.email);
-          }
+        // 1. Buscar sessão e company_id PRIMEIRO
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          console.error('❌ Usuário não autenticado');
+          return;
         }
+        
+        // 2. Buscar company_id (funciona para conta principal e subcontas)
+        const { data: userRole } = await supabase
+          .from('user_roles')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!userRole?.company_id) {
+          console.error('❌ Erro: Usuário sem empresa associada');
+          toast.error('Erro: Usuário sem empresa associada');
+          return;
+        }
+
+        // 3. Definir company_id IMEDIATAMENTE
+        console.log('🏢 Company ID carregado:', userRole.company_id);
+        setUserCompanyId(userRole.company_id);
+        userCompanyIdRef.current = userRole.company_id; // ⚡ ATUALIZAR REF IMEDIATAMENTE
+        
+        // 4. Buscar perfil do usuário
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name, email")
+          .eq("id", user.id)
+          .maybeSingle();
+        
+        if (profile) {
+          setUserName(profile.full_name || profile.email);
+          console.log('👤 Usuário logado:', profile.full_name || profile.email);
+        }
+        
       } catch (error) {
-        console.error('❌ Erro ao carregar perfil:', error);
+        console.error('❌ Erro ao carregar dados iniciais:', error);
       }
     };
     
-    carregarPerfilUsuario();
+    carregarDadosIniciais();
     
     // 🔊 Inicializar som de notificação
     if (!notificationSound.current) {
@@ -1780,19 +1806,7 @@ function Conversas() {
     loadMeetings();
     loadAiMode();
     
-    // ⚡ Carregar conversas do Supabase imediatamente com paginação (evitar duplicado em StrictMode)
-    if (!initialLoadRef.current) {
-      initialLoadRef.current = true;
-      console.log('🔄 [DEBUG] Carregando conversas iniciais do Supabase (primeiras 30)...');
-      console.log('🔄 [DEBUG] initialLoadRef antes:', initialLoadRef.current);
-      loadSupabaseConversations(false).then(() => {
-        console.log('✅ [DEBUG] loadSupabaseConversations concluído');
-      }).catch((err) => {
-        console.error('❌ [DEBUG] Erro em loadSupabaseConversations:', err);
-      });
-    } else {
-      console.log('⚠️ [DEBUG] initialLoadRef já é true, pulando carregamento');
-    }
+    // ⚡ REMOVIDO: Não carregar aqui - será carregado quando userCompanyId estiver disponível
 
     // Verificar se veio de um lead (via state do navigate)
     const handleLeadRedirect = async () => {
@@ -2120,11 +2134,10 @@ function Conversas() {
 
     // MELHORIA: Função para configurar canal realtime
     const setupRealtimeChannel = async () => {
-      // ⚡ CRÍTICO: Aguardar userCompanyIdRef estar disponível antes de configurar
+      // ⚡ CRÍTICO: Se userCompanyId não estiver disponível, o useEffect não deve ter sido executado
       if (!userCompanyIdRef.current) {
-        console.warn('⚠️ [REALTIME] Aguardando userCompanyId...');
-        setTimeout(() => setupRealtimeChannel(), 1000);
-        return;
+        console.error('❌ [REALTIME] ERRO: setupRealtimeChannel chamado sem userCompanyId!');
+        return null;
       }
 
       console.log('🔌 [REALTIME] Configurando canal com company_id:', userCompanyIdRef.current);
@@ -2651,7 +2664,20 @@ function Conversas() {
         }
       });
     };
-  }, []);
+  }, [userCompanyId]); // ⚡ DEPENDÊNCIA CRÍTICA: Reconfigurar quando company_id mudar
+  
+  // 📡 Carregar conversas quando userCompanyId estiver disponível
+  useEffect(() => {
+    if (!userCompanyId || initialLoadRef.current) return;
+    
+    initialLoadRef.current = true;
+    console.log('🔄 [DEBUG] Carregando conversas iniciais do Supabase com company_id:', userCompanyId);
+    loadSupabaseConversations(false).then(() => {
+      console.log('✅ [DEBUG] loadSupabaseConversations concluído');
+    }).catch((err) => {
+      console.error('❌ [DEBUG] Erro em loadSupabaseConversations:', err);
+    });
+  }, [userCompanyId]); // ⚡ Carregar quando company_id estiver disponível
 
   // Fallback: polling com jitter enquanto desconectado
   useEffect(() => {
@@ -2789,7 +2815,11 @@ function Conversas() {
         return;
       }
 
-      setUserCompanyId(userRole.company_id);
+      // ⚡ Atualizar company_id se ainda não foi definido
+      if (!userCompanyId) {
+        setUserCompanyId(userRole.company_id);
+        userCompanyIdRef.current = userRole.company_id;
+      }
       
       // ETAPA 2: ⚡ PAGINAÇÃO REAL - Buscar apenas leads necessários para esta página de conversas
       const offset = append ? conversationsOffset : 0;
