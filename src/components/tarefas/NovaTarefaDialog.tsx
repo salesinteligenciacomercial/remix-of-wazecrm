@@ -96,7 +96,7 @@ export function NovaTarefaDialog({
         body: {
           action: "criar_tarefa",
           data: {
-            title,
+            title: title.trim(),
             description,
             priority,
             due_date: dueDateIso,
@@ -105,8 +105,6 @@ export function NovaTarefaDialog({
             column_id: columnId,
             board_id: boardId,
             checklist,
-            tags,
-            responsaveis,
           },
         },
       });
