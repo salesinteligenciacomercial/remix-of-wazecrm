@@ -75,8 +75,11 @@ function ConversationListItemComponent({
     e.stopPropagation();
   };
 
-  console.log('🔘 Renderizando ConversationListItem:', {
+
+  console.log('🎨 [RENDER] ConversationListItem:', {
     contactName,
+    hasAvatar: !!avatarUrl,
+    avatarUrl: avatarUrl?.substring(0, 50),
     hasCallbacks: {
       onEditName: !!onEditName,
       onCreateLead: !!onCreateLead,
@@ -108,8 +111,8 @@ function ConversationListItemComponent({
               </span>
             </div>
             
-            {/* HORÁRIO E BADGE */}
-            <div className="flex items-center gap-2 flex-shrink-0">
+            {/* HORÁRIO, BADGE E MENU */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {timestamp.toLocaleTimeString("pt-BR", {
                   hour: "2-digit",
@@ -122,63 +125,66 @@ function ConversationListItemComponent({
                 </Badge>
               )}
               
-              {/* BOTÃO DE MENU - Agora no layout flex */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                  <Button 
-                    variant="default" 
-                    size="icon" 
-                    className="h-8 w-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md flex-shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      console.log('🔘 Botão menu clicado!');
-                    }}
+              {/* BOTÃO DE MENU - SEMPRE VISÍVEL */}
+              <div className="relative z-50">
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 hover:bg-accent hover:text-accent-foreground shrink-0 ml-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        console.log('🔘 Menu clicado!', { conversationId, leadId });
+                      }}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent 
+                    align="end" 
+                    side="bottom"
+                    className="w-56 z-[99999]"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent 
-                  align="end" 
-                  className="z-[10000] w-56 bg-background border-2 border-border shadow-xl"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <DropdownMenuItem 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      console.log('✏️ Editar nome');
-                      onEditName?.();
-                    }}
-                    className="cursor-pointer hover:bg-accent"
-                  >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Editar nome
-                  </DropdownMenuItem>
-                  {!leadId && onCreateLead && (
                     <DropdownMenuItem 
                       onClick={(e) => {
                         e.stopPropagation();
-                        console.log('➕ Adicionar ao CRM');
-                        onCreateLead();
+                        console.log('✏️ Editar nome', conversationId);
+                        onEditName?.();
                       }}
-                      className="cursor-pointer hover:bg-accent"
+                      className="cursor-pointer"
                     >
-                      <UserPlus className="h-4 w-4 mr-2" />
-                      Adicionar ao CRM
+                      <Edit className="h-4 w-4 mr-2" />
+                      Editar nome
                     </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      console.log('🗑️ Excluir conversa');
-                      onDeleteConversation?.();
-                    }}
-                    className="text-destructive cursor-pointer hover:bg-destructive/10"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Excluir conversa
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    {!leadId && onCreateLead && (
+                      <DropdownMenuItem 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          console.log('➕ Adicionar ao CRM', conversationId);
+                          onCreateLead();
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Adicionar ao CRM
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        console.log('🗑️ Excluir conversa', conversationId);
+                        onDeleteConversation?.();
+                      }}
+                      className="text-destructive cursor-pointer"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Excluir conversa
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </div>
           

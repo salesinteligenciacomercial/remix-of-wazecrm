@@ -5539,14 +5539,22 @@ function Conversas() {
                 }
                 
                 // Marcar mensagens como lidas e visualizadas
+                // CRÍTICO: Preservar avatarUrl ao atualizar
                 const updatedConv = {
                   ...conv,
                   unread: 0,
+                  avatarUrl: conv.avatarUrl, // Garantir que avatar não seja perdido
                   messages: conv.messages.map(msg => ({
                     ...msg,
                     read: true
                   }))
                 };
+                
+                console.log('📸 [AVATAR-DEBUG] Selecionando conversa:', {
+                  id: conv.id,
+                  name: conv.contactName,
+                  avatarUrl: conv.avatarUrl?.substring(0, 50)
+                });
                 
                 setSelectedConv(updatedConv);
                 
@@ -5562,11 +5570,17 @@ function Conversas() {
                 // Verificar se existe lead vinculado
                 verificarLeadVinculado(conv);
                 
-                // Atualizar no localStorage
+                // Atualizar estado e localStorage - CRÍTICO: Preservar avatars
                 const updated = conversations.map(c => 
-                  c.id === conv.id ? updatedConv : c
+                  c.id === conv.id ? updatedConv : { ...c, avatarUrl: c.avatarUrl }
                 );
-                saveConversations(updated);
+                setConversations(updated); // Atualizar estado React
+                saveConversations(updated); // Salvar no localStorage
+                
+                console.log('📸 [AVATAR-DEBUG] Conversas atualizadas, avatars preservados:', {
+                  total: updated.length,
+                  comAvatar: updated.filter(c => c.avatarUrl).length
+                });
                 
                 // Persistir no Supabase: marcar mensagens recebidas como 'Lida'
                 try {
