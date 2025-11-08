@@ -126,7 +126,8 @@ export default function Dashboard() {
       if (!funisData || funisData.length === 0) {
         setEtapas([]);
         setSelectedFunil(null);
-      } else if (!selectedFunil) {
+      } else if (!selectedFunil || !funisData.some((f: any) => f.id === selectedFunil)) {
+        // Se não há funil selecionado OU o funil selecionado não existe mais, seleciona o primeiro
         setSelectedFunil(funisData[0].id);
       }
 
