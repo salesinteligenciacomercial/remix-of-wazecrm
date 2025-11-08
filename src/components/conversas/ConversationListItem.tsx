@@ -91,33 +91,34 @@ function ConversationListItemComponent({
       }`}
       onClick={onClick}
     >
-      {/* Botão de menu - MOVIDO PARA FORA DO FLEX */}
-  <div className="absolute top-2 right-2 z-50">
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger asChild onClick={handleMenuClick}>
+      {/* Botão de menu - SEMPRE VISÍVEL */}
+      <div className="absolute top-3 right-3 z-[60]">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <Button 
-              variant="ghost" 
+              variant="outline" 
               size="icon" 
-              className="h-8 w-8 hover:bg-accent"
+              className="h-9 w-9 bg-background hover:bg-accent border-border shadow-sm"
               onClick={(e) => {
-                console.log('🔘 Botão clicado!');
-                handleMenuClick(e);
+                e.stopPropagation();
+                console.log('🔘 Botão menu clicado!');
               }}
             >
-              <MoreVertical className="h-4 w-4" />
+              <MoreVertical className="h-4 w-4 text-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent 
             align="end" 
-            className="z-[100] bg-popover border border-border shadow-lg min-w-[180px]"
-            onClick={handleMenuClick}
+            className="w-56 bg-popover border-border shadow-md"
+            onClick={(e) => e.stopPropagation()}
           >
             <DropdownMenuItem 
               onClick={(e) => {
                 e.stopPropagation();
+                console.log('✏️ Editar nome');
                 onEditName?.();
               }}
-              className="cursor-pointer hover:bg-accent"
+              className="cursor-pointer"
             >
               <Edit className="h-4 w-4 mr-2" />
               Editar nome
@@ -126,9 +127,10 @@ function ConversationListItemComponent({
               <DropdownMenuItem 
                 onClick={(e) => {
                   e.stopPropagation();
+                  console.log('➕ Adicionar ao CRM');
                   onCreateLead();
                 }}
-                className="cursor-pointer hover:bg-accent"
+                className="cursor-pointer"
               >
                 <UserPlus className="h-4 w-4 mr-2" />
                 Adicionar ao CRM
@@ -137,9 +139,10 @@ function ConversationListItemComponent({
             <DropdownMenuItem 
               onClick={(e) => {
                 e.stopPropagation();
+                console.log('🗑️ Excluir conversa');
                 onDeleteConversation?.();
               }}
-              className="text-destructive cursor-pointer hover:bg-accent"
+              className="text-destructive cursor-pointer"
             >
               <Trash2 className="h-4 w-4 mr-2" />
               Excluir conversa
