@@ -29,10 +29,7 @@ const createTaskSchema = z.object({
   board_id: z.string().uuid('ID de board inválido').nullable().optional(),
   due_date: z.string().datetime().nullable().optional(),
   priority: z.enum(['baixa', 'media', 'alta', 'urgente']).optional(),
-  tags: z.array(z.string()).optional(),
-  checklist: z.array(z.object({ id: z.string().optional(), text: z.string(), done: z.boolean() })).optional(),
-  comments: z.array(z.object({ id: z.string().optional(), text: z.string(), author_id: z.string().uuid().nullable().optional(), created_at: z.string().optional() })).optional(),
-  responsaveis: z.array(z.string().uuid()).optional()
+  checklist: z.array(z.object({ id: z.string().optional(), text: z.string(), done: z.boolean() })).optional()
 });
 
 const moveTaskSchema = z.object({
@@ -52,10 +49,7 @@ const editTaskSchema = z.object({
   due_date: z.string().datetime().nullable().optional(),
   assignee_id: z.string().uuid('ID de responsável inválido').nullable().optional(),
   lead_id: z.string().uuid('ID de lead inválido').nullable().optional(),
-  tags: z.array(z.string()).optional(),
-  checklist: z.array(z.object({ id: z.string().optional(), text: z.string(), done: z.boolean() })).optional(),
-  comments: z.array(z.object({ id: z.string().optional(), text: z.string(), author_id: z.string().uuid().nullable().optional(), created_at: z.string().optional() })).optional(),
-  responsaveis: z.array(z.string().uuid()).optional()
+  checklist: z.array(z.object({ id: z.string().optional(), text: z.string(), done: z.boolean() })).optional()
 });
 
 const editBoardSchema = z.object({
@@ -224,10 +218,7 @@ serve(async (req) => {
             status: 'pendente',
             owner_id: user.id,
             company_id: companyId,
-            tags: validatedData.tags || [],
-            checklist: validatedData.checklist || [],
-            comments: validatedData.comments || [],
-            responsaveis: validatedData.responsaveis || []
+            checklist: validatedData.checklist || []
           }])
           .select()
           .single();
@@ -399,10 +390,7 @@ serve(async (req) => {
         if (validatedData.due_date !== undefined) updateData.due_date = validatedData.due_date;
         if (validatedData.assignee_id !== undefined) updateData.assignee_id = validatedData.assignee_id;
         if (validatedData.lead_id !== undefined) updateData.lead_id = validatedData.lead_id;
-        if (validatedData.tags !== undefined) updateData.tags = validatedData.tags;
         if (validatedData.checklist !== undefined) updateData.checklist = validatedData.checklist;
-        if (validatedData.comments !== undefined) updateData.comments = validatedData.comments;
-        if (validatedData.responsaveis !== undefined) updateData.responsaveis = validatedData.responsaveis;
 
         const { data: task, error } = await supabase
           .from("tasks")
