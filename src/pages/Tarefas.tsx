@@ -16,7 +16,7 @@ import React, { useState, useEffect, type ReactNode, useMemo, useCallback, useRe
 import { DndContext, DragEndEvent, closestCorners, useDroppable, DragOverlay, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Settings, Trash2, Pencil, MoreVertical } from "lucide-react";
+import { Plus, Settings, Trash2, Pencil, MoreVertical, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -130,7 +130,7 @@ const SortableColumn = React.memo(function SortableColumn({
   } = useSortable({ 
     id: column.id,
     data: {
-      type: 'column',
+      type: 'column', // ✅ CRÍTICO: Identifica drag de coluna
       column
     }
   });
@@ -138,20 +138,31 @@ const SortableColumn = React.memo(function SortableColumn({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.6 : 1,
+    scale: isDragging ? 0.95 : 1,
+    boxShadow: isDragging ? '0 10px 30px rgba(0,0,0,0.2)' : 'none',
   };
 
   return (
     <div 
       ref={setNodeRef} 
       style={style}
-      className="min-w-[300px] flex-shrink-0"
+      className="min-w-[300px] flex-shrink-0 relative group"
     >
-      <div 
-        className="text-white p-3 rounded-t-lg cursor-move" 
-        style={{ backgroundColor: column.cor }}
+      {/* Drag handle */}
+      <div
         {...attributes}
         {...listeners}
+        className="absolute -top-2 -left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+      >
+        <div className="bg-background border rounded-full p-1 shadow-md">
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </div>
+      
+      <div 
+        className="text-white p-3 rounded-t-lg" 
+        style={{ backgroundColor: column.cor }}
       >
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold">{column.nome}</h3>
@@ -262,6 +273,7 @@ export default function Tarefas() {
   const [loadingMore, setLoadingMore] = useState<Record<string, boolean>>({});
   const [editarQuadroOpen, setEditarQuadroOpen] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMovingRef = useRef(false); // ✅ NOVO: Bloquear operações concorrentes
 
   const TASKS_PER_PAGE = 20; // ✅ OTIMIZAÇÃO: Aumentado de 10 para 20
   const INITIAL_LOAD_LIMIT = 50; // ✅ OTIMIZAÇÃO: Limitar carga inicial
@@ -556,12 +568,20 @@ export default function Tarefas() {
       return;
     }
 
+    // 🔒 Prevenir operações concorrentes
+    if (isMovingRef.current) {
+      console.warn('[Drag&Drop] ⚠️ Operação já em andamento - bloqueado');
+      toast.warning("Aguarde a operação anterior finalizar");
+      setActiveTaskId(null);
+      return;
+    }
+
     const activeId = String(active.id);
     const activeData = (active as any).data?.current;
     
     // Verificar se estamos arrastando uma coluna
     if (activeData?.type === 'column') {
-      console.log('[Drag&Drop] Movendo coluna');
+      console.log('[Drag&Drop] 🔄 Movendo coluna');
       const overId = String(over.id);
       
       if (activeId !== overId) {
@@ -569,37 +589,59 @@ export default function Tarefas() {
         const newIndex = columnsFiltradas.findIndex(c => c.id === overId);
         
         if (oldIndex !== -1 && newIndex !== -1) {
-          // Reordenar colunas localmente
-          const reorderedColumns = arrayMove(columnsFiltradas, oldIndex, newIndex);
-          
-          // Atualizar posições no estado global
-          const updatedColumns = columns.map(col => {
-            const newPosition = reorderedColumns.findIndex(c => c.id === col.id);
-            if (newPosition !== -1) {
-              return { ...col, posicao: newPosition };
-            }
-            return col;
-          });
-          
-          setColumns(updatedColumns);
-          
-          // Atualizar posições no backend
           try {
-            await Promise.all(
-              reorderedColumns.map((col, index) =>
-                supabase.functions.invoke("api-tarefas", {
-                  body: {
-                    action: "editar_coluna",
-                    data: { column_id: col.id, posicao: index }
-                  }
-                })
-              )
+            // 🔒 Bloquear operações concorrentes
+            isMovingRef.current = true;
+
+            // Reordenar colunas localmente
+            const reorderedColumns = arrayMove(columnsFiltradas, oldIndex, newIndex);
+            
+            console.log('[Drag&Drop] 📋 Nova ordem:', reorderedColumns.map((c, i) => `${i}. ${c.nome}`));
+            
+            // 🎨 Atualizar UI imediatamente (optimistic update)
+            const updatedColumnsWithPosition = reorderedColumns.map((col, index) => ({
+              ...col,
+              posicao: index
+            }));
+
+            // Atualizar estado global com novas posições
+            setColumns(prev => prev.map(col => {
+              const updatedCol = updatedColumnsWithPosition.find(c => c.id === col.id);
+              return updatedCol || col;
+            }));
+            
+            // 💾 Atualizar posições no banco de dados
+            console.log('[Drag&Drop] 💾 Atualizando posições no banco...');
+            
+            const updatePromises = updatedColumnsWithPosition.map(col =>
+              supabase
+                .from('task_columns')
+                .update({ posicao: col.posicao })
+                .eq('id', col.id)
             );
+
+            const results = await Promise.all(updatePromises);
+            
+            // Verificar erros
+            const errors = results.filter(result => result.error);
+            if (errors.length > 0) {
+              console.error('[Drag&Drop] ❌ Erros nas atualizações:', errors);
+              throw new Error('Erro ao atualizar posições das colunas');
+            }
+
+            console.log('[Drag&Drop] ✅ Colunas reordenadas com sucesso');
             toast.success("Ordem das colunas atualizada!");
+            
           } catch (error) {
-            console.error('[Drag&Drop] Erro ao atualizar posições:', error);
+            console.error('[Drag&Drop] ❌ Erro ao reordenar colunas:', error);
             toast.error("Erro ao atualizar ordem das colunas");
-            carregarDados(); // Recarregar em caso de erro
+            // Recarregar dados em caso de erro
+            await carregarDados();
+          } finally {
+            // 🔓 Desbloquear após delay
+            setTimeout(() => {
+              isMovingRef.current = false;
+            }, 500);
           }
         }
       }
