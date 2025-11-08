@@ -86,75 +86,12 @@ function ConversationListItemComponent({
 
   return (
     <div
-      className={`relative p-4 pr-14 border-b border-border cursor-pointer transition-colors hover:bg-muted/50 ${
+      className={`relative p-4 border-b border-border cursor-pointer transition-colors hover:bg-muted/50 ${
         isSelected ? "bg-muted/70" : ""
       }`}
       onClick={onClick}
     >
-      {/* Botão de menu - SEMPRE VISÍVEL com z-index máximo */}
-      <div 
-        className="absolute top-2 right-2 z-[9999]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button 
-              variant="default" 
-              size="icon" 
-              className="h-10 w-10 bg-primary/90 hover:bg-primary text-primary-foreground shadow-lg border-2 border-background"
-              onClick={(e) => {
-                e.stopPropagation();
-                console.log('🔘 Botão menu clicado!');
-              }}
-            >
-              <MoreVertical className="h-5 w-5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent 
-            align="end" 
-            className="z-[10000] w-56 bg-background border-2 border-border shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <DropdownMenuItem 
-              onClick={(e) => {
-                e.stopPropagation();
-                console.log('✏️ Editar nome');
-                onEditName?.();
-              }}
-              className="cursor-pointer hover:bg-accent"
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Editar nome
-            </DropdownMenuItem>
-            {!leadId && onCreateLead && (
-              <DropdownMenuItem 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  console.log('➕ Adicionar ao CRM');
-                  onCreateLead();
-                }}
-                className="cursor-pointer hover:bg-accent"
-              >
-                <UserPlus className="h-4 w-4 mr-2" />
-                Adicionar ao CRM
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem 
-              onClick={(e) => {
-                e.stopPropagation();
-                console.log('🗑️ Excluir conversa');
-                onDeleteConversation?.();
-              }}
-              className="text-destructive cursor-pointer hover:bg-destructive/10"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Excluir conversa
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      
-      <div className="flex gap-3">
+      <div className="flex gap-3 items-start">
         <Avatar className="h-12 w-12 flex-shrink-0">
           <AvatarImage src={avatarUrl} alt={contactName} />
           <AvatarFallback className="bg-primary/10 text-primary">
@@ -163,29 +100,88 @@ function ConversationListItemComponent({
         </Avatar>
         
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between mb-1 gap-3">
+          <div className="flex items-start justify-between mb-1 gap-2">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               {getChannelIcon()}
               <span className="font-medium text-sm text-foreground truncate">
                 {contactName}
               </span>
             </div>
+            
+            {/* HORÁRIO E BADGE */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="flex flex-col items-end gap-1">
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {timestamp.toLocaleTimeString("pt-BR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-                {unread > 0 && (
-                  <Badge className="bg-[#25D366] hover:bg-[#25D366] text-white text-xs h-5 min-w-5 rounded-full flex items-center justify-center">
-                    {unread}
-                  </Badge>
-                )}
-              </div>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {timestamp.toLocaleTimeString("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+              {unread > 0 && (
+                <Badge className="bg-[#25D366] hover:bg-[#25D366] text-white text-xs h-5 min-w-5 rounded-full flex items-center justify-center">
+                  {unread}
+                </Badge>
+              )}
+              
+              {/* BOTÃO DE MENU - Agora no layout flex */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <Button 
+                    variant="default" 
+                    size="icon" 
+                    className="h-8 w-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md flex-shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log('🔘 Botão menu clicado!');
+                    }}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent 
+                  align="end" 
+                  className="z-[10000] w-56 bg-background border-2 border-border shadow-xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log('✏️ Editar nome');
+                      onEditName?.();
+                    }}
+                    className="cursor-pointer hover:bg-accent"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Editar nome
+                  </DropdownMenuItem>
+                  {!leadId && onCreateLead && (
+                    <DropdownMenuItem 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        console.log('➕ Adicionar ao CRM');
+                        onCreateLead();
+                      }}
+                      className="cursor-pointer hover:bg-accent"
+                    >
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Adicionar ao CRM
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log('🗑️ Excluir conversa');
+                      onDeleteConversation?.();
+                    }}
+                    className="text-destructive cursor-pointer hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir conversa
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
+          
           <p className="text-sm text-muted-foreground truncate">
             {lastMessage || "Sem histórico de conversa"}
           </p>
