@@ -66,15 +66,14 @@ interface Board {
   descricao?: string;
 }
 
-// ✅ MELHORADO: DroppableColumnContainer com feedback visual aprimorado
+// ✅ MELHORADO: DroppableColumnContainer com identificação clara da coluna
 const DroppableColumnContainer = React.memo(function DroppableColumnContainer({ columnId, children }: { columnId: string; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({
     id: columnId,
     data: { 
       type: 'column', 
       columnId: columnId,
-      // Adicionar metadados extras para melhor identificação
-      metadata: { columnId }
+      accepts: ['task'], // ✅ Aceita apenas tarefas
     },
   });
   
@@ -82,7 +81,7 @@ const DroppableColumnContainer = React.memo(function DroppableColumnContainer({ 
     <div
       ref={setNodeRef}
       data-column-id={columnId}
-      data-droppable-type="column"
+      data-droppable="true"
       className={`bg-secondary/20 p-4 rounded-b-lg min-h-[500px] transition-all duration-200 ${
         isOver 
           ? 'bg-primary/20 border-2 border-primary border-dashed shadow-lg scale-[1.02]' 
@@ -719,47 +718,32 @@ export default function Tarefas() {
     const overData: any = (over as any).data?.current || {};
     const overId = String(over.id);
     
+    console.log('[Drag&Drop] 🔍 Análise detalhada:', {
+      overId,
+      overDataType: overData?.type,
+      overColumnId: overData?.columnId,
+      overAccepts: overData?.accepts,
+      taskCurrentColumn: task.column_id
+    });
+    
     // ✅ MELHORADO: Validação robusta com múltiplos fallbacks
     let newColumnId: string | null = null;
     
-    // Prioridade 1: columnId direto do droppable (mais confiável)
-    if (overData?.columnId && typeof overData.columnId === 'string') {
-      newColumnId = overData.columnId;
-      console.log('[Drag&Drop] Usando columnId do droppable:', newColumnId);
+    // Prioridade 1: Se over.id é o ID de uma coluna válida
+    const isValidColumnId = columnsFiltradas.some(c => c.id === overId);
+    if (isValidColumnId) {
+      newColumnId = overId;
+      console.log('[Drag&Drop] ✅ Usando over.id como columnId (área vazia):', newColumnId);
     }
-    // Prioridade 2: metadata.columnId
-    else if (overData?.metadata?.columnId && typeof overData.metadata.columnId === 'string') {
-      newColumnId = overData.metadata.columnId;
-      console.log('[Drag&Drop] Usando columnId do metadata:', newColumnId);
+    // Prioridade 2: columnId direto do droppable data
+    else if (overData?.columnId && typeof overData.columnId === 'string') {
+      newColumnId = overData.columnId;
+      console.log('[Drag&Drop] ✅ Usando columnId do droppable data:', newColumnId);
     }
     // Prioridade 3: containerId do sortable (quando solta sobre outra tarefa)
     else if (overData?.sortable?.containerId && typeof overData.sortable.containerId === 'string') {
       newColumnId = overData.sortable.containerId;
-      console.log('[Drag&Drop] Usando containerId do sortable:', newColumnId);
-    }
-    // Prioridade 4: Tentar extrair do elemento DOM via data-column-id
-    else if (overId) {
-      // Verificar se overId é uma coluna válida
-      const isValidColumnId = columnsFiltradas.some(c => c.id === overId);
-      if (isValidColumnId) {
-        newColumnId = overId;
-        console.log('[Drag&Drop] Usando over.id como columnId:', newColumnId);
-      } else {
-        // Tentar buscar elemento pai com data-column-id
-        try {
-          const element = document.querySelector(`[data-column-id="${overId}"]`) ||
-                         document.querySelector(`[data-droppable-type="column"][data-column-id]`);
-          if (element) {
-            const domColumnId = element.getAttribute('data-column-id');
-            if (domColumnId) {
-              newColumnId = domColumnId;
-              console.log('[Drag&Drop] Usando columnId do DOM:', newColumnId);
-            }
-          }
-        } catch (e) {
-          console.warn('[Drag&Drop] Erro ao buscar no DOM:', e);
-        }
-      }
+      console.log('[Drag&Drop] ✅ Usando containerId do sortable (sobre tarefa):', newColumnId);
     }
 
     // ✅ MELHORADO: Validação detalhada antes de atualizar
