@@ -386,9 +386,14 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       <CardHeader className="relative pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 flex-1">
-            <span className="text-muted-foreground/70">
-              <GripVertical className="h-3 w-3 cursor-grab active:cursor-grabbing" {...attributes} {...listeners} />
-            </span>
+            {/* ✅ Handle de drag - maior e mais visível */}
+            <div 
+              {...attributes} 
+              {...listeners}
+              className="flex items-center justify-center w-6 h-6 -ml-1 cursor-grab active:cursor-grabbing hover:bg-muted/50 rounded transition-colors"
+            >
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+            </div>
             <div className={`h-1 w-1 rounded-full ${getPriorityColor(task.priority)} animate-pulse`} />
             <CardTitle className={`text-base font-semibold ${isOverdue ? 'text-red-700' : 'text-foreground'}`}>
               {task.title}

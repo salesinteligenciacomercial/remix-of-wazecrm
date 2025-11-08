@@ -282,7 +282,7 @@ export default function Tarefas() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
+      activationConstraint: { distance: 3 }, // ✅ Reduzido para tornar drag mais responsivo
     })
   );
 
