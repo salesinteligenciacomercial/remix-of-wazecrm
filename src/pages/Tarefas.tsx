@@ -138,7 +138,7 @@ const SortableColumn = React.memo(function SortableColumn({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition: transition || 'transform 200ms ease',
-    opacity: isDragging ? 0.6 : 1, // ✅ CORRIGIDO: Sem scale, apenas opacidade
+    // ✅ CORRIGIDO: Sem minimização visual durante drag
     boxShadow: isDragging ? '0 10px 30px rgba(0,0,0,0.2)' : 'none',
   };
 
@@ -632,24 +632,33 @@ export default function Tarefas() {
           console.log('[Drag&Drop] 🔒 Bloqueando realtime...');
           isMovingRef.current = true;
 
-          // Reordenar colunas localmente
+          // ✅ Reordenar colunas localmente primeiro
           const reorderedColumns = arrayMove(columnsFiltradas, oldIndex, newIndex);
           
           console.log('[Drag&Drop] 📋 Nova ordem:', reorderedColumns.map((c, i) => `${i}. ${c.nome}`));
           
-          // 🎨 Atualizar UI imediatamente (optimistic update)
+          // ✅ Atualizar posições nas colunas reordenadas
           const updatedColumnsWithPosition = reorderedColumns.map((col, index) => ({
             ...col,
             posicao: index
           }));
 
-          console.log('[Drag&Drop] 🎨 Atualizando UI com novas posições...');
+          console.log('[Drag&Drop] 🎨 Atualizando UI imediatamente...');
           
-          // Atualizar estado global com novas posições
-          setColumns(prev => prev.map(col => {
-            const updatedCol = updatedColumnsWithPosition.find(c => c.id === col.id);
-            return updatedCol || col;
-          }));
+          // ✅ CRÍTICO: Atualizar estado ANTES de persistir no banco
+          setColumns(prev => {
+            // Criar um mapa das novas posições
+            const newPositions = new Map(updatedColumnsWithPosition.map(c => [c.id, c.posicao]));
+            
+            // Atualizar todas as colunas com as novas posições
+            return prev.map(col => {
+              const newPosition = newPositions.get(col.id);
+              if (newPosition !== undefined) {
+                return { ...col, posicao: newPosition };
+              }
+              return col;
+            }).sort((a, b) => a.posicao - b.posicao); // ✅ Ordenar por posição
+          });
           
           // 💾 Atualizar posições no banco de dados
           console.log('[Drag&Drop] 💾 Atualizando posições no banco...');
@@ -674,6 +683,9 @@ export default function Tarefas() {
           console.log('[Drag&Drop] ✅ Colunas reordenadas com sucesso no banco!');
           toast.success("Ordem das colunas atualizada!");
           
+          // ✅ Aguardar um pouco antes de desbloquear realtime
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
         } catch (error) {
           console.error('[Drag&Drop] ❌ Erro ao reordenar colunas:', error);
           toast.error("Erro ao atualizar ordem das colunas");
@@ -681,12 +693,12 @@ export default function Tarefas() {
           console.log('[Drag&Drop] 🔄 Recarregando dados após erro...');
           await carregarDados();
         } finally {
-          // 🔓 Desbloquear após delay
-          console.log('[Drag&Drop] 🔓 Desbloqueando realtime após 1 segundo...');
+          // 🔓 Desbloquear após delay maior
+          console.log('[Drag&Drop] 🔓 Desbloqueando realtime após 2 segundos...');
           setTimeout(() => {
             isMovingRef.current = false;
             console.log('[Drag&Drop] ✓ Realtime desbloqueado');
-          }, 1000); // Aumentado de 500ms para 1s
+          }, 2000); // ✅ Aumentado para 2s para garantir persistência
         }
       } else {
         console.error('[Drag&Drop] ❌ Índices inválidos:', { oldIndex, newIndex });
