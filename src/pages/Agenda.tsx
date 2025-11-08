@@ -506,12 +506,11 @@ export default function Agenda() {
   useEffect(() => {
     const buscarAvatares = async () => {
       const leadsComTelefone = compromissos
-        .filter(c => c.lead_id && c.lead && (c.lead.phone || c.lead.telefone))
+        .filter(c => c.lead_id && c.lead && c.lead.phone)
         .map(c => ({ 
           id: c.lead_id!, 
           name: c.lead!.name, 
-          phone: c.lead!.phone, 
-          telefone: c.lead!.phone 
+          phone: c.lead!.phone
         }))
         .filter((lead, index, self) => 
           index === self.findIndex(l => l.id === lead.id)
@@ -538,8 +537,7 @@ export default function Agenda() {
         .map(l => ({ 
           id: l.compromisso!.lead_id!, 
           name: l.compromisso!.lead!.name, 
-          phone: l.compromisso!.lead!.phone, 
-          telefone: l.compromisso!.lead!.phone 
+          phone: l.compromisso!.lead!.phone
         }))
         .filter((lead, index, self) => 
           index === self.findIndex(l => l.id === lead.id)
@@ -641,7 +639,7 @@ export default function Agenda() {
         .order('nome');
 
       if (error) throw error;
-      setAgendas(data || []);
+      setAgendas((data || []) as unknown as Agenda[]);
     } catch (error) {
       console.error('Erro ao carregar agendas:', error);
     }
@@ -656,7 +654,6 @@ export default function Agenda() {
           compromisso:compromissos(
             id,
             lead_id,
-            titulo,
             data_hora_inicio,
             tipo_servico,
             lead:leads(name, phone)
@@ -665,7 +662,7 @@ export default function Agenda() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setLembretes(data || []);
+      setLembretes((data || []) as unknown as Lembrete[]);
     } catch (error) {
       console.error('Erro ao carregar lembretes:', error);
       toast.error("Erro ao carregar lembretes");
@@ -711,7 +708,7 @@ export default function Agenda() {
             .from('agendas')
             .select('*')
             .eq('status', 'ativo');
-          agendasDisponiveis = agendasData || [];
+          agendasDisponiveis = (agendasData || []) as unknown as Agenda[];
         }
         
         const agendaSelecionada = agendasDisponiveis.find(a => a.id === formData.agenda_id);

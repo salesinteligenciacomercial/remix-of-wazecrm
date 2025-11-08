@@ -144,7 +144,7 @@ export function EditarCompromissoDialog({
         .order("nome");
 
       if (error) throw error;
-      setAgendas(data || []);
+      setAgendas((data || []) as unknown as Agenda[]);
     } catch (error) {
       console.error("Erro ao carregar agendas:", error);
     }

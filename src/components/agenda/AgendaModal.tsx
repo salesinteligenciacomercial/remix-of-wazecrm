@@ -67,18 +67,30 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
       const inicioISO = inicio.toISOString();
       const fimISO = fim.toISOString();
 
-      // Buscar company_id (usuário ou do lead como fallback)
-      const { data: userRole } = await supabase
+      // Buscar company_id do usuário - VALIDAÇÃO CRÍTICA
+      console.log('🔍 [AgendaModal] Buscando company_id para usuário:', session.user.id);
+      
+      const { data: userRole, error: userRoleError } = await supabase
         .from("user_roles")
         .select("company_id")
         .eq("user_id", session.user.id)
         .single();
-      const { data: leadRow } = await supabase
-        .from('leads')
-        .select('company_id')
-        .eq('id', lead.id)
-        .single();
-      const companyId = userRole?.company_id || leadRow?.company_id || undefined;
+
+      if (userRoleError || !userRole) {
+        console.error('❌ [AgendaModal] Erro ao buscar user_role:', userRoleError);
+        toast.error("Erro: Usuário não está associado a uma empresa.");
+        return;
+      }
+
+      if (!userRole.company_id) {
+        console.error('❌ [AgendaModal] company_id não encontrado no user_role');
+        toast.error("Erro: Não foi possível identificar a empresa do usuário.");
+        return;
+      }
+
+      console.log('✅ [AgendaModal] company_id obtido:', userRole.company_id);
+      
+      const companyId = userRole.company_id;
 
       // Criar compromisso e obter o id
       const insertPayload: any = {
