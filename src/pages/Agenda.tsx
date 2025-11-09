@@ -323,7 +323,7 @@ export default function Agenda() {
     data: format(new Date(), "yyyy-MM-dd"),
     hora_inicio: "09:00",
     hora_fim: "10:00",
-    tipo_servico: "",
+    tipo_servico: "", // IMPORTANTE: deve começar vazio para forçar seleção
     observacoes: "",
     custo_estimado: "",
     enviar_lembrete: true,
@@ -671,8 +671,55 @@ export default function Agenda() {
 
   const criarCompromisso = async () => {
     try {
+      // === VALIDAÇÕES FRONTEND ===
+      
+      // 1. Validar tipo de serviço (obrigatório)
+      if (!formData.tipo_servico || formData.tipo_servico.trim() === '') {
+        toast.error("Por favor, selecione o tipo de serviço");
+        return;
+      }
+
+      // 2. Validar data e horários
+      if (!formData.data || !formData.hora_inicio || !formData.hora_fim) {
+        toast.error("Por favor, preencha data e horários");
+        return;
+      }
+
+      const dataHoraInicio = new Date(`${formData.data}T${formData.hora_inicio}`);
+      const dataHoraFim = new Date(`${formData.data}T${formData.hora_fim}`);
+      const agora = new Date();
+
+      // 3. Validar se data/hora não está no passado
+      if (dataHoraInicio < agora) {
+        toast.error("Não é possível agendar compromissos no passado");
+        return;
+      }
+
+      // 4. Validar se hora fim é depois da hora início
+      if (dataHoraFim <= dataHoraInicio) {
+        toast.error("O horário de término deve ser após o horário de início");
+        return;
+      }
+
+      // 5. Validar duração mínima (15 minutos)
+      const duracaoMinutos = (dataHoraFim.getTime() - dataHoraInicio.getTime()) / (1000 * 60);
+      if (duracaoMinutos < 15) {
+        toast.error("O compromisso deve ter no mínimo 15 minutos de duração");
+        return;
+      }
+
+      // 6. Validar valor estimado se preenchido
+      if (formData.custo_estimado && parseFloat(formData.custo_estimado) < 0) {
+        toast.error("O valor estimado não pode ser negativo");
+        return;
+      }
+
+      // === AUTENTICAÇÃO ===
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuário não autenticado");
+      if (!user) {
+        toast.error("Você precisa estar autenticado para criar um compromisso");
+        throw new Error("Usuário não autenticado");
+      }
 
       console.log('🔍 [DEBUG] Criando compromisso para usuário:', user.id);
 
@@ -695,9 +742,16 @@ export default function Agenda() {
       }
 
       console.log('✅ [DEBUG] company_id obtido:', userRole.company_id);
-
-      const dataHoraInicio = new Date(`${formData.data}T${formData.hora_inicio}`);
-      const dataHoraFim = new Date(`${formData.data}T${formData.hora_fim}`);
+      console.log('📋 [DEBUG] Dados do formulário:', {
+        titulo: formData.titulo,
+        tipo_servico: formData.tipo_servico,
+        data: formData.data,
+        hora_inicio: formData.hora_inicio,
+        hora_fim: formData.hora_fim,
+        agenda_id: formData.agenda_id || 'nenhuma',
+        lead_id: formData.lead_id || 'nenhum',
+        custo_estimado: formData.custo_estimado || '0'
+      });
 
       // Validar agenda se selecionada
       if (formData.agenda_id) {
@@ -816,6 +870,20 @@ export default function Agenda() {
 
       if (error) {
         console.error('❌ [DEBUG] Erro ao criar compromisso:', error);
+        
+        // Mensagens de erro mais específicas
+        if (error.message.includes('company_id')) {
+          toast.error("Erro: Empresa não identificada. Entre em contato com o suporte.");
+        } else if (error.message.includes('usuario_responsavel_id')) {
+          toast.error("Erro: Usuário responsável não identificado.");
+        } else if (error.message.includes('tipo_servico')) {
+          toast.error("Erro: Tipo de serviço é obrigatório.");
+        } else if (error.message.includes('violates check constraint')) {
+          toast.error("Erro: Os dados fornecidos não atendem aos requisitos.");
+        } else {
+          toast.error(`Erro ao criar compromisso: ${error.message}`);
+        }
+        
         throw error;
       }
 
@@ -893,9 +961,25 @@ export default function Agenda() {
       setNovoCompromissoOpen(false);
       limparFormulario();
       // Realtime já atualizará a lista; evitar recarga completa
-    } catch (error) {
-      console.error('Erro ao criar compromisso:', error);
-      toast.error("Erro ao criar compromisso");
+    } catch (error: any) {
+      console.error('❌ [ERRO DETALHADO] Erro ao criar compromisso:', {
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
+        formData: {
+          tipo_servico: formData.tipo_servico,
+          data: formData.data,
+          horarios: `${formData.hora_inicio} - ${formData.hora_fim}`,
+          agenda: formData.agenda_id || 'nenhuma',
+          lead: formData.lead_id || 'nenhum'
+        }
+      });
+      
+      // Se não mostrou mensagem específica antes, mostrar genérica
+      if (!error?.message?.includes('Erro:')) {
+        toast.error("Erro ao criar compromisso. Verifique os campos e tente novamente.");
+      }
     }
   };
 
@@ -941,6 +1025,7 @@ export default function Agenda() {
   };
 
   const limparFormulario = () => {
+    console.log('🧹 [DEBUG] Limpando formulário de agendamento');
     setFormData({
       titulo: "",
       agenda_id: "",
@@ -948,7 +1033,7 @@ export default function Agenda() {
       data: format(new Date(), "yyyy-MM-dd"),
       hora_inicio: "09:00",
       hora_fim: "10:00",
-      tipo_servico: "",
+      tipo_servico: "", // Limpar para forçar nova seleção
       observacoes: "",
       custo_estimado: "",
       enviar_lembrete: true,
@@ -958,6 +1043,13 @@ export default function Agenda() {
     setLeadSearch("");
     setSelectedLeadName("");
   };
+
+  // Limpar formulário quando fechar o dialog
+  useEffect(() => {
+    if (!novoCompromissoOpen) {
+      limparFormulario();
+    }
+  }, [novoCompromissoOpen]);
 
   // Memoizar compromissos do mês para evitar recálculos desnecessários
   const compromissosDoMes = useMemo(() => {
@@ -1190,36 +1282,46 @@ export default function Agenda() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Data</Label>
+                    <Label>Data <span className="text-destructive">*</span></Label>
                     <Input 
                       type="date" 
                       value={formData.data}
+                      min={format(new Date(), "yyyy-MM-dd")}
                       onChange={(e) => setFormData({...formData, data: e.target.value})}
+                      className={!formData.data ? "border-amber-500" : ""}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Horário de início</Label>
+                    <Label>Horário de início <span className="text-destructive">*</span></Label>
                     <Input 
                       type="time" 
                       value={formData.hora_inicio}
                       onChange={(e) => setFormData({...formData, hora_inicio: e.target.value})}
+                      className={!formData.hora_inicio ? "border-amber-500" : ""}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Horário de término</Label>
+                  <Label>Horário de término <span className="text-destructive">*</span></Label>
                   <Input 
                     type="time" 
                     value={formData.hora_fim}
                     onChange={(e) => setFormData({...formData, hora_fim: e.target.value})}
+                    className={!formData.hora_fim ? "border-amber-500" : ""}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Duração mínima de 15 minutos
+                  </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Tipo de serviço</Label>
-                  <Select value={formData.tipo_servico} onValueChange={(value) => setFormData({...formData, tipo_servico: value})}>
-                    <SelectTrigger>
+                  <Label>Tipo de serviço <span className="text-destructive">*</span></Label>
+                  <Select 
+                    value={formData.tipo_servico} 
+                    onValueChange={(value) => setFormData({...formData, tipo_servico: value})}
+                  >
+                    <SelectTrigger className={!formData.tipo_servico ? "border-amber-500" : ""}>
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1231,6 +1333,9 @@ export default function Agenda() {
                       <SelectItem value="outro">Outro</SelectItem>
                     </SelectContent>
                   </Select>
+                  {!formData.tipo_servico && (
+                    <p className="text-xs text-amber-600">Campo obrigatório</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -1299,9 +1404,19 @@ export default function Agenda() {
                   </>
                 )}
 
-                <Button className="w-full" onClick={criarCompromisso}>
-                  Criar Agendamento
+                <Button 
+                  className="w-full" 
+                  onClick={criarCompromisso}
+                  disabled={!formData.tipo_servico || !formData.data || !formData.hora_inicio || !formData.hora_fim}
+                >
+                  {!formData.tipo_servico || !formData.data || !formData.hora_inicio || !formData.hora_fim 
+                    ? "Preencha os campos obrigatórios"
+                    : "Criar Agendamento"
+                  }
                 </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  <span className="text-destructive">*</span> Campos obrigatórios
+                </p>
               </div>
             </DialogContent>
           </Dialog>
