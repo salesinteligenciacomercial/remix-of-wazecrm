@@ -126,27 +126,26 @@ function ConversationListItemComponent({
               )}
               
               {/* BOTÃO DE MENU - SEMPRE VISÍVEL */}
-              <div className="relative z-50">
-                <DropdownMenu modal={false}>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-7 w-7 hover:bg-accent hover:text-accent-foreground shrink-0 ml-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('🔘 Menu clicado!', { conversationId, leadId });
-                      }}
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent 
-                    align="end" 
-                    side="bottom"
-                    className="w-56 z-[99999]"
-                    onClick={(e) => e.stopPropagation()}
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 hover:bg-accent hover:text-accent-foreground shrink-0 opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log('🔘 Menu clicado!', { conversationId, leadId });
+                    }}
                   >
+                    <MoreVertical className="h-4 w-4 text-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent 
+                  align="end" 
+                  side="bottom"
+                  className="w-56 z-[99999] bg-background border border-border"
+                  onClick={(e) => e.stopPropagation()}
+                >
                     <DropdownMenuItem 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -183,8 +182,7 @@ function ConversationListItemComponent({
                       Excluir conversa
                     </DropdownMenuItem>
                   </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              </DropdownMenu>
             </div>
           </div>
           
