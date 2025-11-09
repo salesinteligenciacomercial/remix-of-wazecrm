@@ -685,12 +685,14 @@ export default function Agenda() {
         return;
       }
 
-      const dataHoraInicio = new Date(`${formData.data}T${formData.hora_inicio}`);
-      const dataHoraFim = new Date(`${formData.data}T${formData.hora_fim}`);
+      const dataHoraInicio = new Date(`${formData.data}T${formData.hora_inicio}:00`);
+      const dataHoraFim = new Date(`${formData.data}T${formData.hora_fim}:00`);
+      
+      // 3. Validar se data/hora não está no passado (com margem de 1 minuto para evitar falsos positivos)
       const agora = new Date();
-
-      // 3. Validar se data/hora não está no passado
-      if (dataHoraInicio < agora) {
+      const umMinutoAtras = new Date(agora.getTime() - 60000); // 1 minuto de margem
+      
+      if (dataHoraInicio < umMinutoAtras) {
         toast.error("Não é possível agendar compromissos no passado");
         return;
       }
