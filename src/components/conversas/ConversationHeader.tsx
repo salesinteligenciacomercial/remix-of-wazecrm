@@ -114,8 +114,8 @@ import { useEffect, useState } from "react";
      }
    };
 
-   return (
-     <div className="sticky top-0 z-20 bg-background border-b border-border shadow-md backdrop-blur-sm">
+  return (
+    <div className="w-full bg-background border-b border-border shadow-sm backdrop-blur-sm">
        <div className="p-4 space-y-3">
          <div className="flex items-center justify-between">
            <div className="flex items-center gap-3">

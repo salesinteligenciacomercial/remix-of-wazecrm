@@ -17,9 +17,9 @@ import {
   MessageSquare, Instagram, Facebook, Send, Search, Bot, User, Paperclip, 
   Clock, Calendar, Zap, FileText, Tag, TrendingUp, ArrowRightLeft, Image as ImageIcon,
   Mic, FileUp, Check, CheckCheck, Phone, Video, Info, DollarSign, Users, Bell, Download, Volume2,
-  RefreshCw, CheckCircle2, AlertCircle, Reply, CheckSquare, X, Plus, Trash2, Wifi, WifiOff, Loader2
+  RefreshCw, CheckCircle2, AlertCircle, Reply, CheckSquare, X, Plus, Trash2, Loader2
 } from "lucide-react";
-import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +30,7 @@ import { MessageItem } from "@/components/conversas/MessageItem";
 import { AudioRecorder } from "@/components/conversas/AudioRecorder";
 import { MediaUpload } from "@/components/conversas/MediaUpload";
 import { NovaConversaDialog } from "@/components/conversas/NovaConversaDialog";
+import { EditarLeadDialog } from "@/components/funil/EditarLeadDialog";
 import { ResponsaveisManager } from "@/components/conversas/ResponsaveisManager";
 import { AgendaModal } from "@/components/agenda/AgendaModal";
 import { TarefaModal } from "@/components/tarefas/TarefaModal";
@@ -146,7 +147,7 @@ const REMINDERS_KEY = "continuum_reminders";
 const SCHEDULED_MESSAGES_KEY = "continuum_scheduled_messages";
 const MEETINGS_KEY = "continuum_meetings";
 const AI_MODE_KEY = "continuum_ai_mode";
-const CACHE_MAX_AGE = 5 * 60 * 1000; // Cache válido por 5 minutos
+const CACHE_MAX_AGE = 10 * 60 * 1000; // Cache válido por 10 minutos (aumentado para melhor performance)
 
 const initialConversations: Conversation[] = [
   {
@@ -639,11 +640,14 @@ function Conversas() {
   }, [conversations, filter, debouncedSearchTerm, conversationsLimit]);
 
   // Mensagens exibidas: sempre refletir state atual da conversa selecionada (evitar cache obsoleto)
+  // ⚡ CORREÇÃO: Não limitar mensagens exibidas - mostrar todas para preservar histórico
   const displayedMessages = useMemo(() => {
     if (!selectedConv) return [];
     const messages = selectedConv.messages || [];
-    return messages.slice(-messagesLimit);
-  }, [selectedConv?.id, selectedConv?.messages, messagesLimit]);
+    // ⚡ CORREÇÃO CRÍTICA: Mostrar TODAS as mensagens, não limitar
+    // O limite de 50 era para performance, mas estava fazendo mensagens desaparecerem
+    return messages; // Remover .slice(-messagesLimit) para preservar histórico completo
+  }, [selectedConv?.id, selectedConv?.messages]);
 
   // MELHORIA: Função para carregar mais mensagens (lazy loading)
   const loadMoreMessages = useCallback(async () => {
@@ -1527,48 +1531,77 @@ function Conversas() {
     };
   }, [leadVinculado?.id]);
 
-  // 🔑 CRÍTICO: Carregar company_id PRIMEIRO antes de qualquer outra coisa
+  // 🔑 CRÍTICO: Carregar company_id PRIMEIRO (otimizado para ser mais rápido)
   useEffect(() => {
     console.log('🚀 Componente Conversas montado');
     
     const carregarDadosIniciais = async () => {
       try {
-        // 1. Buscar sessão e company_id PRIMEIRO
-        const { data: { user } } = await supabase.auth.getUser();
+        // ⚡ OTIMIZAÇÃO: Tentar usar sessão existente primeiro (mais rápido)
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
         
-        if (!user) {
-          console.error('❌ Usuário não autenticado');
+        if (!userId) {
+          // Fallback: buscar usuário se sessão não estiver disponível
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            console.error('❌ Usuário não autenticado');
+            return;
+          }
+          
+          // Buscar company_id
+          const { data: userRole } = await supabase
+            .from('user_roles')
+            .select('company_id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          if (userRole?.company_id) {
+            console.log('🏢 Company ID carregado:', userRole.company_id);
+            setUserCompanyId(userRole.company_id);
+            userCompanyIdRef.current = userRole.company_id;
+          }
+          
+          // Buscar perfil
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, email")
+            .eq("id", user.id)
+            .maybeSingle();
+          
+          if (profile) {
+            setUserName(profile.full_name || profile.email);
+            console.log('👤 Usuário logado:', profile.full_name || profile.email);
+          }
           return;
         }
         
-        // 2. Buscar company_id (funciona para conta principal e subcontas)
-        const { data: userRole } = await supabase
-          .from('user_roles')
-          .select('company_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
+        // ⚡ OTIMIZAÇÃO: Buscar company_id e perfil em paralelo (mais rápido)
+        const [userRoleResult, profileResult] = await Promise.all([
+          supabase
+            .from('user_roles')
+            .select('company_id')
+            .eq('user_id', userId)
+            .maybeSingle(),
+          supabase
+            .from("profiles")
+            .select("full_name, email")
+            .eq("id", userId)
+            .maybeSingle()
+        ]);
 
-        if (!userRole?.company_id) {
+        if (userRoleResult.data?.company_id) {
+          console.log('🏢 Company ID carregado:', userRoleResult.data.company_id);
+          setUserCompanyId(userRoleResult.data.company_id);
+          userCompanyIdRef.current = userRoleResult.data.company_id;
+        } else {
           console.error('❌ Erro: Usuário sem empresa associada');
           toast.error('Erro: Usuário sem empresa associada');
-          return;
         }
-
-        // 3. Definir company_id IMEDIATAMENTE
-        console.log('🏢 Company ID carregado:', userRole.company_id);
-        setUserCompanyId(userRole.company_id);
-        userCompanyIdRef.current = userRole.company_id; // ⚡ ATUALIZAR REF IMEDIATAMENTE
         
-        // 4. Buscar perfil do usuário
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("full_name, email")
-          .eq("id", user.id)
-          .maybeSingle();
-        
-        if (profile) {
-          setUserName(profile.full_name || profile.email);
-          console.log('👤 Usuário logado:', profile.full_name || profile.email);
+        if (profileResult.data) {
+          setUserName(profileResult.data.full_name || profileResult.data.email);
+          console.log('👤 Usuário logado:', profileResult.data.full_name || profileResult.data.email);
         }
         
       } catch (error) {
@@ -2292,8 +2325,8 @@ function Conversas() {
                   contactName: nomeValido,
                   avatarUrl: profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(nomeValido)}&background=10b981&color=fff`,
                   channel: 'whatsapp' as const,
-                  status: 'waiting' as const,
-                  isGroup: isRealGroupRealtime,
+                  status: 'waiting' as const, // Nova conversa sempre começa como waiting
+                  isGroup: isRealGroupRealtime, // ⚡ CRÍTICO: Preservar flag de grupo
                   messages: [{
                     id: novaConversa.id,
                     content: novaConversa.mensagem,
@@ -2341,21 +2374,98 @@ function Conversas() {
                     // Verificar se a mensagem já não existe (evitar duplicatas)
                     // CORREÇÃO: Verificar também por conteúdo e timestamp para evitar duplicatas de mensagens enviadas localmente
                     const novaMensagem = novaConvFormatted.messages[0];
-                    const mensagemJaExiste = conversaExistente.messages.some(m => {
+                    const mensagemIndexLocal = conversaExistente.messages.findIndex(m => {
                       // Verificar por ID (mensagens do banco)
                       if (m.id === novaMensagem.id) return true;
                       
-                      // Verificar por conteúdo + timestamp próximo (mensagens enviadas localmente)
-                      // Se for mensagem do usuário com mesmo conteúdo nos últimos 5 segundos, é duplicata
+                      // ⚡ CORREÇÃO MELHORADA: Verificar por conteúdo + timestamp próximo (mensagens enviadas localmente)
+                      // Se for mensagem do usuário com mesmo conteúdo nos últimos 10 segundos, é duplicata
+                      // Aumentar margem de tempo para 10 segundos para garantir detecção
                       if (m.sender === 'user' && novaMensagem.sender === 'user' && m.content === novaMensagem.content) {
                         const diffMs = Math.abs(new Date(m.timestamp).getTime() - new Date(novaMensagem.timestamp).getTime());
-                        if (diffMs < 5000) return true; // 5 segundos de margem
+                        if (diffMs < 10000) return true; // 10 segundos de margem (aumentado de 5 para 10)
+                      }
+                      
+                      // ⚡ NOVA DETECÇÃO: Verificar também por conteúdo similar (caso haja pequenas diferenças)
+                      // Se for mensagem do usuário com conteúdo muito similar nos últimos 10 segundos
+                      if (m.sender === 'user' && novaMensagem.sender === 'user') {
+                        const contentSimilar = m.content.trim() === novaMensagem.content.trim() || 
+                                              (m.content.trim().length > 0 && 
+                                               novaMensagem.content.trim().length > 0 &&
+                                               Math.abs(m.content.trim().length - novaMensagem.content.trim().length) <= 2);
+                        if (contentSimilar) {
+                          const diffMs = Math.abs(new Date(m.timestamp).getTime() - new Date(novaMensagem.timestamp).getTime());
+                          if (diffMs < 10000) return true; // 10 segundos de margem
+                        }
                       }
                       
                       return false;
                     });
                     
-                    if (!mensagemJaExiste) {
+                    const mensagemJaExiste = mensagemIndexLocal >= 0;
+                    
+                    // ⚡ CORREÇÃO CRÍTICA: Se a mensagem já existe localmente (enviada pelo usuário),
+                    // substituir pela versão do banco (com ID real) para garantir sincronização
+                    if (mensagemJaExiste && mensagemIndexLocal >= 0) {
+                      // Substituir mensagem local pela versão do banco (com ID real)
+                      const mensagensAtualizadas = [...conversaExistente.messages];
+                      mensagensAtualizadas[mensagemIndexLocal] = novaMensagem; // Substituir com ID do banco
+                      
+                      // Resolver replyTo por conteúdo citado (melhor esforço)
+                      if (novaConversa.replied_to_message) {
+                        const target = mensagensAtualizadas.find(msg => msg.content === novaConversa.replied_to_message);
+                        if (target) {
+                          mensagensAtualizadas[mensagemIndexLocal] = { ...mensagensAtualizadas[mensagemIndexLocal], replyTo: target.id };
+                        }
+                      }
+                      
+                      // CORREÇÃO: Se a conversa existente tem apenas o número como nome 
+                      // e a nova mensagem traz um nome válido, atualizar o nome
+                      const nomeExistenteEhNumero = /^\d+$/.test(conversaExistente.contactName);
+                      const novoNomeValido = novaConvFormatted.contactName && 
+                                            novaConvFormatted.contactName.trim() !== '' && 
+                                            !/^\d+$/.test(novaConvFormatted.contactName);
+                      
+                      const nomeAtualizado = (nomeExistenteEhNumero && novoNomeValido) 
+                        ? novaConvFormatted.contactName 
+                        : conversaExistente.contactName;
+                      
+                      // ⚡ CORREÇÃO: Preservar status 'resolved' quando mensagem é substituída (duplicata)
+                      // Não mudar status se conversa estava finalizada
+                      const statusPreservado = conversaExistente.status === 'resolved' ? 'resolved' : conversaExistente.status;
+                      
+                      updated[existingIndex] = {
+                        ...conversaExistente,
+                        contactName: nomeAtualizado,
+                        messages: mensagensAtualizadas, // Usar mensagens atualizadas (com ID do banco)
+                        lastMessage: novaConvFormatted.lastMessage,
+                        status: statusPreservado, // ⚡ PRESERVAR status (especialmente 'resolved')
+                        unread: isOpen ? 0 : ((novaConversa.fromme === true || novaConversa.status === 'Enviada') ? conversaExistente.unread : conversaExistente.unread),
+                        avatarUrl: novoNomeValido ? novaConvFormatted.avatarUrl : conversaExistente.avatarUrl,
+                      };
+                      
+                      // Salvar referência da conversa atualizada
+                      conversaAtualizada = updated[existingIndex];
+                      
+                      // Mover para o topo
+                      const [item] = updated.splice(existingIndex, 1);
+                      updated.unshift(item);
+                      
+                      console.log('🔄 Mensagem local substituída pela versão do banco (ID real):', {
+                        idLocal: conversaExistente.messages[mensagemIndexLocal]?.id,
+                        idBanco: novaMensagem.id,
+                        contato: nomeAtualizado,
+                        isOpen: isOpen
+                      });
+                      
+                      // ⚡ CORREÇÃO CRÍTICA: Se a conversa está aberta, atualizar selectedConv IMEDIATAMENTE
+                      // mesmo quando a mensagem é substituída (duplicata)
+                      if (isOpen) {
+                        console.log('🔄 Atualizando selectedConv com mensagem substituída (duplicata)');
+                        setSelectedConv(conversaAtualizada);
+                      }
+                    } else if (!mensagemJaExiste) {
+                      // Mensagem nova - adicionar ao histórico
                       // Resolver replyTo por conteúdo citado (melhor esforço)
                       if (novaConversa.replied_to_message) {
                         const target = conversaExistente.messages.find(msg => msg.content === novaConversa.replied_to_message);
@@ -2374,11 +2484,38 @@ function Conversas() {
                         ? novaConvFormatted.contactName 
                         : conversaExistente.contactName;
                       
+                      // ⚡ CORREÇÃO CRÍTICA: Preservar TODAS as mensagens existentes ao adicionar nova
+                      // Ordenar por timestamp para manter ordem cronológica
+                      const todasMensagens = [...conversaExistente.messages, ...novaConvFormatted.messages]
+                        .sort((a, b) => {
+                          const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+                          const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+                          return timeA - timeB;
+                        });
+                      
+                      // ⚡ CORREÇÃO CRÍTICA: Preservar status 'resolved' se conversa estava finalizada
+                      // Só mudar para 'waiting' se for uma nova mensagem RECEBIDA do contato (não enviada pelo usuário)
+                      let novoStatus = conversaExistente.status;
+                      if (conversaExistente.status === 'resolved') {
+                        // Se estava finalizada e chegou nova mensagem do CONTATO, reabrir (mudar para waiting)
+                        // Se foi mensagem do USUÁRIO, manter como resolved
+                        if (novaConversa.fromme !== true && novaConversa.status !== 'Enviada') {
+                          novoStatus = 'waiting'; // Nova mensagem do contato = reabrir conversa
+                          console.log('🔄 Conversa finalizada reaberta - nova mensagem do contato recebida');
+                        } else {
+                          novoStatus = 'resolved'; // Mensagem do usuário = manter finalizada
+                        }
+                      } else {
+                        // Se não estava finalizada, atualizar status normalmente
+                        novoStatus = (novaConversa.fromme === true || novaConversa.status === 'Enviada') ? 'answered' : 'waiting';
+                      }
+                      
                       updated[existingIndex] = {
                         ...conversaExistente,
                         contactName: nomeAtualizado, // Usar nome atualizado
-                        messages: [...conversaExistente.messages, ...novaConvFormatted.messages],
+                        messages: todasMensagens, // ⚡ PRESERVAR TODAS as mensagens (histórico completo)
                         lastMessage: novaConvFormatted.lastMessage,
+                        status: novoStatus, // ⚡ PRESERVAR ou atualizar status corretamente
                         // CORREÇÃO: Só aumentar unread se for mensagem recebida do contato (não enviada pelo usuário)
                         unread: isOpen ? 0 : ((novaConversa.fromme === true || novaConversa.status === 'Enviada') ? conversaExistente.unread : conversaExistente.unread + 1),
                         avatarUrl: novoNomeValido ? novaConvFormatted.avatarUrl : conversaExistente.avatarUrl, // Atualizar avatar se nome foi atualizado
@@ -2394,10 +2531,16 @@ function Conversas() {
                       console.log('✅ Mensagem adicionada à conversa existente:', {
                         contato: nomeAtualizado,
                         totalMensagens: updated[0].messages.length,
-                        nomeAtualizado: nomeExistenteEhNumero && novoNomeValido
+                        nomeAtualizado: nomeExistenteEhNumero && novoNomeValido,
+                        isOpen: isOpen
                       });
-                    } else {
-                      console.log('⚠️ Mensagem duplicada ignorada');
+                      
+                      // ⚡ CORREÇÃO CRÍTICA: Se a conversa está aberta, atualizar selectedConv IMEDIATAMENTE
+                      // quando uma nova mensagem é adicionada (não duplicata)
+                      if (isOpen) {
+                        console.log('🔄 Atualizando selectedConv com nova mensagem adicionada');
+                        setSelectedConv(conversaAtualizada);
+                      }
                     }
                     
                     return updated;
@@ -2412,9 +2555,29 @@ function Conversas() {
                 });
                 
                 // CRÍTICO: Se a conversa recebida é a que está aberta, atualizar selectedConv IMEDIATAMENTE
-                if (isOpen && conversaAtualizada) {
-                  console.log('🔄 Atualizando conversa selecionada com nova mensagem em tempo real');
-                  setSelectedConv(conversaAtualizada);
+                // ⚡ CORREÇÃO: Sempre atualizar se a conversa está aberta, mesmo se mensagem foi detectada como duplicata
+                if (isOpen) {
+                  // Se conversaAtualizada não foi definida (não foi tratada acima), buscar da lista atualizada
+                  if (!conversaAtualizada) {
+                    // Buscar a conversa atualizada da lista usando setTimeout para garantir que o estado foi atualizado
+                    setTimeout(() => {
+                      setConversations(prev => {
+                        const convAtual = prev.find(c => 
+                          c.id === telefoneNormalizado || 
+                          c.phoneNumber === telefoneNormalizado
+                        );
+                        if (convAtual) {
+                          console.log('🔄 Atualizando conversa selecionada (busca na lista):', convAtual.contactName);
+                          setSelectedConv(convAtual);
+                        }
+                        return prev;
+                      });
+                    }, 0);
+                  } else {
+                    console.log('🔄 Atualizando conversa selecionada com nova mensagem em tempo real');
+                    setSelectedConv(conversaAtualizada);
+                  }
+                  
                   // Marcar a mensagem recebida como lida imediatamente no Supabase
                   if (novaConversa.status === 'Recebida') {
                     try {
@@ -2739,13 +2902,10 @@ function Conversas() {
     };
   }, [userCompanyId]); // ⚡ DEPENDÊNCIA CRÍTICA: Reconfigurar quando company_id mudar
   
-  // 📡 Carregar conversas quando userCompanyId estiver disponível - INSTANTÂNEO
+  // ⚡ INSTANTÂNEO: Carregar do cache IMEDIATAMENTE (sem esperar userCompanyId)
+  // ⚡ CRÍTICO: Executar ANTES de qualquer outra coisa para carregamento instantâneo
   useEffect(() => {
-    if (!userCompanyId || initialLoadRef.current) return;
-    
-    initialLoadRef.current = true;
-    
-    // ⚡ INSTANTÂNEO: Carregar do cache primeiro (tempo 0)
+    // ⚡ Carregar do cache instantaneamente (tempo 0) - SEM esperar userCompanyId ou qualquer outra coisa
     const loadFromCache = () => {
       try {
         const cachedData = sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
@@ -2753,6 +2913,7 @@ function Conversas() {
         
         if (cachedData && cacheTimestamp) {
           const age = Date.now() - parseInt(cacheTimestamp, 10);
+          // ⚡ Aumentar tempo de cache válido para 10 minutos (era 5)
           if (age < CACHE_MAX_AGE) {
             const cachedConversations = JSON.parse(cachedData);
             
@@ -2765,8 +2926,9 @@ function Conversas() {
               }))
             }));
             
-            console.log(`⚡ [CACHE] Carregando ${restoredConversations.length} conversas do cache (${age}ms atrás)`);
+            console.log(`⚡ [CACHE] Carregando ${restoredConversations.length} conversas do cache INSTANTANEAMENTE (${age}ms atrás)`);
             setConversations(restoredConversations);
+            // ⚡ IMPORTANTE: Não setar loadingConversations como false aqui, pois pode estar carregando do Supabase
             return true; // Cache válido
           } else {
             console.log('⏰ [CACHE] Cache expirado, recarregando...');
@@ -2780,16 +2942,32 @@ function Conversas() {
       return false; // Cache inválido ou não existe
     };
     
-    // Carregar do cache instantaneamente
-    const hasCache = loadFromCache();
+    // ⚡ Carregar do cache IMEDIATAMENTE (sem esperar nada)
+    loadFromCache();
+  }, []); // ⚡ Executar apenas uma vez no mount - INSTANTÂNEO (antes de tudo)
+
+  // 📡 Carregar conversas do Supabase quando userCompanyId estiver disponível (em background)
+  // ⚡ IMPORTANTE: Isso roda em background, não bloqueia a exibição das conversas do cache
+  useEffect(() => {
+    if (!userCompanyId) return;
     
-    // Carregar do Supabase em background (atualizar cache)
-    console.log('🔄 [LOAD] Carregando conversas do Supabase em background...');
-    loadSupabaseConversations(false).then(() => {
-      console.log('✅ [LOAD] Conversas atualizadas do Supabase');
-    }).catch((err) => {
-      console.error('❌ [LOAD] Erro ao carregar conversas:', err);
-    });
+    // ⚡ Usar flag separada para evitar múltiplos carregamentos
+    if (initialLoadRef.current) return;
+    initialLoadRef.current = true;
+    
+    // ⚡ OTIMIZAÇÃO: Aguardar um pouco para não competir com o carregamento do cache
+    // Mas não bloquear a UI - apenas atualizar em background
+    setTimeout(() => {
+      // Carregar do Supabase em background (atualizar cache)
+      console.log('🔄 [LOAD] Carregando conversas do Supabase em background...');
+      loadSupabaseConversations(false).then(() => {
+        console.log('✅ [LOAD] Conversas atualizadas do Supabase');
+      }).catch((err) => {
+        console.error('❌ [LOAD] Erro ao carregar conversas:', err);
+        // ⚡ Se falhar, permitir tentar novamente
+        initialLoadRef.current = false;
+      });
+    }, 100); // ⚡ Pequeno delay para garantir que cache foi carregado primeiro
   }, [userCompanyId]); // ⚡ Carregar quando company_id estiver disponível
 
   // Fallback: polling com jitter enquanto desconectado
@@ -2999,7 +3177,7 @@ function Conversas() {
         conv.mensagem && !conv.mensagem.includes('{{')
       );
 
-      // Agrupar conversas por telefone e pegar apenas última mensagem de cada
+      // Agrupar conversas por telefone - PRESERVAR TODAS as mensagens (não limitar)
       const conversasMap = new Map<string, any[]>();
       validConversas.forEach(conv => {
         const isGroup = conv.is_group || /@g\.us$/.test(conv.numero || '');
@@ -3010,11 +3188,9 @@ function Conversas() {
         }
         const mensagens = conversasMap.get(key)!;
         mensagens.push(conv);
-        // Manter apenas últimas mensagens ordenadas por data
-        if (mensagens.length > MESSAGES_PER_CONVERSATION) {
-          mensagens.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-          mensagens.splice(MESSAGES_PER_CONVERSATION);
-        }
+        // ⚡ CORREÇÃO CRÍTICA: NÃO limitar mensagens aqui - preservar todas para não perder histórico
+        // Apenas ordenar por data (mais recente primeiro)
+        mensagens.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       });
 
       // ⚡ OTIMIZAÇÃO: Buscar apenas leads dos telefones encontrados (não todos) - MAIS RÁPIDO
@@ -3097,10 +3273,10 @@ function Conversas() {
           contactName = telefone;
         }
         
-        // ⚡ OTIMIZAÇÃO: Processar apenas últimas mensagens (já limitado acima)
-        const messagensFormatadas: Message[] = mensagens
+        // ⚡ CORREÇÃO CRÍTICA: Processar TODAS as mensagens (não limitar) para preservar histórico completo
+        // Apenas para exibição inicial na lista, mostrar últimas 3, mas manter todas no estado
+        const todasMensagensFormatadas: Message[] = mensagens
           .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-          .slice(-MESSAGES_PER_CONVERSATION)
           .map(m => ({
             id: m.id || `msg-${Date.now()}-${Math.random()}`,
             content: m.mensagem || '',
@@ -3111,6 +3287,10 @@ function Conversas() {
             read: m.status !== 'Recebida',
             mediaUrl: m.midia_url,
           }));
+        
+        // ⚡ CORREÇÃO: Para exibição na lista, usar apenas últimas 3 mensagens
+        // Mas manter TODAS as mensagens no estado da conversa
+        const messagensFormatadas = todasMensagensFormatadas;
 
         // ⚡ CORREÇÃO: Determinar status baseado na última mensagem
         const ultimaMensagem = messagensFormatadas[messagensFormatadas.length - 1];
@@ -3195,17 +3375,70 @@ function Conversas() {
             const tel = c.phoneNumber || c.id;
             return !telefonesDoBanco.has(tel);
           });
-          const merged = [...conversasRealtime, ...novasConversas];
+          
+          // ⚡ CORREÇÃO CRÍTICA: Preservar mensagens existentes quando mesclar conversas
+          // Se uma conversa já existe e tem muitas mensagens (histórico completo), preservar todas
+          const merged = novasConversas.map(novaConv => {
+            const telefoneNova = novaConv.phoneNumber || novaConv.id;
+            const conversaExistente = prev.find(c => {
+              const tel = c.phoneNumber || c.id;
+              return tel === telefoneNova;
+            });
+            
+            // Se conversa existente tem histórico completo (mais de 3 mensagens), preservar todas
+            if (conversaExistente && conversaExistente.messages.length > 3) {
+              // Mesclar mensagens: adicionar novas do banco que não existem localmente
+              const idsExistentes = new Set(conversaExistente.messages.map(m => m.id));
+              const novasMensagens = novaConv.messages.filter(m => !idsExistentes.has(m.id));
+              
+              // Combinar mensagens existentes com novas, ordenadas por timestamp
+              const todasMensagens = [...conversaExistente.messages, ...novasMensagens]
+                .sort((a, b) => {
+                  const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+                  const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+                  return timeA - timeB;
+                });
+              
+              // ⚡ CORREÇÃO CRÍTICA: Preservar status 'resolved' se conversa estava finalizada
+              // Só atualizar status se conversa não estava finalizada
+              const statusPreservado = conversaExistente.status === 'resolved' 
+                ? 'resolved' 
+                : novaConv.status;
+              
+              console.log(`🔄 Preservando ${conversaExistente.messages.length} mensagens existentes + ${novasMensagens.length} novas para ${novaConv.contactName}, status: ${statusPreservado}`);
+              
+              return {
+                ...novaConv,
+                messages: todasMensagens, // Preservar histórico completo
+                lastMessage: novaConv.lastMessage, // Atualizar última mensagem
+                status: statusPreservado, // ⚡ PRESERVAR status 'resolved' se estava finalizada
+                isGroup: conversaExistente.isGroup, // ⚡ PRESERVAR flag de grupo
+              };
+            }
+            
+            // Se não tem histórico completo, usar as mensagens do banco mas preservar status se estava finalizada
+            const statusPreservado = conversaExistente?.status === 'resolved' 
+              ? 'resolved' 
+              : novaConv.status;
+            
+            return {
+              ...novaConv,
+              status: statusPreservado, // ⚡ PRESERVAR status 'resolved' se estava finalizada
+              isGroup: conversaExistente?.isGroup ?? novaConv.isGroup, // ⚡ PRESERVAR flag de grupo
+            };
+          });
+          
+          const finalMerged = [...conversasRealtime, ...merged];
           
           // ⚡ INSTANTÂNEO: Salvar no cache imediatamente
           try {
-            sessionStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(merged));
+            sessionStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(finalMerged));
             sessionStorage.setItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY, Date.now().toString());
           } catch (e) {
             console.warn('⚠️ [CACHE] Erro ao salvar cache:', e);
           }
           
-          return merged;
+          return finalMerged;
         });
         // Não mostrar toast se carregou do cache (já está visível)
       }
@@ -5757,29 +5990,6 @@ function Conversas() {
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-semibold text-foreground">Conversas</h1>
             <div className="flex gap-2 items-center">
-              {/* MELHORIA: Indicador visual de status de conexão realtime */}
-              <div 
-                className="flex items-center px-2 py-1 rounded-md"
-                title={
-                  realtimeConnectionStatus === 'connected' 
-                    ? 'Conectado ao servidor em tempo real' 
-                    : realtimeConnectionStatus === 'connecting'
-                    ? `Reconectando... (tentativa ${realtimeReconnectAttempts})`
-                    : realtimeConnectionStatus === 'error'
-                    ? 'Erro na conexão - tentando reconectar'
-                    : 'Desconectado'
-                }
-              >
-                {realtimeConnectionStatus === 'connected' ? (
-                  <Wifi className="h-4 w-4 text-green-500" />
-                ) : realtimeConnectionStatus === 'connecting' ? (
-                  <Loader2 className="h-4 w-4 text-yellow-500 animate-spin" />
-                ) : realtimeConnectionStatus === 'error' ? (
-                  <WifiOff className="h-4 w-4 text-red-500" />
-                ) : (
-                  <WifiOff className="h-4 w-4 text-gray-400" />
-                )}
-              </div>
               <NovaConversaDialog
                 onNovaConversa={(nome, numero) => {
                   // Verificar se já existe conversa com esse número
@@ -5890,7 +6100,7 @@ function Conversas() {
 
         {/* Conversations List */}
         <ScrollArea className="flex-1">
-          {loadingConversations ? (
+          {loadingConversations && conversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">Carregando conversas...</p>
@@ -6054,10 +6264,11 @@ function Conversas() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden relative">
         {selectedConv ? (
           <>
-            <ConversationHeader
+            <div className="sticky top-0 z-50 flex-shrink-0">
+              <ConversationHeader
               contactName={selectedConv.contactName}
               channel={selectedConv.channel}
               avatarUrl={selectedConv.avatarUrl}
@@ -6077,13 +6288,22 @@ function Conversas() {
               isContactInactive={isContactInactive}
               onRestoreConversation={handleRestoreConversation}
               restoringConversation={restoringConversation}
-            />
+              />
+            </div>
 
             <div className="flex flex-1 overflow-hidden">
               {/* Messages Area */}
-              <div className="flex-1 flex flex-col">
-                {/* Messages */}
-                <ScrollArea className="flex-1 p-6 bg-[#e5ddd5]" style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d9d9d9' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')" }}>
+              <div className="flex-1 flex flex-col min-w-0 h-full">
+                {/* Messages - Área de scroll sem barra lateral visível */}
+                <div 
+                  id="messages-scroll-container"
+                  className="flex-1 overflow-y-auto p-6 bg-[#e5ddd5] messages-scroll-area" 
+                  style={{ 
+                    backgroundImage: "url('data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d9d9d9' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')",
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none'
+                  } as React.CSSProperties}
+                >
                   {/* Indicador de histórico */}
                   {selectedConv.phoneNumber && historyStats[selectedConv.phoneNumber] && (
                     <div className="flex justify-center mb-4">
@@ -6133,7 +6353,7 @@ function Conversas() {
                     )}
                     <div ref={messagesEndRef} />
                   </div>
-                </ScrollArea>
+                </div>
 
                 {/* Input Area */}
                 <div className="bg-background border-t border-border p-4">
@@ -6207,12 +6427,57 @@ function Conversas() {
                       </h4>
                       
                       {/* Status de vinculação com Lead */}
-                      <div className="mb-3">
+                      <div className="mb-3 space-y-2">
                         {leadVinculado ? (
-                          <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-green-500/10 text-green-600 border-green-500/20">
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span className="text-xs font-medium">Lead vinculado no CRM</span>
-                          </Badge>
+                          <>
+                            <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-green-500/10 text-green-600 border-green-500/20">
+                              <CheckCircle2 className="h-3 w-3" />
+                              <span className="text-xs font-medium">Lead vinculado no CRM</span>
+                            </Badge>
+                            {/* Botão para editar informações do lead - usando o mesmo componente completo do menu Leads */}
+                            <EditarLeadDialog
+                              lead={{
+                                id: leadVinculado.id,
+                                nome: leadVinculado.name || selectedConv.contactName,
+                                telefone: leadVinculado.phone || leadVinculado.telefone || selectedConv.phoneNumber || selectedConv.id,
+                                email: leadVinculado.email || "",
+                                cpf: leadVinculado.cpf || "",
+                                value: leadVinculado.value || 0,
+                                company: leadVinculado.company || "",
+                                company_id: leadVinculado.company_id,
+                                source: leadVinculado.source || "",
+                                notes: leadVinculado.notes || "",
+                                tags: leadVinculado.tags || [],
+                                funil_id: leadVinculado.funil_id || undefined,
+                                etapa_id: leadVinculado.etapa_id || undefined,
+                              }}
+                              onLeadUpdated={async () => {
+                                // Recarregar informações do lead após atualização
+                                if (selectedConv.phoneNumber || selectedConv.id) {
+                                  const telefoneFormatado = safeFormatPhoneNumber(selectedConv.phoneNumber || selectedConv.id);
+                                  const { data: leadAtualizado } = await supabase
+                                    .from('leads')
+                                    .select('*')
+                                    .or(`phone.eq.${telefoneFormatado},telefone.eq.${telefoneFormatado}`)
+                                    .maybeSingle();
+                                  
+                                  if (leadAtualizado) {
+                                    setLeadVinculado(leadAtualizado);
+                                    setLeadsVinculados(prev => ({
+                                      ...prev,
+                                      [selectedConv.id]: leadAtualizado.id,
+                                      [safeFormatPhoneNumber(selectedConv.id)]: leadAtualizado.id
+                                    }));
+                                  }
+                                }
+                              }}
+                              triggerButton={
+                                <Button size="sm" variant="outline" className="w-full">
+                                  <FileText className="h-3 w-3 mr-2" /> Editar Informações
+                                </Button>
+                              }
+                            />
+                          </>
                         ) : (
                           <div className="space-y-2">
                             <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-amber-500/10 text-amber-600 border-amber-500/20">

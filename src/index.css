@@ -143,3 +143,92 @@ All colors MUST be HSL.
 .animate-slide-in-right {
   animation: slide-in-right 0.3s ease-out;
 }
+
+/* Esconder scrollbar mas manter funcionalidade de scroll */
+.scrollbar-hide {
+  /* Firefox */
+  scrollbar-width: none !important;
+  /* IE and Edge */
+  -ms-overflow-style: none !important;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  /* Chrome, Safari, Opera */
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Esconder scrollbar na área de mensagens - Especificidade MÁXIMA com ID */
+#messages-scroll-container,
+div#messages-scroll-container,
+div.messages-scroll-area,
+.messages-scroll-area,
+[class*="messages-scroll-area"] {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-color: transparent transparent !important; /* Firefox */
+}
+
+#messages-scroll-container::-webkit-scrollbar,
+div#messages-scroll-container::-webkit-scrollbar,
+div.messages-scroll-area::-webkit-scrollbar,
+.messages-scroll-area::-webkit-scrollbar,
+[class*="messages-scroll-area"]::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Opera */
+  width: 0px !important;
+  height: 0px !important;
+  background: transparent !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  visibility: hidden !important;
+}
+
+#messages-scroll-container::-webkit-scrollbar-thumb,
+div#messages-scroll-container::-webkit-scrollbar-thumb,
+div.messages-scroll-area::-webkit-scrollbar-thumb,
+.messages-scroll-area::-webkit-scrollbar-thumb,
+[class*="messages-scroll-area"]::-webkit-scrollbar-thumb {
+  display: none !important;
+  background: transparent !important;
+  width: 0px !important;
+  height: 0px !important;
+  visibility: hidden !important;
+}
+
+#messages-scroll-container::-webkit-scrollbar-track,
+div#messages-scroll-container::-webkit-scrollbar-track,
+div.messages-scroll-area::-webkit-scrollbar-track,
+.messages-scroll-area::-webkit-scrollbar-track,
+[class*="messages-scroll-area"]::-webkit-scrollbar-track {
+  display: none !important;
+  background: transparent !important;
+  width: 0px !important;
+  height: 0px !important;
+  visibility: hidden !important;
+}
+
+#messages-scroll-container::-webkit-scrollbar-button,
+div#messages-scroll-container::-webkit-scrollbar-button,
+div.messages-scroll-area::-webkit-scrollbar-button,
+.messages-scroll-area::-webkit-scrollbar-button,
+[class*="messages-scroll-area"]::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+  visibility: hidden !important;
+}
+
+/* Força remoção de scrollbar em qualquer elemento filho também */
+#messages-scroll-container *,
+.messages-scroll-area * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+#messages-scroll-container *::-webkit-scrollbar,
+.messages-scroll-area *::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+}
