@@ -5712,18 +5712,30 @@ function Conversas() {
         .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
         .single();
 
+      // CORREÇÃO: Inserir mensagem de finalização com status Resolvida
       await supabase.from('conversas').insert([{
         numero: numeroNormalizado,
         telefone_formatado: numeroNormalizado,
         mensagem,
         origem: selectedConv.channel === 'whatsapp' ? 'WhatsApp' : selectedConv.channel === 'instagram' ? 'Instagram' : 'Facebook',
-        status: 'Enviada',
+        status: 'Resolvida',
         tipo_mensagem: 'text',
         nome_contato: selectedConv.contactName,
         company_id: userRole?.company_id,
       }]);
 
-      // Atualizar estados para resolvido
+      // CORREÇÃO: Atualizar TODAS as mensagens anteriores desta conversa para status Resolvida
+      const telefoneFormatado = numeroNormalizado.replace(/[^0-9]/g, '');
+      await supabase
+        .from('conversas')
+        .update({ status: 'Resolvida' })
+        .eq('telefone_formatado', telefoneFormatado)
+        .eq('company_id', userRole?.company_id)
+        .neq('status', 'Resolvida'); // Só atualizar as que ainda não estão resolvidas
+
+      console.log('✅ Conversa marcada como resolvida no banco');
+
+      // Atualizar estados localmente
       const updatedConv: Conversation = { ...selectedConv, status: 'resolved', lastMessage: mensagem };
       const updatedList = conversations.map(c => c.id === selectedConv.id ? updatedConv : c);
       saveConversations(updatedList);
