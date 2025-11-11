@@ -234,7 +234,6 @@ function Conversas() {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'idle'>('idle');
   const [leadVinculado, setLeadVinculado] = useState<any>(null);
-  const [verificandoLead, setVerificandoLead] = useState(false);
   const [mostrarBotaoCriarLead, setMostrarBotaoCriarLead] = useState(false);
   const [leadsVinculados, setLeadsVinculados] = useState<Record<string, string>>({}); // conversationId -> leadId
   const [onlineStatus, setOnlineStatus] = useState<Record<string, 'online' | 'offline' | 'unknown'>>({}); // telefone -> status
@@ -5338,7 +5337,6 @@ function Conversas() {
   // MELHORIA: Função para verificar se existe lead vinculado com validação e logs aprimorados
   const verificarLeadVinculado = async (conversation: Conversation) => {
     try {
-      setVerificandoLead(true);
       setMostrarBotaoCriarLead(false);
       
       console.log('🔍 [LEAD] Verificando lead vinculado para conversa:', {
@@ -5350,7 +5348,6 @@ function Conversas() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         console.warn('⚠️ [LEAD] Usuário não autenticado - não é possível verificar lead');
-        setVerificandoLead(false);
         return;
       }
       
@@ -5362,7 +5359,6 @@ function Conversas() {
 
       if (!userRole?.company_id) {
         console.warn('⚠️ [LEAD] Usuário sem company_id - não é possível verificar lead');
-        setVerificandoLead(false);
         return;
       }
 
@@ -5374,7 +5370,6 @@ function Conversas() {
         console.warn('⚠️ [LEAD] Telefone inválido - não é possível verificar lead:', phoneRaw);
         setLeadVinculado(null);
         setMostrarBotaoCriarLead(true);
-        setVerificandoLead(false);
         return;
       }
       
@@ -5453,8 +5448,6 @@ function Conversas() {
       });
       setLeadVinculado(null);
       setMostrarBotaoCriarLead(false);
-    } finally {
-      setVerificandoLead(false);
     }
   };
 
@@ -6053,7 +6046,6 @@ function Conversas() {
               onToggleInfoPanel={() => setShowInfoPanel(!showInfoPanel)}
               syncStatus={syncStatus}
               leadVinculado={leadVinculado}
-              verificandoLead={verificandoLead}
               mostrarBotaoCriarLead={mostrarBotaoCriarLead}
               onCriarLead={criarLeadManualmente}
               onFinalizeAtendimento={finalizarAtendimento}
@@ -6192,12 +6184,7 @@ function Conversas() {
                       
                       {/* Status de vinculação com Lead */}
                       <div className="mb-3">
-                        {verificandoLead ? (
-                          <Badge variant="outline" className="w-full justify-center gap-2 py-2">
-                            <RefreshCw className="h-3 w-3 animate-spin" />
-                            <span className="text-xs">Verificando...</span>
-                          </Badge>
-                        ) : leadVinculado ? (
+                        {leadVinculado ? (
                           <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-green-500/10 text-green-600 border-green-500/20">
                             <CheckCircle2 className="h-3 w-3" />
                             <span className="text-xs font-medium">Lead vinculado no CRM</span>

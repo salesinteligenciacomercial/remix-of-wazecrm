@@ -22,7 +22,6 @@ import { useEffect, useState } from "react";
    onToggleInfoPanel: () => void;
    syncStatus?: SyncStatus;
    leadVinculado?: any;
-   verificandoLead?: boolean;
    mostrarBotaoCriarLead?: boolean;
    onCriarLead?: () => void;
    onFinalizeAtendimento?: (message: string) => void;
@@ -45,7 +44,6 @@ import { useEffect, useState } from "react";
    onToggleInfoPanel,
    syncStatus = 'idle',
    leadVinculado,
-   verificandoLead = false,
    mostrarBotaoCriarLead = false,
    onCriarLead,
    onFinalizeAtendimento,
@@ -148,35 +146,29 @@ import { useEffect, useState } from "react";
                   </h2>
                   {getSyncStatusBadge()}
                 </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <span className="capitalize font-medium">{channel}</span>
-                  </div>
-                 {/* Badge de Lead Vinculado */}
-                 {verificandoLead && (
-                   <Badge variant="outline" className="gap-1">
-                     <Loader2 className="h-3 w-3 animate-spin" />
-                     Verificando...
-                   </Badge>
-                 )}
-                 {!verificandoLead && leadVinculado && (
-                   <Badge className="gap-1 bg-green-600 hover:bg-green-700">
-                     <Check className="h-3 w-3" />
-                     Lead Cadastrado
-                   </Badge>
-                 )}
-                 {!verificandoLead && mostrarBotaoCriarLead && onCriarLead && (
-                   <Button
-                     variant="outline"
-                     size="sm"
-                     onClick={onCriarLead}
-                     className="h-6 text-xs gap-1"
-                   >
-                     <Plus className="h-3 w-3" />
-                     Criar Lead no CRM
-                   </Button>
-                 )}
-               </div>
+                 <div className="flex items-center gap-2 text-xs">
+                   <div className="flex items-center gap-1.5 text-muted-foreground">
+                     <span className="capitalize font-medium">{channel}</span>
+                   </div>
+                  {/* Badge de Lead Vinculado */}
+                  {leadVinculado && (
+                    <Badge className="gap-1 bg-green-600 hover:bg-green-700">
+                      <Check className="h-3 w-3" />
+                      Lead Cadastrado
+                    </Badge>
+                  )}
+                  {mostrarBotaoCriarLead && onCriarLead && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onCriarLead}
+                      className="h-6 text-xs gap-1"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Criar Lead no CRM
+                    </Button>
+                  )}
+                </div>
              </div>
             </div>
              {/* Ações */}
