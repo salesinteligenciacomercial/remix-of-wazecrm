@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Calendar as CalendarIcon, Plus, Clock, User, Filter, Settings, Bell, CheckCircle2, XCircle, AlertCircle, Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, Clock, User, Filter, Settings, Bell, CheckCircle2, XCircle, AlertCircle, Trash2, Search, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -120,6 +120,9 @@ export default function Agenda() {
   const [activeTab, setActiveTab] = useState<string>("agenda");
   const [filtroStatusLembrete, setFiltroStatusLembrete] = useState<string>("all");
   const [filtroCanalLembrete, setFiltroCanalLembrete] = useState<string>("all");
+  const [buscaCompromissos, setBuscaCompromissos] = useState<string>("");
+  const [filtroAgenda, setFiltroAgenda] = useState<string>("all");
+  const [filtroTipoServico, setFiltroTipoServico] = useState<string>("all");
   
   // Cache de meses carregados para lazy loading
   const [loadedMonths, setLoadedMonths] = useState<Set<string>>(new Set());
@@ -323,12 +326,14 @@ export default function Agenda() {
     data: format(new Date(), "yyyy-MM-dd"),
     hora_inicio: "09:00",
     hora_fim: "10:00",
-    tipo_servico: "", // IMPORTANTE: deve começar vazio para forçar seleção
+    tipo_servico: "", // Opcional - pode ficar vazio
     observacoes: "",
     custo_estimado: "",
     enviar_lembrete: true,
     horas_antecedencia: "24",
     destinatario_lembrete: "lead",
+    enviar_confirmacao: false, // Nova opção: enviar confirmação imediata
+    notificar_responsavel: true, // Nova opção: notificar responsável via push
   });
   
   const [leadSearch, setLeadSearch] = useState("");
@@ -556,6 +561,14 @@ export default function Agenda() {
     }
   }, [lembretes, buscarAvatarLead, leadAvatars]);
 
+  // Solicitar permissão de notificação ao carregar
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      // Não solicitar automaticamente, apenas quando o usuário tentar usar
+      console.log('🔔 [NOTIFICAÇÃO] Permissão de notificação disponível');
+    }
+  }, []);
+
   useEffect(() => {
     // Carregar apenas compromissos do mês atual inicialmente (otimização)
     carregarCompromissosDoMes();
@@ -673,13 +686,7 @@ export default function Agenda() {
     try {
       // === VALIDAÇÕES FRONTEND ===
       
-      // 1. Validar tipo de serviço (obrigatório)
-      if (!formData.tipo_servico || formData.tipo_servico.trim() === '') {
-        toast.error("Por favor, selecione o tipo de serviço");
-        return;
-      }
-
-      // 2. Validar data e horários
+      // 1. Validar data e horários
       if (!formData.data || !formData.hora_inicio || !formData.hora_fim) {
         toast.error("Por favor, preencha data e horários");
         return;
@@ -851,21 +858,39 @@ export default function Agenda() {
       }
 
       // Criar compromisso COM company_id e agenda_id
+      // Garantir que tipo_servico não seja string vazia
+      const tipoServicoFinal = formData.tipo_servico?.trim() || 'outro';
+      
+      // Preparar dados do compromisso
+      const compromissoData: any = {
+        agenda_id: formData.agenda_id || null,
+        lead_id: formData.lead_id || null,
+        usuario_responsavel_id: user.id,
+        owner_id: user.id,
+        company_id: userRole.company_id,
+        data_hora_inicio: dataHoraInicio.toISOString(),
+        data_hora_fim: dataHoraFim.toISOString(),
+        tipo_servico: tipoServicoFinal,
+        status: 'agendado',
+      };
+
+      // Adicionar campos opcionais apenas se preenchidos
+      if (formData.titulo?.trim()) {
+        compromissoData.titulo = formData.titulo.trim();
+      }
+      if (formData.observacoes?.trim()) {
+        compromissoData.observacoes = formData.observacoes.trim();
+      }
+      if (formData.custo_estimado) {
+        const custo = parseFloat(formData.custo_estimado);
+        if (!isNaN(custo) && custo > 0) {
+          compromissoData.custo_estimado = custo;
+        }
+      }
+      
       const { data: compromisso, error } = await supabase
         .from('compromissos')
-        .insert({
-          agenda_id: formData.agenda_id || null,
-          lead_id: formData.lead_id || null,
-          usuario_responsavel_id: user.id,
-          owner_id: user.id,
-          company_id: userRole.company_id, // Adicionar company_id ao compromisso
-          data_hora_inicio: dataHoraInicio.toISOString(),
-          data_hora_fim: dataHoraFim.toISOString(),
-          tipo_servico: formData.tipo_servico,
-          observacoes: formData.observacoes,
-          custo_estimado: formData.custo_estimado ? parseFloat(formData.custo_estimado) : null,
-          status: 'agendado',
-        })
+        .insert(compromissoData)
         .select()
         .single();
 
@@ -878,7 +903,7 @@ export default function Agenda() {
         } else if (error.message.includes('usuario_responsavel_id')) {
           toast.error("Erro: Usuário responsável não identificado.");
         } else if (error.message.includes('tipo_servico')) {
-          toast.error("Erro: Tipo de serviço é obrigatório.");
+          toast.error("Erro: Problema com o tipo de serviço. Tente novamente.");
         } else if (error.message.includes('violates check constraint')) {
           toast.error("Erro: Os dados fornecidos não atendem aos requisitos.");
         } else {
@@ -889,6 +914,94 @@ export default function Agenda() {
       }
 
       console.log('✅ [DEBUG] Compromisso criado com sucesso:', compromisso?.id);
+
+      // Enviar mensagem de confirmação imediata se solicitado
+      if (formData.enviar_confirmacao && compromisso && formData.lead_id) {
+        try {
+          const leadSelecionado = leads.find(l => l.id === formData.lead_id);
+          if (leadSelecionado && (leadSelecionado.phone || leadSelecionado.telefone)) {
+            const telefone = normalizePhoneBR(leadSelecionado.phone || leadSelecionado.telefone || '');
+            if (telefone) {
+              // Mensagem de confirmação formatada e personalizada
+              const tipoServicoFormatado = formData.tipo_servico?.trim()
+                ? formData.tipo_servico.charAt(0).toUpperCase() + formData.tipo_servico.slice(1)
+                : null;
+              const mensagemConfirmacao = `✅ *Compromisso Confirmado!*\n\n` +
+                `Olá ${leadSelecionado.name}! Seu compromisso foi agendado com sucesso.\n\n` +
+                `📅 *Data:* ${format(dataHoraInicio, "dd/MM/yyyy", { locale: ptBR })}\n` +
+                `🕐 *Horário:* ${format(dataHoraInicio, "HH:mm", { locale: ptBR })} às ${format(dataHoraFim, "HH:mm", { locale: ptBR })}\n` +
+                (tipoServicoFormatado ? `📋 *Tipo:* ${tipoServicoFormatado}\n` : '') +
+                (formData.titulo ? `📝 *Título:* ${formData.titulo}\n` : '') +
+                (formData.observacoes ? `\n💬 *Observações:*\n${formData.observacoes}\n` : '') +
+                `\n✅ *Status:* Agendado\n\n` +
+                `Aguardamos você no dia e horário agendados!\n\n` +
+                `_Esta é uma confirmação automática do seu agendamento._`;
+
+              console.log('📱 [CONFIRMAÇÃO] Enviando mensagem de confirmação imediata...');
+              
+              const { error: confirmacaoError } = await supabase.functions.invoke('enviar-whatsapp', {
+                body: {
+                  numero: telefone,
+                  mensagem: mensagemConfirmacao,
+                  company_id: userRole.company_id
+                }
+              });
+
+              if (confirmacaoError) {
+                console.error('❌ [CONFIRMAÇÃO] Erro ao enviar confirmação:', confirmacaoError);
+                toast.warning("Compromisso criado, mas não foi possível enviar a confirmação imediata.");
+              } else {
+                console.log('✅ [CONFIRMAÇÃO] Mensagem de confirmação enviada com sucesso!');
+                toast.success("Compromisso criado e confirmação enviada ao cliente!");
+              }
+            }
+          }
+        } catch (error) {
+          console.error('❌ [CONFIRMAÇÃO] Erro ao enviar confirmação:', error);
+          toast.warning("Compromisso criado, mas houve erro ao enviar a confirmação.");
+        }
+      }
+
+      // Enviar notificação push para o responsável se solicitado
+      if (formData.notificar_responsavel && compromisso) {
+        try {
+          if ('Notification' in window && Notification.permission === 'granted') {
+            const tipoServicoNotif = formData.tipo_servico || 'Compromisso';
+            const mensagemNotificacao = `Novo compromisso agendado: ${tipoServicoNotif}\n` +
+              `${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`;
+
+            new Notification('Novo Compromisso Agendado', {
+              body: mensagemNotificacao,
+              icon: '/favicon.ico',
+              badge: '/favicon.ico',
+              tag: `compromisso-${compromisso.id}`,
+              requireInteraction: false,
+            });
+
+            console.log('🔔 [NOTIFICAÇÃO] Notificação push enviada ao responsável');
+          } else if ('Notification' in window && Notification.permission !== 'denied') {
+            // Solicitar permissão se ainda não foi solicitada
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+              const tipoServicoNotif = formData.tipo_servico || 'Compromisso';
+              const mensagemNotificacao = `Novo compromisso agendado: ${tipoServicoNotif}\n` +
+                `${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`;
+
+              new Notification('Novo Compromisso Agendado', {
+                body: mensagemNotificacao,
+                icon: '/favicon.ico',
+                badge: '/favicon.ico',
+                tag: `compromisso-${compromisso.id}`,
+              });
+
+              console.log('🔔 [NOTIFICAÇÃO] Permissão concedida e notificação enviada');
+            }
+          }
+        } catch (error) {
+          console.error('❌ [NOTIFICAÇÃO] Erro ao enviar notificação push:', error);
+          // Não mostrar erro ao usuário, pois é opcional
+        }
+      }
 
       // Criar lembrete se solicitado
       if (formData.enviar_lembrete && compromisso) {
@@ -907,16 +1020,23 @@ export default function Agenda() {
           .eq('id', user.id)
           .single();
 
+        // Validar e processar horas de antecedência
+        const horasAntecedencia = parseInt(formData.horas_antecedencia) || 24;
+        if (horasAntecedencia < 0) {
+          toast.error("As horas de antecedência não podem ser negativas");
+          return;
+        }
+
         // Calcular data de envio do lembrete
         const dataEnvio = new Date(dataHoraInicio);
-        dataEnvio.setHours(dataEnvio.getHours() - parseInt(formData.horas_antecedencia));
+        dataEnvio.setHours(dataEnvio.getHours() - horasAntecedencia);
 
         const leadSelecionado = leads.find(l => l.id === formData.lead_id);
 
         const lembreteData = {
           compromisso_id: compromisso.id,
           canal: 'whatsapp',
-          horas_antecedencia: parseInt(formData.horas_antecedencia),
+          horas_antecedencia: horasAntecedencia,
           mensagem: `Olá! Lembramos do seu compromisso agendado para ${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`,
           status_envio: 'pendente',
           data_envio: dataEnvio.toISOString(),
@@ -940,7 +1060,16 @@ export default function Agenda() {
         console.log('✅ [DEBUG] Lembrete criado com sucesso para compromisso:', compromisso.id);
       }
 
-      toast.success("Compromisso criado com sucesso!");
+      // Mensagem de sucesso mais informativa
+      if (formData.enviar_confirmacao && formData.notificar_responsavel) {
+        toast.success("Compromisso criado! Confirmação enviada e você foi notificado.");
+      } else if (formData.enviar_confirmacao) {
+        toast.success("Compromisso criado e confirmação enviada ao cliente!");
+      } else if (formData.notificar_responsavel) {
+        toast.success("Compromisso criado e você foi notificado!");
+      } else {
+        toast.success("Compromisso criado com sucesso!");
+      }
 
       // Emitir evento global para sincronização
       if (compromisso) {
@@ -1040,6 +1169,8 @@ export default function Agenda() {
       enviar_lembrete: true,
       horas_antecedencia: "24",
       destinatario_lembrete: "lead",
+      enviar_confirmacao: false,
+      notificar_responsavel: true,
     });
     setLeadSearch("");
     setSelectedLeadName("");
@@ -1073,6 +1204,44 @@ export default function Agenda() {
       return c.status === filterStatus;
     });
   }, [compromissos, selectedDate, filterStatus]);
+
+  // Memoizar compromissos filtrados para a lista
+  const compromissosFiltrados = useMemo(() => {
+    return compromissos.filter((c) => {
+      // Filtro de busca
+      if (buscaCompromissos.trim()) {
+        const busca = buscaCompromissos.toLowerCase();
+        const titulo = (c.titulo || "").toLowerCase();
+        const tipoServico = (c.tipo_servico || "").toLowerCase();
+        const nomeLead = (c.lead?.name || "").toLowerCase();
+        const observacoes = (c.observacoes || "").toLowerCase();
+        const nomeAgenda = (c.agenda?.nome || "").toLowerCase();
+        
+        if (!titulo.includes(busca) && 
+            !tipoServico.includes(busca) && 
+            !nomeLead.includes(busca) && 
+            !observacoes.includes(busca) &&
+            !nomeAgenda.includes(busca)) {
+          return false;
+        }
+      }
+
+      // Filtro de agenda
+      if (filtroAgenda !== "all" && c.agenda_id !== filtroAgenda) {
+        return false;
+      }
+
+      // Filtro de tipo de serviço
+      if (filtroTipoServico !== "all" && c.tipo_servico !== filtroTipoServico) {
+        return false;
+      }
+
+      return true;
+    }).sort((a, b) => {
+      // Ordenar por data/hora (mais recentes primeiro)
+      return new Date(b.data_hora_inicio).getTime() - new Date(a.data_hora_inicio).getTime();
+    });
+  }, [compromissos, buscaCompromissos, filtroAgenda, filtroTipoServico]);
 
   const getStatusBadge = (status: string) => {
     const badges = {
@@ -1317,15 +1486,16 @@ export default function Agenda() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Tipo de serviço <span className="text-destructive">*</span></Label>
+                  <Label>Tipo de serviço (Opcional)</Label>
                   <Select 
-                    value={formData.tipo_servico} 
-                    onValueChange={(value) => setFormData({...formData, tipo_servico: value})}
+                    value={formData.tipo_servico || "none"} 
+                    onValueChange={(value) => setFormData({...formData, tipo_servico: value === "none" ? "" : value})}
                   >
-                    <SelectTrigger className={!formData.tipo_servico ? "border-amber-500" : ""}>
-                      <SelectValue placeholder="Selecione o tipo" />
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o tipo (opcional)" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
                       <SelectItem value="reuniao">Reunião</SelectItem>
                       <SelectItem value="consultoria">Consultoria</SelectItem>
                       <SelectItem value="atendimento">Atendimento</SelectItem>
@@ -1334,9 +1504,6 @@ export default function Agenda() {
                       <SelectItem value="outro">Outro</SelectItem>
                     </SelectContent>
                   </Select>
-                  {!formData.tipo_servico && (
-                    <p className="text-xs text-amber-600">Campo obrigatório</p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -1373,6 +1540,44 @@ export default function Agenda() {
                   />
                 </div>
 
+                {/* Mensagem de Confirmação Imediata */}
+                {formData.lead_id && (
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50/50 dark:bg-blue-950/20">
+                    <div className="space-y-1">
+                      <Label>Enviar confirmação imediata</Label>
+                      <p className="text-xs text-muted-foreground">
+                        O cliente receberá uma mensagem de confirmação via WhatsApp agora
+                      </p>
+                    </div>
+                    <Switch 
+                      checked={formData.enviar_confirmacao}
+                      onCheckedChange={(checked) => setFormData({...formData, enviar_confirmacao: checked})}
+                    />
+                  </div>
+                )}
+
+                {/* Notificação Push para Responsável */}
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-green-50/50 dark:bg-green-950/20">
+                  <div className="space-y-1">
+                    <Label>Notificar responsável</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {('Notification' in window && Notification.permission === 'granted') 
+                        ? 'Você receberá uma notificação push no navegador'
+                        : 'Você receberá uma notificação push (permissão será solicitada)'}
+                    </p>
+                    {('Notification' in window && Notification.permission === 'denied') && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        ⚠️ Notificações bloqueadas. Ative nas configurações do navegador.
+                      </p>
+                    )}
+                  </div>
+                  <Switch 
+                    checked={formData.notificar_responsavel}
+                    onCheckedChange={(checked) => setFormData({...formData, notificar_responsavel: checked})}
+                    disabled={('Notification' in window && Notification.permission === 'denied')}
+                  />
+                </div>
+
                 {formData.enviar_lembrete && (
                   <>
                     <div className="space-y-2">
@@ -1390,17 +1595,23 @@ export default function Agenda() {
                     </div>
                     <div className="space-y-2">
                       <Label>Horas de antecedência</Label>
-                      <Select value={formData.horas_antecedencia} onValueChange={(value) => setFormData({...formData, horas_antecedencia: value})}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">1 hora antes</SelectItem>
-                          <SelectItem value="3">3 horas antes</SelectItem>
-                          <SelectItem value="24">24 horas antes</SelectItem>
-                          <SelectItem value="48">48 horas antes</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="Ex: 24"
+                        value={formData.horas_antecedencia}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // Permitir apenas números positivos
+                          if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
+                            setFormData({...formData, horas_antecedencia: value});
+                          }
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Digite quantas horas antes do compromisso enviar o lembrete (ex: 1, 3, 24, 48)
+                      </p>
                     </div>
                   </>
                 )}
@@ -1408,10 +1619,10 @@ export default function Agenda() {
                 <Button 
                   className="w-full" 
                   onClick={criarCompromisso}
-                  disabled={!formData.tipo_servico || !formData.data || !formData.hora_inicio || !formData.hora_fim}
+                  disabled={!formData.data || !formData.hora_inicio || !formData.hora_fim}
                 >
-                  {!formData.tipo_servico || !formData.data || !formData.hora_inicio || !formData.hora_fim 
-                    ? "Preencha os campos obrigatórios"
+                  {!formData.data || !formData.hora_inicio || !formData.hora_fim 
+                    ? "Preencha os campos obrigatórios (data e horários)"
                     : "Criar Agendamento"
                   }
                 </Button>
@@ -1534,6 +1745,31 @@ export default function Agenda() {
                   }}
                   locale={ptBR}
                   className="rounded-md border"
+                  modifiers={{
+                    hasCompromissos: compromissosDoMes
+                      .filter(c => c.status === 'agendado')
+                      .map(c => {
+                        const date = parseISO(c.data_hora_inicio);
+                        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                      }),
+                    hasConcluidos: compromissosDoMes
+                      .filter(c => c.status === 'concluido')
+                      .map(c => {
+                        const date = parseISO(c.data_hora_inicio);
+                        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                      }),
+                    hasCancelados: compromissosDoMes
+                      .filter(c => c.status === 'cancelado')
+                      .map(c => {
+                        const date = parseISO(c.data_hora_inicio);
+                        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                      }),
+                  }}
+                  modifiersClassNames={{
+                    hasCompromissos: "bg-blue-100 text-blue-900 font-semibold hover:bg-blue-200",
+                    hasConcluidos: "bg-green-100 text-green-900 hover:bg-green-200",
+                    hasCancelados: "bg-red-100 text-red-900 hover:bg-red-200",
+                  }}
                 />
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center gap-2">
@@ -1702,29 +1938,108 @@ export default function Agenda() {
         <TabsContent value="lista">
           <Card>
             <CardHeader>
-              <CardTitle>Todos os Compromissos</CardTitle>
+              <div className="flex flex-col gap-4">
+                <CardTitle>Todos os Compromissos</CardTitle>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por título, tipo, lead, agenda..."
+                      value={buscaCompromissos}
+                      onChange={(e) => setBuscaCompromissos(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                  <Select value={filtroAgenda} onValueChange={setFiltroAgenda}>
+                    <SelectTrigger className="w-full sm:w-[200px]">
+                      <SelectValue placeholder="Filtrar por agenda" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas as agendas</SelectItem>
+                      {agendas.map((agenda) => (
+                        <SelectItem key={agenda.id} value={agenda.id}>
+                          {agenda.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={filtroTipoServico} onValueChange={setFiltroTipoServico}>
+                    <SelectTrigger className="w-full sm:w-[200px]">
+                      <SelectValue placeholder="Tipo de serviço" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os tipos</SelectItem>
+                      <SelectItem value="reuniao">Reunião</SelectItem>
+                      <SelectItem value="consultoria">Consultoria</SelectItem>
+                      <SelectItem value="atendimento">Atendimento</SelectItem>
+                      <SelectItem value="visita">Visita</SelectItem>
+                      <SelectItem value="apresentacao">Apresentação</SelectItem>
+                      <SelectItem value="outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(buscaCompromissos || filtroAgenda !== "all" || filtroTipoServico !== "all") && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Filter className="h-4 w-4" />
+                    <span>
+                      {compromissosFiltrados.length} de {compromissos.length} compromissos
+                    </span>
+                    {(buscaCompromissos || filtroAgenda !== "all" || filtroTipoServico !== "all") && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setBuscaCompromissos("");
+                          setFiltroAgenda("all");
+                          setFiltroTipoServico("all");
+                        }}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Limpar filtros
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-[600px]">
                 <div className="space-y-2">
-                  {compromissos.length === 0 ? (
+                  {compromissosFiltrados.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>Nenhum compromisso cadastrado</p>
+                      <p>
+                        {compromissos.length === 0 
+                          ? "Nenhum compromisso cadastrado" 
+                          : "Nenhum compromisso encontrado com os filtros aplicados"}
+                      </p>
                     </div>
                   ) : (
-                    compromissos.map((compromisso) => (
-                      <Card key={compromisso.id} className="border-l-4 border-l-blue-500">
+                    compromissosFiltrados.map((compromisso) => (
+                      <Card 
+                        key={compromisso.id} 
+                        className={`border-l-4 ${
+                          compromisso.status === 'agendado' ? 'border-l-blue-500' :
+                          compromisso.status === 'concluido' ? 'border-l-green-500' :
+                          'border-l-red-500'
+                        } hover:shadow-md transition-shadow`}
+                      >
                         <CardContent className="pt-4">
                           <div className="flex justify-between items-start">
-                            <div className="space-y-1 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{compromisso.titulo || compromisso.tipo_servico}</span>
+                            <div className="space-y-2 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-base">{compromisso.titulo || compromisso.tipo_servico}</span>
                                 {getStatusBadge(compromisso.status)}
                               </div>
-                              <p className="text-sm text-muted-foreground">
-                                {format(parseISO(compromisso.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                              </p>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <CalendarDays className="h-4 w-4" />
+                                <span>{format(parseISO(compromisso.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                                <span>•</span>
+                                <Clock className="h-4 w-4" />
+                                <span>
+                                  {format(parseISO(compromisso.data_hora_inicio), "HH:mm")} - {format(parseISO(compromisso.data_hora_fim), "HH:mm")}
+                                </span>
+                              </div>
                               {compromisso.agenda && (
                                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                                   <CalendarIcon className="h-3 w-3" />
