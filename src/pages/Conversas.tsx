@@ -2368,7 +2368,8 @@ function Conversas() {
                         contactName: nomeAtualizado, // Usar nome atualizado
                         messages: [...conversaExistente.messages, ...novaConvFormatted.messages],
                         lastMessage: novaConvFormatted.lastMessage,
-                        unread: isOpen ? 0 : (conversaExistente.unread + 1),
+                        // CORREÇÃO: Só aumentar unread se for mensagem recebida do contato (não enviada pelo usuário)
+                        unread: isOpen ? 0 : ((novaConversa.fromme === true || novaConversa.status === 'Enviada') ? conversaExistente.unread : conversaExistente.unread + 1),
                         avatarUrl: novoNomeValido ? novaConvFormatted.avatarUrl : conversaExistente.avatarUrl, // Atualizar avatar se nome foi atualizado
                       };
                       
