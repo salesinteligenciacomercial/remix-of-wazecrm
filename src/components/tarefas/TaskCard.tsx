@@ -275,9 +275,11 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       toast.success("Comentário adicionado");
     } catch (e) {
       console.error("Erro ao adicionar comentário:", e);
+      // Reverter em caso de erro
+      setLocalComments(task.comments || []);
       toast.error("Erro ao salvar comentário");
     }
-  }, [newComment, localComments, task.id, onUpdate]);
+  }, [newComment, localComments, task.id, task.comments, onUpdate]);
 
   const formatTime = useCallback((seconds: number) => {
     const hours = Math.floor(seconds / 3600);
