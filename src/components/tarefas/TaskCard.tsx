@@ -174,7 +174,9 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
           .maybeSingle();
         
         if (!error && data) {
-          setLeadPhone(data.phone || undefined);
+          // Buscar telefone
+          const phoneValue = data.phone || undefined;
+          setLeadPhone(phoneValue);
           setLeadNome(data.name || null);
           
           // Buscar foto de perfil do WhatsApp
@@ -816,13 +818,21 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
               Lead: {task.lead_name}
             </Badge>
             <div className="flex items-center gap-1">
-              {leadPhone && (
+              {task.lead_id && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={(e) => { e.stopPropagation(); setConversaOpen(true); }}
-                  className="h-7 px-2 text-success hover:text-success hover:bg-success/10 transition-all"
-                  title="Ver histórico de conversas"
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    if (leadPhone) {
+                      setConversaOpen(true);
+                    } else {
+                      toast.error("Lead sem telefone cadastrado");
+                    }
+                  }}
+                  disabled={!leadPhone}
+                  className="h-7 px-2 text-success hover:text-success hover:bg-success/10 transition-all disabled:opacity-50"
+                  title={leadPhone ? "Ver histórico de conversas" : "Lead sem telefone cadastrado"}
                 >
                   <MessageSquare className="h-3.5 w-3.5 mr-1" />
                   <span className="text-xs font-medium">Ver Conversas</span>
