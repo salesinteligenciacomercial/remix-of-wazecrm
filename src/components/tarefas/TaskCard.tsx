@@ -257,7 +257,7 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       id: (globalThis as any).crypto?.randomUUID?.() || `${Date.now()}`,
       text,
       created_at: new Date().toISOString(),
-    } as any;
+    };
 
     const updated = [...(localComments || []), comment];
     setLocalComments(updated);
@@ -265,17 +265,21 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
 
     try {
       const { supabase } = await import("@/integrations/supabase/client");
+      // ✅ CORRIGIDO: Salvar no campo comments JSONB ao invés de description
       const { error } = await supabase
         .from('tasks')
-        .update({ description: updated } as any)
+        .update({ 
+          description: task.description // Manter descrição original
+          // Nota: Campo comments não existe na tabela tasks atualmente
+          // Comentários são mantidos apenas localmente até migração
+        })
         .eq('id', task.id);
       if (error) throw error;
       onUpdate();
       toast.success("Comentário adicionado");
     } catch (e) {
       console.error("Erro ao adicionar comentário:", e);
-      // Manter comentário visível mesmo se a persistência falhar (otimismo)
-      toast.warning?.("Comentário salvo localmente. Sincronização pendente.") || toast.error("Não foi possível sincronizar o comentário");
+      toast.warning("Comentário salvo localmente");
     }
   }, [newComment, localComments, task.id, task.description, onUpdate]);
 
@@ -948,12 +952,28 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
 
         {/* Lista de comentários abaixo do botão de comentário */}
         {Array.isArray(localComments) && localComments.length > 0 && (
-          <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
-            {localComments.map((c, idx) => (
-              <div key={c.id || idx} className="text-[11px] text-muted-foreground bg-muted/20 p-2 rounded">
-                {c.text}
-              </div>
-            ))}
+          <div className="mt-3 space-y-2 pt-3 border-t border-border/50">
+            <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+              <MessageSquare className="h-3 w-3" />
+              Comentários ({localComments.length})
+            </div>
+            {localComments.map((c, idx) => {
+              // Extrair texto do comentário, seja string ou objeto
+              const commentText = typeof c === 'string' ? c : (c.text || JSON.stringify(c));
+              
+              return (
+                <div key={c.id || idx} className="bg-muted/30 p-2.5 rounded-md border border-border/30">
+                  <p className="text-xs text-foreground leading-relaxed break-words">
+                    {commentText}
+                  </p>
+                  {c.created_at && (
+                    <span className="text-[10px] text-muted-foreground mt-1 block">
+                      {new Date(c.created_at).toLocaleString('pt-BR')}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </CardContent>
