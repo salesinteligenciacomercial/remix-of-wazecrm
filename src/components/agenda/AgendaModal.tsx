@@ -22,10 +22,10 @@ interface AgendaModalProps {
 export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: AgendaModalProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    titulo: "",
+    descricao: "",
     data_hora_inicio: "",
     data_hora_fim: "",
-    tipo_servico: "",
+    tipo_servico: "reuniao",
     observacoes: "",
     custo_estimado: ""
   });
@@ -33,8 +33,8 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.titulo.trim()) {
-      toast.error("Digite o título do compromisso");
+    if (!formData.tipo_servico.trim()) {
+      toast.error("Selecione o tipo de serviço");
       return;
     }
 
@@ -74,7 +74,7 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
         .from("user_roles")
         .select("company_id")
         .eq("user_id", session.user.id)
-        .single();
+        .maybeSingle();
 
       if (userRoleError || !userRole) {
         console.error('❌ [AgendaModal] Erro ao buscar user_role:', userRoleError);
@@ -93,11 +93,16 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
       const companyId = userRole.company_id;
 
       // Criar compromisso e obter o id
+      // Combinar descrição com observações já que não existe campo título
+      const observacoesCompletas = formData.descricao 
+        ? `${formData.descricao}${formData.observacoes ? '\n\n' + formData.observacoes : ''}`
+        : formData.observacoes;
+
       const insertPayload: any = {
         data_hora_inicio: inicioISO,
         data_hora_fim: fimISO,
         tipo_servico: formData.tipo_servico?.trim() || 'reuniao',
-        observacoes: formData.observacoes,
+        observacoes: observacoesCompletas,
         custo_estimado: formData.custo_estimado ? parseFloat(formData.custo_estimado) : null,
         lead_id: lead.id,
         owner_id: session.user.id,
@@ -120,7 +125,7 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
           compromisso_id: compromissoCriado.id,
           canal: "whatsapp",
           horas_antecedencia: 24,
-          mensagem: `Olá ${lead.nome}! Lembrete do seu compromisso: ${formData.titulo} agendado para ${new Date(formData.data_hora_inicio).toLocaleString()}`,
+          mensagem: `Olá ${lead.nome}! Lembrete do seu compromisso de ${formData.tipo_servico} agendado para ${new Date(formData.data_hora_inicio).toLocaleString()}${formData.descricao ? ': ' + formData.descricao : ''}`,
           status_envio: 'pendente',
           destinatario: 'lead'
         };
@@ -134,10 +139,10 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
 
       // Limpar formulário
       setFormData({
-        titulo: "",
+        descricao: "",
         data_hora_inicio: "",
         data_hora_fim: "",
-        tipo_servico: "",
+        tipo_servico: "reuniao",
         observacoes: "",
         custo_estimado: ""
       });
@@ -156,14 +161,47 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
           <DialogTitle>Agendar Compromisso</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="tipo_servico" className="text-sm">Tipo de Serviço *</Label>
+              <Select
+                value={formData.tipo_servico}
+                onValueChange={(value) => setFormData({ ...formData, tipo_servico: value })}
+                required
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="reuniao">Reunião</SelectItem>
+                  <SelectItem value="apresentacao">Apresentação</SelectItem>
+                  <SelectItem value="visita">Visita</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="custo_estimado" className="text-sm">Custo Estimado (R$)</Label>
+              <Input
+                id="custo_estimado"
+                type="number"
+                step="0.01"
+                value={formData.custo_estimado}
+                onChange={(e) => setFormData({ ...formData, custo_estimado: e.target.value })}
+                placeholder="0.00"
+                className="h-9"
+              />
+            </div>
+          </div>
+
           <div>
-            <Label htmlFor="titulo" className="text-sm">Título *</Label>
+            <Label htmlFor="descricao" className="text-sm">Descrição</Label>
             <Input
-              id="titulo"
-              value={formData.titulo}
-              onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-              placeholder="Ex: Reunião de apresentação"
-              required
+              id="descricao"
+              value={formData.descricao}
+              onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+              placeholder="Ex: Apresentação do produto para cliente"
               className="h-9"
             />
           </div>
@@ -193,38 +231,6 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="tipo_servico" className="text-sm">Tipo de Serviço</Label>
-              <Select
-                value={formData.tipo_servico}
-                onValueChange={(value) => setFormData({ ...formData, tipo_servico: value })}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="reuniao">Reunião</SelectItem>
-                  <SelectItem value="apresentacao">Apresentação</SelectItem>
-                  <SelectItem value="visita">Visita</SelectItem>
-                  <SelectItem value="outro">Outro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="custo_estimado" className="text-sm">Custo Estimado (R$)</Label>
-              <Input
-                id="custo_estimado"
-                type="number"
-                step="0.01"
-                value={formData.custo_estimado}
-                onChange={(e) => setFormData({ ...formData, custo_estimado: e.target.value })}
-                placeholder="0.00"
-                className="h-9"
-              />
-            </div>
-          </div>
 
           <div>
             <Label htmlFor="observacoes" className="text-sm">Observações</Label>
