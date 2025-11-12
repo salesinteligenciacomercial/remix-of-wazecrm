@@ -265,23 +265,19 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
 
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      // ✅ CORRIGIDO: Salvar no campo comments JSONB ao invés de description
+      // ✅ CORRIGIDO: Salvar comentários no campo comments JSONB
       const { error } = await supabase
         .from('tasks')
-        .update({ 
-          description: task.description // Manter descrição original
-          // Nota: Campo comments não existe na tabela tasks atualmente
-          // Comentários são mantidos apenas localmente até migração
-        })
+        .update({ comments: updated })
         .eq('id', task.id);
       if (error) throw error;
       onUpdate();
       toast.success("Comentário adicionado");
     } catch (e) {
       console.error("Erro ao adicionar comentário:", e);
-      toast.warning("Comentário salvo localmente");
+      toast.error("Erro ao salvar comentário");
     }
-  }, [newComment, localComments, task.id, task.description, onUpdate]);
+  }, [newComment, localComments, task.id, onUpdate]);
 
   const formatTime = useCallback((seconds: number) => {
     const hours = Math.floor(seconds / 3600);

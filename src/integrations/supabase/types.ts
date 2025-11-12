@@ -1243,9 +1243,11 @@ export type Database = {
       tasks: {
         Row: {
           assignee_id: string | null
+          attachments: Json | null
           board_id: string | null
           checklist: Json | null
           column_id: string | null
+          comments: Json | null
           company_id: string | null
           created_at: string
           description: string | null
@@ -1255,14 +1257,20 @@ export type Database = {
           owner_id: string
           priority: string
           status: string
+          tags: string[] | null
+          tempo_gasto: number | null
+          time_tracking_iniciado: string | null
+          time_tracking_pausado: boolean | null
           title: string
           updated_at: string
         }
         Insert: {
           assignee_id?: string | null
+          attachments?: Json | null
           board_id?: string | null
           checklist?: Json | null
           column_id?: string | null
+          comments?: Json | null
           company_id?: string | null
           created_at?: string
           description?: string | null
@@ -1272,14 +1280,20 @@ export type Database = {
           owner_id: string
           priority?: string
           status?: string
+          tags?: string[] | null
+          tempo_gasto?: number | null
+          time_tracking_iniciado?: string | null
+          time_tracking_pausado?: boolean | null
           title: string
           updated_at?: string
         }
         Update: {
           assignee_id?: string | null
+          attachments?: Json | null
           board_id?: string | null
           checklist?: Json | null
           column_id?: string | null
+          comments?: Json | null
           company_id?: string | null
           created_at?: string
           description?: string | null
@@ -1289,6 +1303,10 @@ export type Database = {
           owner_id?: string
           priority?: string
           status?: string
+          tags?: string[] | null
+          tempo_gasto?: number | null
+          time_tracking_iniciado?: string | null
+          time_tracking_pausado?: boolean | null
           title?: string
           updated_at?: string
         }
