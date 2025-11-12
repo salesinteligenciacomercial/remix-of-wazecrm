@@ -76,6 +76,10 @@ function ConversationListItemComponent({
   };
 
 
+  // ⚡ GARANTIA: O botão sempre será renderizado, mesmo sem callbacks
+  // Os callbacks são opcionais, mas o botão deve sempre aparecer
+  const hasAnyCallback = !!(onEditName || onCreateLead || onDeleteConversation);
+  
   console.log('🎨 [RENDER] ConversationListItem:', {
     contactName,
     hasAvatar: !!avatarUrl,
@@ -85,7 +89,8 @@ function ConversationListItemComponent({
       onCreateLead: !!onCreateLead,
       onDeleteConversation: !!onDeleteConversation
     },
-    showingButton: true // SEMPRE TRUE
+    hasAnyCallback,
+    showingButton: true // SEMPRE TRUE - botão sempre visível
   });
 
   return (
@@ -94,6 +99,7 @@ function ConversationListItemComponent({
         isSelected ? "bg-muted/70" : ""
       }`}
       onClick={onClick}
+      style={{ position: 'relative', overflow: 'visible' }}
     >
       <div className="flex gap-3 items-start">
         <Avatar className="h-12 w-12 flex-shrink-0">
@@ -113,7 +119,7 @@ function ConversationListItemComponent({
             </div>
             
             {/* HORÁRIO, BADGE E MENU */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="flex items-center gap-1.5 flex-shrink-0 relative z-10">
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {timestamp.toLocaleTimeString("pt-BR", {
                   hour: "2-digit",
@@ -126,65 +132,117 @@ function ConversationListItemComponent({
                 </Badge>
               )}
               
-              {/* BOTÃO DE MENU - SEMPRE VISÍVEL */}
-              <DropdownMenu modal={false}>
-                <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 hover:bg-accent hover:text-accent-foreground shrink-0"
-                    style={{ opacity: 1, visibility: 'visible', display: 'flex' }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      console.log('🔘 Menu clicado!', { conversationId, leadId });
-                    }}
-                  >
-                    <MoreVertical className="h-4 w-4" style={{ color: 'currentColor' }} />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent 
-                  align="end" 
-                  side="bottom"
-                  className="w-56 z-[99999] bg-background border border-border"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                    <DropdownMenuItem 
+              {/* BOTÃO DE MENU - SEMPRE VISÍVEL - GARANTIDO - NUNCA DESAPARECE */}
+              {/* ⚡ CORREÇÃO CRÍTICA: Botão sempre renderizado, independente de callbacks */}
+              <div 
+                className="relative z-20 flex-shrink-0" 
+                style={{ 
+                  position: 'relative', 
+                  zIndex: 20,
+                  minWidth: '32px',
+                  minHeight: '32px'
+                }}
+              >
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 hover:bg-accent hover:text-accent-foreground shrink-0 flex-shrink-0 !flex"
+                      style={{ 
+                        opacity: 1, 
+                        visibility: 'visible', 
+                        display: 'flex !important',
+                        position: 'relative',
+                        zIndex: 20,
+                        minWidth: '32px',
+                        minHeight: '32px',
+                        flexShrink: 0
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        console.log('✏️ Editar nome', conversationId);
-                        onEditName?.();
+                        e.preventDefault();
+                        console.log('🔘 Menu clicado!', { conversationId, leadId, hasAnyCallback });
                       }}
-                      className="cursor-pointer"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                      }}
                     >
-                      <Edit className="h-4 w-4 mr-2" />
-                      Editar nome
-                    </DropdownMenuItem>
-                    {!leadId && onCreateLead && (
+                      <MoreVertical 
+                        className="h-4 w-4 flex-shrink-0 !block" 
+                        style={{ 
+                          color: 'currentColor',
+                          display: 'block !important',
+                          opacity: 1,
+                          visibility: 'visible',
+                          pointerEvents: 'auto'
+                        }} 
+                      />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent 
+                    align="end" 
+                    side="bottom"
+                    className="w-56 z-[99999] bg-background border border-border shadow-lg"
+                    style={{ zIndex: 99999 }}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                      {/* ⚡ SEMPRE mostrar opção de editar nome */}
                       <DropdownMenuItem 
                         onClick={(e) => {
                           e.stopPropagation();
-                          console.log('➕ Adicionar ao CRM', conversationId);
-                          onCreateLead();
+                          e.preventDefault();
+                          console.log('✏️ Editar nome', conversationId);
+                          if (onEditName) {
+                            onEditName();
+                          } else {
+                            console.warn('⚠️ onEditName não está definido');
+                          }
                         }}
                         className="cursor-pointer"
+                        disabled={!onEditName}
                       >
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Adicionar ao CRM
+                        <Edit className="h-4 w-4 mr-2" />
+                        Editar nome
                       </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('🗑️ Excluir conversa', conversationId);
-                        onDeleteConversation?.();
-                      }}
-                      className="text-destructive cursor-pointer"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Excluir conversa
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-              </DropdownMenu>
+                      {/* ⚡ Mostrar "Adicionar ao CRM" apenas se não tiver lead e tiver callback */}
+                      {!leadId && onCreateLead && (
+                        <DropdownMenuItem 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            console.log('➕ Adicionar ao CRM', conversationId);
+                            onCreateLead();
+                          }}
+                          className="cursor-pointer"
+                        >
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Adicionar ao CRM
+                        </DropdownMenuItem>
+                      )}
+                      {/* ⚡ SEMPRE mostrar opção de excluir conversa */}
+                      <DropdownMenuItem 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          console.log('🗑️ Excluir conversa', conversationId);
+                          if (onDeleteConversation) {
+                            onDeleteConversation();
+                          } else {
+                            console.warn('⚠️ onDeleteConversation não está definido');
+                          }
+                        }}
+                        className="text-destructive cursor-pointer"
+                        disabled={!onDeleteConversation}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir conversa
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </div>
           

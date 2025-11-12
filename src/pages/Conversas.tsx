@@ -1787,10 +1787,18 @@ function Conversas() {
                 try { profilePic = await getProfilePictureWithFallback(novaConversa.numero, userCompanyIdRef.current || '', nomeValido || String(novaConversa.numero)); } catch {}
                 const numeroLimpo = String(novaConversa.numero || '').replace(/\D/g, '');
                 const isRealGroup = Boolean((novaConversa as any)?.is_group) || (numeroLimpo.length >= 17 && /@g\.us$/.test(String(novaConversa.numero || '')));
+                // ⚡ CORREÇÃO CRÍTICA: Para grupos, garantir que id e phoneNumber usem o numero (JID do grupo)
+                // Nunca usar telefone_formatado para grupos, pois pode conter número do integrante
+                const idParaGrupo = isRealGroup ? String(novaConversa.numero) : telefoneNormalizado;
+                const phoneNumberParaGrupo = isRealGroup ? String(novaConversa.numero) : telefoneNormalizado;
+                
                 const novaConvFormatted: Conversation = {
-                  id: telefoneNormalizado, contactName: nomeValido,
+                  id: idParaGrupo, 
+                  contactName: nomeValido,
                   avatarUrl: profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(nomeValido)}&background=10b981&color=fff`,
-                  channel: 'whatsapp' as const, status: 'waiting' as const, isGroup: isRealGroup,
+                  channel: 'whatsapp' as const, 
+                  status: 'waiting' as const, 
+                  isGroup: isRealGroup,
                   messages: [{
                     id: novaConversa.id, content: novaConversa.mensagem,
                     sender: (novaConversa.fromme === true || novaConversa.status === 'Enviada') ? 'user' : 'contact',
@@ -1800,10 +1808,17 @@ function Conversas() {
                   }],
                   lastMessage: novaConversa.mensagem,
                   unread: (novaConversa.fromme === true || novaConversa.status === 'Enviada') ? 0 : 1,
-                  tags: [], phoneNumber: telefoneNormalizado
+                  tags: [], 
+                  phoneNumber: phoneNumberParaGrupo // ⚡ CORREÇÃO: Usar numero do grupo para grupos
                 };
                 setConversations(prev => {
-                  const exists = prev.find(c => c.id === telefoneNormalizado);
+                  // ⚡ CORREÇÃO: Para grupos, buscar pelo numero (JID do grupo), não pelo telefone_formatado
+                  const exists = prev.find(c => 
+                    c.id === idParaGrupo || 
+                    c.phoneNumber === phoneNumberParaGrupo ||
+                    (isRealGroup && c.id === String(novaConversa.numero)) ||
+                    (isRealGroup && c.phoneNumber === String(novaConversa.numero))
+                  );
                   if (exists) {
                     // Verificar se mensagem já existe antes de adicionar
                     const messageExists = exists.messages.some(m => m.id === novaConvFormatted.messages[0].id);
@@ -1811,7 +1826,12 @@ function Conversas() {
                       console.log('⏭️ [REALTIME] Mensagem já existe, pulando duplicação');
                       return prev;
                     }
-                    return prev.map(c => c.id === telefoneNormalizado ? { ...c, messages: [...c.messages, novaConvFormatted.messages[0]], lastMessage: novaConvFormatted.lastMessage, unread: c.unread + novaConvFormatted.unread } : c);
+                    // ⚡ CORREÇÃO: Atualizar conversa usando a chave correta (id ou phoneNumber)
+                    return prev.map(c => 
+                      (c.id === idParaGrupo || c.phoneNumber === phoneNumberParaGrupo) 
+                        ? { ...c, messages: [...c.messages, novaConvFormatted.messages[0]], lastMessage: novaConvFormatted.lastMessage, unread: c.unread + novaConvFormatted.unread } 
+                        : c
+                    );
                   }
                   return [novaConvFormatted, ...prev];
                 });
@@ -2320,8 +2340,13 @@ function Conversas() {
                   nome: nomeValido
                 });
                 
+                // ⚡ CORREÇÃO CRÍTICA: Para grupos, garantir que id e phoneNumber usem o numero (JID do grupo)
+                // Nunca usar telefone_formatado para grupos, pois pode conter número do integrante
+                const idParaGrupoRealtime = isRealGroupRealtime ? String(novaConversa.numero) : telefoneNormalizado;
+                const phoneNumberParaGrupoRealtime = isRealGroupRealtime ? String(novaConversa.numero) : telefoneNormalizado;
+                
                 const novaConvFormatted: Conversation = {
-                  id: telefoneNormalizado,
+                  id: idParaGrupoRealtime,
                   contactName: nomeValido,
                   avatarUrl: profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(nomeValido)}&background=10b981&color=fff`,
                   channel: 'whatsapp' as const,
@@ -2350,20 +2375,25 @@ function Conversas() {
                   tags: [],
                   valor: null,
                   anotacoes: null,
+                  phoneNumber: phoneNumberParaGrupoRealtime // ⚡ CORREÇÃO: Usar numero do grupo para grupos
                 };
                 
                 // Atualizar ou adicionar conversa na lista
                 let conversaAtualizada: Conversation | null = null;
                 const isOpen = !!(selectedConvRef.current && (
-                  selectedConvRef.current.id === telefoneNormalizado ||
-                  selectedConvRef.current.phoneNumber === telefoneNormalizado
+                  selectedConvRef.current.id === idParaGrupoRealtime ||
+                  selectedConvRef.current.phoneNumber === phoneNumberParaGrupoRealtime ||
+                  (isRealGroupRealtime && selectedConvRef.current.id === String(novaConversa.numero)) ||
+                  (isRealGroupRealtime && selectedConvRef.current.phoneNumber === String(novaConversa.numero))
                 ));
                 
                 setConversations(prev => {
-                  // Buscar conversa existente usando telefone normalizado
+                  // ⚡ CORREÇÃO: Para grupos, buscar pelo numero (JID do grupo), não pelo telefone_formatado
                   const existingIndex = prev.findIndex(c => 
-                    c.id === telefoneNormalizado || 
-                    c.phoneNumber === telefoneNormalizado
+                    c.id === idParaGrupoRealtime || 
+                    c.phoneNumber === phoneNumberParaGrupoRealtime ||
+                    (isRealGroupRealtime && c.id === String(novaConversa.numero)) ||
+                    (isRealGroupRealtime && c.phoneNumber === String(novaConversa.numero))
                   );
                   
                   if (existingIndex >= 0) {
@@ -2710,10 +2740,22 @@ function Conversas() {
                 // Atualizar status na conversa correspondente
                 setConversations((prevConvs) =>
                   prevConvs.map((conv) => {
-                    const convPhone = conv.phoneNumber?.replace(/[^0-9]/g, '');
-                    const msgPhone = conversaAtualizada?.telefone_formatado?.replace(/[^0-9]/g, '');
+                    // ⚡ CORREÇÃO: Para grupos, usar numero (JID do grupo) ao invés de telefone_formatado
+                    const isGroupMsg = Boolean((conversaAtualizada as any)?.is_group) || /@g\.us$/.test(String(conversaAtualizada?.numero || ''));
+                    const msgPhone = isGroupMsg 
+                      ? String(conversaAtualizada?.numero || '') 
+                      : (conversaAtualizada?.telefone_formatado?.replace(/[^0-9]/g, '') || '');
                     
-                    if (convPhone === msgPhone) {
+                    // Para grupos, comparar pelo numero completo (JID), para contatos pelo número limpo
+                    const convPhone = conv.isGroup 
+                      ? String(conv.phoneNumber || conv.id)
+                      : (conv.phoneNumber?.replace(/[^0-9]/g, '') || '');
+                    
+                    const phoneMatch = isGroupMsg 
+                      ? (conv.id === msgPhone || conv.phoneNumber === msgPhone)
+                      : (convPhone === msgPhone);
+                    
+                    if (phoneMatch) {
                       const newStatus = conversaAtualizada?.status === 'Enviada' ? 'answered' : 
                                        conversaAtualizada?.status === 'Recebida' ? 'waiting' : 
                                        conversaAtualizada?.status === 'Resolvida' ? 'resolved' : conv.status;
@@ -3138,12 +3180,12 @@ function Conversas() {
         userCompanyIdRef.current = companyId;
       }
       
-      // ⚡ OTIMIZAÇÃO: Limitar quantidade inicial de conversas para carregamento RÁPIDO (tempo 0)
-      const INITIAL_LIMIT = 30; // Reduzir para 30 conversas iniciais (mais rápido)
-      const MESSAGES_PER_CONVERSATION = 3; // Apenas 3 últimas mensagens por conversa (mais rápido)
+      // ⚡ OTIMIZAÇÃO: Aumentar limite para carregar histórico completo
+      const INITIAL_LIMIT = 50; // Aumentar para 50 conversas iniciais
+      const MESSAGES_PER_CONVERSATION = 10; // Aumentar para 10 últimas mensagens por conversa (melhor histórico)
       
-      // ⚡ CORREÇÃO: Para append, buscar mensagens mais antigas (conversas diferentes)
-      const MESSAGES_TO_FETCH = append ? 100 : INITIAL_LIMIT * 2; // Buscar mais mensagens para agrupar
+      // ⚡ CORREÇÃO: Aumentar limite de mensagens buscadas para garantir histórico completo
+      const MESSAGES_TO_FETCH = append ? 500 : 1000; // Buscar muito mais mensagens para garantir histórico completo
       
       // ETAPA 2: ⚡ BUSCAR CONVERSAS OTIMIZADO - Buscar apenas últimas mensagens por telefone
       // Query otimizada: buscar apenas campos essenciais e limitar quantidade
@@ -3186,10 +3228,18 @@ function Conversas() {
       );
 
       // Agrupar conversas por telefone - PRESERVAR TODAS as mensagens (não limitar)
+      // ⚡ CORREÇÃO CRÍTICA: Para grupos, SEMPRE usar o numero (JID do grupo) como chave
+      // Nunca usar telefone_formatado para grupos, pois pode conter número do integrante
       const conversasMap = new Map<string, any[]>();
       validConversas.forEach(conv => {
-        const isGroup = conv.is_group || /@g\.us$/.test(conv.numero || '');
-        const key = isGroup ? conv.numero : (conv.telefone_formatado || conv.numero.replace(/[^0-9]/g, ''));
+        // Detectar se é grupo: verificar is_group OU se numero termina com @g.us
+        const isGroup = Boolean(conv.is_group) === true || /@g\.us$/.test(String(conv.numero || ''));
+        
+        // ⚡ CORREÇÃO: Para grupos, SEMPRE usar numero (JID completo do grupo)
+        // Para contatos individuais, usar telefone_formatado ou numero normalizado
+        const key = isGroup 
+          ? String(conv.numero || '') // SEMPRE usar numero para grupos (contém JID do grupo)
+          : (conv.telefone_formatado || conv.numero.replace(/[^0-9]/g, ''));
         
         if (!conversasMap.has(key)) {
           conversasMap.set(key, []);
@@ -3205,26 +3255,36 @@ function Conversas() {
       const telefonesUnicos = Array.from(conversasMap.keys())
         .map(tel => tel.replace(/[^0-9]/g, ''))
         .filter(tel => tel.length >= 10)
-        .slice(0, 30); // Limitar a 30 telefones para query mais rápida
+        .slice(0, 50); // Aumentar para 50 telefones para melhor cobertura
       
-      // Buscar leads de forma otimizada - limitar quantidade drasticamente
+      // Buscar leads de forma otimizada usando queries mais eficientes
       let leadsData: any[] = [];
       if (telefonesUnicos.length > 0) {
-        // Buscar apenas 50 leads (muito mais rápido)
-        const leadsResult = await supabase
-          .from('leads')
-          .select('id, phone, name, telefone')
-          .eq('company_id', companyId)
-          .limit(50); // Reduzir para 50 leads (muito mais rápido)
+        // ⚡ OTIMIZAÇÃO: Buscar leads usando .or() com múltiplos telefones de uma vez
+        // Construir condições para busca otimizada
+        const phoneConditions: string[] = [];
+        telefonesUnicos.forEach(tel => {
+          if (tel && tel.length >= 10) {
+            phoneConditions.push(`phone.ilike.%${tel}%`);
+            phoneConditions.push(`telefone.ilike.%${tel}%`);
+          }
+        });
         
-        if (!leadsResult.error && leadsResult.data) {
-          // Filtrar localmente apenas os leads relevantes
-          leadsData = leadsResult.data.filter(lead => {
-            const phoneRaw = lead.phone || lead.telefone;
-            if (!phoneRaw) return false;
-            const phoneKey = phoneRaw.replace(/[^0-9]/g, '');
-            return telefonesUnicos.some(tel => phoneKey.includes(tel) || tel.includes(phoneKey));
-          });
+        if (phoneConditions.length > 0) {
+          // Limitar condições para evitar query muito longa (máximo 50 condições)
+          const conditionsToUse = phoneConditions.slice(0, 50);
+          const orCondition = conditionsToUse.join(',');
+          
+          const leadsResult = await supabase
+            .from('leads')
+            .select('id, phone, name, telefone')
+            .eq('company_id', companyId)
+            .or(orCondition)
+            .limit(100); // Aumentar limite para garantir que encontramos todos os leads relevantes
+          
+          if (!leadsResult.error && leadsResult.data) {
+            leadsData = leadsResult.data;
+          }
         }
       }
       
@@ -3249,9 +3309,16 @@ function Conversas() {
       const novasConversas: Conversation[] = Array.from(conversasMap.entries())
         .slice(0, INITIAL_LIMIT) // Limitar a 50 conversas iniciais
         .map(([telefone, mensagens]) => {
+        // ⚡ CORREÇÃO CRÍTICA: Detectar se é grupo ANTES de processar
+        // Verificar se alguma mensagem tem is_group = true ou se o número termina com @g.us
+        // Verificar também o telefone (que pode ser o número do grupo) e o número das mensagens
+        const isGroup = mensagens.some(m => Boolean(m.is_group) === true) || 
+                       /@g\.us$/.test(String(telefone || '')) || 
+                       mensagens.some(m => /@g\.us$/.test(String(m.numero || '')));
+        
         const leadInfo = leadsMap.get(telefone);
         
-        // PRIORIDADE 1: Nome do Lead (se existir)
+        // PRIORIDADE 1: Nome do Lead (se existir) - APENAS para contatos individuais
         let contactName = leadInfo?.name;
         
         // PRIORIDADE 2: Nome da mensagem
@@ -3276,9 +3343,9 @@ function Conversas() {
           }
         }
         
-        // FALLBACK: Usar telefone
+        // FALLBACK: Usar telefone ou "Grupo" para grupos
         if (!contactName || contactName.trim() === '') {
-          contactName = telefone;
+          contactName = isGroup ? 'Grupo' : telefone;
         }
         
         // ⚡ CORREÇÃO CRÍTICA: Processar TODAS as mensagens (não limitar) para preservar histórico completo
@@ -3328,8 +3395,10 @@ function Conversas() {
           messages: messagensFormatadas,
           tags: [],
           phoneNumber: telefone,
-          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName.substring(0, 2))}&background=0ea5e9&color=fff`,
-          isGroup: false
+          avatarUrl: isGroup 
+            ? `https://ui-avatars.com/api/?name=${encodeURIComponent('Grupo')}&background=10b981&color=fff`
+            : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName.substring(0, 2))}&background=0ea5e9&color=fff`,
+          isGroup: isGroup // ⚡ CORREÇÃO CRÍTICA: Definir isGroup corretamente
         };
       });
 
@@ -3623,22 +3692,56 @@ function Conversas() {
       ].filter(v => v && v.length > 0)));
       
       // Buscar TODAS as mensagens do contato (sem limite) - tentar múltiplos formatos
-      // Construir condições de forma mais segura
-      const telefoneConditions = variacoes.map(v => `telefone_formatado.eq.${v}`).join(',');
-      const numeroConditions = variacoes.map(v => `numero.eq.${v}`).join(',');
-      const allConditions = [telefoneConditions, numeroConditions].filter(c => c).join(',');
+      // ⚡ CORREÇÃO: Construir query corretamente usando .or() do Supabase
+      // O formato correto é: "campo1.eq.valor1,campo2.eq.valor2" (sem espaços)
+      const conditions: string[] = [];
+      
+      // Adicionar condições para telefone_formatado
+      variacoes.forEach(v => {
+        if (v && v.trim()) {
+          conditions.push(`telefone_formatado.eq.${v}`);
+        }
+      });
+      
+      // Adicionar condições para numero
+      variacoes.forEach(v => {
+        if (v && v.trim()) {
+          conditions.push(`numero.eq.${v}`);
+        }
+      });
       
       let allMessages, error;
-      if (allConditions) {
+      
+      if (conditions.length > 0) {
+        // Construir string de condições no formato correto do Supabase
+        const orCondition = conditions.join(',');
+        
         const result = await supabase
           .from('conversas')
           .select('*')
           .eq('company_id', userCompanyId)
-          .or(allConditions)
+          .or(orCondition)
           .order('created_at', { ascending: true });
         
         allMessages = result.data;
         error = result.error;
+        
+        // Se não encontrou nada, tentar busca mais ampla
+        if ((!allMessages || allMessages.length === 0) && !error) {
+          // Tentar buscar apenas pelo número limpo (sem formatação)
+          const telefoneLimpo = telefoneSemFormatacao;
+          const result2 = await supabase
+            .from('conversas')
+            .select('*')
+            .eq('company_id', userCompanyId)
+            .or(`telefone_formatado.ilike.%${telefoneLimpo}%,numero.ilike.%${telefoneLimpo}%`)
+            .order('created_at', { ascending: true });
+          
+          if (result2.data && result2.data.length > 0) {
+            allMessages = result2.data;
+            error = result2.error;
+          }
+        }
       } else {
         // Fallback: buscar apenas pelo número original
         const result = await supabase
@@ -3660,25 +3763,44 @@ function Conversas() {
       if (allMessages && allMessages.length > 0) {
         console.log(`✅ ${allMessages.length} mensagens carregadas do histórico`);
         
+        // ⚡ CORREÇÃO: Remover mensagens duplicadas por ID antes de formatar
+        const mensagensUnicas = allMessages.filter((m, index, self) => 
+          index === self.findIndex(msg => msg.id === m.id)
+        );
+        
+        console.log(`📊 ${mensagensUnicas.length} mensagens únicas (${allMessages.length - mensagensUnicas.length} duplicadas removidas)`);
+        
         // Formatar todas as mensagens
-        const messagensCompletas: Message[] = allMessages.map(m => ({
-          id: m.id || `msg-${Date.now()}-${Math.random()}`,
-          content: m.mensagem || '',
-          type: (m.tipo_mensagem === 'texto' ? 'text' : (m.tipo_mensagem || 'text')) as any,
-          sender: ((m.fromme === true || m.status === 'Enviada') ? "user" : "contact") as "user" | "contact",
-          timestamp: new Date(m.created_at || Date.now()),
-          delivered: true,
-          read: m.status !== 'Recebida',
-          mediaUrl: m.midia_url,
-          fileName: m.arquivo_nome,
-        }));
+        const messagensCompletas: Message[] = mensagensUnicas
+          .map(m => ({
+            id: m.id || `msg-${Date.now()}-${Math.random()}`,
+            content: m.mensagem || '',
+            type: (m.tipo_mensagem === 'texto' ? 'text' : (m.tipo_mensagem || 'text')) as any,
+            sender: ((m.fromme === true || m.status === 'Enviada') ? "user" : "contact") as "user" | "contact",
+            timestamp: new Date(m.created_at || Date.now()),
+            delivered: true,
+            read: m.status !== 'Recebida',
+            mediaUrl: m.midia_url,
+            fileName: m.arquivo_nome,
+          }))
+          // Ordenar por timestamp para garantir ordem cronológica correta
+          .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+        
+        // ⚡ CORREÇÃO: Remover duplicatas finais por ID e timestamp (caso ainda existam)
+        const mensagensFinais = messagensCompletas.filter((m, index, self) => 
+          index === self.findIndex(msg => 
+            msg.id === m.id || 
+            (msg.content === m.content && 
+             Math.abs(msg.timestamp.getTime() - m.timestamp.getTime()) < 1000)
+          )
+        );
         
         // Atualizar a conversa selecionada
         setSelectedConv(prev => {
           if (prev && prev.phoneNumber === phoneNumber) {
             return {
               ...prev,
-              messages: messagensCompletas
+              messages: mensagensFinais
             };
           }
           return prev;
@@ -3687,20 +3809,20 @@ function Conversas() {
         // Atualizar conversa na lista
         setConversations(prev => prev.map(conv => 
           conv.phoneNumber === phoneNumber 
-            ? { ...conv, messages: messagensCompletas }
+            ? { ...conv, messages: mensagensFinais }
             : conv
         ));
         
         // Estatísticas
         setHistoryStats(prev => ({
           ...prev,
-          [phoneNumber]: { total: allMessages.length, loaded: allMessages.length }
+          [phoneNumber]: { total: mensagensFinais.length, loaded: mensagensFinais.length }
         }));
         
         // Scroll
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         
-        toast.success(`📜 ${allMessages.length} mensagens carregadas`);
+        toast.success(`📜 ${mensagensFinais.length} mensagens carregadas`);
       } else {
         toast.info('Nenhum histórico anterior encontrado');
       }
