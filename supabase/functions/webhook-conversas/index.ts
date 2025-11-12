@@ -432,11 +432,46 @@ serve(async (req) => {
       );
     }
 
-    // CORREÇÃO: Para mensagens ENVIADAS, buscar nome do lead se disponível
+    // ====================================================================
+    // MELHORIA CRÍTICA: Garantir que SEMPRE tenha um lead vinculado
+    // ====================================================================
+    
+    // Se não tem lead e não é grupo, tentar criar automaticamente
+    if (!leadId && !isGroup && numeroLimpo && companyId) {
+      console.log('🔄 Tentando criar lead automaticamente para:', numeroLimpo);
+      
+      // Para mensagens RECEBIDAS: criar com nome do contato
+      // Para mensagens ENVIADAS: criar com o telefone (será atualizado depois)
+      const leadName = validatedData.fromMe 
+        ? numeroLimpo 
+        : (validatedData.nome_contato || numeroLimpo);
+      
+      const { data: newLead, error: leadError } = await supabase
+        .from('leads')
+        .insert({
+          name: leadName,
+          phone: numeroLimpo,
+          telefone: numeroLimpo,
+          company_id: companyId,
+          source: 'whatsapp',
+          status: 'novo',
+          stage: 'prospeccao'
+        })
+        .select('id')
+        .single();
+      
+      if (!leadError && newLead) {
+        leadId = newLead.id;
+        console.log('✅ Lead criado automaticamente:', leadId);
+      } else if (leadError) {
+        console.error('❌ Erro ao criar lead:', leadError);
+      }
+    }
+    
+    // CORREÇÃO: Buscar nome do lead SEMPRE que tiver lead vinculado
     let nomeContatoFinal = validatedData.nome_contato;
     
-    if (validatedData.fromMe === true && leadId) {
-      // Buscar nome do lead para mensagens enviadas
+    if (leadId) {
       const { data: leadData } = await supabase
         .from('leads')
         .select('name')
@@ -445,13 +480,20 @@ serve(async (req) => {
       
       if (leadData?.name) {
         nomeContatoFinal = leadData.name;
-        console.log('✅ Nome do lead usado para mensagem enviada:', nomeContatoFinal);
+        console.log('✅ Nome do lead usado:', nomeContatoFinal);
       }
     }
     
-    // Se ainda não tem nome e não é mensagem enviada, usar número
-    if (!nomeContatoFinal && !validatedData.fromMe && !isGroup && numeroLimpo) {
+    // Se ainda não tem nome, usar número como fallback
+    if (!nomeContatoFinal && !isGroup && numeroLimpo) {
       nomeContatoFinal = numeroLimpo;
+      console.log('⚠️ Usando telefone como nome:', nomeContatoFinal);
+    }
+    
+    // Para grupos, usar o JID como nome se não tiver outro
+    if (!nomeContatoFinal && isGroup) {
+      nomeContatoFinal = validatedData.numero;
+      console.log('👥 Usando JID do grupo como nome');
     }
     
     // Salvar conversa no Supabase com telefone normalizado e STATUS correto

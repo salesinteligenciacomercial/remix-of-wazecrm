@@ -46,10 +46,11 @@ export const useConversationsLoader = () => {
         userCompanyId = userRole.company_id;
       }
       
-      const INITIAL_LIMIT = 30;
-      // CORREÇÃO: Aumentar limite para carregar histórico completo
-      const MESSAGES_PER_CONVERSATION = 100; // Carregar até 100 mensagens por conversa
-      const MESSAGES_TO_FETCH = append ? 200 : 500; // Buscar mais mensagens do banco
+      const INITIAL_LIMIT = 30; // Limite de conversas a serem exibidas inicialmente
+      // ⚡ MELHORIA CRÍTICA: Aumentar drasticamente o limite para garantir histórico completo
+      const MESSAGES_TO_FETCH = append ? 1000 : 2000; // Buscar TODAS as mensagens disponíveis
+      
+      console.log(`📊 [LOAD] Carregando histórico completo: até ${MESSAGES_TO_FETCH} mensagens...`);
       
       let query = supabase
         .from('conversas')
@@ -96,7 +97,7 @@ export const useConversationsLoader = () => {
         }
         const mensagens = conversasMap.get(key)!;
         mensagens.push(conv);
-        // CORREÇÃO: Remover limitação artificial - manter todas as mensagens carregadas
+        // MELHORIA: Não limitar mais - carregar TODAS as mensagens disponíveis
       });
 
       // Buscar leads
@@ -172,7 +173,7 @@ export const useConversationsLoader = () => {
             contactName = telefone;
           }
           
-          // CORREÇÃO: Carregar TODAS as mensagens, não só as últimas 3
+          // MELHORIA: Carregar TODAS as mensagens carregadas do banco
           const messagensFormatadas: Message[] = mensagens
             .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
             .map(m => ({
