@@ -595,9 +595,16 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
                   size="sm"
                   onClick={(e) => { 
                     e.stopPropagation(); 
+                    console.log("🔍 Clique no botão WhatsApp:", { 
+                      leadPhone, 
+                      leadId: task.lead_id, 
+                      leadName: leadNome || task.lead_name 
+                    });
                     if (leadPhone) {
+                      console.log("✅ Abrindo popup de conversa");
                       setConversaOpen(true);
                     } else {
+                      console.log("❌ Lead sem telefone");
                       toast.error("Lead sem telefone cadastrado");
                     }
                   }}
@@ -1005,13 +1012,24 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
 
       {/* Conversa Popup */}
       {task.lead_id && task.lead_name && (
-        <ConversaPopup
-          open={conversaOpen}
-          onOpenChange={setConversaOpen}
-          leadId={task.lead_id}
-          leadName={leadNome || task.lead_name}
-          leadPhone={leadPhone || ""}
-        />
+        <>
+          {console.log("🔍 Renderizando ConversaPopup:", { 
+            conversaOpen, 
+            leadId: task.lead_id, 
+            leadName: leadNome || task.lead_name,
+            leadPhone: leadPhone || ""
+          })}
+          <ConversaPopup
+            open={conversaOpen}
+            onOpenChange={(open) => {
+              console.log("🔄 ConversaPopup onOpenChange:", open);
+              setConversaOpen(open);
+            }}
+            leadId={task.lead_id}
+            leadName={leadNome || task.lead_name}
+            leadPhone={leadPhone || ""}
+          />
+        </>
       )}
     </Card>
   );
