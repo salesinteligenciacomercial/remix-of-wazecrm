@@ -146,10 +146,26 @@ export default function KanbanPage() {
           return;
         }
 
-        // Carregar funis
+        // SOLUÇÃO: Obter company_id via RPC
+        const { data: companyId, error: companyError } = await supabase.rpc('get_my_company_id');
+        
+        if (companyError) {
+          console.error('❌ Erro ao buscar company_id:', companyError);
+          throw new Error('Não foi possível identificar sua empresa');
+        }
+
+        if (!companyId) {
+          console.error('❌ Company ID não encontrado');
+          throw new Error('Usuário não está vinculado a uma empresa');
+        }
+
+        console.log('✅ Company ID obtido:', companyId);
+
+        // Carregar funis DA EMPRESA
         const { data: funisData, error: funisError } = await supabase
           .from("funis")
           .select("*")
+          .eq('company_id', companyId)
           .order("criado_em");
 
         if (funisError) throw funisError;
@@ -165,10 +181,11 @@ export default function KanbanPage() {
           setSelectedFunil(loadedFunis[0].id);
         }
 
-        // Carregar etapas
+        // Carregar etapas DA EMPRESA (via funis)
         const { data: etapasData, error: etapasError } = await supabase
           .from("etapas")
           .select("*")
+          .eq('company_id', companyId)
           .order("posicao");
 
         if (etapasError) throw etapasError;
@@ -176,10 +193,11 @@ export default function KanbanPage() {
 
         setEtapas(etapasData || []);
 
-        // Carregar leads
+        // Carregar leads DA EMPRESA
         const { data: leadsData, error: leadsError } = await supabase
           .from("leads")
           .select("*")
+          .eq('company_id', companyId)
           .order("created_at", { ascending: false });
 
         if (leadsError) throw leadsError;
