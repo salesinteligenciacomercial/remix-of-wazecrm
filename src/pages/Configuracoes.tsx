@@ -71,20 +71,26 @@ export default function Configuracoes() {
         return;
       }
 
-      // Usar RPC para buscar company_id e role do usuário
-      const { data: companyId, error: companyError } = await supabase.rpc('get_my_company_id');
+      // Usar RPC para buscar company e role do usuário de forma segura
+      const { data: company, error: companyError } = await supabase.rpc('get_my_company');
       const { data: userRole, error: roleError } = await supabase.rpc('get_my_role');
 
-      console.log('🔍 Debug roles:', { companyId, userRole, companyError, roleError });
+      console.log('🔍 Debug user data:', { company, userRole, companyError, roleError });
 
-      if (companyError || roleError) {
-        console.error('Erro ao buscar dados do usuário:', { companyError, roleError });
+      if (companyError) {
+        console.error('Erro ao buscar empresa:', companyError);
         setLoading(false);
         return;
       }
 
-      // Se não tem company_id, não tem acesso
-      if (!companyId) {
+      if (roleError) {
+        console.error('Erro ao buscar role:', roleError);
+        setLoading(false);
+        return;
+      }
+
+      // Se não tem company, não tem acesso
+      if (!company || company.length === 0) {
         setUserRoles([]);
         setIsMasterAccount(false);
         setIsSubAccount(false);
@@ -93,37 +99,27 @@ export default function Configuracoes() {
         return;
       }
 
+      // get_my_company retorna array, pegar o primeiro
+      const companyData = Array.isArray(company) ? company[0] : company;
+
       // Definir role do usuário
       if (userRole) {
         setUserRoles([userRole]);
       }
 
-      // Buscar dados da empresa
-      const { data: company, error: companyDataError } = await supabase
-        .from('companies')
-        .select('id, name, plan, is_master_account, parent_company_id')
-        .eq('id', companyId)
-        .single();
-
-      if (companyDataError || !company) {
-        console.error('Erro ao buscar empresa:', companyDataError);
-        setLoading(false);
-        return;
-      }
-
-      setCurrentCompany(company);
+      setCurrentCompany(companyData);
 
       // 🔒 SEGURANÇA: Verificar se a empresa atual é subconta
-      const isCurrentSubAccount = company.parent_company_id !== null && company.parent_company_id !== undefined;
+      const isCurrentSubAccount = companyData.parent_company_id !== null && companyData.parent_company_id !== undefined;
       setIsSubAccount(isCurrentSubAccount);
 
       // 🔒 SEGURANÇA: Apenas mostrar opções de master se NÃO for subconta E for master account
-      const canAccessMasterFeatures = !isCurrentSubAccount && company.is_master_account === true;
+      const canAccessMasterFeatures = !isCurrentSubAccount && companyData.is_master_account === true;
       setIsMasterAccount(canAccessMasterFeatures);
 
       console.log('✅ Dados carregados:', {
         userRole,
-        company,
+        company: companyData,
         isMasterAccount: canAccessMasterFeatures,
         isSubAccount: isCurrentSubAccount
       });

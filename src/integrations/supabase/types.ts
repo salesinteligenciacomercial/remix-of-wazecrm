@@ -1457,6 +1457,19 @@ export type Database = {
       }
       elevate_self_to_super_admin: { Args: never; Returns: Json }
       formatar_telefone: { Args: { telefone: string }; Returns: string }
+      get_my_company: {
+        Args: never
+        Returns: {
+          id: string
+          is_master_account: boolean
+          max_leads: number
+          max_users: number
+          name: string
+          parent_company_id: string
+          plan: string
+          status: string
+        }[]
+      }
       get_my_company_id: { Args: never; Returns: string }
       get_my_role: {
         Args: never

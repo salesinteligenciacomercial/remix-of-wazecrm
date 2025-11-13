@@ -87,22 +87,15 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
         .eq("id", user.id)
         .maybeSingle();
 
-      // Usar RPC para buscar company_id e role de forma segura
-      const { data: companyId } = await supabase.rpc('get_my_company_id');
+      // Usar RPC para buscar company e role de forma segura
+      const { data: company } = await supabase.rpc('get_my_company');
       const { data: userRole } = await supabase.rpc('get_my_role');
 
-      // Buscar company name se tiver company_id
+      // Definir company name
       let companyName = "Sem empresa";
-      if (companyId) {
-        const { data: companyData } = await supabase
-          .from("companies")
-          .select("name")
-          .eq("id", companyId)
-          .maybeSingle();
-        
-        if (companyData) {
-          companyName = companyData.name;
-        }
+      if (company && company.length > 0) {
+        const companyData = Array.isArray(company) ? company[0] : company;
+        companyName = companyData.name || "Sem empresa";
       }
 
       // ✅ Definir dados com valores padrão se algo falhar
