@@ -80,14 +80,13 @@ interface Compromisso {
   agenda_id?: string;
   lead_id?: string;
   usuario_responsavel_id: string;
-  owner_id?: string;
   data_hora_inicio: string;
   data_hora_fim: string;
   tipo_servico: string;
   status: string;
   observacoes?: string;
   custo_estimado?: number;
-  lembrete_enviado?: boolean;
+  lembrete_enviado: boolean;
   lead?: {
     name: string;
     phone?: string;
@@ -322,12 +321,13 @@ export default function Agenda() {
 
   // Form states para novo compromisso
   const [formData, setFormData] = useState({
+    titulo: "",
     agenda_id: "",
     lead_id: "",
     data: format(new Date(), "yyyy-MM-dd"),
     hora_inicio: "09:00",
     hora_fim: "10:00",
-    tipo_servico: "",
+    tipo_servico: "", // Opcional - pode ficar vazio
     observacoes: "",
     custo_estimado: "",
     enviar_lembrete: true,
@@ -460,10 +460,17 @@ export default function Agenda() {
     avatarFetchingRef.current.add(lead.id);
 
     try {
-      // Obter company_id via RPC
+      // Obter company_id se ainda não tiver
       if (!companyIdRef.current) {
-        const { data: companyId } = await supabase.rpc('get_my_company_id');
-        companyIdRef.current = companyId || null;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: userRole } = await supabase
+            .from('user_roles')
+            .select('company_id')
+            .eq('user_id', user.id)
+            .single();
+          companyIdRef.current = userRole?.company_id || null;
+        }
       }
 
       const telefoneNormalizado = normalizePhoneBR(telefone);
@@ -727,17 +734,26 @@ export default function Agenda() {
       console.log('🔍 [DEBUG] Criando compromisso para usuário:', user.id);
 
       // Obter company_id do usuário ANTES de criar compromisso
-      // Obter company_id via RPC
-      const { data: companyId, error: companyError } = await supabase.rpc('get_my_company_id');
+      const { data: userRole, error: userRoleError } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .single();
 
-      if (companyError || !companyId) {
-        console.error('❌ [DEBUG] Erro ao obter company_id:', companyError);
+      if (userRoleError) {
+        console.error('❌ [DEBUG] Erro ao buscar user_role:', userRoleError);
+        throw new Error(`Erro ao obter informações da empresa: ${userRoleError.message}`);
+      }
+
+      if (!userRole || !userRole.company_id) {
+        console.error('❌ [DEBUG] userRole ou company_id não encontrado:', { userRole });
         toast.error("Erro: Usuário não está associado a nenhuma empresa. Por favor, entre em contato com o administrador.");
         throw new Error("Usuário não está associado a nenhuma empresa. company_id é obrigatório.");
       }
 
-      console.log('✅ [DEBUG] company_id obtido:', companyId);
+      console.log('✅ [DEBUG] company_id obtido:', userRole.company_id);
       console.log('📋 [DEBUG] Dados do formulário:', {
+        titulo: formData.titulo,
         tipo_servico: formData.tipo_servico,
         data: formData.data,
         hora_inicio: formData.hora_inicio,
@@ -887,8 +903,10 @@ export default function Agenda() {
         compromissoData.lead_id = null; // Explicitamente null se vazio
       }
       
-      // company_id é obrigatório
-      compromissoData.company_id = companyId;
+      // company_id é opcional mas recomendado
+      if (userRole.company_id) {
+        compromissoData.company_id = userRole.company_id;
+      }
       
       // status tem default 'agendado', mas vamos definir explicitamente
       compromissoData.status = 'agendado';
@@ -1073,7 +1091,7 @@ export default function Agenda() {
                 body: {
                   numero: telefone,
                   mensagem: mensagemConfirmacao,
-                  company_id: companyId
+                  company_id: userRole.company_id
                 }
               });
 
@@ -1138,7 +1156,7 @@ export default function Agenda() {
         console.log('📝 [DEBUG] Criando lembrete para compromisso:', compromisso.id);
 
         // Validar que company_id existe (já obtido anteriormente)
-        if (!companyId) {
+        if (!userRole.company_id) {
           console.error('❌ [DEBUG] company_id não disponível para criar lembrete');
           toast.error("Erro: Não foi possível criar o lembrete. Usuário não está associado a uma empresa.");
           throw new Error("company_id é obrigatório para criar lembretes.");
@@ -1172,7 +1190,7 @@ export default function Agenda() {
           data_envio: dataEnvio.toISOString(),
           destinatario: formData.destinatario_lembrete,
           telefone_responsavel: profile?.full_name || user?.email,
-          company_id: companyId, // Usar company_id validado
+          company_id: userRole.company_id, // Usar company_id validado
         };
 
         console.log('📝 [DEBUG] Dados do lembrete:', { ...lembreteData, mensagem: '[oculta]' });
@@ -1293,10 +1311,13 @@ export default function Agenda() {
               // Obter company_id do usuário
               const { data: { user } } = await supabase.auth.getUser();
               if (user) {
-                // Obter company_id via RPC
-                const { data: cancelCompanyId } = await supabase.rpc('get_my_company_id');
+                const { data: userRole } = await supabase
+                  .from('user_roles')
+                  .select('company_id')
+                  .eq('user_id', user.id)
+                  .single();
 
-                if (cancelCompanyId) {
+                if (userRole?.company_id) {
                   const dataHoraInicio = new Date(compromissoAtual.data_hora_inicio);
                   const dataHoraFim = new Date(compromissoAtual.data_hora_fim);
                   const tipoServicoFormatado = compromissoAtual.tipo_servico 
@@ -1327,7 +1348,7 @@ export default function Agenda() {
                     body: {
                       numero: telefoneNormalizado,
                       mensagem: mensagemCancelamento,
-                      company_id: cancelCompanyId
+                      company_id: userRole.company_id
                     }
                   });
                 }
@@ -1382,10 +1403,14 @@ export default function Agenda() {
         return;
       }
 
-      // Obter company_id via RPC
-      const { data: duplicateCompanyId, error: companyError } = await supabase.rpc('get_my_company_id');
+      // Obter company_id
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .single();
 
-      if (companyError || !duplicateCompanyId) {
+      if (!userRole?.company_id) {
         toast.error("Erro: Empresa não identificada");
         return;
       }
@@ -1404,7 +1429,7 @@ export default function Agenda() {
         lead_id: compromisso.lead_id || null,
         usuario_responsavel_id: user.id,
         owner_id: user.id,
-        company_id: duplicateCompanyId,
+        company_id: userRole.company_id,
         data_hora_inicio: novaDataInicio.toISOString(),
         data_hora_fim: novaDataFim.toISOString(),
         tipo_servico: compromisso.tipo_servico || 'outro',
@@ -1437,12 +1462,13 @@ export default function Agenda() {
   const limparFormulario = () => {
     console.log('🧹 [DEBUG] Limpando formulário de agendamento');
     setFormData({
+      titulo: "",
       agenda_id: "",
       lead_id: "",
       data: format(new Date(), "yyyy-MM-dd"),
       hora_inicio: "09:00",
       hora_fim: "10:00",
-      tipo_servico: "",
+      tipo_servico: "", // Limpar para forçar nova seleção
       observacoes: "",
       custo_estimado: "",
       enviar_lembrete: true,
@@ -1504,12 +1530,14 @@ export default function Agenda() {
       // Filtro de busca
       if (buscaCompromissos.trim()) {
         const busca = buscaCompromissos.toLowerCase();
+        const titulo = (c.titulo || "").toLowerCase();
         const tipoServico = (c.tipo_servico || "").toLowerCase();
         const nomeLead = (c.lead?.name || "").toLowerCase();
         const observacoes = (c.observacoes || "").toLowerCase();
         const nomeAgenda = (c.agenda?.nome || "").toLowerCase();
         
-        if (!tipoServico.includes(busca) && 
+        if (!titulo.includes(busca) && 
+            !tipoServico.includes(busca) && 
             !nomeLead.includes(busca) && 
             !observacoes.includes(busca) &&
             !nomeAgenda.includes(busca)) {
@@ -2144,7 +2172,7 @@ export default function Agenda() {
                             <div className="flex justify-between items-start mb-2">
                               <div className="space-y-1 flex-1">
                                 <div className="flex items-center gap-2">
-                                  <span className="font-medium">{compromisso.tipo_servico}</span>
+                                  <span className="font-medium">{compromisso.titulo || compromisso.tipo_servico}</span>
                                   {getStatusBadge(compromisso.status)}
                                 </div>
                                 <p className="text-sm text-muted-foreground flex items-center gap-1">
@@ -2384,7 +2412,7 @@ export default function Agenda() {
                           <div className="flex justify-between items-start">
                             <div className="space-y-2 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium text-base">{compromisso.tipo_servico}</span>
+                                <span className="font-medium text-base">{compromisso.titulo || compromisso.tipo_servico}</span>
                                 {getStatusBadge(compromisso.status)}
                               </div>
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -2546,7 +2574,7 @@ export default function Agenda() {
                               <div className="space-y-1 flex-1">
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium">
-                                    {lembrete.compromisso?.tipo_servico || 'Compromisso'}
+                                    {lembrete.compromisso?.titulo || lembrete.compromisso?.tipo_servico || 'Compromisso'}
                                   </span>
                                   <Badge variant={
                                     lembrete.status_envio === 'enviado' ? 'default' :

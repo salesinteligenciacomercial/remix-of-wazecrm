@@ -146,26 +146,10 @@ export default function KanbanPage() {
           return;
         }
 
-        // SOLUÇÃO: Obter company_id via RPC
-        const { data: companyId, error: companyError } = await supabase.rpc('get_my_company_id');
-        
-        if (companyError) {
-          console.error('❌ Erro ao buscar company_id:', companyError);
-          throw new Error('Não foi possível identificar sua empresa');
-        }
-
-        if (!companyId) {
-          console.error('❌ Company ID não encontrado');
-          throw new Error('Usuário não está vinculado a uma empresa');
-        }
-
-        console.log('✅ Company ID obtido:', companyId);
-
-        // Carregar funis DA EMPRESA
+        // Carregar funis
         const { data: funisData, error: funisError } = await supabase
           .from("funis")
           .select("*")
-          .eq('company_id', companyId)
           .order("criado_em");
 
         if (funisError) throw funisError;
@@ -181,11 +165,10 @@ export default function KanbanPage() {
           setSelectedFunil(loadedFunis[0].id);
         }
 
-        // Carregar etapas DA EMPRESA (via funis)
+        // Carregar etapas
         const { data: etapasData, error: etapasError } = await supabase
           .from("etapas")
           .select("*")
-          .eq('company_id', companyId)
           .order("posicao");
 
         if (etapasError) throw etapasError;
@@ -193,11 +176,10 @@ export default function KanbanPage() {
 
         setEtapas(etapasData || []);
 
-        // Carregar leads DA EMPRESA
+        // Carregar leads
         const { data: leadsData, error: leadsError } = await supabase
           .from("leads")
           .select("*")
-          .eq('company_id', companyId)
           .order("created_at", { ascending: false });
 
         if (leadsError) throw leadsError;
@@ -232,14 +214,9 @@ export default function KanbanPage() {
   // Atualiza apenas os leads sem recarregar a página
   const refreshLeads = async () => {
     try {
-      // Obter company_id
-      const { data: companyId } = await supabase.rpc('get_my_company_id');
-      if (!companyId) return;
-
       const { data: leadsData, error: leadsError } = await supabase
         .from("leads")
         .select("*")
-        .eq('company_id', companyId)
         .order("created_at", { ascending: false });
       if (leadsError) throw leadsError;
       setLeads((leadsData || []).map(lead => ({
@@ -255,15 +232,7 @@ export default function KanbanPage() {
   // Atualiza funis
   const refreshFunis = async () => {
     try {
-      // Obter company_id
-      const { data: companyId } = await supabase.rpc('get_my_company_id');
-      if (!companyId) return;
-
-      const { data: funisData, error } = await supabase
-        .from('funis')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('criado_em');
+      const { data: funisData, error } = await supabase.from('funis').select('*').order('criado_em');
       if (error) throw error;
       const loaded = funisData || [];
       setFunis(loaded);
@@ -279,15 +248,7 @@ export default function KanbanPage() {
   // Atualiza etapas
   const refreshEtapas = async () => {
     try {
-      // Obter company_id
-      const { data: companyId } = await supabase.rpc('get_my_company_id');
-      if (!companyId) return;
-
-      const { data: etapasData, error } = await supabase
-        .from('etapas')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('posicao');
+      const { data: etapasData, error } = await supabase.from('etapas').select('*').order('posicao');
       if (error) throw error;
       setEtapas(etapasData || []);
     } catch (err) {

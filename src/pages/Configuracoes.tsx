@@ -6,7 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Key,
   Webhook,
@@ -71,59 +70,39 @@ export default function Configuracoes() {
         return;
       }
 
-      // Usar RPC para buscar company e role do usuário de forma segura
-      const { data: company, error: companyError } = await supabase.rpc('get_my_company');
-      const { data: userRole, error: roleError } = await supabase.rpc('get_my_role');
+      // Buscar todas as associações do usuário (pode pertencer a múltiplas empresas)
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('role, company_id, created_at')
+        .eq('user_id', user.id);
 
-      console.log('🔍 Debug user data:', { company, userRole, companyError, roleError });
+      const roleList = (roles || []).map(r => r.role).filter(Boolean);
+      setUserRoles(Array.from(new Set(roleList)));
 
-      if (companyError) {
-        console.error('Erro ao buscar empresa:', companyError);
-        setLoading(false);
-        return;
-      }
+      const companyIds = Array.from(new Set((roles || []).map(r => r.company_id).filter(Boolean)));
+      if (companyIds.length > 0) {
+        const { data: companies } = await (supabase as any)
+          .from('companies')
+          .select('id, name, plan, is_master_account, parent_company_id')
+          .in('id', companyIds as any);
 
-      if (roleError) {
-        console.error('Erro ao buscar role:', roleError);
-        setLoading(false);
-        return;
-      }
+        // Empresa atual padrão: prioriza master; senão, usa a mais recente do user_roles
+        const latestRole = (roles || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+        const preferred = (companies || []).find((c: any) => c.is_master_account) || (companies || []).find((c: any) => c.id === latestRole?.company_id) || null;
+        setCurrentCompany(preferred || null);
 
-      // Se não tem company, não tem acesso
-      if (!company || company.length === 0) {
-        setUserRoles([]);
+        // 🔒 SEGURANÇA: Verificar se a empresa atual é subconta
+        const isCurrentSubAccount = preferred?.parent_company_id !== null && preferred?.parent_company_id !== undefined;
+        setIsSubAccount(isCurrentSubAccount);
+
+        // 🔒 SEGURANÇA: Apenas mostrar opções de master se NÃO for subconta E for master account
+        const canAccessMasterFeatures = !isCurrentSubAccount && preferred?.is_master_account === true;
+        setIsMasterAccount(canAccessMasterFeatures);
+      } else {
         setIsMasterAccount(false);
         setIsSubAccount(false);
         setCurrentCompany(null);
-        setLoading(false);
-        return;
       }
-
-      // get_my_company retorna array, pegar o primeiro
-      const companyData = Array.isArray(company) ? company[0] : company;
-
-      // Definir role do usuário
-      if (userRole) {
-        setUserRoles([userRole]);
-      }
-
-      setCurrentCompany(companyData);
-
-      // 🔒 SEGURANÇA: Verificar se a empresa atual é subconta
-      const isCurrentSubAccount = companyData.parent_company_id !== null && companyData.parent_company_id !== undefined;
-      setIsSubAccount(isCurrentSubAccount);
-
-      // 🔒 SEGURANÇA: Apenas mostrar opções de master se NÃO for subconta E for master account
-      const canAccessMasterFeatures = !isCurrentSubAccount && companyData.is_master_account === true;
-      setIsMasterAccount(canAccessMasterFeatures);
-
-      console.log('✅ Dados carregados:', {
-        userRole,
-        company: companyData,
-        isMasterAccount: canAccessMasterFeatures,
-        isSubAccount: isCurrentSubAccount
-      });
-
     } catch (error) {
       console.error('Erro ao verificar role:', error);
     } finally {
@@ -300,7 +279,7 @@ export default function Configuracoes() {
     nome: "",
     email: "",
     setor: "",
-    funcao: "company_admin", // Default para company_admin ao invés de user
+    funcao: "",
     capacidadeMaxima: 10,
   });
 
@@ -418,20 +397,12 @@ export default function Configuracoes() {
     }
   };
 
-  const [criandoUsuario, setCriandoUsuario] = useState(false);
-  const [credenciaisDialog, setCredenciaisDialog] = useState<{ open: boolean; email: string; senha: string }>({
-    open: false,
-    email: "",
-    senha: ""
-  });
-
   const adicionarColaborador = async () => {
-    // Validações
     if (!novoColaborador.nome || !novoColaborador.email) {
       toast({
         variant: "destructive",
-        title: "Campos obrigatórios",
-        description: "Preencha o nome completo e e-mail do usuário",
+        title: "Erro",
+        description: "Preencha nome e e-mail do usuário",
       });
       return;
     }
@@ -441,103 +412,39 @@ export default function Configuracoes() {
     if (!emailRegex.test(novoColaborador.email)) {
       toast({
         variant: "destructive",
-        title: "E-mail inválido",
-        description: "Digite um e-mail válido (exemplo@dominio.com)",
-      });
-      return;
-    }
-
-    // Validar se tem perfil selecionado
-    if (!novoColaborador.funcao) {
-      toast({
-        variant: "destructive",
-        title: "Perfil obrigatório",
-        description: "Selecione o perfil do usuário antes de continuar",
-      });
-      return;
-    }
-
-    if (!currentCompany?.id) {
-      toast({
-        variant: "destructive",
         title: "Erro",
-        description: "Empresa não encontrada. Recarregue a página.",
+        description: "E-mail inválido",
       });
       return;
     }
 
-    setCriandoUsuario(true);
-    
     try {
-      console.log('🚀 Iniciando criação de usuário:', {
-        companyId: currentCompany.id,
-        email: novoColaborador.email,
-        nome: novoColaborador.nome,
-        role: novoColaborador.funcao || 'company_admin'
-      });
+      if (!currentCompany?.id) throw new Error('Empresa não encontrada');
       
       const { data, error } = await supabase.functions.invoke('criar-usuario-subconta', {
         body: {
           companyId: currentCompany.id,
-          email: novoColaborador.email.trim().toLowerCase(),
-          full_name: novoColaborador.nome.trim(),
-          role: novoColaborador.funcao || 'company_admin', // Garantir que sempre tem um valor válido
+          email: novoColaborador.email,
+          full_name: novoColaborador.nome,
+          role: novoColaborador.funcao || 'user',
         },
       });
       
-      console.log('📊 Resposta da criação:', { data, error });
+      if (error) throw error;
       
-      if (error) {
-        console.error('❌ Erro retornado pela edge function:', error);
-        throw error;
-      }
-
-      if (!data?.success) {
-        console.error('❌ Criação não teve sucesso:', data);
-        throw new Error(data?.error || 'Falha ao criar usuário');
-      }
-      
-      // Sucesso - mostrar credenciais
-      console.log('✅ Usuário criado com sucesso!');
-      
-      setCredenciaisDialog({
-        open: true,
-        email: data.credentials?.email || novoColaborador.email,
-        senha: data.credentials?.senha || ''
+      setNovoColaborador({ nome: "", email: "", setor: "", funcao: "", capacidadeMaxima: 10 });
+      toast({ 
+        title: "Usuário criado", 
+        description: "Usuário criado e vinculado à empresa com sucesso." 
       });
-      
-      // Limpar formulário
-      setNovoColaborador({ nome: "", email: "", setor: "", funcao: "company_admin", capacidadeMaxima: 10 });
-      
-      // Recarregar lista
       await carregarColaboradores();
-      
     } catch (e: any) {
-      console.error('❌ Erro ao criar usuário:', e);
-      
-      let errorMessage = 'Erro ao criar usuário. ';
-      
-      // Tratar erros específicos
-      if (e?.message?.includes('já está cadastrado') || e?.message?.includes('EMAIL_JA_CADASTRADO')) {
-        errorMessage = 'Este e-mail já está cadastrado no sistema. Use outro e-mail ou remova o usuário existente.';
-      } else if (e?.message?.includes('Permissão negada') || e?.message?.includes('Unauthorized')) {
-        errorMessage = 'Você não tem permissão para criar usuários. Entre em contato com o administrador.';
-      } else if (e?.message?.includes('Empresa não encontrada')) {
-        errorMessage = 'Empresa não encontrada. Recarregue a página e tente novamente.';
-      } else if (e?.message) {
-        errorMessage = e.message;
-      } else {
-        errorMessage = 'Ocorreu um erro desconhecido. Tente novamente.';
-      }
-      
+      console.error('Erro ao criar usuário:', e);
       toast({ 
         variant: 'destructive', 
         title: 'Erro ao criar usuário', 
-        description: errorMessage,
-        duration: 6000
+        description: e.message || 'Ocorreu um erro ao criar o usuário. Verifique se o e-mail já não está cadastrado.' 
       });
-    } finally {
-      setCriandoUsuario(false);
     }
   };
 
@@ -726,7 +633,7 @@ export default function Configuracoes() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="funcao">Perfil *</Label>
+                    <Label htmlFor="funcao">Perfil</Label>
                     <Select
                       value={novoColaborador.funcao}
                       onValueChange={(value) => {
@@ -741,6 +648,7 @@ export default function Configuracoes() {
                         <SelectItem value="gestor">Gestor</SelectItem>
                         <SelectItem value="vendedor">Vendedor</SelectItem>
                         <SelectItem value="suporte">Suporte</SelectItem>
+                        <SelectItem value="user">Usuário</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -761,22 +669,9 @@ export default function Configuracoes() {
                   </div>
                 </div>
 
-                <Button 
-                  onClick={adicionarColaborador} 
-                  className="w-full"
-                  disabled={criandoUsuario}
-                >
-                  {criandoUsuario ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
-                      Criando usuário...
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="h-4 w-4 mr-2" />
-                      Adicionar Colaborador
-                    </>
-                  )}
+                <Button onClick={adicionarColaborador} className="w-full">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Adicionar Colaborador
                 </Button>
               </div>
             </CardContent>
@@ -1259,75 +1154,6 @@ export default function Configuracoes() {
           onOpenChange={setManageUsersOpen}
         />
       )}
-      
-      {/* Dialog para exibir credenciais do novo usuário */}
-      <Dialog open={credenciaisDialog.open} onOpenChange={(open) => setCredenciaisDialog(prev => ({ ...prev, open }))}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>✅ Usuário criado com sucesso!</DialogTitle>
-            <DialogDescription>
-              Anote as credenciais abaixo. A senha não poderá ser visualizada novamente.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">E-mail de acesso</Label>
-              <div className="flex items-center gap-2">
-                <Input 
-                  readOnly 
-                  value={credenciaisDialog.email}
-                  className="font-mono text-sm"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    navigator.clipboard.writeText(credenciaisDialog.email);
-                    toast({ title: "E-mail copiado!" });
-                  }}
-                >
-                  Copiar
-                </Button>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Senha temporária</Label>
-              <div className="flex items-center gap-2">
-                <Input 
-                  readOnly 
-                  value={credenciaisDialog.senha}
-                  className="font-mono text-sm"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    navigator.clipboard.writeText(credenciaisDialog.senha);
-                    toast({ title: "Senha copiada!" });
-                  }}
-                >
-                  Copiar
-                </Button>
-              </div>
-            </div>
-            
-            <Alert>
-              <AlertDescription className="text-sm">
-                <strong>Importante:</strong> Envie essas credenciais para o novo usuário de forma segura. 
-                Recomende que ele troque a senha no primeiro acesso.
-              </AlertDescription>
-            </Alert>
-            
-            <Button 
-              onClick={() => setCredenciaisDialog({ open: false, email: "", senha: "" })}
-              className="w-full"
-            >
-              Fechar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

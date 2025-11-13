@@ -63,11 +63,17 @@ export function SubcontasManager() {
 
   const carregarParentCompanyId = async () => {
     try {
-      const { data: company } = await supabase.rpc('get_my_company');
-      
-      if (company && company.length > 0) {
-        const companyData = Array.isArray(company) ? company[0] : company;
-        setParentCompanyId(companyData.id);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (userRole?.company_id) {
+        setParentCompanyId(userRole.company_id);
       }
     } catch (error) {
       console.error('Erro ao carregar parent company ID:', error);
@@ -78,22 +84,23 @@ export function SubcontasManager() {
     try {
       setLoading(true);
       
-      // Buscar company_id do usuário usando RPC segura
-      const { data: company } = await supabase.rpc('get_my_company');
+      // Buscar company_id do usuário logado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      if (!company || company.length === 0) {
-        setSubcontas([]);
-        setLoading(false);
-        return;
-      }
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .single();
 
-      const companyData = Array.isArray(company) ? company[0] : company;
+      if (!userRole) return;
 
       // Buscar subcontas onde parent_company_id é a empresa do usuário
       const { data, error } = await supabase
         .from('companies')
         .select('*')
-        .eq('parent_company_id', companyData.id)
+        .eq('parent_company_id', userRole.company_id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

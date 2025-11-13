@@ -170,11 +170,10 @@ export default function Leads() {
 
   const carregarCompanyIdELeads = async () => {
     try {
-      const { data: auth, error: authError } = await supabase.auth.getUser();
+      const { data: auth } = await supabase.auth.getUser();
       const userId = auth?.user?.id;
       
-      if (authError || !userId) {
-        console.error('❌ Erro de autenticação:', authError);
+      if (!userId) {
         toast({
           variant: "destructive",
           title: "Erro de autenticação",
@@ -183,39 +182,25 @@ export default function Leads() {
         return;
       }
 
-      console.log('✅ Usuário autenticado:', auth.user.email);
+      const { data: role, error: roleError } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', userId)
+        .maybeSingle();
 
-      // SOLUÇÃO: Usar RPC para chamar função SECURITY DEFINER
-      const { data: companyId, error: companyError } = await supabase
-        .rpc('get_my_company_id');
-
-      console.log('📊 Company ID retornado:', { companyId, companyError });
-
-      if (companyError) {
-        console.error('❌ Erro ao buscar company ID:', companyError);
+      if (roleError || !role?.company_id) {
         toast({
           variant: "destructive",
-          title: "Erro ao buscar empresa",
-          description: `Erro: ${companyError.message}`,
+          title: "Empresa não encontrada",
+          description: "Você precisa estar vinculado a uma empresa para gerenciar leads.",
         });
         return;
       }
 
-      if (!companyId) {
-        console.error('❌ Company ID não encontrado');
-        toast({
-          variant: "destructive",
-          title: "Usuário sem empresa associada",
-          description: "Entre em contato com o suporte para vincular sua conta a uma empresa.",
-        });
-        return;
-      }
-
-      console.log('✅ Company ID encontrado:', companyId);
-      companyIdRef.current = companyId;
+      companyIdRef.current = role.company_id;
       carregarLeads();
     } catch (error) {
-      console.error('❌ Erro fatal ao carregar company_id:', error);
+      console.error('Erro ao carregar company_id:', error);
       toast({
         variant: "destructive",
         title: "Erro ao carregar dados",

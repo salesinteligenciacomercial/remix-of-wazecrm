@@ -65,9 +65,9 @@ serve(async (req) => {
     }
 
     const userRole = role || 'company_admin';
-    const allowedRoles = new Set(['company_admin', 'gestor', 'vendedor', 'suporte']);
+    const allowedRoles = new Set(['company_admin', 'gestor', 'vendedor', 'suporte', 'user']);
     if (!allowedRoles.has(userRole)) {
-      return new Response(JSON.stringify({ error: 'Perfil inválido. Use: company_admin, gestor, vendedor ou suporte' }), { 
+      return new Response(JSON.stringify({ error: 'Perfil inválido' }), { 
         status: 400, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
@@ -136,8 +136,21 @@ serve(async (req) => {
         });
       }
 
-      // Não precisa verificar email antes - o createUser já retorna erro se existir
-      console.log('📝 [CRIAR-USUARIO] Preparando criação de subconta...');
+      // VERIFICAR SE EMAIL JÁ EXISTE ANTES DE CRIAR EMPRESA
+      console.log('🔍 [CRIAR-USUARIO] Verificando se email já existe...');
+      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+      const emailExists = existingUser?.users?.some(u => u.email?.toLowerCase() === email.toLowerCase());
+      
+      if (emailExists) {
+        console.error('❌ [CRIAR-USUARIO] Email já cadastrado:', email);
+        return new Response(JSON.stringify({ 
+          error: 'Este email já está cadastrado no sistema. Use outro email ou remova o usuário existente primeiro.',
+          code: 'EMAIL_JA_CADASTRADO'
+        }), { 
+          status: 409, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
 
       console.log('📝 [CRIAR-USUARIO] Criando nova empresa...');
       
@@ -188,7 +201,22 @@ serve(async (req) => {
       }
 
       targetCompanyId = companyId!;
-      console.log('📝 [CRIAR-USUARIO] Preparando criação de usuário...');
+      
+      // VERIFICAR SE EMAIL JÁ EXISTE (para usuários em empresa existente também)
+      console.log('🔍 [CRIAR-USUARIO] Verificando se email já existe...');
+      const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+      const emailExists = existingUsers?.users?.some(u => u.email?.toLowerCase() === email.toLowerCase());
+      
+      if (emailExists) {
+        console.error('❌ [CRIAR-USUARIO] Email já cadastrado:', email);
+        return new Response(JSON.stringify({ 
+          error: `O e-mail ${email} já está cadastrado no sistema. Use outro e-mail ou remova o usuário existente primeiro.`,
+          code: 'EMAIL_JA_CADASTRADO'
+        }), { 
+          status: 409, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
     }
 
     console.log('🔐 [CRIAR-USUARIO] Criando usuário de autenticação...');

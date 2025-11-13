@@ -1600,14 +1600,17 @@ function Conversas() {
             return;
           }
           
-          // Buscar company usando RPC segura
-          const { data: company } = await supabase.rpc('get_my_company');
+          // Buscar company_id
+          const { data: userRole } = await supabase
+            .from('user_roles')
+            .select('company_id')
+            .eq('user_id', user.id)
+            .maybeSingle();
 
-          if (company && company.length > 0) {
-            const companyData = Array.isArray(company) ? company[0] : company;
-            console.log('🏢 Company ID carregado:', companyData.id);
-            setUserCompanyId(companyData.id);
-            userCompanyIdRef.current = companyData.id;
+          if (userRole?.company_id) {
+            console.log('🏢 Company ID carregado:', userRole.company_id);
+            setUserCompanyId(userRole.company_id);
+            userCompanyIdRef.current = userRole.company_id;
           }
           
           // Buscar perfil
@@ -1624,9 +1627,13 @@ function Conversas() {
           return;
         }
         
-        // ⚡ OTIMIZAÇÃO: Buscar company e perfil em paralelo usando RPC segura
-        const [companyResult, profileResult] = await Promise.all([
-          supabase.rpc('get_my_company'),
+        // ⚡ OTIMIZAÇÃO: Buscar company_id e perfil em paralelo (mais rápido)
+        const [userRoleResult, profileResult] = await Promise.all([
+          supabase
+            .from('user_roles')
+            .select('company_id')
+            .eq('user_id', userId)
+            .maybeSingle(),
           supabase
             .from("profiles")
             .select("full_name, email")
@@ -1634,11 +1641,10 @@ function Conversas() {
             .maybeSingle()
         ]);
 
-        if (companyResult.data && companyResult.data.length > 0) {
-          const companyData = Array.isArray(companyResult.data) ? companyResult.data[0] : companyResult.data;
-          console.log('🏢 Company ID carregado:', companyData.id);
-          setUserCompanyId(companyData.id);
-          userCompanyIdRef.current = companyData.id;
+        if (userRoleResult.data?.company_id) {
+          console.log('🏢 Company ID carregado:', userRoleResult.data.company_id);
+          setUserCompanyId(userRoleResult.data.company_id);
+          userCompanyIdRef.current = userRoleResult.data.company_id;
         } else {
           console.error('❌ Erro: Usuário sem empresa associada');
           toast.error('Erro: Usuário sem empresa associada');
