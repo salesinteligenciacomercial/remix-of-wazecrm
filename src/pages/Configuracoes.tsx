@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Key,
   Webhook,
@@ -397,12 +398,20 @@ export default function Configuracoes() {
     }
   };
 
+  const [criandoUsuario, setCriandoUsuario] = useState(false);
+  const [credenciaisDialog, setCredenciaisDialog] = useState<{ open: boolean; email: string; senha: string }>({
+    open: false,
+    email: "",
+    senha: ""
+  });
+
   const adicionarColaborador = async () => {
+    // Validações
     if (!novoColaborador.nome || !novoColaborador.email) {
       toast({
         variant: "destructive",
-        title: "Erro",
-        description: "Preencha nome e e-mail do usuário",
+        title: "Campos obrigatórios",
+        description: "Preencha o nome completo e e-mail do usuário",
       });
       return;
     }
@@ -412,39 +421,103 @@ export default function Configuracoes() {
     if (!emailRegex.test(novoColaborador.email)) {
       toast({
         variant: "destructive",
-        title: "Erro",
-        description: "E-mail inválido",
+        title: "E-mail inválido",
+        description: "Digite um e-mail válido (exemplo@dominio.com)",
       });
       return;
     }
 
+    // Validar se tem perfil selecionado
+    if (!novoColaborador.funcao) {
+      toast({
+        variant: "destructive",
+        title: "Perfil obrigatório",
+        description: "Selecione o perfil do usuário antes de continuar",
+      });
+      return;
+    }
+
+    if (!currentCompany?.id) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Empresa não encontrada. Recarregue a página.",
+      });
+      return;
+    }
+
+    setCriandoUsuario(true);
+    
     try {
-      if (!currentCompany?.id) throw new Error('Empresa não encontrada');
+      console.log('🚀 Iniciando criação de usuário:', {
+        companyId: currentCompany.id,
+        email: novoColaborador.email,
+        nome: novoColaborador.nome,
+        role: novoColaborador.funcao
+      });
       
       const { data, error } = await supabase.functions.invoke('criar-usuario-subconta', {
         body: {
           companyId: currentCompany.id,
-          email: novoColaborador.email,
-          full_name: novoColaborador.nome,
-          role: novoColaborador.funcao || 'user',
+          email: novoColaborador.email.trim().toLowerCase(),
+          full_name: novoColaborador.nome.trim(),
+          role: novoColaborador.funcao,
         },
       });
       
-      if (error) throw error;
+      console.log('📊 Resposta da criação:', { data, error });
       
-      setNovoColaborador({ nome: "", email: "", setor: "", funcao: "", capacidadeMaxima: 10 });
-      toast({ 
-        title: "Usuário criado", 
-        description: "Usuário criado e vinculado à empresa com sucesso." 
+      if (error) {
+        console.error('❌ Erro retornado pela edge function:', error);
+        throw error;
+      }
+
+      if (!data?.success) {
+        console.error('❌ Criação não teve sucesso:', data);
+        throw new Error(data?.error || 'Falha ao criar usuário');
+      }
+      
+      // Sucesso - mostrar credenciais
+      console.log('✅ Usuário criado com sucesso!');
+      
+      setCredenciaisDialog({
+        open: true,
+        email: data.credentials?.email || novoColaborador.email,
+        senha: data.credentials?.senha || ''
       });
+      
+      // Limpar formulário
+      setNovoColaborador({ nome: "", email: "", setor: "", funcao: "", capacidadeMaxima: 10 });
+      
+      // Recarregar lista
       await carregarColaboradores();
+      
     } catch (e: any) {
-      console.error('Erro ao criar usuário:', e);
+      console.error('❌ Erro ao criar usuário:', e);
+      
+      let errorMessage = 'Erro ao criar usuário. ';
+      
+      // Tratar erros específicos
+      if (e?.message?.includes('já está cadastrado') || e?.message?.includes('EMAIL_JA_CADASTRADO')) {
+        errorMessage = 'Este e-mail já está cadastrado no sistema. Use outro e-mail ou remova o usuário existente.';
+      } else if (e?.message?.includes('Permissão negada') || e?.message?.includes('Unauthorized')) {
+        errorMessage = 'Você não tem permissão para criar usuários. Entre em contato com o administrador.';
+      } else if (e?.message?.includes('Empresa não encontrada')) {
+        errorMessage = 'Empresa não encontrada. Recarregue a página e tente novamente.';
+      } else if (e?.message) {
+        errorMessage = e.message;
+      } else {
+        errorMessage = 'Ocorreu um erro desconhecido. Tente novamente.';
+      }
+      
       toast({ 
         variant: 'destructive', 
         title: 'Erro ao criar usuário', 
-        description: e.message || 'Ocorreu um erro ao criar o usuário. Verifique se o e-mail já não está cadastrado.' 
+        description: errorMessage,
+        duration: 6000
       });
+    } finally {
+      setCriandoUsuario(false);
     }
   };
 
@@ -669,9 +742,22 @@ export default function Configuracoes() {
                   </div>
                 </div>
 
-                <Button onClick={adicionarColaborador} className="w-full">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Adicionar Colaborador
+                <Button 
+                  onClick={adicionarColaborador} 
+                  className="w-full"
+                  disabled={criandoUsuario}
+                >
+                  {criandoUsuario ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                      Criando usuário...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Adicionar Colaborador
+                    </>
+                  )}
                 </Button>
               </div>
             </CardContent>
@@ -1154,6 +1240,75 @@ export default function Configuracoes() {
           onOpenChange={setManageUsersOpen}
         />
       )}
+      
+      {/* Dialog para exibir credenciais do novo usuário */}
+      <Dialog open={credenciaisDialog.open} onOpenChange={(open) => setCredenciaisDialog(prev => ({ ...prev, open }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>✅ Usuário criado com sucesso!</DialogTitle>
+            <DialogDescription>
+              Anote as credenciais abaixo. A senha não poderá ser visualizada novamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">E-mail de acesso</Label>
+              <div className="flex items-center gap-2">
+                <Input 
+                  readOnly 
+                  value={credenciaisDialog.email}
+                  className="font-mono text-sm"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(credenciaisDialog.email);
+                    toast({ title: "E-mail copiado!" });
+                  }}
+                >
+                  Copiar
+                </Button>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Senha temporária</Label>
+              <div className="flex items-center gap-2">
+                <Input 
+                  readOnly 
+                  value={credenciaisDialog.senha}
+                  className="font-mono text-sm"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(credenciaisDialog.senha);
+                    toast({ title: "Senha copiada!" });
+                  }}
+                >
+                  Copiar
+                </Button>
+              </div>
+            </div>
+            
+            <Alert>
+              <AlertDescription className="text-sm">
+                <strong>Importante:</strong> Envie essas credenciais para o novo usuário de forma segura. 
+                Recomende que ele troque a senha no primeiro acesso.
+              </AlertDescription>
+            </Alert>
+            
+            <Button 
+              onClick={() => setCredenciaisDialog({ open: false, email: "", senha: "" })}
+              className="w-full"
+            >
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

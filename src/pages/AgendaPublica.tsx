@@ -36,7 +36,6 @@ interface Agenda {
   id: string;
   nome: string;
   tipo: string;
-  slug: string;
   responsavel_id?: string;
 }
 

@@ -80,13 +80,14 @@ interface Compromisso {
   agenda_id?: string;
   lead_id?: string;
   usuario_responsavel_id: string;
+  owner_id?: string;
   data_hora_inicio: string;
   data_hora_fim: string;
   tipo_servico: string;
   status: string;
   observacoes?: string;
   custo_estimado?: number;
-  lembrete_enviado: boolean;
+  lembrete_enviado?: boolean;
   lead?: {
     name: string;
     phone?: string;
