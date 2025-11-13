@@ -92,18 +92,39 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
         return;
       }
 
-      // Get company info and role
+      // Get company info and role - usando maybeSingle para evitar erro se não encontrar
       const { data: userRoleData, error: roleError } = await supabase
         .from("user_roles")
-        .select("role, company_id, companies(name)")
+        .select("role, company_id")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (roleError || !userRoleData) {
-        console.error("❌ Erro ao obter role:", roleError);
-        console.log("🚪 Forçando logout - role não encontrada");
+      if (roleError) {
+        console.error("❌ Erro ao buscar role:", roleError);
+        console.log("🚪 Forçando logout - erro ao buscar role");
         await handleLogout();
         return;
+      }
+
+      if (!userRoleData) {
+        console.error("❌ Nenhuma role encontrada para o usuário");
+        console.log("🚪 Forçando logout - usuário sem role atribuída");
+        await handleLogout();
+        return;
+      }
+
+      // Buscar company separadamente (mais robusto)
+      let companyName = "Sem empresa";
+      if (userRoleData.company_id) {
+        const { data: companyData } = await supabase
+          .from("companies")
+          .select("name")
+          .eq("id", userRoleData.company_id)
+          .maybeSingle();
+        
+        if (companyData) {
+          companyName = companyData.name;
+        }
       }
 
       // ✅ Só define os dados se tudo estiver OK
@@ -123,14 +144,14 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
       
       setUserRole(roleMap[userRoleData.role] || 'Usuário');
       
-      if (userRoleData.companies) {
-        setCompanyName((userRoleData.companies as any).name);
-      }
+      // Set company name
+      setCompanyName(companyName);
+      
 
       console.log("✅ Dados do usuário carregados:", {
         name: profile?.full_name || user.email,
         role: userRoleData.role,
-        company: (userRoleData.companies as any)?.name
+        company: companyName
       });
     } catch (error) {
       console.error("❌ Erro fatal ao carregar dados do usuário:", error);
