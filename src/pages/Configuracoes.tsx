@@ -71,39 +71,63 @@ export default function Configuracoes() {
         return;
       }
 
-      // Buscar todas as associações do usuário (pode pertencer a múltiplas empresas)
-      const { data: roles } = await supabase
-        .from('user_roles')
-        .select('role, company_id, created_at')
-        .eq('user_id', user.id);
+      // Usar RPC para buscar company_id e role do usuário
+      const { data: companyId, error: companyError } = await supabase.rpc('get_my_company_id');
+      const { data: userRole, error: roleError } = await supabase.rpc('get_my_role');
 
-      const roleList = (roles || []).map(r => r.role).filter(Boolean);
-      setUserRoles(Array.from(new Set(roleList)));
+      console.log('🔍 Debug roles:', { companyId, userRole, companyError, roleError });
 
-      const companyIds = Array.from(new Set((roles || []).map(r => r.company_id).filter(Boolean)));
-      if (companyIds.length > 0) {
-        const { data: companies } = await (supabase as any)
-          .from('companies')
-          .select('id, name, plan, is_master_account, parent_company_id')
-          .in('id', companyIds as any);
+      if (companyError || roleError) {
+        console.error('Erro ao buscar dados do usuário:', { companyError, roleError });
+        setLoading(false);
+        return;
+      }
 
-        // Empresa atual padrão: prioriza master; senão, usa a mais recente do user_roles
-        const latestRole = (roles || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-        const preferred = (companies || []).find((c: any) => c.is_master_account) || (companies || []).find((c: any) => c.id === latestRole?.company_id) || null;
-        setCurrentCompany(preferred || null);
-
-        // 🔒 SEGURANÇA: Verificar se a empresa atual é subconta
-        const isCurrentSubAccount = preferred?.parent_company_id !== null && preferred?.parent_company_id !== undefined;
-        setIsSubAccount(isCurrentSubAccount);
-
-        // 🔒 SEGURANÇA: Apenas mostrar opções de master se NÃO for subconta E for master account
-        const canAccessMasterFeatures = !isCurrentSubAccount && preferred?.is_master_account === true;
-        setIsMasterAccount(canAccessMasterFeatures);
-      } else {
+      // Se não tem company_id, não tem acesso
+      if (!companyId) {
+        setUserRoles([]);
         setIsMasterAccount(false);
         setIsSubAccount(false);
         setCurrentCompany(null);
+        setLoading(false);
+        return;
       }
+
+      // Definir role do usuário
+      if (userRole) {
+        setUserRoles([userRole]);
+      }
+
+      // Buscar dados da empresa
+      const { data: company, error: companyDataError } = await supabase
+        .from('companies')
+        .select('id, name, plan, is_master_account, parent_company_id')
+        .eq('id', companyId)
+        .single();
+
+      if (companyDataError || !company) {
+        console.error('Erro ao buscar empresa:', companyDataError);
+        setLoading(false);
+        return;
+      }
+
+      setCurrentCompany(company);
+
+      // 🔒 SEGURANÇA: Verificar se a empresa atual é subconta
+      const isCurrentSubAccount = company.parent_company_id !== null && company.parent_company_id !== undefined;
+      setIsSubAccount(isCurrentSubAccount);
+
+      // 🔒 SEGURANÇA: Apenas mostrar opções de master se NÃO for subconta E for master account
+      const canAccessMasterFeatures = !isCurrentSubAccount && company.is_master_account === true;
+      setIsMasterAccount(canAccessMasterFeatures);
+
+      console.log('✅ Dados carregados:', {
+        userRole,
+        company,
+        isMasterAccount: canAccessMasterFeatures,
+        isSubAccount: isCurrentSubAccount
+      });
+
     } catch (error) {
       console.error('Erro ao verificar role:', error);
     } finally {
