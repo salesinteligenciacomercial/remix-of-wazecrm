@@ -24,6 +24,7 @@ export type Database = {
           nome: string
           owner_id: string
           responsavel_id: string | null
+          slug: string | null
           status: string | null
           tempo_medio_servico: number | null
           tipo: string
@@ -38,6 +39,7 @@ export type Database = {
           nome: string
           owner_id: string
           responsavel_id?: string | null
+          slug?: string | null
           status?: string | null
           tempo_medio_servico?: number | null
           tipo?: string
@@ -52,6 +54,7 @@ export type Database = {
           nome?: string
           owner_id?: string
           responsavel_id?: string | null
+          slug?: string | null
           status?: string | null
           tempo_medio_servico?: number | null
           tipo?: string
