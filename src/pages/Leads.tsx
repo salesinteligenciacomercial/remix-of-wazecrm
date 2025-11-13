@@ -170,10 +170,11 @@ export default function Leads() {
 
   const carregarCompanyIdELeads = async () => {
     try {
-      const { data: auth } = await supabase.auth.getUser();
+      const { data: auth, error: authError } = await supabase.auth.getUser();
       const userId = auth?.user?.id;
       
-      if (!userId) {
+      if (authError || !userId) {
+        console.error('❌ Erro de autenticação:', authError);
         toast({
           variant: "destructive",
           title: "Erro de autenticação",
@@ -182,13 +183,29 @@ export default function Leads() {
         return;
       }
 
+      console.log('✅ Usuário autenticado:', auth.user.email);
+
+      // Buscar company_id do usuário
       const { data: role, error: roleError } = await supabase
         .from('user_roles')
-        .select('company_id')
+        .select('company_id, role')
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (roleError || !role?.company_id) {
+      console.log('📊 Dados do user_roles:', { role, roleError });
+
+      if (roleError) {
+        console.error('❌ Erro ao buscar role:', roleError);
+        toast({
+          variant: "destructive",
+          title: "Erro ao buscar empresa",
+          description: `Erro: ${roleError.message}. Verifique as permissões.`,
+        });
+        return;
+      }
+
+      if (!role?.company_id) {
+        console.error('❌ Company ID não encontrado para o usuário');
         toast({
           variant: "destructive",
           title: "Empresa não encontrada",
@@ -197,10 +214,11 @@ export default function Leads() {
         return;
       }
 
+      console.log('✅ Company ID encontrado:', role.company_id);
       companyIdRef.current = role.company_id;
       carregarLeads();
     } catch (error) {
-      console.error('Erro ao carregar company_id:', error);
+      console.error('❌ Erro fatal ao carregar company_id:', error);
       toast({
         variant: "destructive",
         title: "Erro ao carregar dados",
