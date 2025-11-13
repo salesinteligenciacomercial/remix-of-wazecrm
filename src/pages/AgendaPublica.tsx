@@ -63,11 +63,11 @@ export default function AgendaPublica() {
       setLoading(true);
       setError(null);
 
-      // Buscar agenda pelo slug
+      // Buscar agenda pelo ID (slug foi removido do schema)
       const { data: agendaData, error: agendaError } = await supabase
         .from('agendas')
         .select('*')
-        .eq('slug', slug)
+        .eq('id', slug)
         .eq('status', 'ativo')
         .single();
 
