@@ -185,37 +185,34 @@ export default function Leads() {
 
       console.log('✅ Usuário autenticado:', auth.user.email);
 
-      // Buscar company_id do usuário
-      const { data: role, error: roleError } = await supabase
-        .from('user_roles')
-        .select('company_id, role')
-        .eq('user_id', userId)
-        .maybeSingle();
+      // SOLUÇÃO: Usar RPC para chamar função SECURITY DEFINER
+      const { data: companyId, error: companyError } = await supabase
+        .rpc('get_my_company_id');
 
-      console.log('📊 Dados do user_roles:', { role, roleError });
+      console.log('📊 Company ID retornado:', { companyId, companyError });
 
-      if (roleError) {
-        console.error('❌ Erro ao buscar role:', roleError);
+      if (companyError) {
+        console.error('❌ Erro ao buscar company ID:', companyError);
         toast({
           variant: "destructive",
           title: "Erro ao buscar empresa",
-          description: `Erro: ${roleError.message}. Verifique as permissões.`,
+          description: `Erro: ${companyError.message}`,
         });
         return;
       }
 
-      if (!role?.company_id) {
-        console.error('❌ Company ID não encontrado para o usuário');
+      if (!companyId) {
+        console.error('❌ Company ID não encontrado');
         toast({
           variant: "destructive",
-          title: "Empresa não encontrada",
-          description: "Você precisa estar vinculado a uma empresa para gerenciar leads.",
+          title: "Usuário sem empresa associada",
+          description: "Entre em contato com o suporte para vincular sua conta a uma empresa.",
         });
         return;
       }
 
-      console.log('✅ Company ID encontrado:', role.company_id);
-      companyIdRef.current = role.company_id;
+      console.log('✅ Company ID encontrado:', companyId);
+      companyIdRef.current = companyId;
       carregarLeads();
     } catch (error) {
       console.error('❌ Erro fatal ao carregar company_id:', error);

@@ -74,6 +74,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
         // ⚠️ NÃO forçar logout aqui - apenas definir valores padrão
         setUserName("Usuário");
         setUserRole("Usuário");
+        setLoading(false);
         return;
       }
 
@@ -86,20 +87,17 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
         .eq("id", user.id)
         .maybeSingle();
 
-      // Get company info and role (opcional, não bloquear login se falhar)
-      const { data: userRoleData } = await supabase
-        .from("user_roles")
-        .select("role, company_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // Usar RPC para buscar company_id e role de forma segura
+      const { data: companyId } = await supabase.rpc('get_my_company_id');
+      const { data: userRole } = await supabase.rpc('get_my_role');
 
-      // Buscar company separadamente (mais robusto)
+      // Buscar company name se tiver company_id
       let companyName = "Sem empresa";
-      if (userRoleData?.company_id) {
+      if (companyId) {
         const { data: companyData } = await supabase
           .from("companies")
           .select("name")
-          .eq("id", userRoleData.company_id)
+          .eq("id", companyId)
           .maybeSingle();
         
         if (companyData) {
@@ -123,12 +121,12 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
         'user': 'Usuário Padrão'
       };
       
-      setUserRole(userRoleData?.role ? roleMap[userRoleData.role] || 'Usuário' : 'Usuário');
+      setUserRole(userRole ? roleMap[userRole] || 'Usuário' : 'Usuário');
       setCompanyName(companyName);
 
       console.log("✅ Dados do usuário carregados:", {
         name: profile?.full_name || user.email,
-        role: userRoleData?.role || 'sem role',
+        role: userRole || 'sem role',
         company: companyName
       });
     } catch (error) {
