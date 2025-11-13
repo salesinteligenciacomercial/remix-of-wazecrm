@@ -66,14 +66,18 @@ export function SubcontasManager() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', user.id)
-        .single();
+      const { data: userRole, error } = await supabase.rpc('get_my_user_role');
+      
+      if (error) {
+        console.error('Erro ao buscar role:', error);
+        return;
+      }
 
-      if (userRole?.company_id) {
-        setParentCompanyId(userRole.company_id);
+      // get_my_user_role retorna um array
+      const role = Array.isArray(userRole) ? userRole[0] : userRole;
+
+      if (role?.company_id) {
+        setParentCompanyId(role.company_id);
       }
     } catch (error) {
       console.error('Erro ao carregar parent company ID:', error);
@@ -84,27 +88,35 @@ export function SubcontasManager() {
     try {
       setLoading(true);
       
-      // Buscar company_id do usuário logado
+      // Buscar company_id do usuário logado usando RPC
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', user.id)
-        .single();
+      const { data: userRole, error: roleError } = await supabase.rpc('get_my_user_role');
+      
+      if (roleError) {
+        console.error('Erro ao buscar role:', roleError);
+        throw roleError;
+      }
 
-      if (!userRole) return;
+      // get_my_user_role retorna um array
+      const role = Array.isArray(userRole) ? userRole[0] : userRole;
+
+      if (!role?.company_id) {
+        console.warn('Usuário sem company_id');
+        return;
+      }
 
       // Buscar subcontas onde parent_company_id é a empresa do usuário
       const { data, error } = await supabase
         .from('companies')
         .select('*')
-        .eq('parent_company_id', userRole.company_id)
+        .eq('parent_company_id', role.company_id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       
+      console.log('✅ Subcontas carregadas:', data?.length || 0);
       setSubcontas(data || []);
     } catch (error: any) {
       console.error('Erro ao carregar subcontas:', error);
