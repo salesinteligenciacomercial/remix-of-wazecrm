@@ -11,6 +11,9 @@ interface ScheduledMessage {
   message_content: string;
   scheduled_datetime: string;
   company_id: string;
+  owner_id?: string;
+  contact_name?: string;
+  conversation_id?: string;
 }
 
 Deno.serve(async (req) => {
@@ -110,6 +113,7 @@ Deno.serve(async (req) => {
         } else {
           console.log(`✅ Mensagem ${message.id} enviada com sucesso`);
           
+          // Atualizar status da mensagem agendada
           await supabase
             .from('scheduled_whatsapp_messages')
             .update({
@@ -118,6 +122,28 @@ Deno.serve(async (req) => {
               updated_at: new Date().toISOString()
             })
             .eq('id', message.id);
+
+          // Criar registro na tabela conversas para exibir a mensagem enviada no CRM
+          const { error: conversaError } = await supabase
+            .from('conversas')
+            .insert({
+              numero: message.phone_number,
+              mensagem: message.message_content,
+              origem: 'WhatsApp',
+              status: 'Enviada',
+              tipo_mensagem: 'text',
+              nome_contato: (message as any).contact_name || message.phone_number,
+              owner_id: (message as any).owner_id,
+              company_id: message.company_id,
+              fromMe: true,
+              created_at: new Date().toISOString()
+            });
+
+          if (conversaError) {
+            console.error(`⚠️ Erro ao salvar conversa no CRM:`, conversaError);
+          } else {
+            console.log(`💬 Mensagem salva no CRM para conversa ${message.phone_number}`);
+          }
 
           results.push({ id: message.id, status: 'sent' });
         }
