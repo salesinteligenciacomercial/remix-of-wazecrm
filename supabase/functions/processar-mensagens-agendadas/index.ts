@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
               nome_contato: (message as any).contact_name || message.phone_number,
               owner_id: (message as any).owner_id,
               company_id: message.company_id,
-              fromMe: true,
+              fromme: true, // CORRIGIDO: usar fromme (minúsculo) como está no banco
               created_at: new Date().toISOString()
             });
 
