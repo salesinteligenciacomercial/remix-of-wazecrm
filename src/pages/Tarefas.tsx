@@ -37,6 +37,7 @@ import { Button as UIButton } from "@/components/ui/button";
 import { useLeadsSync } from "@/hooks/useLeadsSync";
 import { useGlobalSync } from "@/hooks/useGlobalSync";
 import { useWorkflowAutomation } from "@/hooks/useWorkflowAutomation";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Task {
   id: string;
@@ -250,6 +251,8 @@ const SortableColumn = React.memo(function SortableColumn({
 });
 
 export default function Tarefas() {
+  const { canManageStructure, isAdmin, hasPermission } = usePermissions();
+  const [canManageTaskStructure, setCanManageTaskStructure] = useState(true); // Padrão: permitir (comportamento atual)
   const [tasks, setTasks] = useState<Task[]>([]);
   const [columns, setColumns] = useState<Column[]>([]);
   const [boards, setBoards] = useState<Board[]>([]);
@@ -273,6 +276,19 @@ export default function Tarefas() {
 
   const TASKS_PER_PAGE = 20; // ✅ OTIMIZAÇÃO: Aumentado de 10 para 20
   const INITIAL_LOAD_LIMIT = 50; // ✅ OTIMIZAÇÃO: Limitar carga inicial
+
+  // Verificar permissão de gerenciar estrutura de tarefas
+  useEffect(() => {
+    const checkPermission = async () => {
+      if (isAdmin) {
+        setCanManageTaskStructure(true);
+        return;
+      }
+      const canManage = await canManageStructure('tarefas');
+      setCanManageTaskStructure(canManage);
+    };
+    checkPermission();
+  }, [isAdmin, canManageStructure]);
 
   const columnsFiltradas = useMemo(() =>
     columns.filter((column) => column.board_id === selectedBoard),
@@ -1134,32 +1150,34 @@ export default function Tarefas() {
               <option key={tag} value={tag}>{tag}</option>
             ))}
           </select>
-          <Dialog open={dialogNovoBoard} onOpenChange={setDialogNovoBoard}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Quadro
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Criar Novo Quadro</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>Nome do Quadro</Label>
-                  <Input 
-                    value={novoBoardNome} 
-                    onChange={(e) => setNovoBoardNome(e.target.value)} 
-                    placeholder="Ex: Projeto Q1 2024"
-                  />
-                </div>
-                <Button onClick={criarNovoBoard} className="w-full">
-                  Criar
+          {canManageTaskStructure && (
+            <Dialog open={dialogNovoBoard} onOpenChange={setDialogNovoBoard}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Novo Quadro
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Criar Novo Quadro</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Nome do Quadro</Label>
+                    <Input 
+                      value={novoBoardNome} 
+                      onChange={(e) => setNovoBoardNome(e.target.value)} 
+                      placeholder="Ex: Projeto Q1 2024"
+                    />
+                  </div>
+                  <Button onClick={criarNovoBoard} className="w-full">
+                    Criar
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
@@ -1187,22 +1205,26 @@ export default function Tarefas() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setEditarQuadroOpen(true)}>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Editar Quadro
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setEditarQuadroOpen(true)}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Gerenciar Colunas
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    onClick={() => setEditarQuadroOpen(true)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Excluir Quadro
-                  </DropdownMenuItem>
+                  {canManageTaskStructure && (
+                    <>
+                      <DropdownMenuItem onClick={() => setEditarQuadroOpen(true)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Editar Quadro
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setEditarQuadroOpen(true)}>
+                        <Settings className="mr-2 h-4 w-4" />
+                        Gerenciar Colunas
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        onClick={() => setEditarQuadroOpen(true)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Excluir Quadro
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -1316,17 +1338,27 @@ export default function Tarefas() {
         </div>
       ) : boards.length === 0 ? (
         <div className="text-center py-12">
-          <Button onClick={() => setDialogNovoBoard(true)}>
-            <Plus className="mr-2" />
-            Criar Primeiro Quadro
-          </Button>
+          {canManageTaskStructure ? (
+            <Button onClick={() => setDialogNovoBoard(true)}>
+              <Plus className="mr-2" />
+              Criar Primeiro Quadro
+            </Button>
+          ) : (
+            <p className="text-muted-foreground">Entre em contato com o administrador para criar quadros</p>
+          )}
         </div>
       ) : columnsFiltradas.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground mb-4">Nenhuma coluna criada ainda</p>
-          <p className="text-sm text-muted-foreground">
-            Crie colunas como "A Fazer", "Em Progresso", "Concluído"
-          </p>
+          {canManageTaskStructure ? (
+            <p className="text-sm text-muted-foreground">
+              Crie colunas como "A Fazer", "Em Progresso", "Concluído"
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Entre em contato com o administrador para criar colunas
+            </p>
+          )}
         </div>
       ) : (
         <DndContext 
@@ -1357,14 +1389,16 @@ export default function Tarefas() {
                   emitGlobalEvent={emitGlobalEvent}
                 />
               ))}
-            {/* Botão para adicionar nova coluna */}
-            <div className="min-w-[280px] flex-shrink-0">
-              <AdicionarColunaDialog
-                boardId={selectedBoard}
-                currentColumnsCount={columnsFiltradas.length}
-                onColumnAdded={carregarDados}
-              />
-            </div>
+            {/* Botão para adicionar nova coluna - apenas admin pode criar colunas */}
+            {canManageTaskStructure && (
+              <div className="min-w-[280px] flex-shrink-0">
+                <AdicionarColunaDialog
+                  boardId={selectedBoard}
+                  currentColumnsCount={columnsFiltradas.length}
+                  onColumnAdded={carregarDados}
+                />
+              </div>
+            )}
           </div>
           </SortableContext>
           <DragOverlay dropAnimation={{

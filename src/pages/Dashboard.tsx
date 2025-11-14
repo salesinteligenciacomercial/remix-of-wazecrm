@@ -7,6 +7,8 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Navigate } from "react-router-dom";
 
 interface Stats {
   totalLeads: number;
@@ -35,6 +37,7 @@ interface LeadReportStats {
 }
 
 export default function Dashboard() {
+  const { canAccess, isAdmin, loading: permissionsLoading } = usePermissions();
   const [stats, setStats] = useState<Stats>({
     totalLeads: 0,
     totalValue: 0,
@@ -61,6 +64,12 @@ export default function Dashboard() {
     taxaConversao: 0
   });
   const [reportLoading, setReportLoading] = useState(false);
+
+  // Verificar permissão de acesso ao Dashboard
+  // Se não tiver permissão e não for admin, redirecionar
+  if (!permissionsLoading && !canAccess('dashboard') && !isAdmin) {
+    return <Navigate to="/leads" replace />;
+  }
 
   useEffect(() => {
     fetchStats();

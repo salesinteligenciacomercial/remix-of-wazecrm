@@ -11,10 +11,18 @@ import { BaseConhecimentoIA } from "@/components/ia/BaseConhecimentoIA";
 import { useEffect, useState } from "react";
 import { useAIAgents } from "@/hooks/useAIAgents";
 import { supabase } from "@/integrations/supabase/client";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Navigate } from "react-router-dom";
 
 export default function IA() {
+  const { canAccess, isAdmin, loading: permissionsLoading } = usePermissions();
   const [agentStates, setAgentStates] = useState({ atendimento: true, vendedora: true, suporte: false });
   const { getAgentConfigs, updateAgentConfig } = useAIAgents();
+
+  // Verificar permissão de acesso à Automação
+  if (!permissionsLoading && !canAccess('automacao') && !isAdmin) {
+    return <Navigate to="/leads" replace />;
+  }
 
   useEffect(() => {
     const load = async () => {

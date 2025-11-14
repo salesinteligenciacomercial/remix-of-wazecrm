@@ -16,6 +16,7 @@ import { AdicionarEtapaDialog } from "@/components/funil/AdicionarEtapaDialog";
 import { toast } from "sonner";
 import { useGlobalSync } from "@/hooks/useGlobalSync";
 import { useWorkflowAutomation } from "@/hooks/useWorkflowAutomation";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Lead {
   id: string;
@@ -98,6 +99,8 @@ function SortableColumn({
 }
 
 export default function KanbanPage() {
+  const { canManageStructure, isAdmin, hasPermission } = usePermissions();
+  const [canCreateFunil, setCanCreateFunil] = useState(true); // Padrão: permitir (comportamento atual)
   const [leads, setLeads] = useState<Lead[]>([]);
   const [etapas, setEtapas] = useState<Etapa[]>([]);
   const [funis, setFunis] = useState<Funil[]>([]);
@@ -105,6 +108,19 @@ export default function KanbanPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
+  
+  // Verificar permissão de criar funil
+  useEffect(() => {
+    const checkPermission = async () => {
+      if (isAdmin) {
+        setCanCreateFunil(true);
+        return;
+      }
+      const canCreate = await hasPermission('funil.create') || await hasPermission('funil.manage');
+      setCanCreateFunil(canCreate);
+    };
+    checkPermission();
+  }, [isAdmin, hasPermission]);
   const [dragOperation, setDragOperation] = useState<{
     isDragging: boolean;
     leadId: string | null;
@@ -915,11 +931,15 @@ export default function KanbanPage() {
             <h1 className="text-3xl font-bold">Funil de Vendas</h1>
             <p className="text-muted-foreground">Gerencie seus leads por etapas</p>
           </div>
-          <NovoFunilDialog onFunilCreated={() => window.location.reload()} />
+          {canCreateFunil && <NovoFunilDialog onFunilCreated={() => window.location.reload()} />}
         </div>
         <div className="text-center py-12">
           <p className="text-muted-foreground mb-4">Nenhum funil criado ainda</p>
-          <NovoFunilDialog onFunilCreated={() => window.location.reload()} />
+          {canCreateFunil ? (
+            <NovoFunilDialog onFunilCreated={() => window.location.reload()} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Entre em contato com o administrador para criar funis</p>
+          )}
         </div>
       </div>
     );
@@ -943,7 +963,9 @@ export default function KanbanPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <NovoFunilDialog onFunilCreated={async () => { await refreshFunis(); await refreshEtapas(); }} />
+          {canCreateFunil && (
+            <NovoFunilDialog onFunilCreated={async () => { await refreshFunis(); await refreshEtapas(); }} />
+          )}
           <NovoLeadDialog
             onLeadCreated={refreshLeads}
             triggerButton={
@@ -976,7 +998,7 @@ export default function KanbanPage() {
             ))}
           </select>
         </div>
-        {funilSelecionado && (
+        {funilSelecionado && canCreateFunil && (
           <div className="mt-6 flex gap-2">
             <AdicionarEtapaDialog
               funilId={funilSelecionado.id}

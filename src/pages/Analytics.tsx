@@ -34,6 +34,8 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Navigate } from "react-router-dom";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -109,6 +111,12 @@ interface ProductivityStats {
 }
 
 export default function Analytics() {
+  const { canAccess, isAdmin, loading: permissionsLoading } = usePermissions();
+
+  // Verificar permissão de acesso ao Analytics
+  if (!permissionsLoading && !canAccess('analytics') && !isAdmin) {
+    return <Navigate to="/leads" replace />;
+  }
   const [stats, setStats] = useState<Stats>({
     totalLeads: 0,
     totalValue: 0,

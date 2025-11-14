@@ -29,6 +29,8 @@ import { UsuariosSubcontaDialog } from "@/components/configuracoes/UsuariosSubco
 import { supabase } from "@/integrations/supabase/client";
 import { FilaDialog } from "@/components/configuracoes/FilaDialog";
 import { FilaColaboradoresDialog } from "@/components/configuracoes/FilaColaboradoresDialog";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Navigate } from "react-router-dom";
 
 interface Colaborador {
   id: string; // user_roles.id
@@ -44,6 +46,7 @@ interface Colaborador {
 
 export default function Configuracoes() {
   const { toast } = useToast();
+  const { canAccess, isAdmin, loading: permissionsLoading } = usePermissions();
   const [openaiKey, setOpenaiKey] = useState("");
   const [audimaToken, setAudimaToken] = useState("");
   const [elevenlabsKey, setElevenlabsKey] = useState("");
@@ -56,6 +59,11 @@ export default function Configuracoes() {
   const [latestAnnouncement, setLatestAnnouncement] = useState<any | null>(null);
   
   const hasRole = (role: string) => userRoles.includes(role);
+
+  // Verificar permissão de acesso às Configurações
+  if (!permissionsLoading && !canAccess('configuracoes') && !isAdmin) {
+    return <Navigate to="/leads" replace />;
+  }
 
   useEffect(() => {
     checkAccessAndRoles();
@@ -279,7 +287,7 @@ export default function Configuracoes() {
     nome: "",
     email: "",
     setor: "",
-    funcao: "",
+    funcao: "vendedor", // Valor padrão mudado para "vendedor" (valor válido do enum)
     capacidadeMaxima: 10,
   });
 
@@ -423,16 +431,16 @@ export default function Configuracoes() {
       
       const { data, error } = await supabase.functions.invoke('criar-usuario-subconta', {
         body: {
-          companyId: currentCompany.id,
+          companyId: currentCompany.id, // IMPORTANTE: Apenas companyId = criar usuário na empresa existente
           email: novoColaborador.email,
           full_name: novoColaborador.nome,
-          role: novoColaborador.funcao || 'user',
+          role: novoColaborador.funcao || 'vendedor', // Valor válido do enum
         },
       });
       
       if (error) throw error;
       
-      setNovoColaborador({ nome: "", email: "", setor: "", funcao: "", capacidadeMaxima: 10 });
+      setNovoColaborador({ nome: "", email: "", setor: "", funcao: "vendedor", capacidadeMaxima: 10 });
       toast({ 
         title: "Usuário criado", 
         description: "Usuário criado e vinculado à empresa com sucesso." 
@@ -646,9 +654,8 @@ export default function Configuracoes() {
                       <SelectContent>
                         <SelectItem value="company_admin">Administrador</SelectItem>
                         <SelectItem value="gestor">Gestor</SelectItem>
-                        <SelectItem value="vendedor">Vendedor</SelectItem>
+                        <SelectItem value="vendedor">Vendedor/Atendente</SelectItem>
                         <SelectItem value="suporte">Suporte</SelectItem>
-                        <SelectItem value="user">Usuário</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

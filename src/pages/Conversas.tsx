@@ -40,6 +40,7 @@ import { useLeadsSync } from "@/hooks/useLeadsSync";
 import { useGlobalSync } from "@/hooks/useGlobalSync";
 import { useWorkflowAutomation } from "@/hooks/useWorkflowAutomation";
 import { useConversationsCache } from "@/hooks/useConversationsCache";
+import { usePermissions } from "@/hooks/usePermissions";
 import * as evolutionAPI from "@/services/evolutionApi";
 
 interface Message {
@@ -209,6 +210,8 @@ const initialConversations: Conversation[] = [
 ];
 
 function Conversas() {
+  const { isAdmin } = usePermissions();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null); // Declarar primeiro
   
   // ⚡ CARREGAMENTO INSTANTÂNEO: Hook carrega do cache em 0 segundos
@@ -3212,6 +3215,7 @@ function Conversas() {
       let companyId = userCompanyId || userCompanyIdRef.current;
       
       // ETAPA 1: Buscar user e company_id (apenas se não tiver cache)
+      let currentUser: any = null;
       if (!companyId) {
         const { data: { user } } = await supabase.auth.getUser();
         
@@ -3220,6 +3224,9 @@ function Conversas() {
           setLoadingConversations(false);
           return;
         }
+        
+        currentUser = user;
+        setCurrentUserId(user.id);
         
         const { data: userRole } = await supabase
           .from('user_roles')
@@ -3236,6 +3243,13 @@ function Conversas() {
         companyId = userRole.company_id;
         setUserCompanyId(companyId);
         userCompanyIdRef.current = companyId;
+      } else {
+        // Se já tem companyId, buscar user para verificar responsável
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          currentUser = user;
+          setCurrentUserId(user.id);
+        }
       }
       
       // ⚡ OTIMIZAÇÃO: Aumentar limite para carregar histórico completo
@@ -3363,9 +3377,51 @@ function Conversas() {
         }
       });
 
-      // ETAPA 3: Criar lista de conversas (otimizado)
+      // ETAPA 3: Buscar assignments (responsáveis) das conversas
+      // Buscar assignments para todos os telefones (para mostrar responsável e filtrar se necessário)
+      let assignmentsMap = new Map<string, string | null>(); // telefone -> assigned_user_id
+      
+      // Buscar assignments apenas para telefones das conversas
+      const telefonesParaBuscar = Array.from(conversasMap.keys())
+        .map(tel => tel.replace(/[^0-9]/g, ''))
+        .filter(tel => tel.length >= 10)
+        .slice(0, 100); // Limitar para não sobrecarregar
+      
+      if (telefonesParaBuscar.length > 0) {
+        // Buscar assignments em lotes
+        const { data: assignmentsData } = await supabase
+          .from('conversation_assignments')
+          .select('telefone_formatado, assigned_user_id')
+          .eq('company_id', companyId)
+          .in('telefone_formatado', telefonesParaBuscar);
+        
+        if (assignmentsData) {
+          assignmentsData.forEach((assignment: any) => {
+            const telKey = assignment.telefone_formatado?.replace(/[^0-9]/g, '') || '';
+            if (telKey) {
+              assignmentsMap.set(telKey, assignment.assigned_user_id);
+            }
+          });
+        }
+      }
+
+      // ETAPA 4: Criar lista de conversas (otimizado) com filtro de responsável
       const novasConversas: Conversation[] = Array.from(conversasMap.entries())
         .slice(0, INITIAL_LIMIT) // Limitar a 50 conversas iniciais
+        .filter(([telefone, mensagens]) => {
+          // Se for admin, mostrar todas as conversas
+          if (isAdmin) return true;
+          
+          // Se não for admin, verificar se tem responsável definido
+          const telKey = telefone.replace(/[^0-9]/g, '');
+          const assignedUserId = assignmentsMap.get(telKey);
+          
+          // Se não tem responsável definido, todos podem ver
+          if (!assignedUserId) return true;
+          
+          // Se tem responsável definido, apenas o responsável pode ver
+          return assignedUserId === currentUserId;
+        })
         .map(([telefone, mensagens]) => {
         // ⚡ CORREÇÃO CRÍTICA: Detectar se é grupo ANTES de processar
         // Verificar se alguma mensagem tem is_group = true ou se o número termina com @g.us
@@ -3443,6 +3499,10 @@ function Conversas() {
           }
         }
         
+        // Buscar responsável da conversa (se houver)
+        const telKey = telefone.replace(/[^0-9]/g, '');
+        const assignedUserId = assignmentsMap.get(telKey);
+        
         return {
           id: telefone,
           contactName,
@@ -3456,7 +3516,8 @@ function Conversas() {
           avatarUrl: isGroup 
             ? `https://ui-avatars.com/api/?name=${encodeURIComponent('Grupo')}&background=10b981&color=fff`
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName.substring(0, 2))}&background=0ea5e9&color=fff`,
-          isGroup: isGroup // ⚡ CORREÇÃO CRÍTICA: Definir isGroup corretamente
+          isGroup: isGroup, // ⚡ CORREÇÃO CRÍTICA: Definir isGroup corretamente
+          responsavel: assignedUserId || undefined // Adicionar responsável à conversa
         };
       });
 

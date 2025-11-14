@@ -11,6 +11,7 @@ interface CriarUsuarioRequest {
   companyId?: string;
   email: string;
   full_name: string;
+  password?: string; // Senha customizada (opcional - se não fornecida, será gerada)
   role?: string; // 'company_admin' | 'gestor' | 'vendedor' | 'suporte' | 'user'
   
   // Para criar subconta completa (nova empresa + admin)
@@ -44,7 +45,7 @@ serve(async (req) => {
     const body: CriarUsuarioRequest = await req.json();
     console.log('📦 [CRIAR-USUARIO] Dados recebidos:', JSON.stringify(body, null, 2));
     
-    const { companyId, email, full_name, role, parentCompanyId, companyName, cnpj, telefone, responsavel, plan, max_users, max_leads } = body;
+    const { companyId, email, full_name, password, role, parentCompanyId, companyName, cnpj, telefone, responsavel, plan, max_users, max_leads } = body;
 
     if (!email || !full_name) {
       return new Response(JSON.stringify({ error: 'Email e nome completo são obrigatórios' }), { 
@@ -54,20 +55,45 @@ serve(async (req) => {
     }
 
     // Detectar modo de operação
+    // IMPORTANTE: Criar usuário na empresa existente (companyId) vs Criar nova subconta (parentCompanyId + companyName)
     const isCreatingSubaccount = !!parentCompanyId && !!companyName;
     const isCreatingUser = !!companyId && !isCreatingSubaccount;
 
+    console.log('🔍 [CRIAR-USUARIO] Modo detectado:', {
+      isCreatingSubaccount,
+      isCreatingUser,
+      hasCompanyId: !!companyId,
+      hasParentCompanyId: !!parentCompanyId,
+      hasCompanyName: !!companyName
+    });
+
     if (!isCreatingSubaccount && !isCreatingUser) {
       return new Response(
-        JSON.stringify({ error: 'Especifique companyId (para usuário) ou parentCompanyId+companyName (para subconta)' }), 
+        JSON.stringify({ error: 'Especifique companyId (para criar usuário na empresa existente) ou parentCompanyId+companyName (para criar nova subconta)' }), 
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const userRole = role || 'company_admin';
-    const allowedRoles = new Set(['company_admin', 'gestor', 'vendedor', 'suporte', 'user']);
-    if (!allowedRoles.has(userRole)) {
-      return new Response(JSON.stringify({ error: 'Perfil inválido' }), { 
+    // Garantir que está no modo correto
+    if (isCreatingUser) {
+      console.log('✅ [CRIAR-USUARIO] Modo: CRIAR USUÁRIO na empresa existente (companyId:', companyId, ')');
+    } else {
+      console.log('✅ [CRIAR-USUARIO] Modo: CRIAR NOVA SUBCONTA (parentCompanyId:', parentCompanyId, ', companyName:', companyName, ')');
+    }
+
+    // Valores válidos do enum app_role: super_admin, company_admin, gestor, vendedor, suporte
+    // NÃO usar 'user' pois não existe no enum
+    const userRole = role || 'vendedor'; // Valor padrão mudado de 'user' para 'vendedor'
+    const allowedRoles = new Set(['company_admin', 'gestor', 'vendedor', 'suporte']);
+    
+    // Se receber 'user', mapear para 'vendedor' (role mais básico)
+    const finalRole = userRole === 'user' ? 'vendedor' : userRole;
+    
+    if (!allowedRoles.has(finalRole)) {
+      return new Response(JSON.stringify({ 
+        error: 'Perfil inválido', 
+        details: `Perfis válidos: company_admin, gestor, vendedor, suporte. Recebido: ${userRole}` 
+      }), { 
         status: 400, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
@@ -191,16 +217,43 @@ serve(async (req) => {
       console.log('✅ [CRIAR-USUARIO] Empresa criada:', targetCompanyId);
     } else {
       // Criar usuário em empresa existente
-      const isCompanyAdminSameCompany = roles?.some(r => r.role === 'company_admin' && r.company_id === companyId) || false;
+      // Normalizar company_id para string para comparação correta
+      const normalizedCompanyId = String(companyId).trim();
+      
+      // Verificar se o usuário tem permissão na empresa
+      // Pode ser super_admin OU company_admin da mesma empresa OU admin (role antiga)
+      const isCompanyAdminSameCompany = roles?.some(r => {
+        const roleCompanyId = String(r.company_id || '').trim();
+        return (r.role === 'company_admin' || r.role === 'admin') && roleCompanyId === normalizedCompanyId;
+      }) || false;
 
+      console.log('🔐 [CRIAR-USUARIO] Verificação de permissões:', {
+        isSuperAdmin,
+        isCompanyAdminSameCompany,
+        companyId: normalizedCompanyId,
+        roles: roles?.map(r => ({ role: r.role, company_id: String(r.company_id) }))
+      });
+
+      // Permitir criar usuário se:
+      // 1. É super_admin OU
+      // 2. É company_admin/admin da mesma empresa
       if (!isSuperAdmin && !isCompanyAdminSameCompany) {
-        return new Response(JSON.stringify({ error: 'Permissão negada para criar usuário nesta empresa' }), { 
+        console.error('❌ [CRIAR-USUARIO] Permissão negada:', {
+          isSuperAdmin,
+          isCompanyAdminSameCompany,
+          companyId: normalizedCompanyId,
+          userRoles: roles
+        });
+        return new Response(JSON.stringify({ 
+          error: 'Permissão negada para criar usuário nesta empresa. Você precisa ser Super Admin ou Administrador da empresa.',
+          details: `Company ID: ${normalizedCompanyId}`
+        }), { 
           status: 403, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         });
       }
 
-      targetCompanyId = companyId!;
+      targetCompanyId = normalizedCompanyId;
       
       // VERIFICAR SE EMAIL JÁ EXISTE (para usuários em empresa existente também)
       console.log('🔍 [CRIAR-USUARIO] Verificando se email já existe...');
@@ -221,13 +274,15 @@ serve(async (req) => {
 
     console.log('🔐 [CRIAR-USUARIO] Criando usuário de autenticação...');
     
-    // Gerar senha temporária forte
-    const tempPassword = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10).toUpperCase() + "!@#123";
+    // Usar senha fornecida ou gerar senha temporária forte
+    const userPassword = password && password.length >= 6 
+      ? password 
+      : Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10).toUpperCase() + "!@#123";
 
     // Criar usuário de autenticação
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email: email.toLowerCase().trim(),
-      password: tempPassword,
+      password: userPassword,
       user_metadata: { full_name },
       email_confirm: true,
     });
@@ -262,12 +317,33 @@ serve(async (req) => {
     }
 
     console.log('✅ [CRIAR-USUARIO] Usuário criado:', created.user.id);
+    
+    // Criar ou atualizar profile na tabela profiles
+    console.log('👤 [CRIAR-USUARIO] Criando/atualizando profile...');
+    const { error: profileErr } = await supabaseAdmin
+      .from('profiles')
+      .upsert({
+        id: created.user.id,
+        full_name: full_name,
+        email: email.toLowerCase().trim(),
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'id'
+      });
+
+    if (profileErr) {
+      console.warn('⚠️ [CRIAR-USUARIO] Erro ao criar/atualizar profile (não crítico):', profileErr);
+      // Não bloquear se der erro no profile, pois pode ser criado por trigger
+    } else {
+      console.log('✅ [CRIAR-USUARIO] Profile criado/atualizado com sucesso');
+    }
+
     console.log('🔗 [CRIAR-USUARIO] Vinculando role à empresa...');
 
-    // Vincular role à empresa
+    // Vincular role à empresa (usar finalRole que garante valor válido do enum)
     const { error: roleErr } = await supabaseAdmin
       .from('user_roles')
-      .insert({ user_id: created.user.id, company_id: targetCompanyId, role: userRole });
+      .insert({ user_id: created.user.id, company_id: targetCompanyId, role: finalRole });
 
     if (roleErr) {
       console.error('❌ [CRIAR-USUARIO] Erro ao vincular role:', roleErr);
@@ -290,7 +366,7 @@ serve(async (req) => {
           body: {
             nome: responsavel || full_name,
             email,
-            senha: tempPassword,
+            senha: userPassword,
             telefone,
             nomeConta: companyName,
             url: SUPABASE_URL.replace('supabase.co', 'lovableproject.com'),
@@ -311,7 +387,7 @@ serve(async (req) => {
         companyId: targetCompanyId,
         credentials: {
           email,
-          senha: tempPassword,
+          senha: userPassword,
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

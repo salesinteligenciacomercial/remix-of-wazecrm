@@ -6,38 +6,47 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
+import { usePermissions } from "@/hooks/usePermissions";
 const navigation = [{
   name: "Analytics",
   href: "/analytics",
-  icon: LayoutDashboard
+  icon: LayoutDashboard,
+  menuKey: "analytics"
 }, {
   name: "Leads",
   href: "/leads",
-  icon: Users
+  icon: Users,
+  menuKey: "leads"
 }, {
   name: "Funil de Vendas",
   href: "/kanban",
-  icon: LayoutDashboard
+  icon: LayoutDashboard,
+  menuKey: "funil"
 }, {
   name: "Conversas",
   href: "/conversas",
-  icon: MessageSquare
+  icon: MessageSquare,
+  menuKey: "conversas"
 }, {
   name: "Agenda",
   href: "/agenda",
-  icon: Calendar
+  icon: Calendar,
+  menuKey: "agenda"
 }, {
   name: "Tarefas",
   href: "/tarefas",
-  icon: Calendar
+  icon: Calendar,
+  menuKey: "tarefas"
 }, {
   name: "Fluxos e Automação",
   href: "/ia",
-  icon: Bot
+  icon: Bot,
+  menuKey: "automacao"
 }, {
   name: "Configurações",
   href: "/configuracoes",
-  icon: Settings
+  icon: Settings,
+  menuKey: "configuracoes"
 }];
 interface SidebarProps {
   collapsed?: boolean;
@@ -50,6 +59,7 @@ export function Sidebar({
     toast
   } = useToast();
   const [isMobile, setIsMobile] = useState(false);
+  const { canAccess, loading: permissionsLoading } = usePermissions();
 
   // Detectar se é mobile e colapsar automaticamente
   useEffect(() => {
@@ -97,7 +107,14 @@ export function Sidebar({
       {/* Navigation */}
       <TooltipProvider delayDuration={0}>
         <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
-          {navigation.map(item => <Tooltip key={item.name}>
+          {navigation
+            .filter(item => {
+              // Se estiver carregando permissões, mostrar todos (comportamento padrão)
+              if (permissionsLoading) return true;
+              // Verificar se pode acessar o menu
+              return canAccess(item.menuKey || '');
+            })
+            .map(item => <Tooltip key={item.name}>
               <TooltipTrigger asChild>
                 <NavLink to={item.href} className={({
               isActive
