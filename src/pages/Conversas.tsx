@@ -30,6 +30,7 @@ import { ConversationListItem } from "@/components/conversas/ConversationListIte
 import { MessageItem } from "@/components/conversas/MessageItem";
 import { AudioRecorder } from "@/components/conversas/AudioRecorder";
 import { MediaUpload } from "@/components/conversas/MediaUpload";
+import { LeadTagsDialog } from "@/components/leads/LeadTagsDialog";
 import { NovaConversaDialog } from "@/components/conversas/NovaConversaDialog";
 import { EditarLeadDialog } from "@/components/funil/EditarLeadDialog";
 import { ResponsaveisManager } from "@/components/conversas/ResponsaveisManager";
@@ -272,6 +273,7 @@ function Conversas() {
   const [aiMode, setAiMode] = useState<Record<string, boolean>>({});
   const [quickMessages, setQuickMessages] = useState<QuickMessage[]>([]);
   const [quickCategories, setQuickCategories] = useState<QuickMessageCategory[]>([]);
+  const [quickMessagesDialogOpen, setQuickMessagesDialogOpen] = useState(false);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [scheduledMessages, setScheduledMessages] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -1557,11 +1559,7 @@ function Conversas() {
 
   // Carregar e sincronizar lembretes em tempo real
   useEffect(() => {
-    if (!leadVinculado?.id) {
-      setReminders([]);
-      return;
-    }
-
+    // Carregar lembretes sempre que o lead vinculado ou a conversa selecionada mudar
     loadReminders();
 
     // Subscrever para atualizações em tempo real de lembretes
@@ -1583,7 +1581,7 @@ function Conversas() {
     return () => {
       supabase.removeChannel(lembretesChannel);
     };
-  }, [leadVinculado?.id]);
+  }, [leadVinculado?.id, selectedConv?.id]);
 
   // 🔑 CRÍTICO: Carregar company_id PRIMEIRO (otimizado para ser mais rápido)
   useEffect(() => {
@@ -3699,10 +3697,18 @@ function Conversas() {
   };
 
   const loadQuickMessages = () => {
-    const saved = localStorage.getItem(QUICK_MESSAGES_KEY);
-    if (saved) {
-      setQuickMessages(JSON.parse(saved));
-    } else {
+    try {
+      const saved = localStorage.getItem(QUICK_MESSAGES_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setQuickMessages(parsed);
+        console.log('📥 Mensagens rápidas carregadas:', parsed.length);
+      } else {
+        setQuickMessages([]);
+        console.log('📥 Nenhuma mensagem rápida salva');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar mensagens rápidas:', error);
       setQuickMessages([]);
     }
   };
@@ -3726,41 +3732,99 @@ function Conversas() {
   };
 
   const loadReminders = async () => {
-    if (!leadVinculado?.id) return;
-    
     try {
-      // CORREÇÃO: Buscar lembretes através dos compromissos do lead
-      const { data: compromissos, error: compError } = await supabase
-        .from('compromissos')
-        .select('id')
-        .eq('lead_id', leadVinculado.id);
+      let compromissoIds: string[] = [];
 
-      if (compError) throw compError;
+      // Se houver lead vinculado, buscar através do lead
+      if (leadVinculado?.id) {
+        const { data: compromissos, error: compError } = await supabase
+          .from('compromissos')
+          .select('id')
+          .eq('lead_id', leadVinculado.id);
 
-      if (!compromissos || compromissos.length === 0) {
-        setReminders([]);
-        return;
+        if (compError) throw compError;
+
+        if (compromissos && compromissos.length > 0) {
+          compromissoIds = compromissos.map(c => c.id);
+        }
       }
 
-      const compromissoIds = compromissos.map(c => c.id);
+      // Se não encontrou compromissos pelo lead e há conversa selecionada, tentar buscar pelo telefone
+      if (compromissoIds.length === 0 && selectedConv) {
+        const phoneNumber = selectedConv.phoneNumber || selectedConv.id;
+        if (phoneNumber) {
+          // Buscar lead pelo telefone da conversa
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: userRole } = await supabase
+              .from('user_roles')
+              .select('company_id')
+              .eq('user_id', user.id)
+              .maybeSingle();
 
-      const { data, error } = await supabase
-        .from('lembretes')
-        .select(`
-          *,
-          compromisso:compromissos(
-            data_hora_inicio,
-            tipo_servico,
-            lead_id
-          )
-        `)
-        .in('compromisso_id', compromissoIds)
-        .order('created_at', { ascending: false });
+            if (userRole?.company_id) {
+              // Normalizar telefone
+              const phoneNormalized = phoneNumber.replace(/\D/g, '');
+              const phoneVariations = [
+                phoneNormalized,
+                phoneNormalized.startsWith('55') ? phoneNormalized : `55${phoneNormalized}`,
+                phoneNormalized.startsWith('55') ? phoneNormalized.substring(2) : phoneNormalized,
+              ];
 
-      if (error) throw error;
-      setReminders(data || []);
+              // Buscar lead pelo telefone
+              const { data: lead } = await supabase
+                .from('leads')
+                .select('id')
+                .eq('company_id', userRole.company_id)
+                .or(`phone.eq.${phoneVariations[0]},telefone.eq.${phoneVariations[0]},phone.eq.${phoneVariations[1]},telefone.eq.${phoneVariations[1]},phone.eq.${phoneVariations[2]},telefone.eq.${phoneVariations[2]}`)
+                .maybeSingle();
+
+              if (lead?.id) {
+                // Buscar compromissos do lead encontrado
+                const { data: compromissos } = await supabase
+                  .from('compromissos')
+                  .select('id')
+                  .eq('lead_id', lead.id);
+
+                if (compromissos && compromissos.length > 0) {
+                  compromissoIds = compromissos.map(c => c.id);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Buscar lembretes dos compromissos encontrados
+      if (compromissoIds.length > 0) {
+        const { data, error } = await supabase
+          .from('lembretes')
+          .select(`
+            *,
+            compromisso:compromissos(
+              data_hora_inicio,
+              tipo_servico,
+              lead_id
+            )
+          `)
+          .in('compromisso_id', compromissoIds)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Erro ao buscar lembretes:', error);
+          // Não limpar os lembretes existentes em caso de erro
+          return;
+        }
+        setReminders(data || []);
+      } else {
+        // Se não encontrou compromissos, manter os lembretes existentes
+        // Não limpar o estado para evitar que lembretes recém-criados desapareçam
+        console.log('Nenhum compromisso encontrado, mantendo lembretes existentes');
+      }
     } catch (error) {
       console.error('Erro ao carregar lembretes:', error);
+      // Não limpar os lembretes existentes em caso de erro
+      // para evitar que lembretes recém-criados desapareçam
     }
   };
 
@@ -3965,8 +4029,16 @@ function Conversas() {
   };
 
   const saveQuickMessages = (updated: QuickMessage[]) => {
-    localStorage.setItem(QUICK_MESSAGES_KEY, JSON.stringify(updated));
-    setQuickMessages(updated);
+    try {
+      // Salvar no localStorage
+      localStorage.setItem(QUICK_MESSAGES_KEY, JSON.stringify(updated));
+      // Atualizar estado imediatamente
+      setQuickMessages(updated);
+      console.log('💾 Mensagens rápidas salvas:', updated.length);
+    } catch (error) {
+      console.error('❌ Erro ao salvar mensagens rápidas:', error);
+      toast.error("Erro ao salvar mensagem rápida");
+    }
   };
 
   const saveQuickCategories = (updated: QuickMessageCategory[]) => {
@@ -4843,10 +4915,22 @@ function Conversas() {
       content: newQuickContent,
       category: newQuickCategory,
     };
-    saveQuickMessages([...quickMessages, newMsg]);
+    
+    // Salvar no localStorage e atualizar estado
+    const updatedMessages = [...quickMessages, newMsg];
+    saveQuickMessages(updatedMessages);
+    
+    // Limpar campos
     setNewQuickTitle("");
     setNewQuickContent("");
     setNewQuickCategory("");
+    
+    // Recarregar mensagens do localStorage para garantir sincronização
+    // Usar setTimeout para garantir que o estado seja atualizado
+    setTimeout(() => {
+      loadQuickMessages();
+    }, 50);
+    
     toast.success("Mensagem rápida criada!");
   };
 
@@ -4891,12 +4975,14 @@ function Conversas() {
     }
     
     // Garantir lead automaticamente
-    if (!leadVinculado?.id) {
+    let leadAtual = leadVinculado;
+    if (!leadAtual?.id) {
       const lead = await findOrCreateLead(selectedConv);
       if (!lead) {
         toast.error("Não foi possível vincular o lead automaticamente");
         return;
       }
+      leadAtual = lead;
       setLeadVinculado(lead);
     }
 
@@ -4905,19 +4991,49 @@ function Conversas() {
       if (!user) throw new Error("Usuário não autenticado");
 
       // Buscar company_id do lead vinculado
-      const companyId = leadVinculado.company_id;
+      const companyId = leadAtual.company_id;
       if (!companyId) {
         toast.error("Lead sem company_id associado");
         return;
       }
 
+      // CRÍTICO: Garantir que o lead tenha telefone (usar telefone da conversa se não tiver)
+      const phoneNumber = selectedConv.phoneNumber || selectedConv.id;
+      const phoneNormalized = phoneNumber.replace(/\D/g, '');
+      
+      if (!leadAtual.phone && !leadAtual.telefone && phoneNormalized) {
+        // Atualizar lead com o telefone da conversa
+        const { error: updateError } = await supabase
+          .from('leads')
+          .update({
+            phone: phoneNormalized.startsWith('55') ? phoneNormalized : `55${phoneNormalized}`,
+            telefone: phoneNormalized.startsWith('55') ? phoneNormalized : `55${phoneNormalized}`
+          })
+          .eq('id', leadAtual.id);
+        
+        if (updateError) {
+          console.error('Erro ao atualizar telefone do lead:', updateError);
+        } else {
+          // Atualizar leadAtual com o telefone
+          leadAtual = { ...leadAtual, phone: phoneNormalized.startsWith('55') ? phoneNormalized : `55${phoneNormalized}`, telefone: phoneNormalized.startsWith('55') ? phoneNormalized : `55${phoneNormalized}` };
+          setLeadVinculado(leadAtual);
+        }
+      }
+
       // Buscar ou criar compromisso
       const dataHoraCompromisso = new Date(reminderDatetime);
+      const agora = new Date();
+      
+      // Validar se a data está no futuro
+      if (dataHoraCompromisso <= agora) {
+        toast.error("A data e hora do lembrete deve ser no futuro");
+        return;
+      }
       
       const { data: compromisso, error: compromissoError } = await supabase
         .from('compromissos')
         .insert({
-          lead_id: (leadVinculado?.id || (await findOrCreateLead(selectedConv))?.id) as string,
+          lead_id: leadAtual.id,
           usuario_responsavel_id: user.id,
           owner_id: user.id,
           company_id: companyId,
@@ -4932,26 +5048,71 @@ function Conversas() {
 
       if (compromissoError) throw compromissoError;
 
-      // Criar lembrete
-      const { error: lembreteError } = await supabase
+      // Calcular horas de antecedência (diferença entre compromisso e data de envio)
+      // Como agora permitimos agendar para qualquer horário, a data_envio será a mesma data escolhida
+      // e horas_antecedencia será calculada como a diferença entre o compromisso e o envio
+      const dataEnvio = new Date(reminderDatetime); // Usar a data escolhida diretamente como data de envio
+      const diferencaMs = dataHoraCompromisso.getTime() - dataEnvio.getTime();
+      const horasAntecedencia = Math.max(0, Math.round(diferencaMs / (1000 * 60 * 60))); // Converter para horas
+
+      // Criar lembrete com data_envio sendo a data escolhida pelo usuário
+      // IMPORTANTE: Lembretes são para o RESPONSÁVEL/USUÁRIO, não para o lead
+      // O lembrete serve para alertar o responsável sobre uma ação (ex: "ligar para lead")
+      // Buscar nome do responsável
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      const nomeResponsavel = profile?.full_name || user.email || 'Responsável';
+      
+      const { data: lembreteCriado, error: lembreteError } = await supabase
         .from('lembretes')
         .insert({
           compromisso_id: compromisso.id,
           canal: 'whatsapp',
-          horas_antecedencia: 24,
+          horas_antecedencia: horasAntecedencia,
           mensagem: `Olá! Lembramos: ${reminderTitle}`,
           status_envio: 'pendente',
-          destinatario: 'lead',
+          data_envio: dataEnvio.toISOString(), // Data/hora escolhida pelo usuário
+          destinatario: 'responsavel', // Lembretes são para o responsável, não para o lead
+          telefone_responsavel: nomeResponsavel, // Nome do responsável que criou o lembrete
           company_id: companyId,
-        });
+        })
+        .select(`
+          *,
+          compromisso:compromissos(
+            data_hora_inicio,
+            tipo_servico,
+            lead_id
+          )
+        `)
+        .single();
 
       if (lembreteError) throw lembreteError;
+
+      // Adicionar o lembrete recém-criado ao estado imediatamente
+      if (lembreteCriado) {
+        setReminders(prev => {
+          // Verificar se o lembrete já não está na lista
+          const existe = prev.some(l => l.id === lembreteCriado.id);
+          if (!existe) {
+            return [lembreteCriado, ...prev];
+          }
+          return prev;
+        });
+      }
 
       setReminderTitle("");
       setReminderDatetime("");
       setReminderNotes("");
       toast.success("Lembrete criado e sincronizado!");
-      loadReminders();
+      
+      // Recarregar todos os lembretes para garantir sincronização completa
+      setTimeout(() => {
+        loadReminders();
+      }, 300);
     } catch (error) {
       console.error('Erro ao criar lembrete:', error);
       toast.error("Erro ao criar lembrete");
@@ -5221,6 +5382,30 @@ function Conversas() {
                 toast.warning("Compromisso criado, mas não foi possível enviar a confirmação imediata.");
               } else {
                 console.log('✅ [CONFIRMAÇÃO] Mensagem de confirmação enviada com sucesso!');
+                
+                // Salvar mensagem de confirmação na conversa para exibir no CRM
+                const telefoneFormatado = telefoneNormalizado.replace(/\D/g, '');
+                const { error: conversaError } = await supabase
+                  .from('conversas')
+                  .insert({
+                    numero: telefoneFormatado,
+                    telefone_formatado: telefoneFormatado,
+                    mensagem: mensagemConfirmacao,
+                    origem: 'WhatsApp',
+                    status: 'Enviada',
+                    tipo_mensagem: 'text',
+                    nome_contato: leadVinculado.name || telefoneFormatado,
+                    company_id: companyId,
+                    fromme: true,
+                    created_at: new Date().toISOString()
+                  });
+
+                if (conversaError) {
+                  console.error('⚠️ Erro ao salvar confirmação na conversa:', conversaError);
+                } else {
+                  console.log('💬 Confirmação salva na conversa para exibição no CRM');
+                }
+                
                 toast.success("Compromisso criado e confirmação enviada ao cliente!");
               }
             } else {
@@ -6928,32 +7113,46 @@ function Conversas() {
                         <Tag className="h-4 w-4" /> Tags
                       </h4>
                       <div className="flex flex-wrap gap-2 mb-2">
-                        {selectedConv.tags?.map((tag, idx) => (
-                          <Badge key={idx} variant="secondary">
-                            {tag}
-                          </Badge>
-                        ))}
+                        {leadVinculado?.tags && leadVinculado.tags.length > 0 ? (
+                          leadVinculado.tags.map((tag: string, idx: number) => (
+                            <Badge key={idx} variant="secondary">
+                              {tag}
+                            </Badge>
+                          ))
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Nenhuma tag adicionada</p>
+                        )}
                       </div>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button size="sm" variant="outline" className="w-full">
-                            <Tag className="h-3 w-3 mr-2" /> Adicionar Tag
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Adicionar Tag</DialogTitle>
-                          </DialogHeader>
-                          <Input
-                            placeholder="Nome da tag"
-                            value={newTag}
-                            onChange={(e) => setNewTag(e.target.value)}
-                          />
-                          <Button onClick={addTag}>
-                            Adicionar
-                          </Button>
-                        </DialogContent>
-                      </Dialog>
+                      {leadVinculado?.id ? (
+                        <LeadTagsDialog
+                          leadId={leadVinculado.id}
+                          currentTags={leadVinculado.tags || []}
+                          onTagsUpdated={() => {
+                            // Recarregar lead após atualizar tags
+                            const reloadLead = async () => {
+                              if (!leadVinculado?.id) return;
+                              const { data } = await supabase
+                                .from("leads")
+                                .select("*")
+                                .eq("id", leadVinculado.id)
+                                .maybeSingle();
+                              if (data) {
+                                setLeadVinculado(data);
+                              }
+                            };
+                            reloadLead();
+                          }}
+                          triggerButton={
+                            <Button size="sm" variant="outline" className="w-full">
+                              <Tag className="h-3 w-3 mr-2" /> Adicionar Tag
+                            </Button>
+                          }
+                        />
+                      ) : (
+                        <Button size="sm" variant="outline" className="w-full" disabled>
+                          <Tag className="h-3 w-3 mr-2" /> Adicionar Tag
+                        </Button>
+                      )}
                     </div>
 
                     {/* Funnel Stage */}
@@ -6983,152 +7182,52 @@ function Conversas() {
                       ) : (
                         <p className="text-sm text-muted-foreground mb-2">Não está em nenhum funil</p>
                       )}
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button size="sm" variant="outline" className="w-full">
-                            <TrendingUp className="h-3 w-3 mr-2" /> 
-                            {leadVinculado && leadVinculado.funil_id ? "Mover de Funil" : "Adicionar ao Funil"}
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>
-                              {leadVinculado && leadVinculado.funil_id ? "Mover Lead de Funil" : "Adicionar ao Funil"}
-                            </DialogTitle>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              Selecione o funil de vendas e a etapa para {leadVinculado && leadVinculado.funil_id ? "mover" : "adicionar"} este lead
-                            </p>
-                          </DialogHeader>
-                          
-                          {/* Informação do funil atual */}
-                          {leadVinculado && leadVinculado.funil_id && (
-                            <div className="p-3 bg-primary/10 border border-primary/30 rounded-lg space-y-2">
-                              <div className="flex items-center gap-2">
-                                <AlertCircle className="h-4 w-4 text-primary" />
-                                <p className="text-sm font-semibold text-primary">Posição Atual do Lead</p>
-                              </div>
-                              <div className="pl-6 space-y-1.5">
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Funil:</p>
-                                  <p className="text-sm font-medium text-foreground">
-                                    📊 {funis.find(f => f.id === leadVinculado.funil_id)?.nome || "Funil não encontrado"}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Etapa:</p>
-                                  <div className="flex items-center gap-2">
-                                    <div 
-                                      className="w-2.5 h-2.5 rounded-full" 
-                                      style={{ 
-                                        backgroundColor: etapas.find(e => e.id === leadVinculado.etapa_id)?.cor || '#3b82f6' 
-                                      }}
-                                    />
-                                    <p className="text-sm font-medium text-foreground">
-                                      {etapas.find(e => e.id === leadVinculado.etapa_id)?.nome || "Etapa não definida"}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <p className="text-xs text-muted-foreground pl-6 pt-1">
-                                💡 Selecione um novo funil/etapa abaixo para mover o lead
-                              </p>
-                            </div>
-                          )}
-                          
-                          <div className="space-y-4">
-                            <div>
-                              <Label htmlFor="funil-select">Funil de Vendas *</Label>
-                              <Select value={selectedFunilId} onValueChange={setSelectedFunilId}>
-                                <SelectTrigger id="funil-select">
-                                  <SelectValue placeholder={
-                                    funis.length === 0 
-                                      ? "Nenhum funil disponível" 
-                                      : "Escolha um funil"
-                                  } />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {funis.length === 0 ? (
-                                    <div className="p-2 text-sm text-muted-foreground text-center">
-                                      <p>Nenhum funil criado</p>
-                                      <p className="text-xs mt-1">Crie um no menu Kanban</p>
-                                    </div>
-                                  ) : (
-                                    funis.map((funil) => (
-                                      <SelectItem key={funil.id} value={funil.id}>
-                                        📊 {funil.nome}
-                                        {funil.descricao && (
-                                          <span className="text-xs text-muted-foreground ml-2">
-                                            - {funil.descricao}
-                                          </span>
-                                        )}
-                                        {leadVinculado?.funil_id === funil.id && (
-                                          <span className="text-xs text-primary ml-2 font-medium">
-                                            (Atual)
-                                          </span>
-                                        )}
-                                      </SelectItem>
-                                    ))
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              {funis.length === 0 && (
-                                <p className="text-xs text-destructive mt-1">
-                                  ⚠️ Crie um funil no menu Kanban
-                                </p>
-                              )}
-                            </div>
-
-                            <div>
-                              <Label htmlFor="etapa-select">Etapa *</Label>
-                              <Select 
-                                value={selectedFunnel} 
-                                onValueChange={setSelectedFunnel}
-                                disabled={!selectedFunilId}
-                              >
-                                <SelectTrigger id="etapa-select">
-                                  <SelectValue placeholder={
-                                    !selectedFunilId 
-                                      ? "Selecione um funil primeiro" 
-                                      : "Escolha a etapa"
-                                  } />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {etapasFiltradas.length === 0 ? (
-                                    <div className="p-2 text-sm text-muted-foreground">
-                                      Nenhuma etapa disponível neste funil
-                                    </div>
-                                  ) : (
-                                    etapasFiltradas.map((etapa) => (
-                                      <SelectItem key={etapa.id} value={etapa.id}>
-                                        <div className="flex items-center gap-2">
-                                          <div 
-                                            className="w-3 h-3 rounded-full" 
-                                            style={{ backgroundColor: etapa.cor || '#3b82f6' }}
-                                          />
-                                          {etapa.nome}
-                                          {leadVinculado?.etapa_id === etapa.id && (
-                                            <span className="text-xs text-primary ml-2 font-medium">
-                                              (Atual)
-                                            </span>
-                                          )}
-                                        </div>
-                                      </SelectItem>
-                                    ))
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              {!selectedFunilId && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  💡 Selecione um funil para ver as etapas
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          <Button onClick={addToFunnel}>
-                            {leadVinculado && leadVinculado.funil_id ? "Mover Lead" : "Adicionar Lead"}
-                          </Button>
-                        </DialogContent>
-                      </Dialog>
+                      {leadVinculado ? (
+                        <EditarLeadDialog
+                          lead={{
+                            id: leadVinculado.id,
+                            nome: leadVinculado.name || selectedConv.name || '',
+                            telefone: leadVinculado.telefone || selectedConv.phoneNumber || '',
+                            email: leadVinculado.email || '',
+                            cpf: leadVinculado.cpf || '',
+                            value: leadVinculado.value || 0,
+                            company: leadVinculado.company || '',
+                            source: leadVinculado.source || '',
+                            notes: leadVinculado.notes || '',
+                            tags: leadVinculado.tags || [],
+                            funil_id: leadVinculado.funil_id || undefined,
+                            etapa_id: leadVinculado.etapa_id || undefined,
+                            company_id: leadVinculado.company_id || undefined,
+                            ...(leadVinculado.responsavel_id ? { responsavel_id: leadVinculado.responsavel_id } : {}),
+                          }}
+                          onLeadUpdated={() => {
+                            // Recarregar lead após atualizar
+                            const reloadLead = async () => {
+                              if (!leadVinculado?.id) return;
+                              const { data } = await supabase
+                                .from("leads")
+                                .select("*")
+                                .eq("id", leadVinculado.id)
+                                .maybeSingle();
+                              if (data) {
+                                setLeadVinculado(data);
+                                toast.success('Lead atualizado');
+                              }
+                            };
+                            reloadLead();
+                          }}
+                          triggerButton={
+                            <Button size="sm" variant="outline" className="w-full">
+                              <TrendingUp className="h-3 w-3 mr-2" /> 
+                              {leadVinculado.funil_id ? 'Mover no Funil' : 'Adicionar ao Funil'}
+                            </Button>
+                          }
+                        />
+                      ) : (
+                        <Button size="sm" variant="outline" className="w-full" disabled>
+                          <TrendingUp className="h-3 w-3 mr-2" /> Adicionar ao Funil
+                        </Button>
+                      )}
                     </div>
 
                     {/* Quick Actions */}
@@ -7146,9 +7245,19 @@ function Conversas() {
                         </Button>
 
                         {/* Quick Messages */}
-                        <Dialog>
+                        <Dialog open={quickMessagesDialogOpen} onOpenChange={(open) => {
+                          setQuickMessagesDialogOpen(open);
+                          if (open) {
+                            // Recarregar mensagens quando o modal for aberto
+                            loadQuickMessages();
+                            loadQuickCategories();
+                          }
+                        }}>
                           <DialogTrigger asChild>
-                            <Button variant="outline" className="w-full justify-start">
+                            <Button 
+                              variant="outline" 
+                              className="w-full justify-start"
+                            >
                               <Zap className="h-4 w-4 mr-2" /> Mensagens Rápidas
                             </Button>
                           </DialogTrigger>
