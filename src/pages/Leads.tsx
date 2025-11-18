@@ -289,11 +289,20 @@ export default function Leads() {
       const uniqueNewLeads = newLeads.filter(lead => !existingIds.has(lead.id));
 
       if (reset) {
-        setLeads(newLeads);
+        // Remover duplicatas também quando resetar
+        const uniqueLeads = Array.from(
+          new Map(newLeads.map(lead => [lead.id, lead])).values()
+        );
+        setLeads(uniqueLeads);
         setPage(0);
         setHasMore(newLeads.length === PAGE_SIZE);
       } else {
-        setLeads(prev => [...prev, ...uniqueNewLeads]);
+        // Garantir que não há duplicatas ao adicionar
+        const allLeads = [...leads, ...uniqueNewLeads];
+        const uniqueAllLeads = Array.from(
+          new Map(allLeads.map(lead => [lead.id, lead])).values()
+        );
+        setLeads(uniqueAllLeads);
         setPage(prev => prev + 1);
         setHasMore(newLeads.length === PAGE_SIZE);
       }
@@ -346,7 +355,11 @@ export default function Leads() {
   }, [searchTerm, selectedStatus, selectedTag, resetAndLoadLeads]);
 
   const filterLeads = () => {
-    let filtered = leads;
+    // Remover duplicatas antes de filtrar
+    const uniqueLeads = Array.from(
+      new Map(leads.map(lead => [lead.id, lead])).values()
+    );
+    let filtered = uniqueLeads;
 
     const normalizeString = (s: string | null | undefined) =>
       (s || "")
