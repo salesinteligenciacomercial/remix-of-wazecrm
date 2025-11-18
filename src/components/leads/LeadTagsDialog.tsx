@@ -28,15 +28,13 @@ export function LeadTagsDialog({ leadId, currentTags = [], onTagsUpdated, trigge
   const [newTag, setNewTag] = useState("");
   const [loading, setLoading] = useState(false);
   const [tagsPopoverOpen, setTagsPopoverOpen] = useState(false);
-  const { allTags: tagsExistentes, addTagToLead, removeTagFromLead, refreshTags } = useTagsManager();
+  const { allTags: tagsExistentes, addTagToLead, removeTagFromLead } = useTagsManager();
 
   useEffect(() => {
     if (open) {
       setTags(Array.isArray(currentTags) ? currentTags : []);
-      // Recarregar tags existentes quando o dialog for aberto
-      refreshTags();
     }
-  }, [open, currentTags, refreshTags]);
+  }, [open, currentTags]);
 
   const adicionarTag = () => {
     const tagTrimmed = newTag.trim();

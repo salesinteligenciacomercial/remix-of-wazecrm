@@ -3,11 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, FileSpreadsheet, AlertCircle, Tag } from "lucide-react";
+import { Upload, FileSpreadsheet, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { safeFormatPhoneNumber } from "@/utils/phoneFormatter";
 
 interface ImportarLeadsDialogProps {
   onLeadsImported: () => void;
@@ -18,7 +17,6 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<any[]>([]);
-  const [importTags, setImportTags] = useState<string>("");
   const [importReport, setImportReport] = useState<{
     total: number;
     success: number;
@@ -29,13 +27,8 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
-    const fileName = selectedFile.name.toLowerCase();
-    const isCSV = fileName.endsWith('.csv');
-    const isTXT = fileName.endsWith('.txt');
-    const isXLSX = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
-
-    if (!isCSV && !isTXT && !isXLSX) {
-      toast.error("Formato não suportado. Use CSV, TXT ou XLSX");
+    if (!selectedFile.name.endsWith('.csv')) {
+      toast.error("Apenas arquivos CSV são suportados no momento");
       return;
     }
 
@@ -44,7 +37,7 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
     processFile(selectedFile);
   };
 
-  const parseCSVLine = (line: string, separator: string = ','): string[] => {
+  const parseCSVLine = (line: string): string[] => {
     const result: string[] = [];
     let current = '';
     let inQuotes = false;
@@ -54,7 +47,7 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
       
       if (char === '"') {
         inQuotes = !inQuotes;
-      } else if (char === separator && !inQuotes) {
+      } else if (char === ',' && !inQuotes) {
         result.push(current.trim());
         current = '';
       } else {
@@ -66,55 +59,20 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
   };
 
   const processFile = (file: File) => {
-    const fileName = file.name.toLowerCase();
-    const isXLSX = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
-    
-    if (isXLSX) {
-      toast.error("Suporte a Excel (XLSX) será implementado em breve. Use CSV ou TXT por enquanto.");
-      return;
-    }
-
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
-      
-      // Para TXT, tentar detectar separador (vírgula, ponto e vírgula, ou tab)
-      const separator = text.includes('\t') ? '\t' : (text.includes(';') ? ';' : ',');
-      
-      // Se for TXT sem separador claro, usar quebra de linha como separador de colunas
       const lines = text.split('\n').filter(line => line.trim());
 
       if (lines.length < 2) {
-        toast.error("Arquivo vazio ou inválido");
+        toast.error("Arquivo CSV vazio ou inválido");
         return;
       }
 
-      // Para TXT simples (uma coluna por linha), criar estrutura básica
-      let headers: string[] = [];
-      if (separator === '\t' || text.includes(',') || text.includes(';')) {
-        headers = parseCSVLine(lines[0], separator).map(h => h.toLowerCase().trim());
-      } else {
-        // TXT simples - assumir que cada linha é um telefone ou nome+telefone
-        headers = ['telefone'];
-        if (lines[0].includes(' ')) {
-          headers = ['nome', 'telefone'];
-        }
-      }
+      const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
 
       const previewData = lines.slice(1, 6).map(line => {
-        let values: string[];
-        if (separator === '\t' || text.includes(',') || text.includes(';')) {
-          values = parseCSVLine(line, separator);
-        } else {
-          // TXT simples - separar por espaço
-          const parts = line.trim().split(/\s+/);
-          if (parts.length >= 2) {
-            values = [parts.slice(0, -1).join(' '), parts[parts.length - 1]];
-          } else {
-            values = [parts[0] || ''];
-          }
-        }
-        
+        const values = parseCSVLine(line);
         const obj: any = {};
         headers.forEach((header, index) => {
           obj[header] = values[index] || '';
@@ -135,14 +93,14 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
   };
 
   const validatePhone = (phone: string): { isValid: boolean; formatted?: string } => {
-    if (!phone || !phone.trim()) {
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length < 10 || cleaned.length > 11) {
       return { isValid: false };
     }
 
-    const formatted = safeFormatPhoneNumber(phone.trim());
-    
-    if (!formatted || formatted.length < 12) {
-      return { isValid: false };
+    let formatted = cleaned;
+    if (!formatted.startsWith("55")) {
+      formatted = "55" + formatted;
     }
 
     return { isValid: true, formatted };
@@ -162,28 +120,26 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
   const validateLead = (lead: any, lineNumber: number): { isValid: boolean; errors: string[] } => {
     const errors: string[] = [];
 
-    // Validação obrigatória: TELEFONE (campo mais importante para WhatsApp)
-    if (!lead.telefone || !lead.telefone.trim()) {
-      errors.push("Telefone é obrigatório (necessário para WhatsApp)");
-    } else {
-      const phoneValidation = validatePhone(lead.telefone.trim());
-      if (!phoneValidation.isValid) {
-        errors.push(`Telefone inválido: "${lead.telefone}". Formatos aceitos: 10 dígitos (1123892019) ou 11 dígitos (61999523405)`);
-      } else {
-        lead.telefone = phoneValidation.formatted;
-        lead.phone = phoneValidation.formatted;
-      }
-    }
-
-    // Nome é opcional - se não tiver, usar telefone como nome
+    // Validação obrigatória: nome
     if (!lead.name || lead.name.trim().length === 0) {
-      lead.name = lead.telefone || `Contato ${lineNumber}`;
+      errors.push("Nome é obrigatório");
     }
 
     // Validação de email se fornecido
     if (lead.email && lead.email.trim()) {
       if (!validateEmail(lead.email.trim())) {
         errors.push("Email inválido");
+      }
+    }
+
+    // Validação de telefone se fornecido
+    if (lead.telefone && lead.telefone.trim()) {
+      const phoneValidation = validatePhone(lead.telefone.trim());
+      if (!phoneValidation.isValid) {
+        errors.push("Telefone inválido (deve ter 10-11 dígitos)");
+      } else {
+        lead.telefone = phoneValidation.formatted;
+        lead.phone = phoneValidation.formatted;
       }
     }
 
@@ -282,42 +238,12 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
       const reader = new FileReader();
       reader.onload = async (event) => {
         const text = event.target?.result as string;
-        
-        // Detectar separador
-        const separator = text.includes('\t') ? '\t' : (text.includes(';') ? ';' : ',');
         const lines = text.split('\n').filter(line => line.trim());
-        
-        let headers: string[] = [];
-        if (separator === '\t' || text.includes(',') || text.includes(';')) {
-          headers = parseCSVLine(lines[0], separator).map(h => h.trim().toLowerCase());
-        } else {
-          // TXT simples
-          headers = ['telefone'];
-          if (lines[0].includes(' ')) {
-            headers = ['nome', 'telefone'];
-          }
-        }
-
-        // Processar tags da interface
-        const tagsArray = importTags
-          ? importTags.split(/[,;]/).map(t => t.trim()).filter(t => t)
-          : [];
+        const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
 
         const processedLeads = lines.slice(1)
           .map((line, index) => {
-            let values: string[];
-            if (separator === '\t' || text.includes(',') || text.includes(';')) {
-              values = parseCSVLine(line, separator);
-            } else {
-              // TXT simples
-              const parts = line.trim().split(/\s+/);
-              if (parts.length >= 2) {
-                values = [parts.slice(0, -1).join(' '), parts[parts.length - 1]];
-              } else {
-                values = [parts[0] || ''];
-              }
-            }
-            
+            const values = parseCSVLine(line);
             const lead: any = {
               owner_id: user.id,
               company_id: userRole.company_id,
@@ -326,7 +252,6 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
               status: 'novo',
               stage: 'prospeccao',
               value: 0,
-              tags: tagsArray.length > 0 ? [...tagsArray] : [],
             };
 
             headers.forEach((header, colIndex) => {
@@ -386,14 +311,12 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
                 case 'tags':
                 case 'tag':
                 case 'etiquetas':
-                  const csvTagsArray = value.includes(';')
+                  const tagsArray = value.includes(';')
                     ? value.split(';')
                     : value.includes(',')
                     ? value.split(',')
                     : [value];
-                  const csvTags = csvTagsArray.map((t: string) => t.trim()).filter((t: string) => t);
-                  // Combinar tags do CSV com tags da interface
-                  lead.tags = [...new Set([...tagsArray, ...csvTags])];
+                  lead.tags = tagsArray.map((t: string) => t.trim()).filter((t: string) => t);
                   break;
                 case 'observacoes':
                 case 'notes':
@@ -450,165 +373,29 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
           return;
         }
 
-        // Remover duplicatas por telefone antes de importar
-        const uniqueLeads = validLeads.reduce((acc: any[], lead: any) => {
-          const telefoneNormalizado = (lead.telefone || lead.phone || '').replace(/\D/g, '');
-          const exists = acc.find((l: any) => {
-            const existingPhone = (l.telefone || l.phone || '').replace(/\D/g, '');
-            return existingPhone === telefoneNormalizado;
-          });
-          if (!exists && telefoneNormalizado) {
-            acc.push(lead);
-          }
-          return acc;
-        }, []);
+        // Importar apenas leads válidos
+        const { error } = await supabase
+          .from("leads")
+          .insert(validLeads);
 
-        if (uniqueLeads.length < validLeads.length) {
-          const duplicatesCount = validLeads.length - uniqueLeads.length;
-          console.warn(`⚠️ ${duplicatesCount} leads duplicados removidos antes da importação`);
-        }
+        if (error) throw error;
 
-        // Importar apenas leads válidos e únicos
-        // Validar estrutura dos dados antes de enviar
-        const leadsToImport = uniqueLeads.map(lead => {
-          // Garantir que todos os campos obrigatórios estão presentes
-          const leadToInsert: any = {
-            name: lead.name || lead.telefone || 'Contato sem nome',
-            telefone: lead.telefone || lead.phone || '',
-            phone: lead.telefone || lead.phone || '',
-            owner_id: lead.owner_id,
-            company_id: lead.company_id,
-            funil_id: lead.funil_id,
-            etapa_id: lead.etapa_id,
-            status: lead.status || 'novo',
-            stage: lead.stage || 'prospeccao',
-            value: lead.value || 0,
-          };
-
-          // Campos opcionais
-          if (lead.email) leadToInsert.email = lead.email;
-          if (lead.cpf) leadToInsert.cpf = lead.cpf;
-          if (lead.company) leadToInsert.company = lead.company;
-          if (lead.source) leadToInsert.source = lead.source;
-          if (lead.notes) leadToInsert.notes = lead.notes;
-          if (lead.servico) leadToInsert.servico = lead.servico;
-          if (lead.segmentacao) leadToInsert.segmentacao = lead.segmentacao;
-          if (lead.responsavel_id) leadToInsert.responsavel_id = lead.responsavel_id;
-          if (lead.tags && Array.isArray(lead.tags) && lead.tags.length > 0) {
-            leadToInsert.tags = lead.tags;
-          }
-
-          return leadToInsert;
-        });
-
-        console.log(`📥 Importando ${leadsToImport.length} leads únicos...`);
-        console.log(`📋 Exemplo de lead:`, leadsToImport[0]);
-
-        // Importar em lotes de 50 para evitar problemas
-        const BATCH_SIZE = 50;
-        let totalImported = 0;
-        let totalErrors = 0;
-        const batchErrors: string[] = [];
-
-        for (let i = 0; i < leadsToImport.length; i += BATCH_SIZE) {
-          const batch = leadsToImport.slice(i, i + BATCH_SIZE);
-          console.log(`📦 Processando lote ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} leads)...`);
-
-          try {
-            // Tentar insert primeiro (mais simples e compatível)
-            const { data: insertedData, error: insertError } = await supabase
-              .from("leads")
-              .insert(batch)
-              .select();
-
-            if (insertError) {
-              console.warn(`⚠️ Erro no insert do lote ${Math.floor(i / BATCH_SIZE) + 1}:`, insertError);
-              console.warn(`Código do erro:`, insertError.code);
-              console.warn(`Mensagem:`, insertError.message);
-              
-              // Se for erro de duplicata, tentar upsert
-              if (insertError.code === '23505' || 
-                  insertError.message?.includes('duplicate') || 
-                  insertError.message?.includes('unique') ||
-                  insertError.message?.includes('violates unique constraint')) {
-                console.log(`🔄 Tentando upsert para o lote ${Math.floor(i / BATCH_SIZE) + 1}...`);
-                
-                const { data: upsertedData, error: upsertError } = await supabase
-                  .from("leads")
-                  .upsert(batch, {
-                    onConflict: 'telefone,company_id',
-                    ignoreDuplicates: false
-                  })
-                  .select();
-
-                if (upsertError) {
-                  console.error(`❌ Erro no upsert do lote ${Math.floor(i / BATCH_SIZE) + 1}:`, upsertError);
-                  batchErrors.push(`Lote ${Math.floor(i / BATCH_SIZE) + 1}: ${upsertError.message}`);
-                  totalErrors += batch.length;
-                } else {
-                  totalImported += upsertedData?.length || batch.length;
-                  console.log(`✅ Lote ${Math.floor(i / BATCH_SIZE) + 1} importado com sucesso (upsert)`);
-                }
-              } else {
-                // Outro tipo de erro
-                console.error(`❌ Erro no insert do lote ${Math.floor(i / BATCH_SIZE) + 1}:`, insertError);
-                batchErrors.push(`Lote ${Math.floor(i / BATCH_SIZE) + 1}: ${insertError.message}`);
-                totalErrors += batch.length;
-              }
-            } else {
-              totalImported += insertedData?.length || batch.length;
-              console.log(`✅ Lote ${Math.floor(i / BATCH_SIZE) + 1} importado com sucesso (insert)`);
-            }
-          } catch (batchError: any) {
-            console.error(`❌ Erro inesperado no lote ${Math.floor(i / BATCH_SIZE) + 1}:`, batchError);
-            batchErrors.push(`Lote ${Math.floor(i / BATCH_SIZE) + 1}: ${batchError.message || 'Erro desconhecido'}`);
-            totalErrors += batch.length;
-          }
-        }
-
-        // Mostrar resultado final da importação
-        const duplicatesRemoved = validLeads.length - uniqueLeads.length;
-        
-        if (totalErrors > 0) {
-          console.error(`❌ Total de erros: ${totalErrors} leads não foram importados`);
-          console.error(`Erros por lote:`, batchErrors);
-          let message = `${totalImported} leads importados`;
-          if (duplicatesRemoved > 0) {
-            message += `. ${duplicatesRemoved} duplicados removidos`;
-          }
-          message += `. ${totalErrors} leads falharam. Verifique o console para detalhes.`;
-          toast.warning(message);
+        // Mostrar resultado da importação
+        if (errors.length === 0) {
+          toast.success(`${validLeads.length} leads importados com sucesso!`);
         } else {
-          let message = `${totalImported} leads importados com sucesso!`;
-          if (duplicatesRemoved > 0) {
-            message += ` (${duplicatesRemoved} duplicados removidos)`;
-          }
-          if (errors.length > 0) {
-            message += `. ${errors.length} linhas com erros foram ignoradas`;
-          }
-          toast.success(message);
+          toast.warning(`${validLeads.length} leads importados. ${errors.length} linhas com erros foram ignoradas.`);
         }
 
         setOpen(false);
         setFile(null);
         setPreview([]);
-        setImportTags("");
         onLeadsImported();
       };
 
       reader.readAsText(file);
     } catch (error: any) {
-      console.error("❌ Erro completo na importação:", error);
-      const errorMessage = error?.message || error?.toString() || "Erro desconhecido ao importar leads";
-      toast.error(`Erro ao importar: ${errorMessage}`);
-      
-      // Mostrar detalhes do erro no console para debug
-      if (error?.details) {
-        console.error("Detalhes do erro:", error.details);
-      }
-      if (error?.hint) {
-        console.error("Dica do erro:", error.hint);
-      }
+      toast.error(error.message || "Erro ao importar leads");
     } finally {
       setLoading(false);
     }
@@ -621,7 +408,6 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
         setFile(null);
         setPreview([]);
         setImportReport(null);
-        setImportTags("");
       }
     }}>
       <DialogTrigger asChild>
@@ -639,50 +425,28 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Formatos aceitos:</strong> CSV, TXT
+              <strong>Formato do arquivo CSV:</strong>
               <br />
-              <strong>Obrigatório:</strong> Telefone/WhatsApp (campo mais importante)
+              <strong>Obrigatório:</strong> nome
               <br />
-              <strong>Opcionais:</strong> nome, email, cpf, empresa, origem, valor, status, servico, segmentacao, tags, observacoes, responsavel
+              <strong>Opcionais:</strong> telefone, email, cpf, empresa, origem, valor, status, servico, segmentacao, tags, observacoes, responsavel
               <br />
-              <strong>Formatos de telefone aceitos:</strong>
+              • Separe múltiplas tags com ponto e vírgula (;) ou vírgula (,)
               <br />
-              • 10 dígitos: 1123892019, 1132747400, 2140090200 (será adicionado 9 automaticamente)
+              • O telefone será formatado automaticamente com código do Brasil (+55)
               <br />
-              • 11 dígitos: 61999523405, 41999999999, 62998503845 (já completo)
-              <br />
-              • Com formatação: (11) 2389-2019, 11 2389-2019, 11-2389-2019
-              <br />
-              • Se o nome não for fornecido, será usado o telefone como identificação
-              <br />
-              • Tags adicionadas aqui serão aplicadas a todos os leads importados
+              • Para o responsável, use o email do usuário da empresa
             </AlertDescription>
           </Alert>
 
           <div className="space-y-2">
-            <Label htmlFor="file">Arquivo (CSV, TXT)</Label>
+            <Label htmlFor="file">Arquivo CSV</Label>
             <Input
               id="file"
               type="file"
-              accept=".csv,.txt"
+              accept=".csv"
               onChange={handleFileChange}
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="tags">
-              <Tag className="inline h-4 w-4 mr-1" />
-              Tags para segmentação (opcional)
-            </Label>
-            <Input
-              id="tags"
-              placeholder="Ex: cliente-vip, importado-2024, campanha-natal (separe com vírgula ou ponto e vírgula)"
-              value={importTags}
-              onChange={(e) => setImportTags(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Estas tags serão aplicadas a todos os leads importados deste arquivo
-            </p>
           </div>
 
           {preview.length > 0 && (

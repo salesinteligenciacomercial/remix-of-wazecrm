@@ -24,7 +24,6 @@ import { Label } from "@/components/ui/label";
 import { useGlobalSync } from "@/hooks/useGlobalSync";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { EditarLeadDialog } from "@/components/funil/EditarLeadDialog";
-import { LeadTagsDialog } from "@/components/leads/LeadTagsDialog";
 
 interface ConversaPopupProps {
   open: boolean;
@@ -75,8 +74,6 @@ export function ConversaPopup({
   // Mensagens rápidas compartilhadas com o menu Conversas (via localStorage)
   const [quickMessages, setQuickMessages] = useState<Array<{ id: string; title: string; content: string; category: string }>>([]);
   const [quickCategories, setQuickCategories] = useState<Array<{ id: string; name: string }>>([]);
-  const [funis, setFunis] = useState<any[]>([]);
-  const [etapas, setEtapas] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Cache simples de avatar por sessão do componente
@@ -209,42 +206,9 @@ export function ConversaPopup({
 
       if (data) {
         setLeadVinculado(data);
-        // Carregar funis e etapas quando o lead for carregado
-        carregarFunisEEtapas();
       }
     } catch (error) {
       console.error("Erro ao carregar lead:", error);
-    }
-  };
-
-  const carregarFunisEEtapas = async () => {
-    try {
-      const companyId = await getCompanyId();
-      if (!companyId) return;
-
-      // Carregar funis
-      const { data: funisData, error: funisError } = await supabase
-        .from("funis")
-        .select("*")
-        .eq("company_id", companyId)
-        .order("criado_em");
-
-      if (!funisError && funisData) {
-        setFunis(funisData);
-      }
-
-      // Carregar etapas
-      const { data: etapasData, error: etapasError } = await supabase
-        .from("etapas")
-        .select("*")
-        .eq("company_id", companyId)
-        .order("posicao");
-
-      if (!etapasError && etapasData) {
-        setEtapas(etapasData);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar funis e etapas:", error);
     }
   };
 
@@ -404,44 +368,6 @@ export function ConversaPopup({
     } catch (err) {
       console.error('Erro ao excluir lead:', err);
       toast.error('Erro ao excluir lead');
-    }
-  };
-
-  const excluirConversa = async () => {
-    if (!leadPhone) return;
-    
-    try {
-      const telefoneNormalizado = normalizePhoneBR(leadPhone)!;
-      const companyId = await getCompanyId();
-      
-      if (!companyId) {
-        toast.error('Empresa não encontrada');
-        return;
-      }
-
-      // Confirmar exclusão
-      const confirmar = window.confirm('Tem certeza que deseja excluir todas as mensagens desta conversa? Esta ação não pode ser desfeita.');
-      if (!confirmar) return;
-
-      // Excluir todas as mensagens da conversa
-      const { error } = await supabase
-        .from('conversas')
-        .delete()
-        .eq('company_id', companyId)
-        .or(`telefone_formatado.eq.${telefoneNormalizado},numero.eq.${telefoneNormalizado}`);
-
-      if (error) throw error;
-
-      toast.success('Conversa excluída com sucesso');
-      setMessages([]);
-      emitGlobalEvent({ 
-        type: 'conversation-updated', 
-        source: 'conversa-popup', 
-        data: { numero: telefoneNormalizado, deleted: true } 
-      });
-    } catch (err) {
-      console.error('Erro ao excluir conversa:', err);
-      toast.error('Erro ao excluir conversa');
     }
   };
 
@@ -802,38 +728,48 @@ export function ConversaPopup({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl h-[90vh] flex flex-col p-0 overflow-visible">
-        <DialogHeader className="px-6 py-4 border-b flex-shrink-0 relative overflow-visible">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <Avatar className="h-12 w-12 flex-shrink-0">
+      <DialogContent className="max-w-7xl h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-12 w-12">
                 <AvatarImage src={avatarUrl || leadVinculado?.avatar_url} />
                 <AvatarFallback>
                   {(leadName && leadName.length > 0) ? leadName.charAt(0).toUpperCase() : "?"}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-lg truncate">{leadName}</span>
-                <span className="text-sm text-muted-foreground font-normal truncate">
+              <div className="flex flex-col">
+                <span className="font-semibold text-lg">{leadName}</span>
+                <span className="text-sm text-muted-foreground font-normal">
                   {formattedPhone}
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0 relative z-[60]">
+            <div className="flex items-center gap-2">
               {/* Menu de ações do lead */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 p-0 hover:bg-accent flex-shrink-0"
-                    type="button"
+                    className="h-8 w-8 p-0"
                   >
                     <MoreVertical className="h-5 w-5" />
-                    <span className="sr-only">Menu de ações</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 z-[100]">
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      if (!leadVinculado) {
+                        toast.error('Salve o lead antes de editar');
+                        return;
+                      }
+                      setEditLeadOpen(true);
+                    }}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Editar lead
+                  </DropdownMenuItem>
                   {!leadVinculado && (
                     <DropdownMenuItem onClick={salvarLeadRapido}>
                       <Save className="h-4 w-4 mr-2" />
@@ -842,14 +778,6 @@ export function ConversaPopup({
                   )}
                   {leadVinculado && (
                     <>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setEditLeadOpen(true);
-                        }}
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Editar lead
-                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={excluirLead}
@@ -860,14 +788,6 @@ export function ConversaPopup({
                       </DropdownMenuItem>
                     </>
                   )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={excluirConversa}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Excluir conversa
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button
@@ -1066,30 +986,12 @@ export function ConversaPopup({
                     <Tag className="h-4 w-4" /> Tags
                   </h4>
                   <div className="flex flex-wrap gap-2 mb-2">
-                    {leadVinculado?.tags && leadVinculado.tags.length > 0 ? (
-                      leadVinculado.tags.map((tag: string, idx: number) => (
-                        <Badge key={idx} variant="secondary">
-                          {tag}
-                        </Badge>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Nenhuma tag adicionada</p>
-                    )}
+                    {leadVinculado?.tags?.map((tag: string, idx: number) => (
+                      <Badge key={idx} variant="secondary">
+                        {tag}
+                      </Badge>
+                    ))}
                   </div>
-                  {leadVinculado?.id && (
-                    <LeadTagsDialog
-                      leadId={leadVinculado.id}
-                      currentTags={leadVinculado.tags || []}
-                      onTagsUpdated={() => {
-                        carregarLead();
-                      }}
-                      triggerButton={
-                        <Button size="sm" variant="outline" className="w-full">
-                          <Tag className="h-3 w-3 mr-2" /> Adicionar Tag
-                        </Button>
-                      }
-                    />
-                  )}
                 </div>
 
                 {/* Funil de Vendas */}
@@ -1099,60 +1001,14 @@ export function ConversaPopup({
                       <TrendingUp className="h-4 w-4" /> Funil de Vendas
                     </h4>
                     {leadVinculado.funil_id ? (
-                      <div className="mb-2 p-2 bg-primary/5 rounded-md border border-primary/20">
-                        <p className="text-xs text-muted-foreground">Lead no funil:</p>
-                        <p className="text-sm font-medium">
-                          {funis.find(f => f.id === leadVinculado.funil_id)?.nome || "Funil"}
-                        </p>
-                        {leadVinculado.etapa_id && (
-                          <>
-                            <p className="text-xs text-muted-foreground mt-1">Etapa atual:</p>
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="w-2 h-2 rounded-full" 
-                                style={{ 
-                                  backgroundColor: etapas.find(e => e.id === leadVinculado.etapa_id)?.cor || '#3b82f6' 
-                                }}
-                              />
-                              <p className="text-sm font-medium">
-                                {etapas.find(e => e.id === leadVinculado.etapa_id)?.nome || "Não definida"}
-                              </p>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      <Badge variant="outline" className="w-full justify-center py-2">
+                        Lead no funil
+                      </Badge>
                     ) : (
                       <p className="text-sm text-muted-foreground mb-2">
                         Não está em nenhum funil
                       </p>
                     )}
-                    <EditarLeadDialog
-                      lead={{
-                        id: leadVinculado.id,
-                        nome: leadVinculado.name || leadName,
-                        telefone: leadVinculado.telefone || leadPhone || '',
-                        email: leadVinculado.email || '',
-                        cpf: leadVinculado.cpf || '',
-                        value: leadVinculado.value || 0,
-                        company: leadVinculado.company || '',
-                        source: leadVinculado.source || '',
-                        notes: leadVinculado.notes || '',
-                        tags: leadVinculado.tags || [],
-                        funil_id: leadVinculado.funil_id || undefined,
-                        etapa_id: leadVinculado.etapa_id || undefined,
-                        company_id: leadVinculado.company_id || undefined,
-                        ...(leadVinculado.responsavel_id ? { responsavel_id: leadVinculado.responsavel_id } : {}),
-                      }}
-                      onLeadUpdated={() => {
-                        carregarLead();
-                        toast.success('Lead atualizado');
-                      }}
-                      triggerButton={
-                        <Button size="sm" variant="outline" className="w-full">
-                          <TrendingUp className="h-3 w-3 mr-2" /> {leadVinculado.funil_id ? 'Mover no Funil' : 'Adicionar ao Funil'}
-                        </Button>
-                      }
-                    />
                   </div>
                 )}
               </div>
