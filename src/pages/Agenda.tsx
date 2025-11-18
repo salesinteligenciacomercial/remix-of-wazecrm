@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Calendar as CalendarIcon, Plus, Clock, User, Filter, Settings, Bell, CheckCircle2, XCircle, AlertCircle, Trash2, Search, CalendarDays, Copy, Download } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, Clock, User, Filter, Settings, Bell, CheckCircle2, XCircle, AlertCircle, Trash2, Search, CalendarDays, Copy, Download, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -33,6 +33,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { EditarCompromissoDialog } from "@/components/agenda/EditarCompromissoDialog";
 import { AgendaColaboradores } from "@/components/agenda/AgendaColaboradores";
+import { ConversaPopup } from "@/components/leads/ConversaPopup";
 
 interface Lembrete {
   id: string;
@@ -124,6 +125,8 @@ export default function Agenda() {
   const [filtroTipoServico, setFiltroTipoServico] = useState<string>("all");
   const [filtroPeriodo, setFiltroPeriodo] = useState<string>("all"); // all, hoje, semana, mes
   const [filtroResponsavel, setFiltroResponsavel] = useState<string>("all");
+  const [leadParaConversa, setLeadParaConversa] = useState<{ id: string; name: string; phone?: string } | null>(null);
+  const [showConversaDialog, setShowConversaDialog] = useState(false);
   
   // Cache de meses carregados para lazy loading
   const [loadedMonths, setLoadedMonths] = useState<Set<string>>(new Set());
@@ -331,7 +334,8 @@ export default function Agenda() {
     observacoes: "",
     custo_estimado: "",
     enviar_lembrete: true,
-    horas_antecedencia: "24",
+    horas_antecedencia: "0",
+    minutos_antecedencia: "30",
     destinatario_lembrete: "lead",
     enviar_confirmacao: false, // Nova opção: enviar confirmação imediata
     notificar_responsavel: true, // Nova opção: notificar responsável via push
@@ -1100,6 +1104,30 @@ export default function Agenda() {
                 toast.warning("Compromisso criado, mas não foi possível enviar a confirmação imediata.");
               } else {
                 console.log('✅ [CONFIRMAÇÃO] Mensagem de confirmação enviada com sucesso!');
+                
+                // Salvar mensagem de confirmação na conversa para exibir no CRM
+                const telefoneFormatado = telefone.replace(/\D/g, '');
+                const { error: conversaError } = await supabase
+                  .from('conversas')
+                  .insert({
+                    numero: telefoneFormatado,
+                    telefone_formatado: telefoneFormatado,
+                    mensagem: mensagemConfirmacao,
+                    origem: 'WhatsApp',
+                    status: 'Enviada',
+                    tipo_mensagem: 'text',
+                    nome_contato: leadSelecionado.name || telefoneFormatado,
+                    company_id: userRole.company_id,
+                    fromme: true,
+                    created_at: new Date().toISOString()
+                  });
+
+                if (conversaError) {
+                  console.error('⚠️ Erro ao salvar confirmação na conversa:', conversaError);
+                } else {
+                  console.log('💬 Confirmação salva na conversa para exibição no CRM');
+                }
+                
                 toast.success("Compromisso criado e confirmação enviada ao cliente!");
               }
             }
@@ -1168,44 +1196,68 @@ export default function Agenda() {
           .eq('id', user.id)
           .single();
 
-        // Validar e processar horas de antecedência
-        const horasAntecedencia = parseInt(formData.horas_antecedencia) || 24;
-        if (horasAntecedencia < 0) {
-          toast.error("As horas de antecedência não podem ser negativas");
+        // Validar e processar tempo de antecedência (horas e minutos)
+        const horas = parseInt(formData.horas_antecedencia) || 0;
+        const minutos = parseInt(formData.minutos_antecedencia) || 0;
+        
+        if (horas < 0 || minutos < 0) {
+          toast.error("O tempo de antecedência não pode ser negativo");
+          return;
+        }
+
+        // Calcular tempo total em minutos
+        const tempoTotalMinutos = (horas * 60) + minutos;
+        
+        if (tempoTotalMinutos <= 0) {
+          toast.error("O tempo de antecedência deve ser maior que zero");
           return;
         }
 
         // Calcular data de envio do lembrete
         const dataEnvio = new Date(dataHoraInicio);
-        dataEnvio.setHours(dataEnvio.getHours() - horasAntecedencia);
+        dataEnvio.setMinutes(dataEnvio.getMinutes() - tempoTotalMinutos);
+        
+        // Calcular horas de antecedência para salvar no banco (arredondado)
+        const horasAntecedencia = Math.round(tempoTotalMinutos / 60 * 100) / 100; // Mantém decimais para minutos
 
         const leadSelecionado = leads.find(l => l.id === formData.lead_id);
 
-        const lembreteData = {
+        // Determinar quais lembretes criar baseado no destinatário
+        const destinatarios: ("lead" | "responsavel")[] = 
+          formData.destinatario_lembrete === "ambos" 
+            ? ["lead", "responsavel"]
+            : formData.destinatario_lembrete === "responsavel"
+            ? ["responsavel"]
+            : ["lead"];
+
+        // Criar lembretes para cada destinatário
+        const lembretesParaCriar = destinatarios.map(destinatario => ({
           compromisso_id: compromisso.id,
           canal: 'whatsapp',
           horas_antecedencia: horasAntecedencia,
           mensagem: `Olá! Lembramos do seu compromisso agendado para ${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`,
           status_envio: 'pendente',
           data_envio: dataEnvio.toISOString(),
-          destinatario: formData.destinatario_lembrete,
+          destinatario: destinatario,
           telefone_responsavel: profile?.full_name || user?.email,
           company_id: userRole.company_id, // Usar company_id validado
-        };
+        }));
 
-        console.log('📝 [DEBUG] Dados do lembrete:', { ...lembreteData, mensagem: '[oculta]' });
+        console.log('📝 [DEBUG] Criando', lembretesParaCriar.length, 'lembrete(s) para compromisso:', compromisso.id);
+        console.log('📝 [DEBUG] Destinatários:', destinatarios);
+        console.log('📝 [DEBUG] Dados dos lembretes:', lembretesParaCriar.map(l => ({ ...l, mensagem: '[oculta]' })));
 
         const { error: lembreteError } = await supabase
           .from('lembretes')
-          .insert(lembreteData);
+          .insert(lembretesParaCriar);
 
         if (lembreteError) {
-          console.error('❌ [DEBUG] Erro ao criar lembrete:', lembreteError);
-          toast.error("Compromisso criado, mas houve erro ao criar o lembrete. Por favor, tente novamente.");
+          console.error('❌ [DEBUG] Erro ao criar lembrete(s):', lembreteError);
+          toast.error("Compromisso criado, mas houve erro ao criar o(s) lembrete(s). Por favor, tente novamente.");
           throw lembreteError;
         }
 
-        console.log('✅ [DEBUG] Lembrete criado com sucesso para compromisso:', compromisso.id);
+        console.log('✅ [DEBUG]', lembretesParaCriar.length, 'lembrete(s) criado(s) com sucesso para compromisso:', compromisso.id);
       }
 
       // Mensagem de sucesso mais informativa
@@ -1472,7 +1524,8 @@ export default function Agenda() {
       observacoes: "",
       custo_estimado: "",
       enviar_lembrete: true,
-      horas_antecedencia: "24",
+      horas_antecedencia: "0",
+      minutos_antecedencia: "30",
       destinatario_lembrete: "lead",
       enviar_confirmacao: false,
       notificar_responsavel: true,
@@ -1643,6 +1696,15 @@ export default function Agenda() {
     retry: lembretes.filter(l => l.status_envio === 'retry').length,
     taxaSucesso: lembretes.length > 0 ? Math.round((lembretes.filter(l => l.status_envio === 'enviado').length / lembretes.length) * 100) : 0,
   };
+
+  // Verificar se há erro de carregamento
+  if (!compromissos && compromissos !== undefined) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-muted-foreground">Carregando...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -1938,26 +2000,47 @@ export default function Agenda() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Horas de antecedência</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="Ex: 24"
-                        value={formData.horas_antecedencia}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          // Permitir apenas números positivos
-                          if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
-                            setFormData({...formData, horas_antecedencia: value});
-                          }
-                        }}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Digite quantas horas antes do compromisso enviar o lembrete (ex: 1, 3, 24, 48)
-                      </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label>Horas antes</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="Ex: 1"
+                          value={formData.horas_antecedencia}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Permitir apenas números positivos
+                            if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
+                              setFormData({...formData, horas_antecedencia: value});
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Minutos antes</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="59"
+                          step="1"
+                          placeholder="Ex: 30"
+                          value={formData.minutos_antecedencia}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            const numValue = parseInt(value);
+                            // Permitir apenas números entre 0 e 59
+                            if (value === '' || (!isNaN(numValue) && numValue >= 0 && numValue < 60)) {
+                              setFormData({...formData, minutos_antecedencia: value});
+                            }
+                          }}
+                        />
+                      </div>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      Defina quando o lembrete será enviado antes do compromisso (ex: 1 hora e 30 minutos, ou apenas 20 minutos)
+                    </p>
                   </>
                 )}
 
@@ -2447,10 +2530,33 @@ export default function Agenda() {
                                       }}
                                     />
                                     <AvatarFallback className="h-6 w-6 text-xs bg-primary/10">
-                                      {compromisso.lead.name.charAt(0).toUpperCase()}
+                                      {(compromisso.lead.name && compromisso.lead.name.length > 0) 
+                                        ? compromisso.lead.name.charAt(0).toUpperCase() 
+                                        : '?'}
                                     </AvatarFallback>
                                   </Avatar>
-                                  <span className="text-sm">{compromisso.lead.name}</span>
+                                  <span className="text-sm">{compromisso.lead.name || 'Lead sem nome'}</span>
+                                  {compromisso.lead.phone && compromisso.lead_id && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 px-2 ml-2 text-[#25D366] hover:text-[#25D366] hover:bg-[#25D366]/10 transition-all"
+                                      onClick={() => {
+                                        if (compromisso.lead_id && compromisso.lead) {
+                                          setLeadParaConversa({
+                                            id: compromisso.lead_id,
+                                            name: compromisso.lead.name,
+                                            phone: compromisso.lead.phone
+                                          });
+                                          setShowConversaDialog(true);
+                                        }
+                                      }}
+                                      title="Abrir Conversa no WhatsApp"
+                                    >
+                                      <MessageSquare className="h-3.5 w-3.5 mr-1" />
+                                      <span className="text-xs font-medium">Chat</span>
+                                    </Button>
+                                  )}
                                 </div>
                               )}
                               {compromisso.custo_estimado && (
@@ -2686,6 +2792,22 @@ export default function Agenda() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog de Conversa */}
+      {leadParaConversa && leadParaConversa.id && (
+        <ConversaPopup
+          open={showConversaDialog}
+          onOpenChange={(open) => {
+            setShowConversaDialog(open);
+            if (!open) {
+              setLeadParaConversa(null);
+            }
+          }}
+          leadId={leadParaConversa.id}
+          leadName={leadParaConversa.name || "Lead sem nome"}
+          leadPhone={leadParaConversa.phone || undefined}
+        />
+      )}
     </div>
   );
 }

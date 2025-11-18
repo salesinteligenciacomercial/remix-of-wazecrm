@@ -34,7 +34,8 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
     enviar_confirmacao: false,
     notificar_responsavel: true,
     enviar_lembrete: true,
-    horas_antecedencia: "24",
+    horas_antecedencia: "0",
+    minutos_antecedencia: "30",
     destinatario_lembrete: "lead" as "lead" | "responsavel" | "ambos"
   });
 
@@ -182,6 +183,29 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
               toast.warning("Compromisso criado, mas não foi possível enviar a confirmação imediata.");
             } else {
               console.log('✅ [CONFIRMAÇÃO] Mensagem de confirmação enviada com sucesso!');
+              
+              // Salvar mensagem de confirmação na conversa para exibir no CRM
+              const telefoneFormatado = telefone.replace(/\D/g, '');
+              const { error: conversaError } = await supabase
+                .from('conversas')
+                .insert({
+                  numero: telefoneFormatado,
+                  telefone_formatado: telefoneFormatado,
+                  mensagem: mensagemConfirmacao,
+                  origem: 'WhatsApp',
+                  status: 'Enviada',
+                  tipo_mensagem: 'text',
+                  nome_contato: lead.nome || telefoneFormatado,
+                  company_id: companyId,
+                  fromme: true,
+                  created_at: new Date().toISOString()
+                });
+
+              if (conversaError) {
+                console.error('⚠️ Erro ao salvar confirmação na conversa:', conversaError);
+              } else {
+                console.log('💬 Confirmação salva na conversa para exibição no CRM');
+              }
             }
           }
         } catch (error) {
@@ -242,44 +266,67 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
             .eq('id', session.user.id)
             .single();
 
-          // Validar e processar horas de antecedência
-          const horasAntecedencia = parseInt(formData.horas_antecedencia) || 24;
-          if (horasAntecedencia < 0) {
-            console.warn('⚠️ [LEMBRETE] Horas de antecedência negativas, usando padrão 24h');
-            // Não bloquear, apenas usar valor padrão
+          // Validar e processar tempo de antecedência (horas e minutos)
+          const horas = parseInt(formData.horas_antecedencia) || 0;
+          const minutos = parseInt(formData.minutos_antecedencia) || 0;
+          
+          if (horas < 0 || minutos < 0) {
+            console.warn('⚠️ [LEMBRETE] Tempo de antecedência negativo, usando valores padrão');
+            toast.warning("Tempo de antecedência inválido, usando 30 minutos como padrão");
+          }
+
+          // Calcular tempo total em minutos
+          const tempoTotalMinutos = (horas * 60) + minutos;
+          
+          if (tempoTotalMinutos <= 0) {
+            toast.error("O tempo de antecedência deve ser maior que zero");
+            return;
           }
 
           // Calcular data de envio do lembrete
           const dataEnvio = new Date(inicio);
-          dataEnvio.setHours(dataEnvio.getHours() - horasAntecedencia);
+          dataEnvio.setMinutes(dataEnvio.getMinutes() - tempoTotalMinutos);
+          
+          // Calcular horas de antecedência para salvar no banco (arredondado)
+          const horasAntecedencia = Math.round(tempoTotalMinutos / 60 * 100) / 100; // Mantém decimais para minutos
 
-          const lembreteData = {
+          // Determinar quais lembretes criar baseado no destinatário
+          const destinatarios: ("lead" | "responsavel")[] = 
+            formData.destinatario_lembrete === "ambos" 
+              ? ["lead", "responsavel"]
+              : formData.destinatario_lembrete === "responsavel"
+              ? ["responsavel"]
+              : ["lead"];
+
+          // Criar lembretes para cada destinatário
+          const lembretesParaCriar = destinatarios.map(destinatario => ({
             compromisso_id: compromissoCriado.id,
             canal: 'whatsapp',
             horas_antecedencia: horasAntecedencia,
             mensagem: `Olá! Lembramos do seu compromisso agendado para ${format(inicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`,
             status_envio: 'pendente',
             data_envio: dataEnvio.toISOString(),
-            destinatario: formData.destinatario_lembrete,
+            destinatario: destinatario,
             telefone_responsavel: profile?.full_name || session.user.email,
             company_id: companyId,
-          };
+          }));
 
-          console.log('📝 [LEMBRETE] Criando lembrete para compromisso:', compromissoCriado.id);
+          console.log('📝 [LEMBRETE] Criando', lembretesParaCriar.length, 'lembrete(s) para compromisso:', compromissoCriado.id);
+          console.log('📝 [LEMBRETE] Destinatários:', destinatarios);
 
           const { error: lembreteError } = await supabase
             .from('lembretes')
-            .insert(lembreteData);
+            .insert(lembretesParaCriar);
 
           if (lembreteError) {
             console.error('❌ [LEMBRETE] Erro ao criar lembrete:', lembreteError);
-            toast.warning("Compromisso criado, mas houve erro ao criar o lembrete.");
+            toast.warning("Compromisso criado, mas houve erro ao criar o(s) lembrete(s).");
           } else {
-            console.log('✅ [LEMBRETE] Lembrete criado com sucesso para compromisso:', compromissoCriado.id);
+            console.log('✅ [LEMBRETE]', lembretesParaCriar.length, 'lembrete(s) criado(s) com sucesso para compromisso:', compromissoCriado.id);
           }
         } catch (error) {
           console.error('❌ [LEMBRETE] Erro ao criar lembrete:', error);
-          toast.warning("Compromisso criado, mas houve erro ao criar o lembrete.");
+          toast.warning("Compromisso criado, mas houve erro ao criar o(s) lembrete(s).");
         }
       }
 
@@ -308,7 +355,8 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
         enviar_confirmacao: false,
         notificar_responsavel: true,
         enviar_lembrete: true,
-        horas_antecedencia: "24",
+        horas_antecedencia: "0",
+        minutos_antecedencia: "30",
         destinatario_lembrete: "lead"
       });
     } catch (error: any) {
@@ -444,26 +492,47 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-sm">Horas de antecedência</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="1"
-                    placeholder="Ex: 24"
-                    value={formData.horas_antecedencia}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
-                        setFormData({ ...formData, horas_antecedencia: value });
-                      }
-                    }}
-                    className="h-9"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Digite quantas horas antes do compromisso enviar o lembrete (ex: 1, 3, 24, 48)
-                  </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Horas antes</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="Ex: 1"
+                      value={formData.horas_antecedencia}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
+                          setFormData({ ...formData, horas_antecedencia: value });
+                        }
+                      }}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Minutos antes</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="59"
+                      step="1"
+                      placeholder="Ex: 30"
+                      value={formData.minutos_antecedencia}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const numValue = parseInt(value);
+                        if (value === '' || (!isNaN(numValue) && numValue >= 0 && numValue < 60)) {
+                          setFormData({ ...formData, minutos_antecedencia: value });
+                        }
+                      }}
+                      className="h-9"
+                    />
+                  </div>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Defina quando o lembrete será enviado antes do compromisso (ex: 1 hora e 30 minutos, ou apenas 20 minutos)
+                </p>
               </>
             )}
 
