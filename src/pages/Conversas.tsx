@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { MessageSquare, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ConversaPopup } from "@/components/leads/ConversaPopup";
+import { ConversationListItem } from "@/components/conversas/ConversationListItem";
+import { ConversationHeader } from "@/components/conversas/ConversationHeader";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 
 interface Conversa {
   id: string;
@@ -19,12 +22,24 @@ interface Conversa {
   origem: string;
 }
 
+interface ConversaMessage {
+  id: string;
+  mensagem: string;
+  fromme: boolean;
+  created_at: string;
+  tipo_mensagem: string | null;
+  midia_url: string | null;
+  arquivo_nome: string | null;
+}
+
 export default function Conversas() {
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
-  const [selectedConversa, setSelectedConversa] = useState<{ id: string; name: string; phone?: string } | null>(null);
-  const [showConversaDialog, setShowConversaDialog] = useState(false);
+  const [selectedConversa, setSelectedConversa] = useState<Conversa | null>(null);
+  const [messages, setMessages] = useState<ConversaMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [showInfoPanel, setShowInfoPanel] = useState(false);
 
   useEffect(() => {
     carregarConversas();
@@ -93,139 +108,158 @@ export default function Conversas() {
   );
 
   const abrirConversa = async (conversa: Conversa) => {
-    // Tentar encontrar o lead pelo telefone
-    const telefoneLimpo = conversa.telefone_formatado.replace(/\D/g, "");
+    setSelectedConversa(conversa);
+    setLoadingMessages(true);
     
     try {
-      // Buscar lead pelo telefone
-      const { data: lead } = await supabase
-        .from("leads")
-        .select("id, name, phone, telefone")
-        .or(`phone.ilike.%${telefoneLimpo}%,telefone.ilike.%${telefoneLimpo}%`)
-        .limit(1)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: userRole } = await supabase
+        .from("user_roles")
+        .select("company_id")
+        .eq("user_id", user.id)
         .single();
 
-      if (lead) {
-        setSelectedConversa({
-          id: lead.id,
-          name: lead.name || conversa.nome_contato,
-          phone: lead.phone || lead.telefone || conversa.numero,
-        });
-      } else {
-        // Se não encontrar lead, criar um temporário
-        setSelectedConversa({
-          id: conversa.id,
-          name: conversa.nome_contato,
-          phone: conversa.numero,
-        });
-      }
-    } catch {
-      // Se não encontrar lead, usar dados da conversa
-      setSelectedConversa({
-        id: conversa.id,
-        name: conversa.nome_contato,
-        phone: conversa.numero,
-      });
+      if (!userRole?.company_id) return;
+
+      // Carregar mensagens da conversa
+      const { data, error } = await supabase
+        .from("conversas")
+        .select("*")
+        .eq("company_id", userRole.company_id)
+        .eq("telefone_formatado", conversa.telefone_formatado)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      setMessages(data || []);
+    } catch (error) {
+      console.error("Erro ao carregar mensagens:", error);
+      toast.error("Erro ao carregar mensagens");
+    } finally {
+      setLoadingMessages(false);
     }
-    
-    setShowConversaDialog(true);
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Conversas</h1>
-          <p className="text-muted-foreground">
-            Gerencie todas as suas conversas do WhatsApp
-          </p>
-        </div>
-      </div>
-
-      <Card>
+    <div className="flex h-[calc(100vh-4rem)] gap-4">
+      {/* Coluna Esquerda - Lista de Conversas */}
+      <Card className="w-96 flex flex-col">
         <CardHeader>
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome ou telefone..."
-                className="pl-10"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome ou telefone..."
+              className="pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
         </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <p className="text-muted-foreground">Carregando conversas...</p>
-            </div>
-          ) : conversasFiltradas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <MessageSquare className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
-              <p className="text-muted-foreground">
-                {searchTerm ? "Nenhuma conversa encontrada" : "Nenhuma conversa ainda"}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {conversasFiltradas.map((conversa) => (
-                <Card
-                  key={conversa.id}
-                  className="cursor-pointer hover:bg-accent transition-colors"
-                  onClick={() => abrirConversa(conversa)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-semibold">{conversa.nome_contato}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {conversa.numero}
-                        </p>
-                        {conversa.ultima_mensagem && (
-                          <p className="text-sm text-muted-foreground mt-1 truncate">
-                            {conversa.ultima_mensagem}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(conversa.created_at).toLocaleDateString("pt-BR")}
-                        </p>
-                        <Badge
-                          variant={
-                            conversa.status === "Enviada" ? "default" : "secondary"
-                          }
-                          className="mt-1"
-                        >
-                          {conversa.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </CardContent>
+        <Separator />
+        <ScrollArea className="flex-1">
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <p className="text-muted-foreground">Carregando conversas...</p>
+              </div>
+            ) : conversasFiltradas.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <MessageSquare className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
+                <p className="text-muted-foreground">
+                  {searchTerm ? "Nenhuma conversa encontrada" : "Nenhuma conversa ainda"}
+                </p>
+              </div>
+            ) : (
+              <div>
+                {conversasFiltradas.map((conversa) => (
+                  <ConversationListItem
+                    key={conversa.id}
+                    contactName={conversa.nome_contato}
+                    channel="whatsapp"
+                    lastMessage={conversa.ultima_mensagem}
+                    timestamp={new Date(conversa.created_at)}
+                    unread={0}
+                    isSelected={selectedConversa?.id === conversa.id}
+                    onClick={() => abrirConversa(conversa)}
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </ScrollArea>
       </Card>
 
-      {/* Dialog de Conversa */}
-      {selectedConversa && selectedConversa.id && (
-        <ConversaPopup
-          open={showConversaDialog}
-          onOpenChange={(open) => {
-            setShowConversaDialog(open);
-            if (!open) {
-              setSelectedConversa(null);
-            }
-          }}
-          leadId={selectedConversa.id}
-          leadName={selectedConversa.name || "Contato sem nome"}
-          leadPhone={selectedConversa.phone || undefined}
-        />
-      )}
+      {/* Coluna Direita - Conteúdo da Conversa */}
+      <Card className="flex-1 flex flex-col">
+        {selectedConversa ? (
+          <>
+            <ConversationHeader
+              contactName={selectedConversa.nome_contato}
+              channel="whatsapp"
+              showInfoPanel={showInfoPanel}
+              onToggleInfoPanel={() => setShowInfoPanel(!showInfoPanel)}
+            />
+            <Separator />
+            <ScrollArea className="flex-1 p-4">
+              {loadingMessages ? (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-muted-foreground">Carregando mensagens...</p>
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-muted-foreground">Nenhuma mensagem ainda</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${message.fromme ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div className={`max-w-[70%] rounded-lg p-3 ${
+                        message.fromme 
+                          ? 'bg-primary text-primary-foreground' 
+                          : 'bg-muted'
+                      }`}>
+                        <p className="text-sm whitespace-pre-wrap break-words">
+                          {message.mensagem}
+                        </p>
+                        <span className="text-xs opacity-70 mt-1 block">
+                          {new Date(message.created_at).toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+            <Separator />
+            <div className="p-4 flex gap-2">
+              <Input
+                placeholder="Digite sua mensagem..."
+                className="flex-1"
+              />
+              <Button>
+                Enviar
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <p className="text-muted-foreground">
+                Selecione uma conversa para visualizar
+              </p>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
