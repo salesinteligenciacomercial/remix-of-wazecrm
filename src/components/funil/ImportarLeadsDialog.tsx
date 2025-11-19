@@ -7,6 +7,8 @@ import { Upload, FileSpreadsheet, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { robustFormatPhoneNumber } from "@/utils/phoneFormatter";
+import * as XLSX from "xlsx";
 
 interface ImportarLeadsDialogProps {
   onLeadsImported: () => void;
@@ -17,9 +19,11 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<any[]>([]);
+  const [importTags, setImportTags] = useState<string>("");
   const [importReport, setImportReport] = useState<{
     total: number;
     success: number;
+    duplicates: number;
     errors: { line: number; errors: string[] }[];
   } | null>(null);
 
@@ -27,17 +31,20 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
-    if (!selectedFile.name.endsWith('.csv')) {
-      toast.error("Apenas arquivos CSV são suportados no momento");
+    const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase();
+    const supportedFormats = ['csv', 'tsv', 'xlsx', 'xls', 'ods'];
+    
+    if (!fileExtension || !supportedFormats.includes(fileExtension)) {
+      toast.error(`Formato não suportado. Use: ${supportedFormats.join(', ').toUpperCase()}`);
       return;
     }
 
     setFile(selectedFile);
-    setImportReport(null); // Reset report when new file is selected
+    setImportReport(null);
     processFile(selectedFile);
   };
 
-  const parseCSVLine = (line: string): string[] => {
+  const parseCSVLine = (line: string, delimiter: string = ','): string[] => {
     const result: string[] = [];
     let current = '';
     let inQuotes = false;
@@ -47,7 +54,7 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
       
       if (char === '"') {
         inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
+      } else if (char === delimiter && !inQuotes) {
         result.push(current.trim());
         current = '';
       } else {
@@ -58,52 +65,107 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
     return result;
   };
 
-  const processFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split('\n').filter(line => line.trim());
-
-      if (lines.length < 2) {
-        toast.error("Arquivo CSV vazio ou inválido");
-        return;
-      }
-
-      const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
-
-      const previewData = lines.slice(1, 6).map(line => {
-        const values = parseCSVLine(line);
-        const obj: any = {};
-        headers.forEach((header, index) => {
-          obj[header] = values[index] || '';
-        });
-        return obj;
-      });
-
-      setPreview(previewData);
-      setImportReport(null); // Reset report when new file is selected
-    };
-    reader.readAsText(file, 'UTF-8');
+  const parseTSVLine = (line: string): string[] => {
+    return parseCSVLine(line, '\t');
   };
 
-  // Funções de validação robustas
+  const readExcelFile = async (file: File): Promise<{ headers: string[]; rows: string[][] }> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' }) as any[][];
+          
+          if (jsonData.length < 1) {
+            reject(new Error("Arquivo Excel vazio"));
+            return;
+          }
+
+          // Primeira linha são os headers
+          const headers = jsonData[0].map((h: any) => String(h || '').toLowerCase().trim());
+          const rows = jsonData.slice(1).map(row => row.map(cell => String(cell || '').trim()));
+
+          resolve({ headers, rows });
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  const processFile = async (file: File) => {
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+
+    try {
+      if (fileExtension === 'xlsx' || fileExtension === 'xls' || fileExtension === 'ods') {
+        const { headers, rows } = await readExcelFile(file);
+        const previewData = rows.slice(0, 5).map(row => {
+          const obj: any = {};
+          headers.forEach((header, index) => {
+            obj[header] = row[index] || '';
+          });
+          return obj;
+        });
+        setPreview(previewData);
+      } else {
+        // CSV ou TSV
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const text = event.target?.result as string;
+          const delimiter = fileExtension === 'tsv' ? '\t' : ',';
+          const lines = text.split('\n').filter(line => line.trim());
+
+          if (lines.length < 1) {
+            toast.error("Arquivo vazio ou inválido");
+            return;
+          }
+
+          // Se não tiver cabeçalho, assume que são apenas números
+          const firstLineValues = fileExtension === 'tsv' 
+            ? parseTSVLine(lines[0])
+            : parseCSVLine(lines[0]);
+          
+          const hasHeaders = firstLineValues.some(val => isNaN(Number(val.replace(/\D/g, ''))) && val.length > 0);
+          
+          let headers: string[];
+          let dataStartIndex: number;
+
+          if (hasHeaders) {
+            headers = firstLineValues.map(h => h.toLowerCase().trim());
+            dataStartIndex = 1;
+          } else {
+            // Sem cabeçalho, cria headers genéricos baseados no número de colunas
+            headers = firstLineValues.map((_, i) => `coluna${i + 1}`);
+            dataStartIndex = 0;
+          }
+
+          const previewData = lines.slice(dataStartIndex, dataStartIndex + 5).map(line => {
+            const values = fileExtension === 'tsv' ? parseTSVLine(line) : parseCSVLine(line);
+            const obj: any = {};
+            headers.forEach((header, index) => {
+              obj[header] = values[index] || '';
+            });
+            return obj;
+          });
+
+          setPreview(previewData);
+        };
+        reader.readAsText(file, 'UTF-8');
+      }
+    } catch (error: any) {
+      toast.error(`Erro ao processar arquivo: ${error.message}`);
+    }
+  };
+
+  // Funções de validação
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
-  };
-
-  const validatePhone = (phone: string): { isValid: boolean; formatted?: string } => {
-    const cleaned = phone.replace(/\D/g, '');
-    if (cleaned.length < 10 || cleaned.length > 11) {
-      return { isValid: false };
-    }
-
-    let formatted = cleaned;
-    if (!formatted.startsWith("55")) {
-      formatted = "55" + formatted;
-    }
-
-    return { isValid: true, formatted };
   };
 
   const validateValue = (value: string): { isValid: boolean; parsed?: number } => {
@@ -120,26 +182,28 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
   const validateLead = (lead: any, lineNumber: number): { isValid: boolean; errors: string[] } => {
     const errors: string[] = [];
 
-    // Validação obrigatória: nome
+    // Validação obrigatória: telefone
+    if (!lead.telefone || !lead.telefone.trim()) {
+      errors.push("Telefone é obrigatório");
+    } else {
+      const phoneValidation = robustFormatPhoneNumber(lead.telefone.trim());
+      if (!phoneValidation.isValid) {
+        errors.push("Telefone inválido (deve ter formato válido de telefone brasileiro)");
+      } else {
+        lead.telefone = phoneValidation.formatted;
+        lead.phone = phoneValidation.formatted;
+      }
+    }
+
+    // Nome é opcional, mas se não tiver, usa um padrão
     if (!lead.name || lead.name.trim().length === 0) {
-      errors.push("Nome é obrigatório");
+      lead.name = `Lead ${lineNumber}`;
     }
 
     // Validação de email se fornecido
     if (lead.email && lead.email.trim()) {
       if (!validateEmail(lead.email.trim())) {
         errors.push("Email inválido");
-      }
-    }
-
-    // Validação de telefone se fornecido
-    if (lead.telefone && lead.telefone.trim()) {
-      const phoneValidation = validatePhone(lead.telefone.trim());
-      if (!phoneValidation.isValid) {
-        errors.push("Telefone inválido (deve ter 10-11 dígitos)");
-      } else {
-        lead.telefone = phoneValidation.formatted;
-        lead.phone = phoneValidation.formatted;
       }
     }
 
@@ -154,6 +218,81 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
     }
 
     return { isValid: errors.length === 0, errors };
+  };
+
+  const extractPhoneNumbers = (text: string): string[] => {
+    if (!text || !text.trim()) return [];
+    
+    // Remove tudo que não é número, espaço, hífen ou parênteses
+    const cleaned = text.replace(/[^\d\s\-()]/g, '');
+    // Divide por espaços, vírgulas, tabs ou múltiplos espaços
+    const parts = cleaned.split(/[\s,\t]+/).filter(p => p.trim().length > 0);
+    
+    const phones: string[] = [];
+    for (const part of parts) {
+      const numbersOnly = part.replace(/\D/g, '');
+      // Se tiver pelo menos 10 dígitos (DDD + número), considera como telefone
+      // Aceita também 8 ou 9 dígitos se parecer com número de telefone
+      if (numbersOnly.length >= 10 || (numbersOnly.length >= 8 && numbersOnly.length <= 11)) {
+        phones.push(part.trim());
+      }
+    }
+    
+    return phones;
+  };
+
+  const isPhoneNumber = (value: string): boolean => {
+    if (!value || !value.trim()) return false;
+    const numbersOnly = value.replace(/\D/g, '');
+    // Telefone brasileiro tem pelo menos 10 dígitos (DDD + número fixo) ou 11 (DDD + celular)
+    return numbersOnly.length >= 10 && numbersOnly.length <= 13;
+  };
+
+  const processData = async (file: File): Promise<{ headers: string[]; rows: string[][] }> => {
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+
+    if (fileExtension === 'xlsx' || fileExtension === 'xls' || fileExtension === 'ods') {
+      return await readExcelFile(file);
+    } else {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const text = event.target?.result as string;
+          const delimiter = fileExtension === 'tsv' ? '\t' : ',';
+          const lines = text.split('\n').filter(line => line.trim());
+
+          if (lines.length < 1) {
+            reject(new Error("Arquivo vazio"));
+            return;
+          }
+
+          const firstLineValues = fileExtension === 'tsv' 
+            ? parseTSVLine(lines[0])
+            : parseCSVLine(lines[0]);
+          
+          const hasHeaders = firstLineValues.some(val => isNaN(Number(val.replace(/\D/g, ''))) && val.length > 0);
+          
+          let headers: string[];
+          let dataStartIndex: number;
+
+          if (hasHeaders) {
+            headers = firstLineValues.map(h => h.toLowerCase().trim());
+            dataStartIndex = 1;
+          } else {
+            headers = firstLineValues.map((_, i) => `coluna${i + 1}`);
+            dataStartIndex = 0;
+          }
+
+          const rows = lines.slice(dataStartIndex).map(line => 
+            fileExtension === 'tsv' ? parseTSVLine(line) : parseCSVLine(line)
+          );
+
+          resolve({ headers, rows });
+        };
+        reader.onerror = reject;
+        reader.readAsText(file, 'UTF-8');
+      });
+    }
   };
 
   const handleImport = async () => {
@@ -171,7 +310,7 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
         return;
       }
 
-      // Buscar company_id do usuário com tratamento de erro explícito
+      // Buscar company_id do usuário
       const { data: userRole, error: roleError } = await supabase
         .from("user_roles")
         .select("company_id")
@@ -235,15 +374,51 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
         }
       });
 
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const text = event.target?.result as string;
-        const lines = text.split('\n').filter(line => line.trim());
-        const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+      // Processar arquivo
+      const { headers, rows } = await processData(file);
 
-        const processedLeads = lines.slice(1)
-          .map((line, index) => {
-            const values = parseCSVLine(line);
+      // Tags adicionais da interface
+      const additionalTags = importTags
+        .split(/[,;]/)
+        .map(t => t.trim())
+        .filter(t => t.length > 0);
+
+      // Se não tiver cabeçalhos nomeados, processa cada célula como possível telefone
+      const hasNamedHeaders = headers.some(h => 
+        ['nome', 'name', 'telefone', 'phone', 'whatsapp', 'celular'].includes(h)
+      );
+
+      const processedLeads: { lead: any; lineNumber: number }[] = [];
+
+      rows.forEach((row, rowIndex) => {
+        if (!hasNamedHeaders) {
+          // Sem cabeçalhos nomeados, processa cada célula como possível telefone
+          // Cria um lead para cada telefone válido encontrado na linha
+          const validPhones: string[] = [];
+          
+          row.forEach((cell) => {
+            if (cell && cell.trim()) {
+              // Se a célula parece ser um telefone (10-13 dígitos), tenta formatar
+              if (isPhoneNumber(cell)) {
+                const validation = robustFormatPhoneNumber(cell);
+                if (validation.isValid && !validPhones.includes(validation.formatted)) {
+                  validPhones.push(validation.formatted);
+                }
+              } else {
+                // Tenta extrair telefones do texto
+                const phones = extractPhoneNumbers(cell);
+                phones.forEach(p => {
+                  const validation = robustFormatPhoneNumber(p);
+                  if (validation.isValid && !validPhones.includes(validation.formatted)) {
+                    validPhones.push(validation.formatted);
+                  }
+                });
+              }
+            }
+          });
+
+          // Cria um lead para cada telefone válido encontrado
+          validPhones.forEach((phone) => {
             const lead: any = {
               owner_id: user.id,
               company_id: userRole.company_id,
@@ -252,148 +427,288 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
               status: 'novo',
               stage: 'prospeccao',
               value: 0,
+              telefone: phone,
+              phone: phone,
             };
 
-            headers.forEach((header, colIndex) => {
-              const value = values[colIndex]?.trim().replace(/^["']|["']$/g, '');
-              if (!value) return;
+            // Adiciona tags da interface se houver
+            if (additionalTags.length > 0) {
+              lead.tags = [...additionalTags];
+            }
 
-              // Mapear colunas do CSV para campos do banco
-              switch (header) {
-                case 'nome':
-                case 'name':
-                  lead.name = value;
-                  break;
-                case 'telefone':
-                case 'phone':
-                case 'whatsapp':
-                case 'celular':
-                  lead.telefone = value; // Será validado depois
-                  break;
-                case 'email':
-                case 'e-mail':
-                  lead.email = value.toLowerCase();
-                  break;
-                case 'cpf':
-                  lead.cpf = value.replace(/\D/g, "");
-                  break;
-                case 'empresa':
-                case 'company':
-                  lead.company = value;
-                  break;
-                case 'origem':
-                case 'source':
-                case 'fonte':
-                  lead.source = value;
-                  break;
-                case 'valor':
-                case 'value':
-                case 'ticket':
-                  lead.value = value; // Será validado depois
-                  break;
-                case 'status':
-                  const statusValido = ['novo', 'em_contato', 'qualificado', 'negociacao', 'ganho', 'perdido'];
-                  const statusNormalizado = value.toLowerCase().replace(/\s+/g, '_');
-                  if (statusValido.includes(statusNormalizado)) {
-                    lead.status = statusNormalizado;
-                  }
-                  break;
-                case 'servico':
-                case 'service':
-                case 'produto':
-                  lead.servico = value;
-                  break;
-                case 'segmentacao':
-                case 'segmento':
-                case 'categoria':
-                  lead.segmentacao = value;
-                  break;
-                case 'tags':
-                case 'tag':
-                case 'etiquetas':
-                  const tagsArray = value.includes(';')
-                    ? value.split(';')
-                    : value.includes(',')
-                    ? value.split(',')
-                    : [value];
-                  lead.tags = tagsArray.map((t: string) => t.trim()).filter((t: string) => t);
-                  break;
-                case 'observacoes':
-                case 'notes':
-                case 'nota':
-                case 'observacao':
-                  lead.notes = value;
-                  break;
-                case 'responsavel':
-                case 'responsible':
-                case 'atribuido':
-                case 'assignee':
-                  // Mapear email para user_id
-                  const responsavelEmail = value.toLowerCase().trim();
-                  const responsavelId = userEmailMap.get(responsavelEmail);
-                  if (responsavelId) {
-                    lead.responsavel_id = responsavelId;
-                  }
-                  break;
-              }
-            });
+            processedLeads.push({ lead, lineNumber: rowIndex + 2 });
+          });
+        } else {
+          // Com cabeçalhos nomeados, processa normalmente
+          const lead: any = {
+            owner_id: user.id,
+            company_id: userRole.company_id,
+            funil_id: funilId,
+            etapa_id: etapaId,
+            status: 'novo',
+            stage: 'prospeccao',
+            value: 0,
+          };
 
-            return { lead, lineNumber: index + 2 }; // +2 porque começa na linha 1 (headers) + 1 para index 0
+          // Processa com cabeçalhos nomeados
+          headers.forEach((header, colIndex) => {
+            const value = row[colIndex]?.trim().replace(/^["']|["']$/g, '');
+            if (!value) return;
+
+            // Mapear colunas do arquivo para campos do banco
+            switch (header) {
+              case 'nome':
+              case 'name':
+                lead.name = value;
+                break;
+              case 'telefone':
+              case 'phone':
+              case 'whatsapp':
+              case 'celular':
+                lead.telefone = value;
+                break;
+              case 'email':
+              case 'e-mail':
+                lead.email = value.toLowerCase();
+                break;
+              case 'cpf':
+                lead.cpf = value.replace(/\D/g, "");
+                break;
+              case 'empresa':
+              case 'company':
+                lead.company = value;
+                break;
+              case 'origem':
+              case 'source':
+              case 'fonte':
+                lead.source = value;
+                break;
+              case 'valor':
+              case 'value':
+              case 'ticket':
+                lead.value = value;
+                break;
+              case 'status':
+                const statusValido = ['novo', 'em_contato', 'qualificado', 'negociacao', 'ganho', 'perdido'];
+                const statusNormalizado = value.toLowerCase().replace(/\s+/g, '_');
+                if (statusValido.includes(statusNormalizado)) {
+                  lead.status = statusNormalizado;
+                }
+                break;
+              case 'servico':
+              case 'service':
+              case 'produto':
+                lead.servico = value;
+                break;
+              case 'segmentacao':
+              case 'segmento':
+              case 'categoria':
+                lead.segmentacao = value;
+                break;
+              case 'tags':
+              case 'tag':
+              case 'etiquetas':
+                const tagsArray = value.includes(';')
+                  ? value.split(';')
+                  : value.includes(',')
+                  ? value.split(',')
+                  : [value];
+                lead.tags = tagsArray.map((t: string) => t.trim()).filter((t: string) => t);
+                break;
+              case 'observacoes':
+              case 'notes':
+              case 'nota':
+              case 'observacao':
+                lead.notes = value;
+                break;
+              case 'responsavel':
+              case 'responsible':
+              case 'atribuido':
+              case 'assignee':
+                const responsavelEmail = value.toLowerCase().trim();
+                const responsavelId = userEmailMap.get(responsavelEmail);
+                if (responsavelId) {
+                  lead.responsavel_id = responsavelId;
+                }
+                break;
+              default:
+                // Se o header não for reconhecido, mas o valor parece ser um telefone, tenta usar
+                if (!lead.telefone) {
+                  if (isPhoneNumber(value)) {
+                    const validation = robustFormatPhoneNumber(value);
+                    if (validation.isValid) {
+                      lead.telefone = validation.formatted;
+                      lead.phone = validation.formatted;
+                    }
+                  } else {
+                    const phones = extractPhoneNumbers(value);
+                    if (phones.length > 0) {
+                      const validation = robustFormatPhoneNumber(phones[0]);
+                      if (validation.isValid) {
+                        lead.telefone = validation.formatted;
+                        lead.phone = validation.formatted;
+                      }
+                    }
+                  }
+                }
+                break;
+            }
           });
 
-        // Validar todos os leads e separar válidos dos inválidos
-        const validationResults = processedLeads.map(({ lead, lineNumber }) => ({
-          lead,
-          lineNumber,
-          validation: validateLead(lead, lineNumber)
+          // Adiciona tags da interface se houver
+          if (additionalTags.length > 0) {
+            if (!lead.tags) {
+              lead.tags = [];
+            }
+            lead.tags = [...lead.tags, ...additionalTags];
+          }
+
+          processedLeads.push({ lead, lineNumber: rowIndex + 2 });
+        }
+      });
+
+      // Filtra apenas leads que têm telefone
+      const leadsWithPhones = processedLeads.filter(({ lead }) => {
+        return lead.telefone && lead.telefone.trim();
+      });
+
+      // Validar todos os leads
+      const validationResults = leadsWithPhones.map(({ lead, lineNumber }) => ({
+        lead,
+        lineNumber,
+        validation: validateLead(lead, lineNumber)
+      }));
+
+      const validLeads = validationResults
+        .filter(result => result.validation.isValid)
+        .map(result => result.lead);
+
+      const errors = validationResults
+        .filter(result => !result.validation.isValid)
+        .map(result => ({
+          line: result.lineNumber,
+          errors: result.validation.errors
         }));
 
-        const validLeads = validationResults
-          .filter(result => result.validation.isValid)
-          .map(result => result.lead);
+      if (validLeads.length === 0) {
+        toast.error("Nenhum lead válido encontrado no arquivo. Verifique os erros abaixo.");
+        setLoading(false);
+        return;
+      }
 
-        const errors = validationResults
-          .filter(result => !result.validation.isValid)
-          .map(result => ({
-            line: result.lineNumber,
-            errors: result.validation.errors
-          }));
+      // Função para normalizar telefone para comparação (remove tudo que não é número)
+      const normalizePhoneForComparison = (phone: string): string => {
+        return phone.replace(/\D/g, '');
+      };
 
-        // Criar relatório de importação
-        const report = {
-          total: processedLeads.length,
-          success: validLeads.length,
-          errors
-        };
+      // Buscar leads existentes da empresa para verificar duplicatas
+      const phoneNumbersToCheck = validLeads
+        .map(lead => lead.telefone || lead.phone)
+        .filter(phone => phone);
 
-        setImportReport(report);
+      if (phoneNumbersToCheck.length === 0) {
+        toast.error("Nenhum telefone válido encontrado para verificar duplicatas.");
+        setLoading(false);
+        return;
+      }
 
-        if (validLeads.length === 0) {
-          toast.error("Nenhum lead válido encontrado no arquivo. Verifique os erros abaixo.");
+      // Buscar leads existentes com os telefones que estão sendo importados
+      const { data: existingLeads, error: searchError } = await supabase
+        .from("leads")
+        .select("id, telefone, phone")
+        .eq("company_id", userRole.company_id);
+
+      if (searchError) {
+        console.error("Erro ao buscar leads existentes:", searchError);
+        toast.error("Erro ao verificar duplicatas. Tente novamente.");
+        setLoading(false);
+        return;
+      }
+
+      // Criar mapa de telefones normalizados dos leads existentes
+      const existingPhonesMap = new Map<string, boolean>();
+      existingLeads?.forEach(lead => {
+        const phone = lead.telefone || lead.phone;
+        if (phone) {
+          const normalized = normalizePhoneForComparison(phone);
+          existingPhonesMap.set(normalized, true);
+        }
+      });
+
+      // Separar leads novos e duplicados
+      const newLeads: any[] = [];
+      const duplicateLeads: { lead: any; reason: string }[] = [];
+
+      validLeads.forEach(lead => {
+        const phone = lead.telefone || lead.phone;
+        if (!phone) {
+          duplicateLeads.push({ lead, reason: "Telefone não encontrado" });
           return;
         }
 
-        // Importar apenas leads válidos
-        const { error } = await supabase
-          .from("leads")
-          .insert(validLeads);
-
-        if (error) throw error;
-
-        // Mostrar resultado da importação
-        if (errors.length === 0) {
-          toast.success(`${validLeads.length} leads importados com sucesso!`);
+        const normalizedPhone = normalizePhoneForComparison(phone);
+        
+        if (existingPhonesMap.has(normalizedPhone)) {
+          duplicateLeads.push({ 
+            lead, 
+            reason: `Telefone ${phone} já existe no sistema` 
+          });
         } else {
-          toast.warning(`${validLeads.length} leads importados. ${errors.length} linhas com erros foram ignoradas.`);
+          // Adicionar ao mapa para evitar duplicatas dentro do mesmo lote de importação
+          existingPhonesMap.set(normalizedPhone, true);
+          newLeads.push(lead);
         }
+      });
 
-        setOpen(false);
-        setFile(null);
-        setPreview([]);
-        onLeadsImported();
+      // Criar relatório de importação com informações de duplicatas
+      const report = {
+        total: leadsWithPhones.length,
+        success: newLeads.length,
+        duplicates: duplicateLeads.length,
+        errors
       };
 
-      reader.readAsText(file);
+      setImportReport(report);
+
+      if (newLeads.length === 0) {
+        if (duplicateLeads.length > 0) {
+          toast.warning(`Todos os ${duplicateLeads.length} leads já existem no sistema (telefones duplicados).`);
+        } else {
+          toast.error("Nenhum lead válido para importar.");
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Importar apenas leads novos (não duplicados)
+      const { error } = await supabase
+        .from("leads")
+        .insert(newLeads);
+
+      if (error) throw error;
+
+      // Mostrar resultado da importação
+      let message = `${newLeads.length} lead${newLeads.length !== 1 ? 's' : ''} importado${newLeads.length !== 1 ? 's' : ''} com sucesso!`;
+      
+      if (duplicateLeads.length > 0) {
+        message += ` ${duplicateLeads.length} duplicado${duplicateLeads.length !== 1 ? 's' : ''} ignorado${duplicateLeads.length !== 1 ? 's' : ''}.`;
+      }
+      
+      if (errors.length > 0) {
+        message += ` ${errors.length} linha${errors.length !== 1 ? 's' : ''} com erro${errors.length !== 1 ? 's' : ''} ignorada${errors.length !== 1 ? 's' : ''}.`;
+      }
+
+      if (duplicateLeads.length > 0 || errors.length > 0) {
+        toast.warning(message);
+      } else {
+        toast.success(message);
+      }
+
+      setOpen(false);
+      setFile(null);
+      setPreview([]);
+      setImportTags("");
+      onLeadsImported();
     } catch (error: any) {
       toast.error(error.message || "Erro ao importar leads");
     } finally {
@@ -408,6 +723,7 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
         setFile(null);
         setPreview([]);
         setImportReport(null);
+        setImportTags("");
       }
     }}>
       <DialogTrigger asChild>
@@ -425,28 +741,44 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Formato do arquivo CSV:</strong>
+              <strong>Formatos suportados:</strong> CSV, TSV, XLSX, XLS, ODS
               <br />
-              <strong>Obrigatório:</strong> nome
+              <strong>Obrigatório:</strong> Telefone (pode ser apenas números em colunas)
               <br />
-              <strong>Opcionais:</strong> telefone, email, cpf, empresa, origem, valor, status, servico, segmentacao, tags, observacoes, responsavel
+              <strong>Opcionais:</strong> nome, email, cpf, empresa, origem, valor, status, servico, segmentacao, tags, observacoes, responsavel
+              <br />
+              • O sistema detecta automaticamente telefones mesmo sem cabeçalho
               <br />
               • Separe múltiplas tags com ponto e vírgula (;) ou vírgula (,)
               <br />
-              • O telefone será formatado automaticamente com código do Brasil (+55)
+              • O telefone será formatado automaticamente para +55 (código do país + DDD + número)
               <br />
-              • Para o responsável, use o email do usuário da empresa
+              • Aceita números em diferentes formatos: 55 87 9142-6333, 879914263333, 8791426-3333, etc.
             </AlertDescription>
           </Alert>
 
           <div className="space-y-2">
-            <Label htmlFor="file">Arquivo CSV</Label>
+            <Label htmlFor="file">Arquivo (CSV, TSV, XLSX, XLS, ODS)</Label>
             <Input
               id="file"
               type="file"
-              accept=".csv"
+              accept=".csv,.tsv,.xlsx,.xls,.ods"
               onChange={handleFileChange}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="tags">Tags para segmentação (opcional)</Label>
+            <Input
+              id="tags"
+              type="text"
+              placeholder="Ex: cliente-vip, promocao, seguimento-1; seguimento-2"
+              value={importTags}
+              onChange={(e) => setImportTags(e.target.value)}
+            />
+            <p className="text-sm text-muted-foreground">
+              Separe múltiplas tags com vírgula (,) ou ponto e vírgula (;). Essas tags serão aplicadas a todos os leads importados.
+            </p>
           </div>
 
           {preview.length > 0 && (
@@ -483,7 +815,7 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
             <div className="space-y-2">
               <Label>Relatório de Importação</Label>
               <div className="border rounded-lg p-4 space-y-3">
-                <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="grid grid-cols-4 gap-4 text-center">
                   <div className="bg-blue-50 p-3 rounded-lg">
                     <div className="text-2xl font-bold text-blue-600">{importReport.total}</div>
                     <div className="text-sm text-blue-800">Total de linhas</div>
@@ -492,11 +824,26 @@ export function ImportarLeadsDialog({ onLeadsImported }: ImportarLeadsDialogProp
                     <div className="text-2xl font-bold text-green-600">{importReport.success}</div>
                     <div className="text-sm text-green-800">Importados</div>
                   </div>
+                  <div className="bg-yellow-50 p-3 rounded-lg">
+                    <div className="text-2xl font-bold text-yellow-600">{importReport.duplicates || 0}</div>
+                    <div className="text-sm text-yellow-800">Duplicados</div>
+                  </div>
                   <div className="bg-red-50 p-3 rounded-lg">
                     <div className="text-2xl font-bold text-red-600">{importReport.errors.length}</div>
                     <div className="text-sm text-red-800">Com erros</div>
                   </div>
                 </div>
+
+                {importReport.duplicates > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-yellow-600">Leads duplicados (ignorados):</Label>
+                    <div className="bg-yellow-50 p-3 rounded border-l-4 border-yellow-400">
+                      <div className="text-sm text-yellow-800">
+                        {importReport.duplicates} lead{importReport.duplicates !== 1 ? 's' : ''} com telefone{importReport.duplicates !== 1 ? 's' : ''} que já existe{importReport.duplicates !== 1 ? 'm' : ''} no sistema foram ignorado{importReport.duplicates !== 1 ? 's' : ''} para evitar duplicação.
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {importReport.errors.length > 0 && (
                   <div className="space-y-2">

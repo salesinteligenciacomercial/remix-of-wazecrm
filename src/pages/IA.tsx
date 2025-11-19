@@ -5,6 +5,7 @@ import { FluxoAutomacaoBuilder } from "@/components/fluxos/FluxoAutomacaoBuilder
 import { IAAgentCard } from "@/components/ia/IAAgentCard";
 import { PainelInsights } from "@/components/ia/PainelInsights";
 import { DisparoEmMassa } from "@/components/campanhas/DisparoEmMassa";
+import { CampanhasDashboard } from "@/components/campanhas/CampanhasDashboard";
 import { TreinamentoIA } from "@/components/ia/TreinamentoIA";
 import { RecomendacoesIA } from "@/components/ia/RecomendacoesIA";
 import { BaseConhecimentoIA } from "@/components/ia/BaseConhecimentoIA";
@@ -209,7 +210,24 @@ export default function IA() {
         </TabsContent>
 
         <TabsContent value="campanhas" className="space-y-4 mt-6">
-          <DisparoEmMassa />
+          <Tabs defaultValue="disparo" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="disparo">
+                <Send className="h-4 w-4 mr-2" />
+                Disparo em Massa
+              </TabsTrigger>
+              <TabsTrigger value="relatorio">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Relatório
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="disparo" className="mt-4">
+              <DisparoEmMassa />
+            </TabsContent>
+            <TabsContent value="relatorio" className="mt-4">
+              <CampanhasDashboard />
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         <TabsContent value="treinamento" className="space-y-4 mt-6">
