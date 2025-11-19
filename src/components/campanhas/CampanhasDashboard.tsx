@@ -251,9 +251,11 @@ export function CampanhasDashboard() {
               if (!msg || !msg.lead_id) return;
 
               // Encontrar a campanha deste lead
+              // NOTA: conversas não tem campos campanha_id ou campanha_nome no schema
+              // Esta funcionalidade precisa ser implementada adicionando essas colunas
               const convCampanha = conversas?.find((c: any) => c.lead_id === msg.lead_id);
-              if (convCampanha?.campanha_id || convCampanha?.campanha_nome) {
-                const campanhaId = convCampanha.campanha_id || convCampanha.campanha_nome;
+              if (convCampanha && false) { // Desabilitado até colunas serem adicionadas
+                const campanhaId = ""; // convCampanha.campanha_id || convCampanha.campanha_nome;
                 const campanha = campanhasMap.get(campanhaId);
                 
                 if (campanha && msg.created_at) {
@@ -294,9 +296,10 @@ export function CampanhasDashboard() {
                 if (!lead || !lead.id) return;
                 
                 // Encontrar campanha do lead
+                // NOTA: conversas não tem campos campanha_id ou campanha_nome no schema
                 const conv = conversas?.find((c: any) => c.lead_id === lead.id);
-                if (conv?.campanha_id || conv?.campanha_nome) {
-                  const campanhaId = conv.campanha_id || conv.campanha_nome;
+                if (conv && false) { // Desabilitado até colunas serem adicionadas
+                  const campanhaId = ""; // conv.campanha_id || conv.campanha_nome;
                   const campanha = campanhasMap.get(campanhaId);
                   if (campanha && lead.status === "ganho") {
                     campanha.conversoes.add(lead.id);

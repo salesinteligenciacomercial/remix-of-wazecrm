@@ -1186,8 +1186,8 @@ export default function Agenda() {
 
         const leadSelecionado = leads.find(l => l.id === formData.lead_id);
 
-        // Obter telefone do responsável (phone do profile, não nome/email)
-        const telefoneResponsavel = profile?.phone || null;
+        // Obter telefone do responsável - profiles não tem campo phone
+        const telefoneResponsavel = null;
 
         const lembreteData = {
           compromisso_id: compromisso.id,
