@@ -258,8 +258,8 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
           const dataEnvio = new Date(inicio);
           dataEnvio.setTime(dataEnvio.getTime() - (tempoAntecedencia * 60 * 60 * 1000)); // Converter horas para milissegundos
 
-          // Obter telefone do responsável (phone do profile, não nome/email)
-          const telefoneResponsavel = profile?.phone || null;
+          // Obter telefone do responsável - profiles não tem campo phone
+          const telefoneResponsavel = null;
 
           const lembreteData = {
             compromisso_id: compromissoCriado.id,

@@ -1718,7 +1718,10 @@ function Conversas() {
     loadReminders();
     loadMeetings();
     loadAiMode();
-  }, []); // ⚡ Executar apenas uma vez no mount
+    
+    // ⚡ CORREÇÃO: Carregar tags na inicialização
+    refreshTags();
+  }, [refreshTags]); // ⚡ Executar apenas uma vez no mount
 
   // 📡 CRÍTICO: Configurar canal realtime APENAS quando userCompanyId estiver disponível
   useEffect(() => {
@@ -4644,6 +4647,7 @@ function Conversas() {
         nome_contato: selectedConv.contactName,
         arquivo_nome: 'audio.ogg',
         company_id: userRole?.company_id,
+        fromme: true, // ⚡ CORREÇÃO: Marcar como mensagem enviada pelo usuário
       }]).select('id').single();
       if (dbError) {
         console.error('❌ Erro ao salvar mensagem no banco:', dbError);
@@ -4833,6 +4837,7 @@ function Conversas() {
         tipo_mensagem: type,
         nome_contato: selectedConv.contactName,
         company_id: userRole?.company_id, // IMPORTANTE: Adicionar company_id
+        fromme: true, // ⚡ CORREÇÃO: Marcar como mensagem enviada pelo usuário
         replied_to_message: repliedMessage || null,
       }]);
 
