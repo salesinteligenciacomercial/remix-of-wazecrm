@@ -331,9 +331,13 @@ export function DisparoEmMassa() {
 
         const formattedPhone = phoneValidation.formatted;
         
-        // Normalizar telefone para garantir consistência no agrupamento
-        // O telefone_formatado deve ser apenas números (sem espaços, sem +)
-        const telefoneNormalizado = formattedPhone.replace(/[^0-9]/g, '');
+        // ⚡ CORREÇÃO CRÍTICA: Normalizar telefone para garantir consistência no agrupamento
+        // O telefone_formatado deve ser apenas números (sem espaços, sem +) e sempre com prefixo 55
+        let telefoneNormalizado = formattedPhone.replace(/[^0-9]/g, '');
+        // Garantir que tenha prefixo 55 se não tiver (para consistência com realtime)
+        if (!telefoneNormalizado.startsWith('55') && telefoneNormalizado.length >= 10) {
+          telefoneNormalizado = `55${telefoneNormalizado}`;
+        }
 
         // Preparar payload de envio
         const payload: any = {
