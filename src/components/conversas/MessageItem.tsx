@@ -92,10 +92,23 @@ function MessageItemComponent({
 
   // Carregar mídia quando componente montar
   useEffect(() => {
-    // Carregar todas as mídias (incluindo PDF) via getMediaUrl
+    // ⚡ CORREÇÃO: Se já tem mediaUrl (blob ou data URL), usar diretamente
     if (message.mediaUrl && (message.type === 'image' || message.type === 'video' || message.type === 'audio' || message.type === 'pdf')) {
+      // Verificar se é uma URL blob ou data URL (já disponível)
+      if (message.mediaUrl.startsWith('blob:') || message.mediaUrl.startsWith('data:')) {
+        console.log('✅ [MESSAGE-ITEM] Usando URL direta da mídia:', {
+          id: message.id,
+          type: message.type,
+          urlType: message.mediaUrl.startsWith('blob:') ? 'blob' : 'data'
+        });
+        setMediaUrl(message.mediaUrl);
+        setMediaLoading(false);
+        return;
+      }
+      
+      // Se não for blob/data URL, tentar carregar via getMediaUrl
       setMediaLoading(true);
-      console.log('🔄 [MESSAGE-ITEM] Iniciando carregamento de mídia:', {
+      console.log('🔄 [MESSAGE-ITEM] Carregando mídia do banco:', {
         id: message.id,
         type: message.type,
         hasUrl: !!message.mediaUrl
@@ -103,10 +116,10 @@ function MessageItemComponent({
       
       getMediaUrl(message.id, message.type)
         .then((url) => {
-          console.log('✅ [MESSAGE-ITEM] Mídia carregada:', { 
+          console.log('✅ [MESSAGE-ITEM] Mídia carregada do banco:', { 
             id: message.id, 
             type: message.type,
-            urlPreview: url.substring(0, 100)
+            urlPreview: url?.substring(0, 100) || 'sem URL'
           });
           setMediaUrl(url);
           setMediaLoading(false);
@@ -117,12 +130,12 @@ function MessageItemComponent({
             type: message.type,
             error: error?.message || String(error)
           });
+          // ⚡ CORREÇÃO: Se falhar, tentar usar a URL original como fallback
+          if (message.mediaUrl) {
+            console.log('⚠️ [MESSAGE-ITEM] Usando URL original como fallback');
+            setMediaUrl(message.mediaUrl);
+          }
           setMediaLoading(false);
-          toast({
-            title: "Erro ao carregar mídia",
-            description: "Não foi possível carregar a mídia. Tente novamente.",
-            variant: "destructive",
-          });
         });
     }
 
@@ -234,27 +247,31 @@ function MessageItemComponent({
           )}
           
           {/* Image Message */}
-          {message.type === "image" && message.mediaUrl && (
+          {message.type === "image" && (
             <div className="space-y-2">
               {mediaLoading ? (
                 <div className="flex items-center justify-center w-[300px] h-[200px] bg-muted/50 rounded-lg">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-              ) : mediaUrl ? (
+              ) : (mediaUrl || message.mediaUrl) ? (
                 <img
-                  src={mediaUrl}
+                  src={mediaUrl || message.mediaUrl}
                   alt="Imagem"
                   className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
                   style={{ maxHeight: '400px', maxWidth: '300px' }}
-                  onClick={() => onImageClick?.(mediaUrl, `imagem-${message.id}`)}
+                  onClick={() => onImageClick?.(mediaUrl || message.mediaUrl || '', `imagem-${message.id}`)}
+                  onError={(e) => {
+                    console.error('❌ [MESSAGE-ITEM] Erro ao carregar imagem:', message.id);
+                    e.currentTarget.style.display = 'none';
+                  }}
                 />
               ) : (
                 <div className="flex items-center justify-center w-[300px] h-[200px] bg-muted/50 rounded-lg">
-                  <AlertCircle className="h-8 w-8 text-destructive" />
-                  <span className="text-sm text-muted-foreground ml-2">Imagem indisponível</span>
+                  <ImageIcon className="h-8 w-8 text-muted-foreground mr-2" />
+                  <span className="text-sm text-muted-foreground">Imagem enviada</span>
                 </div>
               )}
-              {message.content && !message.content.includes('[Imagem]') && (
+              {message.content && !message.content.includes('[Imagem]') && !message.content.includes('Imagem enviada') && (
                 <p className="text-sm">{message.content}</p>
               )}
             </div>
@@ -369,18 +386,18 @@ function MessageItemComponent({
           )}
           
           {/* PDF Message */}
-          {message.type === "pdf" && message.mediaUrl && (
+          {message.type === "pdf" && (
             <div className="space-y-2 min-w-[200px]">
               {mediaLoading ? (
                 <div className="flex items-center justify-center p-8 border border-border rounded bg-muted/50">
                   <Loader2 className="h-6 w-6 animate-spin mr-2" />
                   <span>Carregando PDF...</span>
                 </div>
-              ) : mediaUrl ? (
+              ) : (mediaUrl || message.mediaUrl) ? (
                 pdfExpanded ? (
                   <div className="space-y-2">
                     <iframe 
-                      src={mediaUrl} 
+                      src={mediaUrl || message.mediaUrl || ''} 
                       className="w-full h-[500px] border border-border rounded"
                       title="PDF Viewer"
                     />
@@ -396,14 +413,14 @@ function MessageItemComponent({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => onDownload?.(mediaUrl, message.fileName || 'documento.pdf')}
+                        onClick={() => onDownload?.(mediaUrl || message.mediaUrl || '', message.fileName || 'documento.pdf')}
                       >
                         <Download className="h-3 w-3" />
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => onPdfClick?.(mediaUrl, message.fileName || 'documento.pdf')}
+                        onClick={() => onPdfClick?.(mediaUrl || message.mediaUrl || '', message.fileName || 'documento.pdf')}
                       >
                         <FileText className="h-3 w-3 mr-2" />
                         Abrir no visor
@@ -414,7 +431,7 @@ function MessageItemComponent({
                   <div className="space-y-2">
                     {/* Preview thumbnail do PDF */}
                     <PDFPreview
-                      url={mediaUrl}
+                      url={mediaUrl || message.mediaUrl || ''}
                       fileName={message.fileName}
                       onClick={() => setPdfExpanded(true)}
                     />
@@ -432,7 +449,7 @@ function MessageItemComponent({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => onDownload?.(mediaUrl, message.fileName || 'documento.pdf')}
+                        onClick={() => onDownload?.(mediaUrl || message.mediaUrl || '', message.fileName || 'documento.pdf')}
                       >
                         <Download className="h-3 w-3" />
                       </Button>
@@ -441,35 +458,36 @@ function MessageItemComponent({
                 )
               ) : (
                 <div className="flex items-center justify-center p-8 border border-border rounded bg-muted/50">
-                  <AlertCircle className="h-6 w-6 text-muted-foreground mr-2" />
-                  <span>Erro ao carregar PDF</span>
+                  <FileText className="h-6 w-6 text-muted-foreground mr-2" />
+                  <span>Documento enviado</span>
                 </div>
               )}
             </div>
           )}
           
           {/* Video Message */}
-
-          {/* Video Message */}
-          {message.type === "video" && message.mediaUrl && (
+          {message.type === "video" && (
             <div className="space-y-2">
               {mediaLoading ? (
                 <div className="flex items-center justify-center w-[300px] h-[200px] bg-muted/50 rounded-lg">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-              ) : mediaUrl ? (
+              ) : (mediaUrl || message.mediaUrl) ? (
                 <video
                   controls
                   className="rounded-lg max-w-full h-auto"
                   style={{ maxHeight: '400px', maxWidth: '300px' }}
+                  onError={(e) => {
+                    console.error('❌ [MESSAGE-ITEM] Erro ao carregar vídeo:', message.id);
+                  }}
                 >
-                  <source src={mediaUrl} type="video/mp4" />
+                  <source src={mediaUrl || message.mediaUrl} type="video/mp4" />
                   Seu navegador não suporta o elemento de vídeo.
                 </video>
               ) : (
                 <div className="flex items-center justify-center w-[300px] h-[200px] bg-muted/50 rounded-lg">
-                  <AlertCircle className="h-8 w-8 text-destructive" />
-                  <span className="text-sm text-muted-foreground ml-2">Vídeo indisponível</span>
+                  <Video className="h-8 w-8 text-muted-foreground mr-2" />
+                  <span className="text-sm text-muted-foreground">Vídeo enviado</span>
                 </div>
               )}
             </div>

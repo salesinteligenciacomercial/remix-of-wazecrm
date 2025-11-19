@@ -109,8 +109,8 @@ function ConversationListItemComponent({
           </AvatarFallback>
         </Avatar>
         
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between mb-1 gap-2">
+        <div className="flex-1 min-w-0" style={{ overflow: 'visible' }}>
+          <div className="flex items-start justify-between mb-1 gap-2" style={{ overflow: 'visible' }}>
             <div className="flex items-center gap-2 flex-1 min-w-0">
               {getChannelIcon()}
               <span className="font-medium text-sm text-foreground truncate">
@@ -119,7 +119,17 @@ function ConversationListItemComponent({
             </div>
             
             {/* HORÁRIO, BADGE E MENU */}
-            <div className="flex items-center gap-1.5 flex-shrink-0 relative z-10">
+            {/* ⚡ CORREÇÃO: Garantir que o container do menu sempre seja visível em todos os filtros */}
+            <div 
+              className="flex items-center gap-1.5 flex-shrink-0" 
+              style={{ 
+                position: 'relative', 
+                zIndex: 100,
+                overflow: 'visible',
+                minWidth: '120px',
+                justifyContent: 'flex-end'
+              }}
+            >
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {timestamp.toLocaleTimeString("pt-BR", {
                   hour: "2-digit",
@@ -132,15 +142,19 @@ function ConversationListItemComponent({
                 </Badge>
               )}
               
-              {/* BOTÃO DE MENU - SEMPRE VISÍVEL - GARANTIDO - NUNCA DESAPARECE */}
-              {/* ⚡ CORREÇÃO CRÍTICA: Botão sempre renderizado, independente de callbacks */}
+              {/* BOTÃO DE MENU - SEMPRE VISÍVEL EM TODOS OS FILTROS */}
+              {/* ⚡ CORREÇÃO: Botão sempre renderizado e visível, independente de filtro ou callbacks */}
               <div 
-                className="relative z-20 flex-shrink-0" 
+                className="flex-shrink-0" 
                 style={{ 
                   position: 'relative', 
-                  zIndex: 20,
+                  zIndex: 100,
                   minWidth: '32px',
-                  minHeight: '32px'
+                  minHeight: '32px',
+                  overflow: 'visible',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
                 <DropdownMenu modal={false}>
@@ -148,21 +162,23 @@ function ConversationListItemComponent({
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-8 w-8 hover:bg-accent hover:text-accent-foreground shrink-0 flex-shrink-0 !flex"
+                      className="h-8 w-8 hover:bg-accent hover:text-accent-foreground shrink-0 flex-shrink-0"
                       style={{ 
                         opacity: 1, 
                         visibility: 'visible', 
-                        display: 'flex !important',
+                        display: 'flex',
                         position: 'relative',
-                        zIndex: 20,
+                        zIndex: 101,
                         minWidth: '32px',
                         minHeight: '32px',
-                        flexShrink: 0
+                        flexShrink: 0,
+                        pointerEvents: 'auto',
+                        cursor: 'pointer'
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        console.log('🔘 Menu clicado!', { conversationId, leadId, hasAnyCallback });
+                        console.log('🔘 Menu clicado!', { conversationId, leadId, hasAnyCallback, filter: 'all' });
                       }}
                       onMouseDown={(e) => {
                         e.stopPropagation();
@@ -170,13 +186,15 @@ function ConversationListItemComponent({
                       }}
                     >
                       <MoreVertical 
-                        className="h-4 w-4 flex-shrink-0 !block" 
+                        className="h-4 w-4 flex-shrink-0" 
                         style={{ 
                           color: 'currentColor',
-                          display: 'block !important',
+                          display: 'block',
                           opacity: 1,
                           visibility: 'visible',
-                          pointerEvents: 'auto'
+                          pointerEvents: 'auto',
+                          width: '16px',
+                          height: '16px'
                         }} 
                       />
                     </Button>

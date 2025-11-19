@@ -41,6 +41,7 @@ import { useGlobalSync } from "@/hooks/useGlobalSync";
 import { useWorkflowAutomation } from "@/hooks/useWorkflowAutomation";
 import { useConversationsCache } from "@/hooks/useConversationsCache";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useTagsManager } from "@/hooks/useTagsManager";
 import * as evolutionAPI from "@/services/evolutionApi";
 
 interface Message {
@@ -211,6 +212,7 @@ const initialConversations: Conversation[] = [
 
 function Conversas() {
   const { isAdmin } = usePermissions();
+  const { allTags, refreshTags } = useTagsManager();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null); // Declarar primeiro
   
@@ -933,6 +935,44 @@ function Conversas() {
   useEffect(() => {
     carregarFunisEEtapas();
   }, []);
+
+  // ⚡ CORREÇÃO: Verificar e atualizar lead vinculado quando a conversa selecionada mudar
+  useEffect(() => {
+    if (selectedConv && userCompanyId) {
+      verificarLeadVinculado(selectedConv);
+    } else {
+      setLeadVinculado(null);
+      setMostrarBotaoCriarLead(false);
+    }
+  }, [selectedConv?.id, userCompanyId]);
+
+  // ⚡ CORREÇÃO: Atualizar informações do funil quando funis/etapas forem carregados e lead estiver vinculado
+  useEffect(() => {
+    if (leadVinculado?.funil_id && funis.length > 0 && etapas.length > 0) {
+      const etapaInfo = leadVinculado.etapa_id ? etapas.find(e => e.id === leadVinculado.etapa_id) : null;
+      const funilInfo = funis.find(f => f.id === leadVinculado.funil_id);
+      
+      console.log('📊 [FUNIL] Verificando exibição do funil:', {
+        leadVinculado: !!leadVinculado,
+        funil_id: leadVinculado.funil_id,
+        etapa_id: leadVinculado.etapa_id,
+        funilInfo: funilInfo?.nome || 'não encontrado',
+        etapaInfo: etapaInfo?.nome || 'não encontrado',
+        funisCarregados: funis.length,
+        etapasCarregadas: etapas.length
+      });
+      
+      if (funilInfo && selectedConv) {
+        // Atualizar conversa selecionada com informações do funil
+        if (etapaInfo) {
+          setSelectedConv(prev => prev ? {
+            ...prev,
+            funnelStage: etapaInfo.nome
+          } : null);
+        }
+      }
+    }
+  }, [funis, etapas, leadVinculado?.funil_id, leadVinculado?.etapa_id, selectedConv?.id]);
 
   // Carregar usuários da empresa e assinar atualizações quando o painel estiver aberto
   useEffect(() => {
@@ -4444,6 +4484,18 @@ function Conversas() {
         .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
         .single();
 
+      // ⚡ CORREÇÃO: Criar URL blob temporária para exibição imediata
+      const blobUrl = URL.createObjectURL(file);
+      
+      // ⚡ CORREÇÃO: Criar data URL para salvar no banco (compatível com getMediaUrl)
+      const dataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          resolve(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      });
+
       const { data: inserted, error: dbError } = await supabase.from('conversas').insert([{
         numero: numeroNormalizado,
         telefone_formatado: numeroNormalizado,
@@ -4453,14 +4505,17 @@ function Conversas() {
         tipo_mensagem: type,
         nome_contato: selectedConv.contactName,
         arquivo_nome: file.name,
+        midia_url: dataUrl, // ⚡ CORREÇÃO: Salvar URL da mídia no banco
         company_id: userRole?.company_id,
-      }]).select('id').single();
+        fromme: true, // Marcar como mensagem enviada pelo usuário
+      }]).select('id, midia_url').single();
 
       if (dbError) {
         console.error('❌ Erro ao salvar mensagem no banco:', dbError);
         toast.error('Erro ao salvar mensagem no histórico');
       }
 
+      // ⚡ CORREÇÃO: Usar blob URL para exibição imediata, mas também ter o ID do banco
       const newMessage: Message = {
         id: (inserted?.id || Date.now()).toString(),
         content: caption || tipoMensagem[type] || 'Arquivo enviado',
@@ -4469,7 +4524,7 @@ function Conversas() {
         timestamp: new Date(),
         delivered: true,
         read: false,
-        mediaUrl: URL.createObjectURL(file),
+        mediaUrl: blobUrl, // URL blob temporária para exibição imediata
         fileName: file.name,
         mimeType: file.type,
         sentBy: userName || "Você", // Adicionar quem enviou
@@ -5319,6 +5374,12 @@ function Conversas() {
       return;
     }
     
+    // Verificar se a tag já existe
+    if (selectedConv.tags?.includes(newTag.trim())) {
+      toast.error("Esta tag já foi adicionada");
+      return;
+    }
+    
     try {
       setSyncStatus('syncing');
       
@@ -5327,7 +5388,7 @@ function Conversas() {
       
       if (leadData) {
         // Atualizar tags no Supabase
-        const updatedTags = [...(leadData.tags || []), newTag];
+        const updatedTags = [...(leadData.tags || []), newTag.trim()];
         const { error } = await supabase
           .from('leads')
           .update({ tags: updatedTags })
@@ -5349,17 +5410,130 @@ function Conversas() {
       // Atualizar localmente (será sincronizado via realtime)
       const updatedConversations = conversations.map((conv) =>
         conv.id === selectedConv.id
-          ? { ...conv, tags: [...(conv.tags || []), newTag] }
+          ? { ...conv, tags: [...(conv.tags || []), newTag.trim()] }
           : conv
       );
       saveConversations(updatedConversations);
-      setSelectedConv({ ...selectedConv, tags: [...(selectedConv.tags || []), newTag] });
+      setSelectedConv({ ...selectedConv, tags: [...(selectedConv.tags || []), newTag.trim()] });
       setNewTag("");
+      await refreshTags(); // Atualizar lista de tags disponíveis
       toast.success("Tag adicionada!");
     } catch (error) {
       console.error('Erro ao adicionar tag:', error);
       setSyncStatus('error');
       toast.error('Erro ao adicionar tag');
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    }
+  };
+
+  const addExistingTag = async (tag: string) => {
+    if (!selectedConv) return;
+    
+    // Verificar se a tag já existe
+    if (selectedConv.tags?.includes(tag)) {
+      return;
+    }
+    
+    try {
+      setSyncStatus('syncing');
+      
+      // Buscar ou criar lead no Supabase
+      const leadData = await findOrCreateLead(selectedConv);
+      
+      if (leadData) {
+        // Atualizar tags no Supabase
+        const updatedTags = [...(leadData.tags || []), tag];
+        const { error } = await supabase
+          .from('leads')
+          .update({ tags: updatedTags })
+          .eq('id', leadData.id);
+        
+        if (error) {
+          console.error('Erro ao atualizar tags no Supabase:', error);
+          setSyncStatus('error');
+          toast.error('Erro ao salvar tag');
+          setTimeout(() => setSyncStatus('idle'), 2000);
+          return;
+        }
+        
+        console.log('✅ Tag adicionada no Supabase');
+        setSyncStatus('synced');
+        setTimeout(() => setSyncStatus('idle'), 1000);
+      }
+      
+      // Atualizar localmente
+      const updatedConversations = conversations.map((conv) =>
+        conv.id === selectedConv.id
+          ? { ...conv, tags: [...(conv.tags || []), tag] }
+          : conv
+      );
+      saveConversations(updatedConversations);
+      setSelectedConv({ ...selectedConv, tags: [...(selectedConv.tags || []), tag] });
+      
+      // Atualizar lead vinculado se existir
+      if (leadVinculado) {
+        setLeadVinculado({ ...leadVinculado, tags: updatedConversations.find(c => c.id === selectedConv.id)?.tags || [] });
+      }
+      
+      toast.success("Tag adicionada!");
+    } catch (error) {
+      console.error('Erro ao adicionar tag:', error);
+      setSyncStatus('error');
+      toast.error('Erro ao adicionar tag');
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    }
+  };
+
+  const removeTag = async (tag: string) => {
+    if (!selectedConv) return;
+    
+    try {
+      setSyncStatus('syncing');
+      
+      // Buscar lead no Supabase
+      const leadData = await findOrCreateLead(selectedConv);
+      
+      if (leadData) {
+        // Remover tag do array
+        const updatedTags = (leadData.tags || []).filter(t => t !== tag);
+        const { error } = await supabase
+          .from('leads')
+          .update({ tags: updatedTags })
+          .eq('id', leadData.id);
+        
+        if (error) {
+          console.error('Erro ao remover tag no Supabase:', error);
+          setSyncStatus('error');
+          toast.error('Erro ao remover tag');
+          setTimeout(() => setSyncStatus('idle'), 2000);
+          return;
+        }
+        
+        console.log('✅ Tag removida no Supabase');
+        setSyncStatus('synced');
+        setTimeout(() => setSyncStatus('idle'), 1000);
+      }
+      
+      // Atualizar localmente
+      const updatedTags = (selectedConv.tags || []).filter(t => t !== tag);
+      const updatedConversations = conversations.map((conv) =>
+        conv.id === selectedConv.id
+          ? { ...conv, tags: updatedTags }
+          : conv
+      );
+      saveConversations(updatedConversations);
+      setSelectedConv({ ...selectedConv, tags: updatedTags });
+      
+      // Atualizar lead vinculado se existir
+      if (leadVinculado) {
+        setLeadVinculado({ ...leadVinculado, tags: updatedTags });
+      }
+      
+      toast.success("Tag removida!");
+    } catch (error) {
+      console.error('Erro ao remover tag:', error);
+      setSyncStatus('error');
+      toast.error('Erro ao remover tag');
       setTimeout(() => setSyncStatus('idle'), 2000);
     }
   };
@@ -6044,7 +6218,9 @@ function Conversas() {
           leadId: existingLead.id,
           leadName: existingLead.name,
           phoneMatched: existingLead.phone || existingLead.telefone,
-          searchedVariations: variations.length
+          searchedVariations: variations.length,
+          funil_id: existingLead.funil_id,
+          etapa_id: existingLead.etapa_id
         });
 
         setLeadVinculado(existingLead);
@@ -6065,6 +6241,63 @@ function Conversas() {
           }
           return newMap;
         });
+        
+        // ⚡ SINCRONIZAÇÃO: Atualizar informações do funil na conversa
+        // Atualizar conversa com informações do lead (tags, valor, etc)
+        setConversations(prev => prev.map(conv => 
+          conv.id === conversation.id 
+            ? { 
+                ...conv, 
+                tags: existingLead.tags || conv.tags,
+                responsavel: existingLead.responsavel_id ? conv.responsavel : conv.responsavel,
+                valor: existingLead.value ? `R$ ${Number(existingLead.value).toLocaleString('pt-BR')}` : conv.valor
+              }
+            : conv
+        ));
+        
+        // Atualizar conversa selecionada se for a mesma
+        if (selectedConv?.id === conversation.id) {
+          setSelectedConv(prev => prev ? {
+            ...prev,
+            tags: existingLead.tags || prev.tags,
+            valor: existingLead.value ? `R$ ${Number(existingLead.value).toLocaleString('pt-BR')}` : prev.valor
+          } : null);
+        }
+        
+        // Se o lead tem funil, buscar informações do funil e etapa
+        if (existingLead.funil_id && existingLead.etapa_id) {
+          // Aguardar um pouco para garantir que funis/etapas foram carregados
+          setTimeout(() => {
+            const etapaInfo = etapas.find(e => e.id === existingLead.etapa_id);
+            const funilInfo = funis.find(f => f.id === existingLead.funil_id);
+            const nomeEtapa = etapaInfo?.nome || "Etapa não definida";
+            const nomeFunil = funilInfo?.nome || "Funil";
+            
+            console.log('📊 [FUNIL] Atualizando informações do funil:', {
+              funil_id: existingLead.funil_id,
+              etapa_id: existingLead.etapa_id,
+              nomeFunil,
+              nomeEtapa,
+              funisCarregados: funis.length,
+              etapasCarregadas: etapas.length
+            });
+            
+            // Atualizar conversa com informações do funil
+            setConversations(prev => prev.map(conv => 
+              conv.id === conversation.id 
+                ? { ...conv, funnelStage: nomeEtapa }
+                : conv
+            ));
+            
+            // Atualizar conversa selecionada se for a mesma
+            if (selectedConv?.id === conversation.id) {
+              setSelectedConv(prev => prev ? {
+                ...prev,
+                funnelStage: nomeEtapa
+              } : null);
+            }
+          }, 100);
+        }
         
         console.log('✅ [LEAD] Mapeamento de leads vinculados atualizado');
       } else {
@@ -6933,25 +7166,85 @@ function Conversas() {
                             {tag}
                           </Badge>
                         ))}
+                        {(!selectedConv.tags || selectedConv.tags.length === 0) && (
+                          <p className="text-sm text-muted-foreground">Nenhuma tag adicionada</p>
+                        )}
                       </div>
-                      <Dialog>
+                      <Dialog onOpenChange={(open) => {
+                        if (open) {
+                          refreshTags(); // Atualizar tags quando abrir o dialog
+                        }
+                      }}>
                         <DialogTrigger asChild>
                           <Button size="sm" variant="outline" className="w-full">
                             <Tag className="h-3 w-3 mr-2" /> Adicionar Tag
                           </Button>
                         </DialogTrigger>
-                        <DialogContent>
+                        <DialogContent className="max-w-md">
                           <DialogHeader>
-                            <DialogTitle>Adicionar Tag</DialogTitle>
+                            <DialogTitle>Gerenciar Tags</DialogTitle>
                           </DialogHeader>
-                          <Input
-                            placeholder="Nome da tag"
-                            value={newTag}
-                            onChange={(e) => setNewTag(e.target.value)}
-                          />
-                          <Button onClick={addTag}>
-                            Adicionar
-                          </Button>
+                          <div className="space-y-4">
+                            {/* Campo para criar nova tag */}
+                            <div className="space-y-2">
+                              <Label>Criar Nova Tag</Label>
+                              <div className="flex gap-2">
+                                <Input
+                                  placeholder="Nome da tag"
+                                  value={newTag}
+                                  onChange={(e) => setNewTag(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && newTag.trim()) {
+                                      e.preventDefault();
+                                      addTag();
+                                    }
+                                  }}
+                                />
+                                <Button onClick={addTag} disabled={!newTag.trim()}>
+                                  Adicionar
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {/* Lista de tags disponíveis para seleção */}
+                            {allTags.length > 0 && (
+                              <div className="space-y-2">
+                                <Label>Tags Disponíveis</Label>
+                                <ScrollArea className="h-[200px] border rounded-md p-2">
+                                  <div className="flex flex-wrap gap-2">
+                                    {allTags.map((tag) => {
+                                      const isSelected = selectedConv.tags?.includes(tag) || false;
+                                      return (
+                                        <Badge
+                                          key={tag}
+                                          variant={isSelected ? "default" : "outline"}
+                                          className="cursor-pointer hover:bg-primary/80"
+                                          onClick={() => {
+                                            if (isSelected) {
+                                              // Remover tag
+                                              removeTag(tag);
+                                            } else {
+                                              // Adicionar tag
+                                              addExistingTag(tag);
+                                            }
+                                          }}
+                                        >
+                                          {tag}
+                                          {isSelected && <X className="h-3 w-3 ml-1" />}
+                                        </Badge>
+                                      );
+                                    })}
+                                  </div>
+                                </ScrollArea>
+                              </div>
+                            )}
+                            
+                            {allTags.length === 0 && (
+                              <p className="text-sm text-muted-foreground text-center py-4">
+                                Nenhuma tag disponível. Crie uma nova tag acima.
+                              </p>
+                            )}
+                          </div>
                         </DialogContent>
                       </Dialog>
                     </div>
@@ -6961,27 +7254,41 @@ function Conversas() {
                       <h4 className="text-foreground font-medium mb-2 flex items-center gap-2">
                         <TrendingUp className="h-4 w-4" /> Funil de Vendas
                       </h4>
-                      {leadVinculado && leadVinculado.funil_id ? (
-                        <div className="mb-2 p-2 bg-primary/5 rounded-md border border-primary/20">
-                          <p className="text-xs text-muted-foreground">Lead no funil:</p>
-                          <p className="text-sm font-medium">
-                            {funis.find(f => f.id === leadVinculado.funil_id)?.nome || "Funil"}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">Etapa atual:</p>
-                          <div className="flex items-center gap-2">
-                            <div 
-                              className="w-2 h-2 rounded-full" 
-                              style={{ 
-                                backgroundColor: etapas.find(e => e.id === leadVinculado.etapa_id)?.cor || '#3b82f6' 
-                              }}
-                            />
-                            <p className="text-sm font-medium">
-                              {etapas.find(e => e.id === leadVinculado.etapa_id)?.nome || "Não definida"}
-                            </p>
+                      {/* ⚡ CORREÇÃO: Verificar se lead está vinculado e tem funil_id */}
+                      {leadVinculado?.funil_id ? (
+                        <div className="mb-2 p-3 bg-primary/5 rounded-md border border-primary/20">
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Funil de Vendas:</p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {funis.find(f => f.id === leadVinculado.funil_id)?.nome || "Carregando..."}
+                              </p>
+                            </div>
+                            {leadVinculado.etapa_id && (
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-1">Etapa Atual:</p>
+                                <div className="flex items-center gap-2">
+                                  <div 
+                                    className="w-3 h-3 rounded-full flex-shrink-0" 
+                                    style={{ 
+                                      backgroundColor: etapas.find(e => e.id === leadVinculado.etapa_id)?.cor || '#3b82f6' 
+                                    }}
+                                  />
+                                  <p className="text-sm font-medium text-foreground">
+                                    {etapas.find(e => e.id === leadVinculado.etapa_id)?.nome || "Carregando..."}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                            {!leadVinculado.etapa_id && (
+                              <p className="text-xs text-amber-600">Etapa não definida</p>
+                            )}
                           </div>
                         </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground mb-2">Não está em nenhum funil</p>
+                        <div className="mb-2">
+                          <p className="text-sm text-muted-foreground">Não está em nenhum funil</p>
+                        </div>
                       )}
                       <Dialog>
                         <DialogTrigger asChild>
