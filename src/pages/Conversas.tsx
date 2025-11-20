@@ -1801,15 +1801,16 @@ function Conversas() {
       }
     };
 
-    // ⚡ CORREÇÃO: Debounce mais curto para mensagens enviadas (disparo em massa)
-    const debouncedUpdate = (updateFn: () => void | Promise<void>, delay: number = 300, isFromMe: boolean = false) => {
+    // ⚡ CORREÇÃO CRÍTICA: SEM debounce para garantir sincronização em tempo real
+    // Especialmente importante para disparos em massa
+    const debouncedUpdate = (updateFn: () => void | Promise<void>, delay: number = 0, isFromMe: boolean = false) => {
       if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
-      // Mensagens enviadas (disparo em massa) aparecem mais rápido
-      const finalDelay = isFromMe ? Math.min(delay, 100) : delay;
+      // ⚡ CORREÇÃO: Delay 0 para sincronização instantânea
+      const finalDelay = 0;
       debounceTimeoutRef.current = setTimeout(async () => {
         const now = Date.now();
-        // Reduzir limite para mensagens enviadas
-        const minInterval = isFromMe ? 50 : 100;
+        // Permitir atualizações mais frequentes
+        const minInterval = 0;
         if (now - lastUpdateTimeRef.current < minInterval) {
           console.log('⏱️ [REALTIME] Atualização ignorada (muito frequente)', { isFromMe });
           return;
@@ -1864,12 +1865,14 @@ function Conversas() {
         realtimeChannelRef.current = null;
       }
       // ✅ CRITICAL: Escutar TODOS os eventos (INSERT e UPDATE) para sincronização total
+      // ⚡ CORREÇÃO CRÍTICA: Remover filter de company_id do realtime para garantir sincronização
+      // O filtro será feito no código após receber o evento
       const channel = supabase.channel('conversas_realtime_full')
         .on('postgres_changes', {
           event: '*', // Escutar INSERT, UPDATE e DELETE
           schema: 'public', 
-          table: 'conversas',
-          filter: `company_id=eq.${userCompanyIdRef.current}`
+          table: 'conversas'
+          // NÃO usar filter aqui - pode causar problemas de sincronização
         }, async (payload) => {
           try {
             const eventType = payload.eventType;
@@ -1950,8 +1953,9 @@ function Conversas() {
                 mensagem: novaConversa.mensagem?.substring(0, 50)
               });
               
-              // ⚡ CORREÇÃO: Passar isFromMe para debounce mais rápido em disparo em massa
+              // ⚡ CORREÇÃO CRÍTICA: Executar IMEDIATAMENTE sem debounce
               debouncedUpdate(async () => {
+                console.log('⚡ [REALTIME] Processando mensagem IMEDIATAMENTE');
                 const isGroup = Boolean((novaConversa as any)?.is_group) || /@g\.us$/.test(String(novaConversa.numero || ''));
                 // ⚡ CORREÇÃO CRÍTICA: Usar telefone_formatado diretamente se disponível (já normalizado)
                 // Se não tiver, normalizar o numero. Garantir consistência com disparo em massa
@@ -2160,7 +2164,7 @@ function Conversas() {
                   } catch {}
                   toast.success(`Nova mensagem de ${nomeValido}`, { duration: 4000 });
                 }
-              }, 300, isFromMe); // ⚡ CORREÇÃO: Passar isFromMe para debounce mais rápido
+              }, 0, isFromMe); // ⚡ CORREÇÃO: Delay 0 para sincronização instantânea
             }
           } catch (err) { 
             console.error('❌ [REALTIME] Erro ao processar:', err); 
