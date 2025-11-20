@@ -91,6 +91,10 @@ interface QuickMessage {
   title: string;
   content: string;
   category: string;
+  type?: "text" | "image" | "video"; // Tipo de mensagem
+  mediaUrl?: string; // URL base64 da mídia
+  fileName?: string; // Nome do arquivo
+  mimeType?: string; // Tipo MIME do arquivo
 }
 
 interface QuickMessageCategory {
@@ -890,6 +894,19 @@ function Conversas() {
   const [newQuickContent, setNewQuickContent] = useState("");
   const [newQuickCategory, setNewQuickCategory] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newQuickMessageType, setNewQuickMessageType] = useState<"text" | "image" | "video">("text");
+  const [newQuickMediaFile, setNewQuickMediaFile] = useState<File | null>(null);
+  const [newQuickMediaPreview, setNewQuickMediaPreview] = useState<string | null>(null);
+  // Estados para edição
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editMessageTitle, setEditMessageTitle] = useState("");
+  const [editMessageContent, setEditMessageContent] = useState("");
+  const [editMessageCategory, setEditMessageCategory] = useState("");
+  const [editCategoryName, setEditCategoryName] = useState("");
+  const [editMessageType, setEditMessageType] = useState<"text" | "image" | "video">("text");
+  const [editMessageMediaFile, setEditMessageMediaFile] = useState<File | null>(null);
+  const [editMessageMediaPreview, setEditMessageMediaPreview] = useState<string | null>(null);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDatetime, setReminderDatetime] = useState("");
   const [reminderNotes, setReminderNotes] = useState("");
@@ -4311,21 +4328,70 @@ function Conversas() {
     }, 1000);
   };
 
-  const addQuickMessage = () => {
-    if (!newQuickTitle || !newQuickContent || !newQuickCategory) {
-      toast.error("Preencha todos os campos e selecione uma categoria");
+  // Função para converter arquivo para base64
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        resolve(base64String);
+      };
+      reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const addQuickMessage = async () => {
+    if (!newQuickTitle || !newQuickCategory) {
+      toast.error("Preencha título e selecione uma categoria");
       return;
     }
+    
+    // Validar conteúdo baseado no tipo
+    if (newQuickMessageType === "text" && !newQuickContent.trim()) {
+      toast.error("Digite a mensagem de texto");
+      return;
+    }
+    
+    if ((newQuickMessageType === "image" || newQuickMessageType === "video") && !newQuickMediaFile) {
+      toast.error("Selecione um arquivo de mídia");
+      return;
+    }
+
+    let mediaUrl = "";
+    let fileName = "";
+    let mimeType = "";
+
+    // Converter mídia para base64 se houver
+    if (newQuickMediaFile) {
+      try {
+        mediaUrl = await convertFileToBase64(newQuickMediaFile);
+        fileName = newQuickMediaFile.name;
+        mimeType = newQuickMediaFile.type;
+      } catch (error) {
+        toast.error("Erro ao processar arquivo de mídia");
+        return;
+      }
+    }
+
     const newMsg: QuickMessage = {
       id: Date.now().toString(),
       title: newQuickTitle,
-      content: newQuickContent,
+      content: newQuickContent || (newQuickMessageType === "image" ? "[Imagem]" : newQuickMessageType === "video" ? "[Vídeo]" : ""),
       category: newQuickCategory,
+      type: newQuickMessageType,
+      mediaUrl: mediaUrl || undefined,
+      fileName: fileName || undefined,
+      mimeType: mimeType || undefined,
     };
+    
     saveQuickMessages([...quickMessages, newMsg]);
     setNewQuickTitle("");
     setNewQuickContent("");
     setNewQuickCategory("");
+    setNewQuickMessageType("text");
+    setNewQuickMediaFile(null);
+    setNewQuickMediaPreview(null);
     toast.success("Mensagem rápida criada!");
   };
 
@@ -4359,8 +4425,222 @@ function Conversas() {
     toast.success("Categoria removida!");
   };
 
-  const sendQuickMessage = (content: string) => {
-    handleSendMessage(content);
+  const sendQuickMessage = async (message: QuickMessage) => {
+    if (message.type === "image" || message.type === "video") {
+      // Enviar mídia
+      if (!message.mediaUrl) {
+        toast.error("Mídia não encontrada na mensagem rápida");
+        return;
+      }
+      
+      // Extrair base64 da data URL
+      const base64 = message.mediaUrl.includes(',') ? message.mediaUrl.split(',')[1] : message.mediaUrl;
+      
+      // Criar arquivo temporário a partir do base64
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: message.mimeType || 'image/jpeg' });
+      const file = new File([blob], message.fileName || 'media', { type: message.mimeType || 'image/jpeg' });
+      
+      // Enviar mídia usando handleSendMedia
+      await handleSendMedia(file, message.content, message.type);
+    } else {
+      // Enviar texto
+      handleSendMessage(message.content);
+    }
+  };
+
+  // Função para editar mensagem rápida
+  const editQuickMessage = (id: string) => {
+    const message = quickMessages.find(m => m.id === id);
+    if (message) {
+      setEditingMessageId(id);
+      setEditMessageTitle(message.title);
+      setEditMessageContent(message.content);
+      setEditMessageCategory(message.category);
+      setEditMessageType(message.type || "text");
+      setEditMessageMediaPreview(message.mediaUrl || null);
+      setEditMessageMediaFile(null); // Resetar arquivo novo
+    }
+  };
+
+  // Função para salvar edição de mensagem
+  const saveEditedMessage = async () => {
+    if (!editingMessageId || !editMessageTitle || !editMessageCategory) {
+      toast.error("Preencha título e selecione uma categoria");
+      return;
+    }
+    
+    // Validar conteúdo baseado no tipo
+    if (editMessageType === "text" && !editMessageContent.trim()) {
+      toast.error("Digite a mensagem de texto");
+      return;
+    }
+    
+    if ((editMessageType === "image" || editMessageType === "video") && !editMessageMediaFile && !editMessageMediaPreview) {
+      toast.error("Selecione um arquivo de mídia ou mantenha o existente");
+      return;
+    }
+
+    let mediaUrl = editMessageMediaPreview || "";
+    let fileName = "";
+    let mimeType = "";
+
+    // Se houver novo arquivo, converter para base64
+    if (editMessageMediaFile) {
+      try {
+        mediaUrl = await convertFileToBase64(editMessageMediaFile);
+        fileName = editMessageMediaFile.name;
+        mimeType = editMessageMediaFile.type;
+      } catch (error) {
+        toast.error("Erro ao processar arquivo de mídia");
+        return;
+      }
+    } else if (editMessageMediaPreview) {
+      // Manter dados do arquivo existente se não houver novo
+      const existingMsg = quickMessages.find(m => m.id === editingMessageId);
+      if (existingMsg) {
+        fileName = existingMsg.fileName || "";
+        mimeType = existingMsg.mimeType || "";
+      }
+    }
+
+    const updated = quickMessages.map(m => 
+      m.id === editingMessageId 
+        ? { 
+            ...m, 
+            title: editMessageTitle, 
+            content: editMessageContent || (editMessageType === "image" ? "[Imagem]" : editMessageType === "video" ? "[Vídeo]" : ""), 
+            category: editMessageCategory,
+            type: editMessageType,
+            mediaUrl: mediaUrl || undefined,
+            fileName: fileName || undefined,
+            mimeType: mimeType || undefined,
+          }
+        : m
+    );
+    saveQuickMessages(updated);
+    setEditingMessageId(null);
+    setEditMessageTitle("");
+    setEditMessageContent("");
+    setEditMessageCategory("");
+    setEditMessageType("text");
+    setEditMessageMediaFile(null);
+    setEditMessageMediaPreview(null);
+    toast.success("Mensagem editada com sucesso!");
+  };
+
+  // Função para cancelar edição de mensagem
+  const cancelEditMessage = () => {
+    setEditingMessageId(null);
+    setEditMessageTitle("");
+    setEditMessageContent("");
+    setEditMessageCategory("");
+    setEditMessageType("text");
+    setEditMessageMediaFile(null);
+    setEditMessageMediaPreview(null);
+  };
+
+  // Função para editar categoria
+  const editQuickCategory = (id: string) => {
+    const category = quickCategories.find(c => c.id === id);
+    if (category) {
+      setEditingCategoryId(id);
+      setEditCategoryName(category.name);
+    }
+  };
+
+  // Função para salvar edição de categoria
+  const saveEditedCategory = () => {
+    if (!editingCategoryId || !editCategoryName.trim()) {
+      toast.error("Digite o nome da categoria");
+      return;
+    }
+    const updated = quickCategories.map(c => 
+      c.id === editingCategoryId 
+        ? { ...c, name: editCategoryName }
+        : c
+    );
+    saveQuickCategories(updated);
+    setEditingCategoryId(null);
+    setEditCategoryName("");
+    toast.success("Categoria editada com sucesso!");
+  };
+
+  // Função para cancelar edição de categoria
+  const cancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditCategoryName("");
+  };
+
+  // Função para mover mensagem para cima
+  const moveMessageUp = (id: string, categoryId: string) => {
+    // Obter todas as mensagens da categoria na ordem atual
+    const categoryMessages = quickMessages.filter(m => m.category === categoryId);
+    const otherMessages = quickMessages.filter(m => m.category !== categoryId);
+    
+    const currentIndex = categoryMessages.findIndex(m => m.id === id);
+    if (currentIndex <= 0) return; // Já está no topo
+    
+    // Reordenar mensagens da categoria
+    const reordered = [...categoryMessages];
+    [reordered[currentIndex], reordered[currentIndex - 1]] = 
+    [reordered[currentIndex - 1], reordered[currentIndex]];
+    
+    // Reconstruir array completo mantendo ordem: outras categorias + categoria reordenada
+    const updated = [...otherMessages, ...reordered];
+    saveQuickMessages(updated);
+    toast.success("Mensagem movida para cima!");
+  };
+
+  // Função para mover mensagem para baixo
+  const moveMessageDown = (id: string, categoryId: string) => {
+    // Obter todas as mensagens da categoria na ordem atual
+    const categoryMessages = quickMessages.filter(m => m.category === categoryId);
+    const otherMessages = quickMessages.filter(m => m.category !== categoryId);
+    
+    const currentIndex = categoryMessages.findIndex(m => m.id === id);
+    if (currentIndex >= categoryMessages.length - 1) return; // Já está no final
+    
+    // Reordenar mensagens da categoria
+    const reordered = [...categoryMessages];
+    [reordered[currentIndex], reordered[currentIndex + 1]] = 
+    [reordered[currentIndex + 1], reordered[currentIndex]];
+    
+    // Reconstruir array completo mantendo ordem: outras categorias + categoria reordenada
+    const updated = [...otherMessages, ...reordered];
+    saveQuickMessages(updated);
+    toast.success("Mensagem movida para baixo!");
+  };
+
+  // Função para mover categoria para cima
+  const moveCategoryUp = (id: string) => {
+    const currentIndex = quickCategories.findIndex(c => c.id === id);
+    if (currentIndex <= 0) return; // Já está no topo
+    
+    const updated = [...quickCategories];
+    [updated[currentIndex], updated[currentIndex - 1]] = 
+    [updated[currentIndex - 1], updated[currentIndex]];
+    
+    saveQuickCategories(updated);
+    toast.success("Categoria movida para cima!");
+  };
+
+  // Função para mover categoria para baixo
+  const moveCategoryDown = (id: string) => {
+    const currentIndex = quickCategories.findIndex(c => c.id === id);
+    if (currentIndex >= quickCategories.length - 1) return; // Já está no final
+    
+    const updated = [...quickCategories];
+    [updated[currentIndex], updated[currentIndex + 1]] = 
+    [updated[currentIndex + 1], updated[currentIndex]];
+    
+    saveQuickCategories(updated);
+    toast.success("Categoria movida para baixo!");
   };
 
   const addReminder = async () => {
@@ -6934,6 +7214,23 @@ function Conversas() {
                                         </Select>
                                       </div>
                                       <div className="space-y-2">
+                                        <Label>Tipo de Mensagem *</Label>
+                                        <Select value={newQuickMessageType} onValueChange={(value: "text" | "image" | "video") => {
+                                          setNewQuickMessageType(value);
+                                          setNewQuickMediaFile(null);
+                                          setNewQuickMediaPreview(null);
+                                        }}>
+                                          <SelectTrigger>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="text">Texto</SelectItem>
+                                            <SelectItem value="image">Imagem</SelectItem>
+                                            <SelectItem value="video">Vídeo</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div className="space-y-2">
                                         <Label>Título *</Label>
                                         <Input
                                           value={newQuickTitle}
@@ -6941,15 +7238,57 @@ function Conversas() {
                                           placeholder="Ex: Saudação"
                                         />
                                       </div>
-                                      <div className="space-y-2">
-                                        <Label>Mensagem *</Label>
-                                        <Textarea
-                                          value={newQuickContent}
-                                          onChange={(e) => setNewQuickContent(e.target.value)}
-                                          placeholder="Digite a mensagem..."
-                                          rows={3}
-                                        />
-                                      </div>
+                                      {newQuickMessageType === "text" ? (
+                                        <div className="space-y-2">
+                                          <Label>Mensagem *</Label>
+                                          <Textarea
+                                            value={newQuickContent}
+                                            onChange={(e) => setNewQuickContent(e.target.value)}
+                                            placeholder="Digite a mensagem..."
+                                            rows={3}
+                                          />
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <div className="space-y-2">
+                                            <Label>Arquivo de {newQuickMessageType === "image" ? "Imagem" : "Vídeo"} *</Label>
+                                            <Input
+                                              type="file"
+                                              accept={newQuickMessageType === "image" ? "image/*" : "video/*"}
+                                              onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                  setNewQuickMediaFile(file);
+                                                  const reader = new FileReader();
+                                                  reader.onloadend = () => {
+                                                    setNewQuickMediaPreview(reader.result as string);
+                                                  };
+                                                  reader.readAsDataURL(file);
+                                                }
+                                              }}
+                                            />
+                                          </div>
+                                          {newQuickMediaPreview && (
+                                            <div className="space-y-2">
+                                              <Label>Preview:</Label>
+                                              {newQuickMessageType === "image" ? (
+                                                <img src={newQuickMediaPreview} alt="Preview" className="max-w-full h-auto rounded border" style={{ maxHeight: '200px' }} />
+                                              ) : (
+                                                <video src={newQuickMediaPreview} controls className="max-w-full rounded border" style={{ maxHeight: '200px' }} />
+                                              )}
+                                            </div>
+                                          )}
+                                          <div className="space-y-2">
+                                            <Label>Legenda (opcional)</Label>
+                                            <Textarea
+                                              value={newQuickContent}
+                                              onChange={(e) => setNewQuickContent(e.target.value)}
+                                              placeholder="Digite a legenda da mídia..."
+                                              rows={2}
+                                            />
+                                          </div>
+                                        </>
+                                      )}
                                       <Button onClick={addQuickMessage} className="w-full">
                                         Criar Mensagem Rápida
                                       </Button>
@@ -6967,9 +7306,15 @@ function Conversas() {
                                   ) : (
                                     <Accordion type="single" collapsible className="w-full">
                                       {quickCategories.map((category) => {
-                                        const categoryMessages = quickMessages.filter(
-                                          (msg) => msg.category === category.id
-                                        );
+                                        // ⚡ CORREÇÃO: Manter ordem original das mensagens ao filtrar por categoria
+                                        const categoryMessages = quickMessages
+                                          .filter((msg) => msg.category === category.id)
+                                          .sort((a, b) => {
+                                            // Manter ordem original baseada na posição no array completo
+                                            const indexA = quickMessages.findIndex(m => m.id === a.id);
+                                            const indexB = quickMessages.findIndex(m => m.id === b.id);
+                                            return indexA - indexB;
+                                          });
                                         return (
                                           <AccordionItem key={category.id} value={category.id}>
                                             <AccordionTrigger className="hover:no-underline">
@@ -6985,32 +7330,192 @@ function Conversas() {
                                                 </p>
                                               ) : (
                                                 <div className="space-y-2">
-                                                  {categoryMessages.map((qm) => (
+                                                  {categoryMessages.map((qm, msgIndex) => (
                                                     <div
                                                       key={qm.id}
                                                       className="flex items-start justify-between p-3 bg-background rounded border"
                                                     >
-                                                      <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-medium">{qm.title}</p>
-                                                        <p className="text-xs text-muted-foreground mt-1 break-words">
-                                                          {qm.content}
-                                                        </p>
-                                                      </div>
-                                                      <div className="flex gap-1 ml-2">
-                                                        <Button
-                                                          size="sm"
-                                                          onClick={() => sendQuickMessage(qm.content)}
-                                                        >
-                                                          Enviar
-                                                        </Button>
-                                                        <Button
-                                                          size="sm"
-                                                          variant="destructive"
-                                                          onClick={() => deleteQuickMessage(qm.id)}
-                                                        >
-                                                          ×
-                                                        </Button>
-                                                      </div>
+                                                      {editingMessageId === qm.id ? (
+                                                        // Modo de edição
+                                                        <div className="flex-1 space-y-2">
+                                                          <div className="space-y-2">
+                                                            <Label>Tipo de Mensagem *</Label>
+                                                            <Select value={editMessageType} onValueChange={(value: "text" | "image" | "video") => {
+                                                              setEditMessageType(value);
+                                                              if (value === "text") {
+                                                                setEditMessageMediaFile(null);
+                                                                setEditMessageMediaPreview(null);
+                                                              }
+                                                            }}>
+                                                              <SelectTrigger>
+                                                                <SelectValue />
+                                                              </SelectTrigger>
+                                                              <SelectContent>
+                                                                <SelectItem value="text">Texto</SelectItem>
+                                                                <SelectItem value="image">Imagem</SelectItem>
+                                                                <SelectItem value="video">Vídeo</SelectItem>
+                                                              </SelectContent>
+                                                            </Select>
+                                                          </div>
+                                                          <div className="space-y-2">
+                                                            <Label>Título *</Label>
+                                                            <Input
+                                                              value={editMessageTitle}
+                                                              onChange={(e) => setEditMessageTitle(e.target.value)}
+                                                              placeholder="Título da mensagem"
+                                                            />
+                                                          </div>
+                                                          {editMessageType === "text" ? (
+                                                            <div className="space-y-2">
+                                                              <Label>Mensagem *</Label>
+                                                              <Textarea
+                                                                value={editMessageContent}
+                                                                onChange={(e) => setEditMessageContent(e.target.value)}
+                                                                placeholder="Conteúdo da mensagem"
+                                                                rows={3}
+                                                              />
+                                                            </div>
+                                                          ) : (
+                                                            <>
+                                                              <div className="space-y-2">
+                                                                <Label>Arquivo de {editMessageType === "image" ? "Imagem" : "Vídeo"} *</Label>
+                                                                <Input
+                                                                  type="file"
+                                                                  accept={editMessageType === "image" ? "image/*" : "video/*"}
+                                                                  onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) {
+                                                                      setEditMessageMediaFile(file);
+                                                                      const reader = new FileReader();
+                                                                      reader.onloadend = () => {
+                                                                        setEditMessageMediaPreview(reader.result as string);
+                                                                      };
+                                                                      reader.readAsDataURL(file);
+                                                                    }
+                                                                  }}
+                                                                />
+                                                                <p className="text-xs text-muted-foreground">
+                                                                  Deixe em branco para manter o arquivo atual
+                                                                </p>
+                                                              </div>
+                                                              {editMessageMediaPreview && (
+                                                                <div className="space-y-2">
+                                                                  <Label>Preview:</Label>
+                                                                  {editMessageType === "image" ? (
+                                                                    <img src={editMessageMediaPreview} alt="Preview" className="max-w-full h-auto rounded border" style={{ maxHeight: '150px' }} />
+                                                                  ) : (
+                                                                    <video src={editMessageMediaPreview} controls className="max-w-full rounded border" style={{ maxHeight: '150px' }} />
+                                                                  )}
+                                                                </div>
+                                                              )}
+                                                              <div className="space-y-2">
+                                                                <Label>Legenda (opcional)</Label>
+                                                                <Textarea
+                                                                  value={editMessageContent}
+                                                                  onChange={(e) => setEditMessageContent(e.target.value)}
+                                                                  placeholder="Digite a legenda da mídia..."
+                                                                  rows={2}
+                                                                />
+                                                              </div>
+                                                            </>
+                                                          )}
+                                                          <div className="space-y-2">
+                                                            <Label>Categoria *</Label>
+                                                            <Select value={editMessageCategory} onValueChange={setEditMessageCategory}>
+                                                              <SelectTrigger>
+                                                                <SelectValue placeholder="Selecione a categoria" />
+                                                              </SelectTrigger>
+                                                              <SelectContent>
+                                                                {quickCategories.map((cat) => (
+                                                                  <SelectItem key={cat.id} value={cat.id}>
+                                                                    {cat.name}
+                                                                  </SelectItem>
+                                                                ))}
+                                                              </SelectContent>
+                                                            </Select>
+                                                          </div>
+                                                          <div className="flex gap-2">
+                                                            <Button size="sm" onClick={saveEditedMessage}>
+                                                              Salvar
+                                                            </Button>
+                                                            <Button size="sm" variant="outline" onClick={cancelEditMessage}>
+                                                              Cancelar
+                                                            </Button>
+                                                          </div>
+                                                        </div>
+                                                      ) : (
+                                                        // Modo de visualização
+                                                        <>
+                                                          <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-medium">{qm.title}</p>
+                                                            {qm.type === "image" && qm.mediaUrl && (
+                                                              <div className="mt-2 mb-2">
+                                                                <img 
+                                                                  src={qm.mediaUrl} 
+                                                                  alt={qm.title} 
+                                                                  className="max-w-full h-auto rounded border" 
+                                                                  style={{ maxHeight: '150px' }} 
+                                                                />
+                                                              </div>
+                                                            )}
+                                                            {qm.type === "video" && qm.mediaUrl && (
+                                                              <div className="mt-2 mb-2">
+                                                                <video 
+                                                                  src={qm.mediaUrl} 
+                                                                  controls 
+                                                                  className="max-w-full rounded border" 
+                                                                  style={{ maxHeight: '150px' }} 
+                                                                />
+                                                              </div>
+                                                            )}
+                                                            <p className="text-xs text-muted-foreground mt-1 break-words">
+                                                              {qm.content}
+                                                            </p>
+                                                          </div>
+                                                          <div className="flex gap-1 ml-2">
+                                                            <Button
+                                                              size="sm"
+                                                              variant="outline"
+                                                              onClick={() => moveMessageUp(qm.id, category.id)}
+                                                              disabled={msgIndex === 0}
+                                                              title="Mover para cima"
+                                                            >
+                                                              ↑
+                                                            </Button>
+                                                            <Button
+                                                              size="sm"
+                                                              variant="outline"
+                                                              onClick={() => moveMessageDown(qm.id, category.id)}
+                                                              disabled={msgIndex === categoryMessages.length - 1}
+                                                              title="Mover para baixo"
+                                                            >
+                                                              ↓
+                                                            </Button>
+                                                            <Button
+                                                              size="sm"
+                                                              variant="outline"
+                                                              onClick={() => editQuickMessage(qm.id)}
+                                                              title="Editar mensagem"
+                                                            >
+                                                              ✏️
+                                                            </Button>
+                                                            <Button
+                                                              size="sm"
+                                                              onClick={() => sendQuickMessage(qm)}
+                                                            >
+                                                              Enviar
+                                                            </Button>
+                                                            <Button
+                                                              size="sm"
+                                                              variant="destructive"
+                                                              onClick={() => deleteQuickMessage(qm.id)}
+                                                              title="Excluir mensagem"
+                                                            >
+                                                              ×
+                                                            </Button>
+                                                          </div>
+                                                        </>
+                                                      )}
                                                     </div>
                                                   ))}
                                                 </div>
@@ -7050,7 +7555,7 @@ function Conversas() {
                                 <div>
                                   <h4 className="text-sm font-medium mb-3">Categorias Criadas:</h4>
                                   <div className="space-y-2">
-                                    {quickCategories.map((cat) => {
+                                    {quickCategories.map((cat, catIndex) => {
                                       const messageCount = quickMessages.filter(
                                         (msg) => msg.category === cat.id
                                       ).length;
@@ -7059,20 +7564,76 @@ function Conversas() {
                                           key={cat.id}
                                           className="flex items-center justify-between p-3 bg-muted rounded border"
                                         >
-                                          <div className="flex items-center gap-3">
-                                            <span className="font-medium">{cat.name}</span>
-                                            <Badge variant="secondary">
-                                              {messageCount} {messageCount === 1 ? "mensagem" : "mensagens"}
-                                            </Badge>
-                                          </div>
-                                          <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            onClick={() => deleteQuickCategory(cat.id)}
-                                            disabled={messageCount > 0}
-                                          >
-                                            Excluir
-                                          </Button>
+                                          {editingCategoryId === cat.id ? (
+                                            // Modo de edição
+                                            <div className="flex-1 flex gap-2 items-center">
+                                              <Input
+                                                value={editCategoryName}
+                                                onChange={(e) => setEditCategoryName(e.target.value)}
+                                                placeholder="Nome da categoria"
+                                                className="flex-1"
+                                                onKeyDown={(e) => {
+                                                  if (e.key === "Enter") {
+                                                    e.preventDefault();
+                                                    saveEditedCategory();
+                                                  }
+                                                }}
+                                              />
+                                              <Button size="sm" onClick={saveEditedCategory}>
+                                                Salvar
+                                              </Button>
+                                              <Button size="sm" variant="outline" onClick={cancelEditCategory}>
+                                                Cancelar
+                                              </Button>
+                                            </div>
+                                          ) : (
+                                            // Modo de visualização
+                                            <>
+                                              <div className="flex items-center gap-3 flex-1">
+                                                <span className="font-medium">{cat.name}</span>
+                                                <Badge variant="secondary">
+                                                  {messageCount} {messageCount === 1 ? "mensagem" : "mensagens"}
+                                                </Badge>
+                                              </div>
+                                              <div className="flex gap-1">
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  onClick={() => moveCategoryUp(cat.id)}
+                                                  disabled={catIndex === 0}
+                                                  title="Mover para cima"
+                                                >
+                                                  ↑
+                                                </Button>
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  onClick={() => moveCategoryDown(cat.id)}
+                                                  disabled={catIndex === quickCategories.length - 1}
+                                                  title="Mover para baixo"
+                                                >
+                                                  ↓
+                                                </Button>
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  onClick={() => editQuickCategory(cat.id)}
+                                                  title="Editar categoria"
+                                                >
+                                                  ✏️
+                                                </Button>
+                                                <Button
+                                                  size="sm"
+                                                  variant="destructive"
+                                                  onClick={() => deleteQuickCategory(cat.id)}
+                                                  disabled={messageCount > 0}
+                                                  title="Excluir categoria"
+                                                >
+                                                  Excluir
+                                                </Button>
+                                              </div>
+                                            </>
+                                          )}
                                         </div>
                                       );
                                     })}
