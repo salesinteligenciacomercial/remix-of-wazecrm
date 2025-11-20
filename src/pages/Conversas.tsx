@@ -684,9 +684,10 @@ function Conversas() {
       return bTime - aTime;
     });
 
-    // Limitar quantidade após aplicar filtros
-    return filtered.slice(0, conversationsLimit);
-  }, [conversations, filter, debouncedSearchTerm, conversationsLimit]);
+    // ⚡ CORREÇÃO CRÍTICA: REMOVER limite de exibição - todas as conversas devem ser exibidas
+    // Todas as conversas do WhatsApp precisam aparecer no CRM
+    return filtered; // Removido .slice(0, conversationsLimit) para exibir TODAS as conversas
+  }, [conversations, filter, debouncedSearchTerm]);
 
   // Mensagens exibidas: sempre refletir state atual da conversa selecionada (evitar cache obsoleto)
   // ⚡ CORREÇÃO: Não limitar mensagens exibidas - mostrar todas para preservar histórico
@@ -742,16 +743,16 @@ function Conversas() {
     return null;
   }, []);
 
-  // MELHORIA: Limitar quantidade de conversas carregadas inicialmente - otimização de performance
+  // ⚡ CORREÇÃO: Carregar TODAS as conversas, não apenas 50
   const loadInitialConversations = useCallback(async () => {
     try {
-      // Carregar apenas as primeiras 50 conversas
+      // ⚡ CORREÇÃO CRÍTICA: Remover limite - carregar TODAS as conversas do WhatsApp
       const { data, error } = await supabase
         .from('conversas')
         .select('*')
         .eq('company_id', userCompanyId || '')
         .order('created_at', { ascending: false })
-        .limit(50); // Limitar quantidade inicial
+        // REMOVIDO: .limit(50) - agora carrega TODAS as conversas
 
       if (error) throw error;
 
@@ -2705,12 +2706,13 @@ function Conversas() {
         }
       }
       
-      // ⚡ OTIMIZAÇÃO: Aumentar limite para carregar histórico completo
-      const INITIAL_LIMIT = 50; // Aumentar para 50 conversas iniciais
+      // ⚡ CORREÇÃO: Remover limite de conversas - carregar TODAS as conversas do WhatsApp
+      // Não usar INITIAL_LIMIT para limitar conversas - todas devem ser exibidas
       const MESSAGES_PER_CONVERSATION = 10; // Aumentar para 10 últimas mensagens por conversa (melhor histórico)
       
-      // ⚡ CORREÇÃO: Aumentar limite de mensagens buscadas para garantir histórico completo
-      const MESSAGES_TO_FETCH = append ? 500 : 1000; // Buscar muito mais mensagens para garantir histórico completo
+      // ⚡ CORREÇÃO CRÍTICA: Aumentar drasticamente limite de mensagens para garantir que TODAS as conversas sejam carregadas
+      // Usar limite maior para garantir que todas as conversas sejam encontradas
+      const MESSAGES_TO_FETCH = append ? 2000 : 5000; // Buscar MUITO mais mensagens para garantir histórico completo de TODAS as conversas
       
       // ETAPA 2: ⚡ BUSCAR CONVERSAS OTIMIZADO - Buscar apenas últimas mensagens por telefone
       // Query otimizada: buscar apenas campos essenciais e limitar quantidade
@@ -2746,6 +2748,14 @@ function Conversas() {
 
       const conversasData = conversasResult || [];
       
+      // ⚡ CORREÇÃO: Verificar se há mais conversas para carregar
+      // Se retornou exatamente o limite, provavelmente há mais mensagens no banco
+      const hasMoreMessages = conversasData.length === MESSAGES_TO_FETCH;
+      if (!append && hasMoreMessages) {
+        console.log(`⚠️ [LOAD] Retornou exatamente ${MESSAGES_TO_FETCH} mensagens - pode haver mais no banco`);
+        setHasMoreConversations(true); // Garantir que o botão "carregar mais" apareça
+      }
+      
       // ⚡ OTIMIZAÇÃO: Processar e agrupar de forma mais eficiente
       const validConversas = conversasData.filter(conv => 
         conv.numero && !conv.numero.includes('{{') &&
@@ -2776,11 +2786,12 @@ function Conversas() {
         mensagens.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       });
 
-      // ⚡ OTIMIZAÇÃO: Buscar apenas leads dos telefones encontrados (não todos) - MAIS RÁPIDO
+      // ⚡ CORREÇÃO: Buscar leads de TODOS os telefones encontrados (sem limite)
+      // Remover slice para garantir que todos os leads sejam encontrados
       const telefonesUnicos = Array.from(conversasMap.keys())
         .map(tel => tel.replace(/[^0-9]/g, ''))
-        .filter(tel => tel.length >= 10)
-        .slice(0, 50); // Aumentar para 50 telefones para melhor cobertura
+        .filter(tel => tel.length >= 10);
+      // Removido .slice(0, 50) para buscar leads de TODAS as conversas
       
       // Buscar leads de forma otimizada usando queries mais eficientes
       let leadsData: any[] = [];
@@ -2796,16 +2807,28 @@ function Conversas() {
         });
         
         if (phoneConditions.length > 0) {
-          // Limitar condições para evitar query muito longa (máximo 50 condições)
-          const conditionsToUse = phoneConditions.slice(0, 50);
-          const orCondition = conditionsToUse.join(',');
+          // ⚡ CORREÇÃO: Buscar leads em lotes maiores para garantir que todos sejam encontrados
+          // Processar em lotes de 100 condições para evitar query muito longa
+          const BATCH_SIZE = 100;
+          let allLeads: any[] = [];
           
-          const leadsResult = await supabase
-            .from('leads')
-            .select('id, phone, name, telefone')
-            .eq('company_id', companyId)
-            .or(orCondition)
-            .limit(100); // Aumentar limite para garantir que encontramos todos os leads relevantes
+          for (let i = 0; i < phoneConditions.length; i += BATCH_SIZE) {
+            const batch = phoneConditions.slice(i, i + BATCH_SIZE);
+            const orCondition = batch.join(',');
+            
+            const leadsResult = await supabase
+              .from('leads')
+              .select('id, phone, name, telefone')
+              .eq('company_id', companyId)
+              .or(orCondition)
+              .limit(500); // Limite maior por lote
+            
+            if (!leadsResult.error && leadsResult.data) {
+              allLeads = [...allLeads, ...leadsResult.data];
+            }
+          }
+          
+          leadsData = allLeads;
           
           if (!leadsResult.error && leadsResult.data) {
             leadsData = leadsResult.data;
@@ -2834,33 +2857,46 @@ function Conversas() {
       // Buscar assignments para todos os telefones (para mostrar responsável e filtrar se necessário)
       let assignmentsMap = new Map<string, string | null>(); // telefone -> assigned_user_id
       
-      // Buscar assignments apenas para telefones das conversas
+      // ⚡ CORREÇÃO: Buscar assignments de TODOS os telefones das conversas (sem limite)
       const telefonesParaBuscar = Array.from(conversasMap.keys())
         .map(tel => tel.replace(/[^0-9]/g, ''))
-        .filter(tel => tel.length >= 10)
-        .slice(0, 100); // Limitar para não sobrecarregar
+        .filter(tel => tel.length >= 10);
+      // Removido .slice(0, 100) para buscar assignments de TODAS as conversas
       
       if (telefonesParaBuscar.length > 0) {
-        // Buscar assignments em lotes
-        const { data: assignmentsData } = await supabase
-          .from('conversation_assignments')
-          .select('telefone_formatado, assigned_user_id')
-          .eq('company_id', companyId)
-          .in('telefone_formatado', telefonesParaBuscar);
+        // ⚡ CORREÇÃO: Buscar assignments em lotes para garantir que todos sejam encontrados
+        // Processar em lotes de 100 telefones para evitar limite do Supabase
+        const ASSIGNMENT_BATCH_SIZE = 100;
+        let allAssignments: any[] = [];
         
-        if (assignmentsData) {
-          assignmentsData.forEach((assignment: any) => {
-            const telKey = assignment.telefone_formatado?.replace(/[^0-9]/g, '') || '';
-            if (telKey) {
-              assignmentsMap.set(telKey, assignment.assigned_user_id);
-            }
-          });
+        for (let i = 0; i < telefonesParaBuscar.length; i += ASSIGNMENT_BATCH_SIZE) {
+          const batch = telefonesParaBuscar.slice(i, i + ASSIGNMENT_BATCH_SIZE);
+          
+          const { data: assignmentsData } = await supabase
+            .from('conversation_assignments')
+            .select('telefone_formatado, assigned_user_id')
+            .eq('company_id', companyId)
+            .in('telefone_formatado', batch);
+          
+          if (assignmentsData) {
+            allAssignments = [...allAssignments, ...assignmentsData];
+          }
         }
+        
+        // Processar todos os assignments encontrados
+        allAssignments.forEach((assignment: any) => {
+          const telKey = assignment.telefone_formatado?.replace(/[^0-9]/g, '') || '';
+          if (telKey) {
+            assignmentsMap.set(telKey, assignment.assigned_user_id);
+          }
+        });
       }
 
       // ETAPA 4: Criar lista de conversas (otimizado) com filtro de responsável
+      // ⚡ CORREÇÃO CRÍTICA: REMOVER .slice(0, INITIAL_LIMIT) para exibir TODAS as conversas
+      // Todas as conversas do WhatsApp devem aparecer no CRM
       const novasConversas: Conversation[] = Array.from(conversasMap.entries())
-        .slice(0, INITIAL_LIMIT) // Limitar a 50 conversas iniciais
+        // REMOVIDO: .slice(0, INITIAL_LIMIT) - agora todas as conversas são exibidas
         .filter(([telefone, mensagens]) => {
           // Se for admin, mostrar todas as conversas
           if (isAdmin) return true;
