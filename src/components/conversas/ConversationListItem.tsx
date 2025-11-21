@@ -79,19 +79,6 @@ function ConversationListItemComponent({
   // ⚡ GARANTIA: O botão sempre será renderizado, mesmo sem callbacks
   // Os callbacks são opcionais, mas o botão deve sempre aparecer
   const hasAnyCallback = !!(onEditName || onCreateLead || onDeleteConversation);
-  
-  console.log('🎨 [RENDER] ConversationListItem:', {
-    contactName,
-    hasAvatar: !!avatarUrl,
-    avatarUrl: avatarUrl?.substring(0, 50),
-    hasCallbacks: {
-      onEditName: !!onEditName,
-      onCreateLead: !!onCreateLead,
-      onDeleteConversation: !!onDeleteConversation
-    },
-    hasAnyCallback,
-    showingButton: true // SEMPRE TRUE - botão sempre visível
-  });
 
   return (
     <div
@@ -99,7 +86,13 @@ function ConversationListItemComponent({
         isSelected ? "bg-muted/70" : ""
       }`}
       onClick={onClick}
-      style={{ position: 'relative', overflow: 'visible' }}
+      style={{ 
+        position: 'relative', 
+        overflow: 'visible', 
+        zIndex: 1,
+        paddingBottom: '16px', // Garantir espaço suficiente para o botão não ser cortado
+        paddingTop: '16px'
+      }}
     >
       <div className="flex gap-3 items-start">
         <Avatar className="h-12 w-12 flex-shrink-0">
@@ -109,8 +102,8 @@ function ConversationListItemComponent({
           </AvatarFallback>
         </Avatar>
         
-        <div className="flex-1 min-w-0" style={{ overflow: 'visible' }}>
-          <div className="flex items-start justify-between mb-1 gap-2" style={{ overflow: 'visible' }}>
+        <div className="flex-1 min-w-0" style={{ overflow: 'visible', position: 'relative' }}>
+          <div className="flex items-start justify-between mb-1 gap-2" style={{ overflow: 'visible', position: 'relative' }}>
             <div className="flex items-center gap-2 flex-1 min-w-0">
               {getChannelIcon()}
               <span className="font-medium text-sm text-foreground truncate">
@@ -119,15 +112,19 @@ function ConversationListItemComponent({
             </div>
             
             {/* HORÁRIO, BADGE E MENU */}
-            {/* ⚡ CORREÇÃO: Garantir que o container do menu sempre seja visível em todos os filtros */}
+            {/* ⚡ CORREÇÃO CRÍTICA: Garantir que o container do menu sempre seja visível em TODOS os filtros */}
+            {/* ⚡ CORREÇÃO: Adicionar padding/margin para evitar que o botão seja cortado pela linha */}
             <div 
               className="flex items-center gap-1.5 flex-shrink-0" 
               style={{ 
                 position: 'relative', 
-                zIndex: 100,
+                zIndex: 1000,
                 overflow: 'visible',
                 minWidth: '120px',
-                justifyContent: 'flex-end'
+                justifyContent: 'flex-end',
+                pointerEvents: 'auto',
+                marginBottom: '0', // Garantir que não seja cortado
+                paddingBottom: '0'
               }}
             >
               <span className="text-xs text-muted-foreground whitespace-nowrap">
@@ -142,19 +139,31 @@ function ConversationListItemComponent({
                 </Badge>
               )}
               
-              {/* BOTÃO DE MENU - SEMPRE VISÍVEL EM TODOS OS FILTROS */}
-              {/* ⚡ CORREÇÃO: Botão sempre renderizado e visível, independente de filtro ou callbacks */}
+              {/* BOTÃO DE MENU - SEMPRE VISÍVEL E FUNCIONAL EM TODOS OS FILTROS */}
+              {/* ⚡ CORREÇÃO CRÍTICA: Botão sempre renderizado, visível e funcional, independente de filtro */}
+              {/* ⚡ CORREÇÃO: Adicionar margin/padding para evitar corte pela linha */}
               <div 
-                className="flex-shrink-0" 
+                className="flex-shrink-0 relative" 
                 style={{ 
                   position: 'relative', 
-                  zIndex: 100,
+                  zIndex: 1001,
                   minWidth: '32px',
                   minHeight: '32px',
                   overflow: 'visible',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  pointerEvents: 'auto',
+                  marginTop: '-2px', // Ajustar posição para não ser cortado
+                  marginBottom: '2px'
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
                 }}
               >
                 <DropdownMenu modal={false}>
@@ -166,19 +175,19 @@ function ConversationListItemComponent({
                       style={{ 
                         opacity: 1, 
                         visibility: 'visible', 
-                        display: 'flex',
+                        display: 'flex !important',
                         position: 'relative',
-                        zIndex: 101,
+                        zIndex: 1002,
                         minWidth: '32px',
                         minHeight: '32px',
                         flexShrink: 0,
                         pointerEvents: 'auto',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        backgroundColor: 'transparent'
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        console.log('🔘 Menu clicado!', { conversationId, leadId, hasAnyCallback, filter: 'all' });
                       }}
                       onMouseDown={(e) => {
                         e.stopPropagation();
@@ -203,7 +212,11 @@ function ConversationListItemComponent({
                     align="end" 
                     side="bottom"
                     className="w-56 z-[99999] bg-background border border-border shadow-lg"
-                    style={{ zIndex: 99999 }}
+                    style={{ 
+                      zIndex: 99999,
+                      position: 'fixed',
+                      pointerEvents: 'auto'
+                    }}
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
                   >
@@ -212,11 +225,8 @@ function ConversationListItemComponent({
                         onClick={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
-                          console.log('✏️ Editar nome', conversationId);
                           if (onEditName) {
                             onEditName();
-                          } else {
-                            console.warn('⚠️ onEditName não está definido');
                           }
                         }}
                         className="cursor-pointer"
@@ -231,7 +241,6 @@ function ConversationListItemComponent({
                           onClick={(e) => {
                             e.stopPropagation();
                             e.preventDefault();
-                            console.log('➕ Adicionar ao CRM', conversationId);
                             onCreateLead();
                           }}
                           className="cursor-pointer"
@@ -245,11 +254,8 @@ function ConversationListItemComponent({
                         onClick={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
-                          console.log('🗑️ Excluir conversa', conversationId);
                           if (onDeleteConversation) {
                             onDeleteConversation();
-                          } else {
-                            console.warn('⚠️ onDeleteConversation não está definido');
                           }
                         }}
                         className="text-destructive cursor-pointer"
