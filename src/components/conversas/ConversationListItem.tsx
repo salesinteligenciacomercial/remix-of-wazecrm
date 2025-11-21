@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Instagram, Facebook, MoreVertical, Edit, UserPlus, Trash2 } from "lucide-react";
@@ -9,6 +9,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+// Estilos globais para forçar posicionamento correto do menu
+const dropdownMenuStyles = `
+  [data-radix-popper-content-wrapper][data-side="left"] {
+    display: none !important;
+  }
+  [data-radix-popper-content-wrapper][data-side="right"] {
+    display: none !important;
+  }
+  [data-radix-popper-content-wrapper][data-side="top"] {
+    display: none !important;
+  }
+  [data-radix-popper-content-wrapper][data-side="bottom"][data-align="end"] {
+    display: block !important;
+  }
+  /* Forçar posicionamento abaixo e à direita */
+  [data-radix-popper-content-wrapper] {
+    transform-origin: top right !important;
+  }
+`;
 
 interface ConversationListItemProps {
   contactName: string;
@@ -49,6 +69,120 @@ function ConversationListItemComponent({
   onCreateLead,
   onDeleteConversation,
 }: ConversationListItemProps) {
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Função para forçar posicionamento correto do menu
+  const forceMenuPosition = () => {
+    const button = menuButtonRef.current;
+    if (!button) return;
+
+    // Encontrar TODOS os menus no DOM e forçar posicionamento no mais próximo do botão
+    const allMenus = Array.from(document.querySelectorAll('[data-radix-popper-content-wrapper]')) as HTMLElement[];
+    if (allMenus.length === 0) return;
+
+    // Encontrar o menu mais próximo do botão (geralmente o último adicionado quando está aberto)
+    const buttonRect = button.getBoundingClientRect();
+    let menuContent = allMenus[allMenus.length - 1]; // Pegar o último (mais recente)
+    
+    // Verificar se há um menu visível próximo ao botão
+    for (const menu of allMenus) {
+      const menuRect = menu.getBoundingClientRect();
+      const distance = Math.abs(menuRect.top - buttonRect.bottom) + Math.abs(menuRect.left - buttonRect.right);
+      if (distance < 500) { // Se estiver próximo (dentro de 500px)
+        menuContent = menu;
+        break;
+      }
+    }
+
+    if (!menuContent) return;
+
+    // Obter posição do botão
+    const rect = button.getBoundingClientRect();
+    
+    // Calcular posição: abaixo do botão, alinhado à direita
+    const menuWidth = 224; // w-56 = 14rem = 224px
+    const offset = 4; // sideOffset
+    
+    const top = rect.bottom + offset;
+    const left = rect.right - menuWidth;
+    
+    // Forçar posicionamento com !important via setProperty
+    menuContent.style.setProperty('position', 'fixed', 'important');
+    menuContent.style.setProperty('top', `${top}px`, 'important');
+    menuContent.style.setProperty('left', `${left}px`, 'important');
+    menuContent.style.setProperty('right', 'auto', 'important');
+    menuContent.style.setProperty('bottom', 'auto', 'important');
+    menuContent.style.setProperty('transform', 'none', 'important');
+    menuContent.style.setProperty('margin', '0', 'important');
+    menuContent.style.setProperty('display', 'block', 'important');
+    menuContent.style.setProperty('visibility', 'visible', 'important');
+    menuContent.style.setProperty('opacity', '1', 'important');
+    menuContent.style.setProperty('z-index', '99999', 'important');
+    
+    menuContent.setAttribute('data-side', 'bottom');
+    menuContent.setAttribute('data-align', 'end');
+    
+    // Forçar também no elemento filho se existir
+    const contentElement = menuContent.querySelector('[role="menu"]') as HTMLElement;
+    if (contentElement) {
+      contentElement.style.setProperty('max-height', '300px', 'important');
+      contentElement.style.setProperty('overflow-y', 'auto', 'important');
+    }
+  };
+
+  // Monitorar abertura do menu e forçar posicionamento
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    // Forçar imediatamente múltiplas vezes
+    setTimeout(() => forceMenuPosition(), 0);
+    setTimeout(() => forceMenuPosition(), 10);
+    setTimeout(() => forceMenuPosition(), 50);
+    setTimeout(() => forceMenuPosition(), 100);
+    
+    // Forçar continuamente enquanto o menu estiver aberto (a cada 5ms)
+    const interval = setInterval(() => {
+      forceMenuPosition();
+    }, 5);
+
+    // Observer para quando o menu for adicionado ao DOM
+    const observer = new MutationObserver(() => {
+      forceMenuPosition();
+    });
+
+    observer.observe(document.body, { 
+      childList: true, 
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'data-side', 'data-align', 'class']
+    });
+
+    // Também observar mudanças de scroll e resize
+    const handleScroll = () => forceMenuPosition();
+    const handleResize = () => forceMenuPosition();
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      clearInterval(interval);
+      observer.disconnect();
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [menuOpen]);
+
+  // Injetar estilos globais
+  useEffect(() => {
+    const styleId = 'conversation-dropdown-menu-fix';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = dropdownMenuStyles;
+      document.head.appendChild(style);
+    }
+  }, []);
+
   const getChannelIcon = () => {
     switch (channel) {
       case "whatsapp":
@@ -166,9 +300,10 @@ function ConversationListItemComponent({
                   e.preventDefault();
                 }}
               >
-                <DropdownMenu modal={false}>
+                <DropdownMenu modal={false} open={menuOpen} onOpenChange={setMenuOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button 
+                      ref={menuButtonRef}
                       variant="ghost" 
                       size="icon" 
                       className="h-8 w-8 hover:bg-accent hover:text-accent-foreground shrink-0 flex-shrink-0"
@@ -211,14 +346,22 @@ function ConversationListItemComponent({
                   <DropdownMenuContent 
                     align="end" 
                     side="bottom"
-                    className="w-56 z-[99999] bg-background border border-border shadow-lg"
-                    style={{ 
+                    sideOffset={4}
+                    alignOffset={0}
+                    avoidCollisions={false}
+                    onEscapeKeyDown={(e) => e.stopPropagation()}
+                    onPointerDownOutside={(e) => e.stopPropagation()}
+                    onInteractOutside={(e) => e.stopPropagation()}
+                    className="w-56 max-h-[300px] overflow-y-auto z-[99999] bg-background border border-border shadow-lg"
+                    style={{
                       zIndex: 99999,
-                      position: 'fixed',
-                      pointerEvents: 'auto'
+                      position: 'fixed !important',
                     }}
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
+                    onOpenAutoFocus={(e) => {
+                      setTimeout(() => forceMenuPosition(), 0);
+                    }}
                   >
                       {/* ⚡ SEMPRE mostrar opção de editar nome */}
                       <DropdownMenuItem 
