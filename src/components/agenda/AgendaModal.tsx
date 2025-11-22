@@ -35,6 +35,8 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
     notificar_responsavel: true,
     enviar_lembrete: true,
     horas_antecedencia: "",
+    horas_antecedencia_horas: "1",
+    horas_antecedencia_minutos: "0",
     destinatario_lembrete: "lead" as "lead" | "responsavel" | "ambos"
   });
 
@@ -147,6 +149,132 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
         lead_telefone: lead.telefone
       });
 
+      // ⚡ CRIAR LEMBRETE AUTOMATICAMENTE PARA TODO COMPROMISSO (OBRIGATÓRIO)
+      if (compromissoCriado) {
+        console.log('📝 [LEMBRETE] Criando lembrete automaticamente para compromisso:', compromissoCriado.id);
+        
+        try {
+          // Processar tempo de antecedência (usar valores do formulário ou padrão)
+          let horas = parseInt(formData.horas_antecedencia_horas || "0", 10);
+          let minutos = parseInt(formData.horas_antecedencia_minutos || "0", 10);
+          
+          // Se não informado ou inválido, usar valores padrão (1 hora antes)
+          if (horas === 0 && minutos === 0) {
+            console.log('ℹ️ [LEMBRETE] Usando valores padrão: 1 hora de antecedência');
+            horas = 1;
+            minutos = 0;
+          }
+          
+          // Validar valores
+          if (horas < 0) horas = 1;
+          if (minutos < 0 || minutos >= 60) minutos = 0;
+
+          // Converter horas e minutos para formato decimal (garantir precisão)
+          const tempoAntecedencia = parseFloat((horas + (minutos / 60)).toFixed(4));
+
+          // Calcular data de envio do lembrete baseada na data do compromisso
+          const dataEnvio = new Date(inicio);
+          dataEnvio.setTime(dataEnvio.getTime() - (tempoAntecedencia * 60 * 60 * 1000));
+
+          // Mensagem personalizada do lembrete
+          const mensagemLembrete = `Olá ${lead.nome}! Lembramos do seu compromisso agendado para ${format(inicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`;
+
+          const lembreteData = {
+            compromisso_id: compromissoCriado.id,
+            canal: 'whatsapp',
+            horas_antecedencia: tempoAntecedencia,
+            mensagem: mensagemLembrete,
+            status_envio: 'pendente',
+            data_envio: dataEnvio.toISOString(),
+            destinatario: formData.destinatario_lembrete || 'lead',
+            telefone_responsavel: null,
+            company_id: companyId,
+          };
+
+          console.log('📝 [LEMBRETE] Dados do lembrete:', { 
+            compromisso_id: lembreteData.compromisso_id,
+            data_envio: lembreteData.data_envio,
+            horas_antecedencia: lembreteData.horas_antecedencia,
+            destinatario: lembreteData.destinatario,
+            data_compromisso: inicio.toISOString()
+          });
+
+          // Criar lembrete de forma síncrona e garantida
+          let lembreteCriado = null;
+          let lembreteError = null;
+          
+          // Tentar inserir com valor decimal
+          const resultado = await supabase
+            .from('lembretes')
+            .insert(lembreteData)
+            .select()
+            .single();
+          
+          lembreteCriado = resultado.data;
+          lembreteError = resultado.error;
+
+          // Se erro for de tipo INTEGER, tentar novamente arredondando para inteiro (fallback temporário)
+          if (lembreteError && (lembreteError.message?.includes('integer') || lembreteError.message?.includes('INTEGER'))) {
+            console.warn('⚠️ [LEMBRETE] Erro de tipo INTEGER detectado, tentando com valor arredondado (fallback)...');
+            
+            // Criar novo objeto com valor arredondado para inteiro (horas completas)
+            const lembreteDataFallback = {
+              ...lembreteData,
+              horas_antecedencia: Math.round(tempoAntecedencia) || 1, // Arredondar para horas completas
+            };
+            
+            // Recalcular data de envio com valor arredondado
+            const dataEnvioFallback = new Date(inicio);
+            dataEnvioFallback.setTime(dataEnvioFallback.getTime() - (lembreteDataFallback.horas_antecedencia * 60 * 60 * 1000));
+            lembreteDataFallback.data_envio = dataEnvioFallback.toISOString();
+            
+            console.log('🔄 [LEMBRETE] Tentando novamente com valor arredondado:', lembreteDataFallback.horas_antecedencia);
+            
+            const retryResult = await supabase
+              .from('lembretes')
+              .insert(lembreteDataFallback)
+              .select()
+              .single();
+            
+            lembreteCriado = retryResult.data;
+            lembreteError = retryResult.error;
+            
+            if (!lembreteError) {
+              console.log('✅ [LEMBRETE] Lembrete criado com valor arredondado (fallback temporário)');
+              toast.warning(
+                `Lembrete criado com ${lembreteDataFallback.horas_antecedencia} hora(s) de antecedência (arredondado). Para usar minutos, execute a migração SQL.`,
+                { duration: 8000 }
+              );
+            }
+          }
+
+          if (lembreteError) {
+            console.error('❌ [LEMBRETE] Erro ao criar lembrete:', lembreteError);
+            console.error('❌ [LEMBRETE] Dados que causaram erro:', {
+              compromisso_id: lembreteData.compromisso_id,
+              horas_antecedencia: lembreteData.horas_antecedencia,
+              tipo_horas_antecedencia: typeof lembreteData.horas_antecedencia,
+              erro_completo: JSON.stringify(lembreteError, null, 2)
+            });
+            
+            toast.error(
+              `Erro ao criar lembrete. Execute o SQL em APLICAR_MIGRACAO_LEMBRETES.sql no Supabase Dashboard para corrigir.`,
+              { duration: 10000 }
+            );
+          } else {
+            console.log('✅ [LEMBRETE] Lembrete criado automaticamente e sincronizado:', lembreteCriado?.id);
+            console.log('📅 [LEMBRETE] Data de envio calculada:', dataEnvio.toISOString());
+            console.log('📅 [LEMBRETE] Data do compromisso:', inicio.toISOString());
+            console.log('⏰ [LEMBRETE] Antecedência:', tempoAntecedencia, 'horas');
+            console.log('🔗 [LEMBRETE] Vinculado ao compromisso:', compromissoCriado.id);
+          }
+        } catch (error: any) {
+          console.error('❌ [LEMBRETE] Erro ao criar lembrete:', error);
+          toast.error(`Erro ao criar lembrete: ${error?.message || 'Erro desconhecido'}`);
+          // Não lançar erro para não impedir o compromisso
+        }
+      }
+
       // Enviar mensagem de confirmação imediata se solicitado
       if (formData.enviar_confirmacao && compromissoCriado && lead.telefone) {
         console.log('📱 [AgendaModal] Iniciando envio de confirmação...');
@@ -182,6 +310,30 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
               toast.warning("Compromisso criado, mas não foi possível enviar a confirmação imediata.");
             } else {
               console.log('✅ [CONFIRMAÇÃO] Mensagem de confirmação enviada com sucesso!');
+              
+              // Salvar mensagem de confirmação na tabela conversas para ficar visível no CRM
+              try {
+                const { error: dbError } = await supabase.from('conversas').insert([{
+                  numero: telefone,
+                  telefone_formatado: telefone,
+                  mensagem: mensagemConfirmacao,
+                  origem: 'WhatsApp',
+                  status: 'Enviada',
+                  tipo_mensagem: 'text',
+                  nome_contato: lead.nome,
+                  company_id: companyId,
+                  lead_id: lead.id,
+                  fromme: true,
+                }]);
+                
+                if (dbError) {
+                  console.error('❌ [CONFIRMAÇÃO] Erro ao salvar mensagem no banco:', dbError);
+                } else {
+                  console.log('✅ [CONFIRMAÇÃO] Mensagem salva no banco de dados com sucesso!');
+                }
+              } catch (saveError) {
+                console.error('❌ [CONFIRMAÇÃO] Erro ao salvar mensagem no banco:', saveError);
+              }
             }
           }
         } catch (error) {
@@ -232,64 +384,7 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
         }
       }
 
-      // Criar lembrete se solicitado
-      if (formData.enviar_lembrete && compromissoCriado) {
-        console.log('📝 [AgendaModal] Iniciando criação de lembrete...');
-        try {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('full_name, phone')
-            .eq('id', session.user.id)
-            .single();
-
-          // Validar e processar tempo de antecedência (aceita horas e minutos via decimais)
-          if (!formData.horas_antecedencia || formData.horas_antecedencia.trim() === '') {
-            toast.error("Por favor, informe o tempo de antecedência para o lembrete");
-            return;
-          }
-          
-          const tempoAntecedencia = parseFloat(formData.horas_antecedencia);
-          if (isNaN(tempoAntecedencia) || tempoAntecedencia < 0) {
-            toast.error("O tempo de antecedência deve ser um número positivo");
-            return;
-          }
-
-          // Calcular data de envio do lembrete (tempo em horas, pode ser decimal para minutos)
-          const dataEnvio = new Date(inicio);
-          dataEnvio.setTime(dataEnvio.getTime() - (tempoAntecedencia * 60 * 60 * 1000)); // Converter horas para milissegundos
-
-          // Obter telefone do responsável - profiles não tem campo phone
-          const telefoneResponsavel = null;
-
-          const lembreteData = {
-            compromisso_id: compromissoCriado.id,
-            canal: 'whatsapp',
-            horas_antecedencia: tempoAntecedencia,
-            mensagem: `Olá! Lembramos do seu compromisso agendado para ${format(inicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`,
-            status_envio: 'pendente',
-            data_envio: dataEnvio.toISOString(),
-            destinatario: formData.destinatario_lembrete,
-            telefone_responsavel: telefoneResponsavel, // CORRIGIDO: usar phone do profile, não nome/email
-            company_id: companyId,
-          };
-
-          console.log('📝 [LEMBRETE] Criando lembrete para compromisso:', compromissoCriado.id);
-
-          const { error: lembreteError } = await supabase
-            .from('lembretes')
-            .insert(lembreteData);
-
-          if (lembreteError) {
-            console.error('❌ [LEMBRETE] Erro ao criar lembrete:', lembreteError);
-            toast.warning("Compromisso criado, mas houve erro ao criar o lembrete.");
-          } else {
-            console.log('✅ [LEMBRETE] Lembrete criado com sucesso para compromisso:', compromissoCriado.id);
-          }
-        } catch (error) {
-          console.error('❌ [LEMBRETE] Erro ao criar lembrete:', error);
-          toast.warning("Compromisso criado, mas houve erro ao criar o lembrete.");
-        }
-      }
+      // Lembrete já foi criado acima, logo após o compromisso
 
       // Mensagem de sucesso mais informativa
       if (formData.enviar_confirmacao && formData.notificar_responsavel) {
@@ -317,6 +412,8 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
         notificar_responsavel: true,
         enviar_lembrete: true,
         horas_antecedencia: "",
+        horas_antecedencia_horas: "1",
+        horas_antecedencia_minutos: "0",
         destinatario_lembrete: "lead"
       });
     } catch (error: any) {
@@ -454,22 +551,50 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm">Tempo de antecedência</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="Ex: 0.25 (15 min), 1 (1 hora), 24 (24 horas)"
-                    value={formData.horas_antecedencia}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
-                        setFormData({ ...formData, horas_antecedencia: value });
-                      }
-                    }}
-                    className="h-9"
-                  />
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <Label className="text-xs text-muted-foreground mb-1 block">Horas</Label>
+                      <Select
+                        value={formData.horas_antecedencia_horas}
+                        onValueChange={(value) => {
+                          setFormData({ ...formData, horas_antecedencia_horas: value });
+                        }}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 25 }, (_, i) => (
+                            <SelectItem key={i} value={i.toString()}>
+                              {i} {i === 1 ? 'hora' : 'horas'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex-1">
+                      <Label className="text-xs text-muted-foreground mb-1 block">Minutos</Label>
+                      <Select
+                        value={formData.horas_antecedencia_minutos}
+                        onValueChange={(value) => {
+                          setFormData({ ...formData, horas_antecedencia_minutos: value });
+                        }}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[0, 5, 10, 15, 20, 30, 45].map((min) => (
+                            <SelectItem key={min} value={min.toString()}>
+                              {min} {min === 1 ? 'minuto' : 'minutos'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Digite o tempo antes do compromisso para enviar o lembrete. Use valores decimais para minutos: 0.083 (5 min), 0.167 (10 min), 0.25 (15 min), 0.5 (30 min), 1 (1 hora), 24 (24 horas)
+                    Selecione quantas horas e minutos antes do compromisso o lembrete deve ser enviado.
                   </p>
                 </div>
               </>

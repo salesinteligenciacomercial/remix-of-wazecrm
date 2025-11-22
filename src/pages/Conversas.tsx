@@ -974,7 +974,8 @@ function Conversas() {
   const [meetingNotes, setMeetingNotes] = useState("");
   const [enviarConfirmacaoReuniao, setEnviarConfirmacaoReuniao] = useState(true); // ⚡ Enviar confirmação por padrão
   const [enviarLembreteReuniao, setEnviarLembreteReuniao] = useState(true); // ⚡ Enviar lembrete por padrão
-  const [horasAntecedenciaReuniao, setHorasAntecedenciaReuniao] = useState("24"); // ⚡ 24h padrão
+  const [horasAntecedenciaReuniaoHoras, setHorasAntecedenciaReuniaoHoras] = useState("1"); // ⚡ 1 hora padrão
+  const [horasAntecedenciaReuniaoMinutos, setHorasAntecedenciaReuniaoMinutos] = useState("0"); // ⚡ 0 minutos padrão
   const [newTag, setNewTag] = useState("");
   const [selectedFunnel, setSelectedFunnel] = useState("");
   const [newResponsavel, setNewResponsavel] = useState("");
@@ -2168,13 +2169,25 @@ function Conversas() {
                       if (m.id === novaMensagem.id) {
                         return true;
                       }
-                      // Verificar por conteúdo + timestamp próximo (apenas para mensagens enviadas localmente)
-                      // Reduzir janela para 10 segundos para evitar falsos positivos
+                      // ⚡ CORREÇÃO CRÍTICA: Para mensagens enviadas pelo usuário, verificar duplicatas
+                      // por conteúdo + timestamp mesmo quando IDs são diferentes (ID temporário vs ID real)
                       if (novaConversa.fromme === true) {
                         const mesmoConteudo = m.content.trim() === novaMensagem.content.trim();
                         const diffMs = Math.abs(new Date(m.timestamp).getTime() - new Date(novaMensagem.timestamp).getTime());
-                        if (mesmoConteudo && diffMs < 10000) {
-                          console.log('🔍 [REALTIME] Duplicata detectada por conteúdo+timestamp (mensagem enviada)');
+                        // Aumentar janela para 30 segundos para capturar mensagens que foram adicionadas localmente
+                        // e depois chegaram via realtime com ID diferente
+                        if (mesmoConteudo && diffMs < 30000) {
+                          console.log('🔍 [REALTIME] Duplicata detectada por conteúdo+timestamp (mensagem enviada)', {
+                            idLocal: m.id,
+                            idBanco: novaMensagem.id,
+                            conteudo: m.content.substring(0, 30),
+                            diffMs
+                          });
+                          return true;
+                        }
+                        // Verificar também se o ID local é temporário (começa com "temp_") e o conteúdo é igual
+                        if (m.id.startsWith('temp_') && mesmoConteudo && diffMs < 30000) {
+                          console.log('🔍 [REALTIME] Duplicata detectada: ID temporário local vs ID real do banco');
                           return true;
                         }
                       }
@@ -2187,34 +2200,50 @@ function Conversas() {
                       const mensagemIndex = conversaExistente.messages.findIndex(m => 
                         m.id === novaMensagem.id || 
                         (m.content.trim() === novaMensagem.content.trim() && 
-                         Math.abs(new Date(m.timestamp).getTime() - new Date(novaMensagem.timestamp).getTime()) < 10000)
+                         Math.abs(new Date(m.timestamp).getTime() - new Date(novaMensagem.timestamp).getTime()) < 30000) ||
+                        (m.id.startsWith('temp_') && m.content.trim() === novaMensagem.content.trim() && 
+                         Math.abs(new Date(m.timestamp).getTime() - new Date(novaMensagem.timestamp).getTime()) < 30000)
                       );
                       
-                      if (mensagemIndex >= 0 && conversaExistente.messages[mensagemIndex].id !== novaMensagem.id) {
-                        // Substituir mensagem local pela versão do banco (com ID real)
-                        const mensagensAtualizadas = [...conversaExistente.messages];
-                        mensagensAtualizadas[mensagemIndex] = {
-                          ...novaMensagem,
-                          sentBy: mensagensAtualizadas[mensagemIndex].sentBy || novaMensagem.sentBy
-                        };
-                        
-                        updated[existingIndex] = {
-                          ...conversaExistente,
-                          messages: mensagensAtualizadas.sort((a, b) => {
-                            const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
-                            const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
-                            return timeA - timeB;
-                          }),
-                          lastMessage: novaConvFormatted.lastMessage,
-                        };
-                        conversaAtualizada = updated[existingIndex];
+                      if (mensagemIndex >= 0) {
+                        const mensagemExistente = conversaExistente.messages[mensagemIndex];
+                        // Se o ID é diferente (mensagem local com ID temporário vs mensagem do banco com ID real)
+                        if (mensagemExistente.id !== novaMensagem.id) {
+                          // Substituir mensagem local pela versão do banco (com ID real)
+                          const mensagensAtualizadas = [...conversaExistente.messages];
+                          mensagensAtualizadas[mensagemIndex] = {
+                            ...novaMensagem,
+                            sentBy: mensagemExistente.sentBy || novaMensagem.sentBy,
+                            // Preservar outros campos da mensagem local se necessário
+                            replyTo: mensagemExistente.replyTo || novaMensagem.replyTo
+                          };
+                          
+                          updated[existingIndex] = {
+                            ...conversaExistente,
+                            messages: mensagensAtualizadas.sort((a, b) => {
+                              const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+                              const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+                              return timeA - timeB;
+                            }),
+                            lastMessage: novaConvFormatted.lastMessage,
+                          };
+                          conversaAtualizada = updated[existingIndex];
+                          console.log('✅ [REALTIME] Mensagem local atualizada com ID real do banco:', {
+                            idAntigo: mensagemExistente.id,
+                            idNovo: novaMensagem.id
+                          });
+                        } else {
+                          // Mensagem já existe e está correta, apenas atualizar lastMessage se necessário
+                          updated[existingIndex] = {
+                            ...conversaExistente,
+                            lastMessage: novaConvFormatted.lastMessage,
+                          };
+                          conversaAtualizada = updated[existingIndex];
+                        }
                       } else {
-                        // Mensagem já existe e está correta, apenas atualizar lastMessage se necessário
-                        updated[existingIndex] = {
-                          ...conversaExistente,
-                          lastMessage: novaConvFormatted.lastMessage,
-                        };
-                        conversaAtualizada = updated[existingIndex];
+                        // Mensagem marcada como existente mas não encontrada no índice - não fazer nada
+                        console.log('⚠️ [REALTIME] Mensagem marcada como existente mas não encontrada no índice');
+                        return prev;
                       }
                     } else {
                       // Mensagem nova - adicionar ao histórico
@@ -4482,11 +4511,8 @@ function Conversas() {
           if (!dbError) {
             mensagemSalva = true;
             console.log('✅ [ENVIO] Mensagem salva no banco com sucesso (antes do envio)');
-            // Recarregar conversas imediatamente para mostrar a mensagem
-            setTimeout(async () => {
-              console.log('🔄 [ENVIO] Recarregando conversas após salvar mensagem...');
-              await loadSupabaseConversations();
-            }, 300);
+            // ⚡ CORREÇÃO: Não recarregar conversas manualmente - o realtime vai atualizar automaticamente
+            // Isso evita duplicação de mensagens
           } else {
             console.error('❌ [ENVIO] Erro ao salvar mensagem no banco:', dbError);
           }
@@ -4514,39 +4540,8 @@ function Conversas() {
       });
 
       console.log('📥 [ENVIO] Resposta do enviarWhatsApp:', { data, error });
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: userRole } = await supabase
-            .from('user_roles')
-            .select('company_id')
-            .eq('user_id', user.id)
-            .single();
-          
-          if (userRole?.company_id) {
-            const { error: dbError } = await supabase.from('conversas').insert([{
-              numero: numeroNormalizado,
-              telefone_formatado: numeroNormalizado,
-              mensagem: messageContent,
-              origem: 'WhatsApp',
-              status: 'Enviada',
-              tipo_mensagem: type,
-              nome_contato: selectedConv.contactName,
-              company_id: userRole.company_id,
-              fromme: true,
-            }]);
-            
-            if (!dbError) {
-              mensagemSalva = true;
-              console.log('✅ [ENVIO] Mensagem salva no banco com sucesso');
-            } else {
-              console.error('❌ [ENVIO] Erro ao salvar mensagem no banco:', dbError);
-            }
-          }
-        }
-      } catch (saveError) {
-        console.error('❌ [ENVIO] Erro ao salvar mensagem no banco:', saveError);
-      }
+      // ⚡ CORREÇÃO: Mensagem já foi salva antes do envio, não salvar novamente aqui
+      // Isso evita duplicação de mensagens no banco
 
       if (error) {
         console.error('❌ [ENVIO] Erro ao enviar mensagem via WhatsApp:', error);
@@ -5316,6 +5311,31 @@ function Conversas() {
                 toast.warning("Compromisso criado, mas não foi possível enviar a confirmação imediata.");
               } else {
                 console.log('✅ [CONFIRMAÇÃO] Mensagem de confirmação enviada com sucesso!');
+                
+                // Salvar mensagem de confirmação na tabela conversas para ficar visível no CRM
+                try {
+                  const { error: dbError } = await supabase.from('conversas').insert([{
+                    numero: telefoneNormalizado,
+                    telefone_formatado: telefoneNormalizado,
+                    mensagem: mensagemConfirmacao,
+                    origem: 'WhatsApp',
+                    status: 'Enviada',
+                    tipo_mensagem: 'text',
+                    nome_contato: leadVinculado.name || leadVinculado.nome,
+                    company_id: companyId,
+                    lead_id: leadVinculado.id,
+                    fromme: true,
+                  }]);
+                  
+                  if (dbError) {
+                    console.error('❌ [CONFIRMAÇÃO] Erro ao salvar mensagem no banco:', dbError);
+                  } else {
+                    console.log('✅ [CONFIRMAÇÃO] Mensagem salva no banco de dados com sucesso!');
+                  }
+                } catch (saveError) {
+                  console.error('❌ [CONFIRMAÇÃO] Erro ao salvar mensagem no banco:', saveError);
+                }
+                
                 toast.success("Compromisso criado e confirmação enviada ao cliente!");
               }
             } else {
@@ -5349,12 +5369,22 @@ function Conversas() {
             .eq('id', user.id)
             .maybeSingle();
 
-          // Validar e processar horas de antecedência
-          const horasAntecedencia = parseInt(horasAntecedenciaReuniao) || 24;
-          if (horasAntecedencia < 0) {
-            toast.error("As horas de antecedência não podem ser negativas");
+          // Validar e processar horas de antecedência (converter horas e minutos para decimal)
+          const horas = parseInt(horasAntecedenciaReuniaoHoras || "0", 10);
+          const minutos = parseInt(horasAntecedenciaReuniaoMinutos || "0", 10);
+          
+          if (horas === 0 && minutos === 0) {
+            toast.error("Por favor, informe o tempo de antecedência para o lembrete");
             return;
           }
+          
+          if (horas < 0 || minutos < 0 || minutos >= 60) {
+            toast.error("Valores inválidos para horas ou minutos");
+            return;
+          }
+          
+          // Converter horas e minutos para formato decimal (horas + minutos/60)
+          const horasAntecedencia = horas + (minutos / 60);
 
           // Calcular data de envio do lembrete
           const dataEnvio = new Date(dataHoraInicio);
@@ -8499,25 +8529,46 @@ function Conversas() {
                                   </div>
                                   
                                   {enviarLembreteReuniao && (
-                                    <div>
+                                    <div className="space-y-2">
                                       <Label className="text-xs">Enviar com antecedência de</Label>
-                                      <Select
-                                        value={horasAntecedenciaReuniao}
-                                        onValueChange={setHorasAntecedenciaReuniao}
-                                      >
-                                        <SelectTrigger className="h-9">
-                                          <SelectValue placeholder="Selecionar" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="1">1 hora antes</SelectItem>
-                                          <SelectItem value="2">2 horas antes</SelectItem>
-                                          <SelectItem value="4">4 horas antes</SelectItem>
-                                          <SelectItem value="8">8 horas antes</SelectItem>
-                                          <SelectItem value="12">12 horas antes</SelectItem>
-                                          <SelectItem value="24">24 horas antes</SelectItem>
-                                          <SelectItem value="48">48 horas antes</SelectItem>
-                                        </SelectContent>
-                                      </Select>
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex-1">
+                                          <Label className="text-xs text-muted-foreground mb-1 block">Horas</Label>
+                                          <Select
+                                            value={horasAntecedenciaReuniaoHoras}
+                                            onValueChange={setHorasAntecedenciaReuniaoHoras}
+                                          >
+                                            <SelectTrigger className="h-9">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {Array.from({ length: 25 }, (_, i) => (
+                                                <SelectItem key={i} value={i.toString()}>
+                                                  {i} {i === 1 ? 'hora' : 'horas'}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        <div className="flex-1">
+                                          <Label className="text-xs text-muted-foreground mb-1 block">Minutos</Label>
+                                          <Select
+                                            value={horasAntecedenciaReuniaoMinutos}
+                                            onValueChange={setHorasAntecedenciaReuniaoMinutos}
+                                          >
+                                            <SelectTrigger className="h-9">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {[0, 5, 10, 15, 20, 30, 45].map((min) => (
+                                                <SelectItem key={min} value={min.toString()}>
+                                                  {min} {min === 1 ? 'minuto' : 'minutos'}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      </div>
                                     </div>
                                   )}
                                 </div>

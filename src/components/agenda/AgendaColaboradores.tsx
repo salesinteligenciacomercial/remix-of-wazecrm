@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, User, Trash2, Clock, DollarSign, Copy, ExternalLink, Link2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { HorarioComercialConfig, criarHorarioPadrao, converterHorarioAntigo, HorarioComercial } from "./HorarioComercialConfig";
 
 interface Agenda {
   id: string;
@@ -34,8 +35,7 @@ export function AgendaColaboradores() {
     tipo: "colaborador",
     capacidade_simultanea: 1,
     tempo_medio_servico: 30,
-    horario_inicio: "08:00",
-    horario_fim: "18:00",
+    horarioComercial: criarHorarioPadrao(),
     dias_semana: ["seg", "ter", "qua", "qui", "sex"],
   });
 
@@ -104,8 +104,7 @@ export function AgendaColaboradores() {
           tempo_medio_servico: formData.tempo_medio_servico,
           disponibilidade: {
             dias: formData.dias_semana,
-            horario_inicio: formData.horario_inicio,
-            horario_fim: formData.horario_fim,
+            periodos: formData.horarioComercial,
           },
           owner_id: user.id,
           company_id: userRole.company_id,
@@ -130,8 +129,7 @@ export function AgendaColaboradores() {
         tipo: "colaborador",
         capacidade_simultanea: 1,
         tempo_medio_servico: 30,
-        horario_inicio: "08:00",
-        horario_fim: "18:00",
+        horarioComercial: criarHorarioPadrao(),
         dias_semana: ["seg", "ter", "qua", "qui", "sex"],
       });
     } catch (error: any) {
@@ -224,7 +222,7 @@ export function AgendaColaboradores() {
               Nova Agenda
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Criar Nova Agenda</DialogTitle>
             </DialogHeader>
@@ -288,18 +286,13 @@ export function AgendaColaboradores() {
 
               <div className="space-y-2">
                 <Label>Horário de Funcionamento</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    type="time"
-                    value={formData.horario_inicio}
-                    onChange={(e) => setFormData({ ...formData, horario_inicio: e.target.value })}
-                  />
-                  <Input
-                    type="time"
-                    value={formData.horario_fim}
-                    onChange={(e) => setFormData({ ...formData, horario_fim: e.target.value })}
-                  />
-                </div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Configure os períodos de atendimento para este colaborador
+                </p>
+                <HorarioComercialConfig 
+                  horario={formData.horarioComercial}
+                  onChange={(horario) => setFormData({ ...formData, horarioComercial: horario })}
+                />
               </div>
 
               <Button onClick={criarAgenda} className="w-full">
@@ -403,11 +396,48 @@ export function AgendaColaboradores() {
                 <span>Tempo médio: {agenda.tempo_medio_servico} min</span>
               </div>
               {agenda.disponibilidade && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Clock className="h-4 w-4" />
-                  <span>
-                    {agenda.disponibilidade.horario_inicio} - {agenda.disponibilidade.horario_fim}
-                  </span>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Clock className="h-4 w-4" />
+                    <span>Horários:</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground pl-6 space-y-0.5">
+                    {(() => {
+                      const disponibilidade = agenda.disponibilidade;
+                      if (disponibilidade?.periodos) {
+                        // Novo formato com períodos
+                        const periodos = disponibilidade.periodos;
+                        const periodosAtivos = [];
+                        if (periodos.manha?.ativo) {
+                          periodosAtivos.push(
+                            <div key="manha">🌅 Manhã: {periodos.manha.inicio} - {periodos.manha.fim}</div>
+                          );
+                        }
+                        if (periodos.intervalo_almoco?.ativo) {
+                          periodosAtivos.push(
+                            <div key="almoco" className="text-muted-foreground/70">
+                              ☕ Almoço: {periodos.intervalo_almoco.inicio} - {periodos.intervalo_almoco.fim}
+                            </div>
+                          );
+                        }
+                        if (periodos.tarde?.ativo) {
+                          periodosAtivos.push(
+                            <div key="tarde">🕐 Tarde: {periodos.tarde.inicio} - {periodos.tarde.fim}</div>
+                          );
+                        }
+                        if (periodos.noite?.ativo) {
+                          periodosAtivos.push(
+                            <div key="noite">🌙 Noite: {periodos.noite.inicio} - {periodos.noite.fim}</div>
+                          );
+                        }
+                        return periodosAtivos.length > 0 ? periodosAtivos : <span>Não configurado</span>;
+                      } else if (disponibilidade?.horario_inicio && disponibilidade?.horario_fim) {
+                        // Formato antigo
+                        return <span>{disponibilidade.horario_inicio} - {disponibilidade.horario_fim}</span>;
+                      }
+                      return <span>Não configurado</span>;
+                    })()}
+                  </div>
                 </div>
               )}
             </CardContent>

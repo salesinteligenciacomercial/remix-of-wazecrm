@@ -65,6 +65,7 @@ serve(async (req) => {
           tipo_servico,
           lead_id,
           company_id,
+          usuario_responsavel_id,
           lead:leads (
             name,
             phone,
@@ -86,6 +87,7 @@ serve(async (req) => {
           tipo_servico,
           lead_id,
           company_id,
+          usuario_responsavel_id,
           lead:leads (
             name,
             phone,
@@ -283,6 +285,31 @@ serve(async (req) => {
                   todosEnviados = false;
                 } else {
                   console.log(`✅ WhatsApp enviado com sucesso via edge function`);
+                  
+                  // Salvar mensagem de lembrete na tabela conversas para ficar visível no CRM
+                  try {
+                    const leadNome = lembrete.compromisso.lead?.name || 'Contato';
+                    const { error: dbError } = await supabase.from('conversas').insert([{
+                      numero: telefoneFormatado,
+                      telefone_formatado: telefoneFormatado,
+                      mensagem: mensagemLembrete,
+                      origem: 'WhatsApp',
+                      status: 'Enviada',
+                      tipo_mensagem: 'text',
+                      nome_contato: leadNome,
+                      company_id: lembrete.compromisso.company_id || companyId,
+                      lead_id: lembrete.compromisso.lead_id,
+                      fromme: true,
+                    }]);
+                    
+                    if (dbError) {
+                      console.error(`❌ Erro ao salvar mensagem de lembrete no banco:`, dbError);
+                    } else {
+                      console.log(`✅ Mensagem de lembrete salva no banco de dados`);
+                    }
+                  } catch (saveError) {
+                    console.error(`❌ Erro ao salvar mensagem de lembrete no banco:`, saveError);
+                  }
                 }
               } catch (error) {
                 console.error(`❌ Erro ao chamar edge function enviar-whatsapp:`, error);
@@ -306,6 +333,39 @@ serve(async (req) => {
                 .from('compromissos')
                 .update({ lembrete_enviado: true })
                 .eq('id', lembrete.compromisso_id);
+
+              // Criar notificação para o responsável do compromisso
+              if (lembrete.compromisso.usuario_responsavel_id) {
+                try {
+                  const dataCompromisso = new Date(lembrete.compromisso.data_hora_inicio);
+                  const mensagemNotificacao = `Lembrete enviado: Compromisso de ${lembrete.compromisso.tipo_servico} agendado para ${dataCompromisso.toLocaleString('pt-BR')}`;
+                  
+                  // Criar entrada na tabela de notificações (se existir) ou usar outro método
+                  // Por enquanto, vamos criar uma entrada em uma tabela de notificações simples
+                  // ou usar um campo no compromisso que o frontend pode verificar
+                  
+                  // Tentar inserir em uma tabela de notificações (se existir)
+                  const { error: notifError } = await supabase.from('notificacoes').insert([{
+                    usuario_id: lembrete.compromisso.usuario_responsavel_id,
+                    tipo: 'lembrete_enviado',
+                    titulo: 'Lembrete Enviado',
+                    mensagem: mensagemNotificacao,
+                    compromisso_id: lembrete.compromisso_id,
+                    company_id: lembrete.compromisso.company_id || companyId,
+                    lida: false,
+                    created_at: new Date().toISOString()
+                  }]).select();
+                  
+                  if (notifError) {
+                    // Se a tabela não existir, apenas logar (não é crítico)
+                    console.log(`ℹ️ Tabela de notificações não encontrada ou erro ao criar notificação:`, notifError.message);
+                  } else {
+                    console.log(`✅ Notificação criada para o responsável do compromisso`);
+                  }
+                } catch (notifError) {
+                  console.log(`ℹ️ Erro ao criar notificação (não crítico):`, notifError);
+                }
+              }
 
               totalProcessados++;
               console.log(`✅ Lembrete ${lembrete.id} processado com sucesso`);

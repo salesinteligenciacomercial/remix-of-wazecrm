@@ -29,10 +29,12 @@ import { ptBR } from "date-fns/locale";
 import { useLeadsSync } from "@/hooks/useLeadsSync";
 import { useGlobalSync } from "@/hooks/useGlobalSync";
 import { useWorkflowAutomation } from "@/hooks/useWorkflowAutomation";
+import { useNotifications } from "@/hooks/useNotifications";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { EditarCompromissoDialog } from "@/components/agenda/EditarCompromissoDialog";
 import { AgendaColaboradores } from "@/components/agenda/AgendaColaboradores";
+import { HorarioComercialConfig, criarHorarioPadrao, converterHorarioAntigo, HorarioComercial } from "@/components/agenda/HorarioComercialConfig";
 
 interface Lembrete {
   id: string;
@@ -107,6 +109,9 @@ interface Lead {
 }
 
 export default function Agenda() {
+  // Hook de notificações para escutar lembretes enviados e enviar push notifications
+  useNotifications();
+  
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [compromissos, setCompromissos] = useState<Compromisso[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -115,6 +120,9 @@ export default function Agenda() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [novoCompromissoOpen, setNovoCompromissoOpen] = useState(false);
   const [configuracoesOpen, setConfiguracoesOpen] = useState(false);
+  const [horarioComercial, setHorarioComercial] = useState<HorarioComercial>(criarHorarioPadrao());
+  const [tempoMedioPadrao, setTempoMedioPadrao] = useState<number>(30);
+  const [canalLembretePadrao, setCanalLembretePadrao] = useState<string>("whatsapp");
   const [lembretes, setLembretes] = useState<Lembrete[]>([]);
   const [activeTab, setActiveTab] = useState<string>("agenda");
   const [filtroStatusLembrete, setFiltroStatusLembrete] = useState<string>("all");
@@ -332,6 +340,8 @@ export default function Agenda() {
     custo_estimado: "",
     enviar_lembrete: true,
     horas_antecedencia: "",
+    horas_antecedencia_horas: "1",
+    horas_antecedencia_minutos: "0",
     destinatario_lembrete: "lead",
     enviar_confirmacao: false, // Nova opção: enviar confirmação imediata
     notificar_responsavel: true, // Nova opção: notificar responsável via push
@@ -376,11 +386,15 @@ export default function Agenda() {
       if (error) throw error;
       
       if (startDate && endDate) {
-        // Lazy loading: adicionar ao cache existente
+        // Lazy loading: adicionar ao cache existente, mas remover duplicatas e ordenar
         setCompromissos(prev => {
           const existingIds = new Set(prev.map(c => c.id));
           const newCompromissos = (data || []).filter(c => !existingIds.has(c.id));
-          return [...prev, ...newCompromissos];
+          const allCompromissos = [...prev, ...newCompromissos];
+          // Ordenar por data
+          return allCompromissos.sort((a, b) => 
+            new Date(a.data_hora_inicio).getTime() - new Date(b.data_hora_inicio).getTime()
+          );
         });
       } else {
         // Carregamento inicial: substituir todos
@@ -393,15 +407,24 @@ export default function Agenda() {
   }, []);
 
   // Função para carregar compromissos do mês atual ou específico
-  const carregarCompromissosDoMes = useCallback(async (month?: Date) => {
+  const carregarCompromissosDoMes = useCallback(async (month?: Date, forceReload: boolean = false) => {
     const targetMonth = month || selectedDate;
     const monthKey = format(targetMonth, 'yyyy-MM');
     
+    // Se forçar recarregamento, remover do cache primeiro
+    if (forceReload) {
+      setLoadedMonths(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(monthKey);
+        return newSet;
+      });
+    }
+    
     // Verificar se o mês já foi carregado usando função de setter
     setLoadedMonths(prev => {
-      if (prev.has(monthKey)) {
+      if (prev.has(monthKey) && !forceReload) {
         console.log(`📅 [Performance] Mês ${monthKey} já carregado, pulando...`);
-        return prev; // Não atualizar se já existe
+        return prev; // Não atualizar se já existe e não forçar recarregamento
       }
       
       console.log(`📅 [Performance] Carregando compromissos do mês ${monthKey}...`);
@@ -417,7 +440,7 @@ export default function Agenda() {
       
       return prev; // Retornar estado atual enquanto carrega
     });
-  }, [selectedDate]);
+  }, [selectedDate, carregarCompromissos]);
 
   // Função para normalizar telefone brasileiro
   const normalizePhoneBR = (phone: string): string | null => {
@@ -589,8 +612,8 @@ export default function Agenda() {
           table: 'compromissos'
         },
         () => {
-          // Ao receber atualização em tempo real, recarregar apenas mês atual
-          carregarCompromissosDoMes();
+          // Ao receber atualização em tempo real, recarregar apenas mês atual (forçar recarregamento)
+          carregarCompromissosDoMes(undefined, true);
         }
       )
       .subscribe();
@@ -641,6 +664,41 @@ export default function Agenda() {
       setLeads(data || []);
     } catch (error) {
       console.error('Erro ao carregar leads:', error);
+    }
+  };
+
+  // Carregar configurações da agenda quando abrir o diálogo
+  const carregarConfiguracoes = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: agenda } = await supabase
+        .from('agendas')
+        .select('*')
+        .eq('owner_id', user.id)
+        .eq('tipo', 'principal')
+        .single();
+
+      if (agenda) {
+        // Carregar horário comercial
+        if (agenda.disponibilidade?.periodos) {
+          setHorarioComercial(agenda.disponibilidade.periodos);
+        } else if (agenda.disponibilidade) {
+          // Converter formato antigo para novo
+          setHorarioComercial(converterHorarioAntigo(agenda.disponibilidade));
+        }
+
+        // Carregar outras configurações
+        if (agenda.tempo_medio_servico) {
+          setTempoMedioPadrao(agenda.tempo_medio_servico);
+        }
+        if (agenda.disponibilidade?.canal_lembrete_padrao) {
+          setCanalLembretePadrao(agenda.disponibilidade.canal_lembrete_padrao);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações:', error);
     }
   };
 
@@ -1063,6 +1121,145 @@ export default function Agenda() {
 
       console.log('✅ [DEBUG] Compromisso criado com sucesso:', compromisso?.id);
 
+      // ⚡ CRIAR LEMBRETE AUTOMATICAMENTE PARA TODO COMPROMISSO (OBRIGATÓRIO)
+      if (compromisso) {
+        console.log('📝 [LEMBRETE] Criando lembrete automaticamente para compromisso:', compromisso.id);
+        
+        try {
+          // Validar que company_id existe
+          if (!userRole.company_id) {
+            console.error('❌ [LEMBRETE] company_id não disponível');
+            toast.warning("Compromisso criado, mas lembrete não foi criado. Usuário não está associado a uma empresa.");
+          } else {
+            // Processar tempo de antecedência (usar valores do formulário ou padrão)
+            let horas = parseInt(formData.horas_antecedencia_horas || "0", 10);
+            let minutos = parseInt(formData.horas_antecedencia_minutos || "0", 10);
+            
+            // Se não informado ou inválido, usar valores padrão (1 hora antes)
+            if (horas === 0 && minutos === 0) {
+              console.log('ℹ️ [LEMBRETE] Usando valores padrão: 1 hora de antecedência');
+              horas = 1;
+              minutos = 0;
+            }
+            
+            // Validar valores
+            if (horas < 0) horas = 1;
+            if (minutos < 0 || minutos >= 60) minutos = 0;
+
+              // Converter horas e minutos para formato decimal (garantir precisão)
+            const tempoAntecedenciaDecimal = parseFloat((horas + (minutos / 60)).toFixed(4));
+            
+            // Calcular data de envio do lembrete baseada na data do compromisso
+            const dataEnvio = new Date(dataHoraInicio);
+            dataEnvio.setTime(dataEnvio.getTime() - (tempoAntecedenciaDecimal * 60 * 60 * 1000));
+
+            // Buscar lead se houver para personalizar mensagem
+            const leadSelecionado = leads.find(l => l.id === formData.lead_id);
+            const nomeLead = leadSelecionado?.name || leadSelecionado?.nome || 'Cliente';
+
+            // Mensagem personalizada do lembrete
+            const mensagemLembrete = `Olá ${nomeLead}! Lembramos do seu compromisso agendado para ${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`;
+
+            // Preparar dados do lembrete - usar NUMERIC para horas_antecedencia
+            const lembreteData = {
+              compromisso_id: compromisso.id,
+              canal: 'whatsapp',
+              horas_antecedencia: tempoAntecedenciaDecimal, // NUMERIC aceita decimais
+              mensagem: mensagemLembrete,
+              status_envio: 'pendente',
+              data_envio: dataEnvio.toISOString(),
+              destinatario: formData.destinatario_lembrete || 'lead',
+              telefone_responsavel: null,
+              company_id: userRole.company_id,
+            };
+
+            console.log('📝 [LEMBRETE] Dados do lembrete:', { 
+              compromisso_id: lembreteData.compromisso_id,
+              data_envio: lembreteData.data_envio,
+              horas_antecedencia: lembreteData.horas_antecedencia,
+              horas_antecedencia_tipo: typeof lembreteData.horas_antecedencia,
+              destinatario: lembreteData.destinatario,
+              data_compromisso: dataHoraInicio.toISOString()
+            });
+
+            // Criar lembrete de forma síncrona e garantida
+            let lembreteCriado = null;
+            let lembreteError = null;
+            
+            // Tentar inserir com valor decimal
+            const resultado = await supabase
+              .from('lembretes')
+              .insert(lembreteData)
+              .select()
+              .single();
+            
+            lembreteCriado = resultado.data;
+            lembreteError = resultado.error;
+
+            // Se erro for de tipo INTEGER, tentar novamente arredondando para inteiro (fallback temporário)
+            if (lembreteError && (lembreteError.message?.includes('integer') || lembreteError.message?.includes('INTEGER'))) {
+              console.warn('⚠️ [LEMBRETE] Erro de tipo INTEGER detectado, tentando com valor arredondado (fallback)...');
+              
+              // Criar novo objeto com valor arredondado para inteiro (horas completas)
+              const lembreteDataFallback = {
+                ...lembreteData,
+                horas_antecedencia: Math.round(tempoAntecedenciaDecimal) || 1, // Arredondar para horas completas
+              };
+              
+              // Recalcular data de envio com valor arredondado
+              const dataEnvioFallback = new Date(dataHoraInicio);
+              dataEnvioFallback.setTime(dataEnvioFallback.getTime() - (lembreteDataFallback.horas_antecedencia * 60 * 60 * 1000));
+              lembreteDataFallback.data_envio = dataEnvioFallback.toISOString();
+              
+              console.log('🔄 [LEMBRETE] Tentando novamente com valor arredondado:', lembreteDataFallback.horas_antecedencia);
+              
+              const retryResult = await supabase
+                .from('lembretes')
+                .insert(lembreteDataFallback)
+                .select()
+                .single();
+              
+              lembreteCriado = retryResult.data;
+              lembreteError = retryResult.error;
+              
+              if (!lembreteError) {
+                console.log('✅ [LEMBRETE] Lembrete criado com valor arredondado (fallback temporário)');
+                toast.warning(
+                  `Lembrete criado com ${lembreteDataFallback.horas_antecedencia} hora(s) de antecedência (arredondado). Para usar minutos, execute a migração SQL.`,
+                  { duration: 8000 }
+                );
+              }
+            }
+
+            if (lembreteError) {
+              console.error('❌ [LEMBRETE] Erro ao criar lembrete:', lembreteError);
+              console.error('❌ [LEMBRETE] Dados que causaram erro:', {
+                compromisso_id: lembreteData.compromisso_id,
+                horas_antecedencia: lembreteData.horas_antecedencia,
+                tipo_horas_antecedencia: typeof lembreteData.horas_antecedencia,
+                data_envio: lembreteData.data_envio,
+                erro_completo: JSON.stringify(lembreteError, null, 2)
+              });
+              
+              toast.error(
+                `Erro ao criar lembrete. Execute o SQL em APLICAR_MIGRACAO_LEMBRETES.sql no Supabase Dashboard para corrigir.`,
+                { duration: 10000 }
+              );
+            } else {
+              console.log('✅ [LEMBRETE] Lembrete criado automaticamente e sincronizado:', lembreteCriado?.id);
+              console.log('📅 [LEMBRETE] Data de envio calculada:', dataEnvio.toISOString());
+              console.log('📅 [LEMBRETE] Data do compromisso:', dataHoraInicio.toISOString());
+              console.log('⏰ [LEMBRETE] Antecedência:', tempoAntecedencia, 'horas');
+              console.log('🔗 [LEMBRETE] Vinculado ao compromisso:', compromisso.id);
+            }
+          }
+        } catch (error: any) {
+          console.error('❌ [LEMBRETE] Erro ao criar lembrete:', error);
+          toast.error(`Erro ao criar lembrete: ${error?.message || 'Erro desconhecido'}`);
+          // Não lançar erro para não impedir o compromisso
+        }
+      }
+
       // Enviar mensagem de confirmação imediata se solicitado
       if (formData.enviar_confirmacao && compromisso && formData.lead_id) {
         try {
@@ -1100,6 +1297,31 @@ export default function Agenda() {
                 toast.warning("Compromisso criado, mas não foi possível enviar a confirmação imediata.");
               } else {
                 console.log('✅ [CONFIRMAÇÃO] Mensagem de confirmação enviada com sucesso!');
+                
+                // Salvar mensagem de confirmação na tabela conversas para ficar visível no CRM
+                try {
+                  const { error: dbError } = await supabase.from('conversas').insert([{
+                    numero: telefone,
+                    telefone_formatado: telefone,
+                    mensagem: mensagemConfirmacao,
+                    origem: 'WhatsApp',
+                    status: 'Enviada',
+                    tipo_mensagem: 'text',
+                    nome_contato: leadSelecionado.name || leadSelecionado.nome,
+                    company_id: userRole.company_id,
+                    lead_id: formData.lead_id,
+                    fromme: true,
+                  }]);
+                  
+                  if (dbError) {
+                    console.error('❌ [CONFIRMAÇÃO] Erro ao salvar mensagem no banco:', dbError);
+                  } else {
+                    console.log('✅ [CONFIRMAÇÃO] Mensagem salva no banco de dados com sucesso!');
+                  }
+                } catch (saveError) {
+                  console.error('❌ [CONFIRMAÇÃO] Erro ao salvar mensagem no banco:', saveError);
+                }
+                
                 toast.success("Compromisso criado e confirmação enviada ao cliente!");
               }
             }
@@ -1151,70 +1373,7 @@ export default function Agenda() {
         }
       }
 
-      // Criar lembrete se solicitado
-      if (formData.enviar_lembrete && compromisso) {
-        console.log('📝 [DEBUG] Criando lembrete para compromisso:', compromisso.id);
-
-        // Validar que company_id existe (já obtido anteriormente)
-        if (!userRole.company_id) {
-          console.error('❌ [DEBUG] company_id não disponível para criar lembrete');
-          toast.error("Erro: Não foi possível criar o lembrete. Usuário não está associado a uma empresa.");
-          throw new Error("company_id é obrigatório para criar lembretes.");
-        }
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('full_name, phone')
-          .eq('id', user.id)
-          .single();
-
-        // Validar e processar tempo de antecedência (aceita horas e minutos via decimais)
-        if (!formData.horas_antecedencia || formData.horas_antecedencia.trim() === '') {
-          toast.error("Por favor, informe o tempo de antecedência para o lembrete");
-          return;
-        }
-        
-        const tempoAntecedencia = parseFloat(formData.horas_antecedencia);
-        if (isNaN(tempoAntecedencia) || tempoAntecedencia < 0) {
-          toast.error("O tempo de antecedência deve ser um número positivo");
-          return;
-        }
-
-        // Calcular data de envio do lembrete (tempo em horas, pode ser decimal para minutos)
-        const dataEnvio = new Date(dataHoraInicio);
-        dataEnvio.setTime(dataEnvio.getTime() - (tempoAntecedencia * 60 * 60 * 1000)); // Converter horas para milissegundos
-
-        const leadSelecionado = leads.find(l => l.id === formData.lead_id);
-
-        // Obter telefone do responsável - profiles não tem campo phone
-        const telefoneResponsavel = null;
-
-        const lembreteData = {
-          compromisso_id: compromisso.id,
-          canal: 'whatsapp',
-          horas_antecedencia: tempoAntecedencia,
-          mensagem: `Olá! Lembramos do seu compromisso agendado para ${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`,
-          status_envio: 'pendente',
-          data_envio: dataEnvio.toISOString(),
-          destinatario: formData.destinatario_lembrete,
-          telefone_responsavel: telefoneResponsavel, // CORRIGIDO: usar phone do profile, não nome/email
-          company_id: userRole.company_id, // Usar company_id validado
-        };
-
-        console.log('📝 [DEBUG] Dados do lembrete:', { ...lembreteData, mensagem: '[oculta]' });
-
-        const { error: lembreteError } = await supabase
-          .from('lembretes')
-          .insert(lembreteData);
-
-        if (lembreteError) {
-          console.error('❌ [DEBUG] Erro ao criar lembrete:', lembreteError);
-          toast.error("Compromisso criado, mas houve erro ao criar o lembrete. Por favor, tente novamente.");
-          throw lembreteError;
-        }
-
-        console.log('✅ [DEBUG] Lembrete criado com sucesso para compromisso:', compromisso.id);
-      }
+      // Lembrete já foi criado acima, logo após o compromisso
 
       // Mensagem de sucesso mais informativa
       if (formData.enviar_confirmacao && formData.notificar_responsavel) {
@@ -1246,7 +1405,37 @@ export default function Agenda() {
 
       setNovoCompromissoOpen(false);
       limparFormulario();
-      // Realtime já atualizará a lista; evitar recarga completa
+      
+      // Adicionar compromisso recém-criado diretamente à lista para aparecer instantaneamente
+      if (compromisso) {
+        // Buscar dados completos do compromisso com relacionamentos
+        const { data: compromissoCompleto } = await supabase
+          .from('compromissos')
+          .select(`
+            *,
+            lead:leads(name, phone),
+            agenda:agendas(nome, tipo)
+          `)
+          .eq('id', compromisso.id)
+          .single();
+        
+        if (compromissoCompleto) {
+          setCompromissos(prev => {
+            // Verificar se já existe para evitar duplicatas
+            const exists = prev.some(c => c.id === compromissoCompleto.id);
+            if (exists) return prev;
+            // Adicionar ao início da lista
+            return [compromissoCompleto, ...prev].sort((a, b) => 
+              new Date(a.data_hora_inicio).getTime() - new Date(b.data_hora_inicio).getTime()
+            );
+          });
+        }
+      }
+      
+      // Também recarregar o mês para garantir sincronização completa (forçar recarregamento)
+      await carregarCompromissosDoMes(undefined, true);
+      
+      // Realtime também atualizará, mas garantimos atualização imediata
     } catch (error: any) {
       // Log completo do erro de forma legível no catch
       console.error('❌ [ERRO DETALHADO] Erro ao criar compromisso:');
@@ -1503,6 +1692,8 @@ export default function Agenda() {
       custo_estimado: "",
       enviar_lembrete: true,
       horas_antecedencia: "",
+      horas_antecedencia_horas: "1",
+      horas_antecedencia_minutos: "0",
       destinatario_lembrete: "lead",
       enviar_confirmacao: false,
       notificar_responsavel: true,
@@ -1683,31 +1874,50 @@ export default function Agenda() {
           <p className="text-muted-foreground">Gerencie seus compromissos e agendamentos</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={configuracoesOpen} onOpenChange={setConfiguracoesOpen}>
+          <Dialog open={configuracoesOpen} onOpenChange={(open) => {
+            setConfiguracoesOpen(open);
+            if (open) {
+              carregarConfiguracoes();
+            }
+          }}>
             <DialogTrigger asChild>
               <Button variant="outline" size="icon">
                 <Settings className="h-4 w-4" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Configurações de Agenda</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="space-y-2">
                   <Label>Tempo médio padrão (minutos)</Label>
-                  <Input type="number" defaultValue="30" />
+                  <Input 
+                    type="number" 
+                    min="5"
+                    step="5"
+                    value={tempoMedioPadrao}
+                    onChange={(e) => setTempoMedioPadrao(parseInt(e.target.value) || 30)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Duração média padrão para cada compromisso
+                  </p>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Horário comercial</Label>
-                  <div className="flex gap-2">
-                    <Input type="time" defaultValue="08:00" />
-                    <Input type="time" defaultValue="18:00" />
-                  </div>
+                  <Label>Horário Comercial</Label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Configure os períodos de atendimento. Cada empresa/profissional pode ter horários personalizados.
+                  </p>
+                  <HorarioComercialConfig 
+                    horario={horarioComercial}
+                    onChange={setHorarioComercial}
+                  />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Canal de lembrete padrão</Label>
-                  <Select defaultValue="whatsapp">
+                  <Select value={canalLembretePadrao} onValueChange={setCanalLembretePadrao}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -1718,7 +1928,76 @@ export default function Agenda() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button className="w-full">Salvar Configurações</Button>
+
+                <Button 
+                  className="w-full"
+                  onClick={async () => {
+                    try {
+                      const { data: { user } } = await supabase.auth.getUser();
+                      if (!user) throw new Error("Usuário não autenticado");
+
+                      const { data: userRole } = await supabase
+                        .from('user_roles')
+                        .select('company_id')
+                        .eq('user_id', user.id)
+                        .single();
+
+                      if (!userRole?.company_id) throw new Error("Empresa não encontrada");
+
+                      // Buscar ou criar agenda padrão
+                      const { data: agendaExistente } = await supabase
+                        .from('agendas')
+                        .select('id')
+                        .eq('owner_id', user.id)
+                        .eq('tipo', 'principal')
+                        .single();
+
+                      const disponibilidade = {
+                        periodos: horarioComercial,
+                        tempo_medio_servico: tempoMedioPadrao,
+                        canal_lembrete_padrao: canalLembretePadrao,
+                      };
+
+                      if (agendaExistente) {
+                        // Atualizar agenda existente
+                        const { error } = await supabase
+                          .from('agendas')
+                          .update({
+                            disponibilidade,
+                            tempo_medio_servico: tempoMedioPadrao,
+                            updated_at: new Date().toISOString(),
+                          })
+                          .eq('id', agendaExistente.id);
+
+                        if (error) throw error;
+                      } else {
+                        // Criar nova agenda
+                        const { error } = await supabase
+                          .from('agendas')
+                          .insert({
+                            nome: 'Agenda Principal',
+                            tipo: 'principal',
+                            owner_id: user.id,
+                            company_id: userRole.company_id,
+                            disponibilidade,
+                            tempo_medio_servico: tempoMedioPadrao,
+                            capacidade_simultanea: 1,
+                            status: 'ativo',
+                          });
+
+                        if (error) throw error;
+                      }
+
+                      toast.success("Configurações salvas com sucesso!");
+                      setConfiguracoesOpen(false);
+                    } catch (error: any) {
+                      console.error('Erro ao salvar configurações:', error);
+                      toast.error(`Erro ao salvar: ${error.message || 'Erro desconhecido'}`);
+                    }
+                  }}
+                >
+                  Salvar Configurações
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -1970,22 +2249,50 @@ export default function Agenda() {
                     </div>
                     <div className="space-y-2">
                       <Label>Tempo de antecedência</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="Ex: 0.25 (15 min), 1 (1 hora), 24 (24 horas)"
-                        value={formData.horas_antecedencia}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          // Permitir apenas números positivos (decimais para minutos)
-                          if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
-                            setFormData({...formData, horas_antecedencia: value});
-                          }
-                        }}
-                      />
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <Label className="text-xs text-muted-foreground mb-1 block">Horas</Label>
+                          <Select
+                            value={formData.horas_antecedencia_horas}
+                            onValueChange={(value) => {
+                              setFormData({...formData, horas_antecedencia_horas: value});
+                            }}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 25 }, (_, i) => (
+                                <SelectItem key={i} value={i.toString()}>
+                                  {i} {i === 1 ? 'hora' : 'horas'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex-1">
+                          <Label className="text-xs text-muted-foreground mb-1 block">Minutos</Label>
+                          <Select
+                            value={formData.horas_antecedencia_minutos}
+                            onValueChange={(value) => {
+                              setFormData({...formData, horas_antecedencia_minutos: value});
+                            }}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[0, 5, 10, 15, 20, 30, 45].map((min) => (
+                                <SelectItem key={min} value={min.toString()}>
+                                  {min} {min === 1 ? 'minuto' : 'minutos'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                       <p className="text-xs text-muted-foreground">
-                        Digite o tempo antes do compromisso para enviar o lembrete. Use valores decimais para minutos: 0.083 (5 min), 0.167 (10 min), 0.25 (15 min), 0.5 (30 min), 1 (1 hora), 24 (24 horas)
+                        Selecione quantas horas e minutos antes do compromisso o lembrete deve ser enviado.
                       </p>
                     </div>
                   </>
