@@ -25,6 +25,7 @@ import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { WhatsAppQRCode } from "@/components/configuracoes/WhatsAppQRCode";
 import { SubcontasManager } from "@/components/configuracoes/SubcontasManager";
+import { cleanAllConversationsHistory } from "@/utils/cleanConversationsHistory";
 import { UsuariosSubcontaDialog } from "@/components/configuracoes/UsuariosSubcontaDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { FilaDialog } from "@/components/configuracoes/FilaDialog";
@@ -47,6 +48,7 @@ interface Colaborador {
 export default function Configuracoes() {
   const { toast } = useToast();
   const { canAccess, isAdmin, loading: permissionsLoading } = usePermissions();
+  const [isCleaningHistory, setIsCleaningHistory] = useState(false);
   const [openaiKey, setOpenaiKey] = useState("");
   const [audimaToken, setAudimaToken] = useState("");
   const [elevenlabsKey, setElevenlabsKey] = useState("");
@@ -465,6 +467,38 @@ export default function Configuracoes() {
     } catch (e: any) {
       console.error('Erro ao remover colaborador:', e);
       toast({ variant: 'destructive', title: 'Erro ao remover colaborador', description: e.message });
+    }
+  };
+
+  const handleCleanAllHistory = async () => {
+    if (!confirm("⚠️ ATENÇÃO: Isso vai deletar TODAS as conversas (backup automático será criado). Deseja continuar?")) {
+      return;
+    }
+
+    setIsCleaningHistory(true);
+    try {
+      const result = await cleanAllConversationsHistory();
+      
+      if (result.success) {
+        toast({
+          title: "✅ Histórico Limpo com Sucesso",
+          description: `Deletadas: ${result.supabaseResult?.deletedCount || 0} conversas. Cache limpo: ${result.localStorageResult?.cleanedKeys.length || 0} itens.`,
+        });
+        
+        // Recarregar página após 2s
+        setTimeout(() => window.location.reload(), 2000);
+      } else {
+        throw new Error(result.error || "Erro desconhecido");
+      }
+    } catch (error: any) {
+      console.error("Erro ao limpar histórico:", error);
+      toast({
+        title: "❌ Erro ao Limpar Histórico",
+        description: error.message || "Tente novamente",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCleaningHistory(false);
     }
   };
 
@@ -1114,7 +1148,7 @@ export default function Configuracoes() {
       )}
 
       <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className={`grid w-full ${isMasterAccount ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        <TabsList className={`grid w-full ${isMasterAccount ? 'grid-cols-6' : 'grid-cols-5'}`}>
           {isMasterAccount && (
             <TabsTrigger value="subcontas">
               <Building2 className="mr-2 h-4 w-4" />
@@ -1125,6 +1159,7 @@ export default function Configuracoes() {
           <TabsTrigger value="channels">Canais & Integrações</TabsTrigger>
           <TabsTrigger value="ia">IA & Automação</TabsTrigger>
           <TabsTrigger value="webhooks_api">Webhooks & APIs</TabsTrigger>
+          <TabsTrigger value="avancado" className="text-destructive">Avançado</TabsTrigger>
         </TabsList>
 
         {isMasterAccount && (
@@ -1306,6 +1341,41 @@ export default function Configuracoes() {
                 <div className="flex items-center justify-center py-12">
                   <p className="text-muted-foreground">Nenhum webhook configurado</p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="avancado" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-destructive">🚨 Zona de Perigo</CardTitle>
+              <CardDescription>
+                Operações irreversíveis que afetam todo o histórico do sistema
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
+                <div>
+                  <h4 className="font-semibold text-destructive mb-1">Limpar Todo Histórico de Conversas</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Deleta TODAS as conversas (backup automático criado). Sistema começará do zero.
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={handleCleanAllHistory}
+                  disabled={isCleaningHistory}
+                >
+                  {isCleaningHistory ? (
+                    <>Limpando...</>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Limpar Tudo
+                    </>
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>
