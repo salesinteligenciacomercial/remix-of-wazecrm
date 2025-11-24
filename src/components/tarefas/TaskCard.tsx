@@ -63,7 +63,6 @@ interface Task {
   lead_name?: string;
   checklist?: { id?: string; text: string; done: boolean }[];
   comments?: { id?: string; text: string; author_id?: string; created_at?: string }[];
-  responsaveis?: string[];
   tempo_gasto?: number;
   time_tracking_iniciado?: string;
   time_tracking_pausado?: boolean;
@@ -705,11 +704,6 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
             <div className="flex items-center gap-1.5 text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">
               <User className="h-3 w-3" />
               <span className="font-medium">{task.assignee_name}</span>
-            </div>
-          )}
-          {Array.isArray((task as any).responsaveis) && (task as any).responsaveis.length > 0 && (
-            <div className="text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">
-              +{(task as any).responsaveis.length - (task.assignee_id ? 1 : 0)} resp.
             </div>
           )}
           {Array.isArray(localComments) && localComments.length > 0 && (

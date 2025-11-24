@@ -42,7 +42,6 @@ interface Task {
   checklist?: { id?: string; text: string; done: boolean }[];
   tags?: string[];
   comments?: { id?: string; text: string; author_id?: string; created_at?: string }[];
-  responsaveis?: string[];
   attachments?: { name: string; url: string }[];
 }
 
@@ -87,7 +86,6 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
   const { allTags: tagsExistentes } = useTagsManager();
   const [comments, setComments] = useState<{ id?: string; text: string; author_id?: string; created_at?: string }[]>(task.comments || []);
   const [newComment, setNewComment] = useState("");
-  const [responsaveis, setResponsaveis] = useState<string[]>(task.responsaveis || []);
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>(task.attachments || []);
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
@@ -104,7 +102,6 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
       setChecklist(task.checklist || []);
       setTags(task.tags || []);
       setComments(task.comments || []);
-      setResponsaveis(task.responsaveis || []);
       setAttachments(task.attachments || []);
       setEditingItemId(null);
       setEditingText("");
@@ -176,7 +173,6 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
               checklist,
               tags,
               comments,
-              responsaveis,
               attachments,
             },
           },
@@ -391,24 +387,6 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
             )}
           </div>
 
-          <div>
-            <Label>Responsáveis (múltiplos)</Label>
-            <div className="grid grid-cols-2 gap-2 max-h-32 overflow-auto p-2 border rounded-md">
-              {users.map((u) => (
-                <label key={u.id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={responsaveis.includes(u.id)}
-                    onChange={(e) => {
-                      setResponsaveis((prev) => (e.target as HTMLInputElement).checked ? [...prev, u.id] : prev.filter(id => id !== u.id));
-                    }}
-                  />
-                  {u.full_name}
-                </label>
-              ))}
-            </div>
-          </div>
-
               <div>
                 <Label>Descrição</Label>
                 <Textarea
@@ -550,24 +528,6 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div>
-                <Label>Responsáveis Adicionais</Label>
-                <div className="grid grid-cols-2 gap-2 max-h-24 overflow-auto p-2 border rounded-md">
-                  {users.map((u) => (
-                    <label key={u.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={responsaveis.includes(u.id)}
-                        onChange={(e) => {
-                          setResponsaveis((prev) => (e.target as HTMLInputElement).checked ? [...prev, u.id] : prev.filter(id => id !== u.id));
-                        }}
-                      />
-                      {u.full_name}
-                    </label>
-                  ))}
-                </div>
               </div>
 
               <div>

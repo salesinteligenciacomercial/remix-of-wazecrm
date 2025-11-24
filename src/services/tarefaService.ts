@@ -13,7 +13,6 @@ export interface TarefaPayload {
   checklist?: { id?: string; text: string; done: boolean }[];
   comments?: { id?: string; text: string; author_id?: string; created_at?: string }[];
   attachments?: { name: string; url: string }[];
-  responsaveis?: string[]; // múltiplos
 }
 
 export async function criarTarefa(data: TarefaPayload) {
