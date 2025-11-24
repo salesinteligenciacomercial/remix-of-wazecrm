@@ -32,8 +32,7 @@ const createTaskSchema = z.object({
   tags: z.array(z.string()).optional(),
   checklist: z.array(z.object({ id: z.string().optional(), text: z.string(), done: z.boolean() })).optional(),
   comments: z.array(z.object({ id: z.string().optional(), text: z.string(), author_id: z.string().uuid().nullable().optional(), created_at: z.string().optional() })).optional(),
-  attachments: z.array(z.object({ name: z.string(), url: z.string().url() })).optional(),
-  responsaveis: z.array(z.string().uuid()).optional()
+  attachments: z.array(z.object({ name: z.string(), url: z.string().url() })).optional()
 });
 
 const moveTaskSchema = z.object({
@@ -56,8 +55,7 @@ const editTaskSchema = z.object({
   tags: z.array(z.string()).optional(),
   checklist: z.array(z.object({ id: z.string().optional(), text: z.string(), done: z.boolean() })).optional(),
   comments: z.array(z.object({ id: z.string().optional(), text: z.string(), author_id: z.string().uuid().nullable().optional(), created_at: z.string().optional() })).optional(),
-  attachments: z.array(z.object({ name: z.string(), url: z.string().url() })).optional(),
-  responsaveis: z.array(z.string().uuid()).optional()
+  attachments: z.array(z.object({ name: z.string(), url: z.string().url() })).optional()
 });
 
 const editBoardSchema = z.object({
@@ -483,7 +481,6 @@ serve(async (req) => {
         if (validatedData.checklist !== undefined) updateData.checklist = validatedData.checklist;
         if (validatedData.comments !== undefined) updateData.comments = validatedData.comments;
         if (validatedData.attachments !== undefined) updateData.attachments = validatedData.attachments;
-        if (validatedData.responsaveis !== undefined) updateData.responsaveis = validatedData.responsaveis;
 
         const { data: task, error } = await supabase
           .from("tasks")
