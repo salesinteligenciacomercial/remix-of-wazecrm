@@ -6942,19 +6942,32 @@ function Conversas() {
       const result = await cleanAllConversationsHistory(userCompanyId || undefined);
       
       if (result.success) {
-        // Limpar estados locais
+        // ⚡ CORREÇÃO: Limpar APENAS o histórico de conversas, sem afetar outras funcionalidades
+        // Não chamar loadSupabaseConversations() para evitar reinicialização desnecessária
         setConversations([]);
         setSelectedConv(null);
+        setLeadVinculado(null);
+        setLeadsVinculados({});
         
-        // Recarregar conversas (vai carregar vazio, mas garante sincronização)
-        await loadSupabaseConversations();
+        // Limpar cache do hook de conversas também
+        if (syncConversations) {
+          await syncConversations(true); // Force refresh do cache
+        }
         
         toast.success(
-          `✅ Histórico limpo com sucesso! ${result.supabaseResult?.deletedCount || 0} mensagens removidas do banco e ${result.localStorageResult?.cleanedKeys.length || 0} caches limpos.`,
+          `✅ Histórico limpo! ${result.supabaseResult?.deletedCount || 0} mensagens removidas. Todas as outras configurações foram preservadas.`,
           { duration: 5000 }
         );
         
         setCleanHistoryDialogOpen(false);
+        
+        console.log('✅ [CLEAN] Histórico limpo sem afetar funcionalidades:', {
+          leadsPreservados: result.diagnosis?.leads.count,
+          tarefasPreservadas: result.diagnosis?.tasks.count,
+          funisPreservados: result.diagnosis?.funis.count,
+          etapasPreservadas: result.diagnosis?.etapas.count,
+          whatsappPreservado: result.diagnosis?.whatsappConnections.count
+        });
       } else {
         toast.error(`❌ Erro ao limpar histórico: ${result.error || 'Erro desconhecido'}`);
       }
