@@ -29,8 +29,7 @@ const CONVERSATION_CACHE_KEYS = [
 /**
  * Limpa todas as mensagens da tabela conversas no Supabase
  * Mantém a estrutura da tabela intacta
- * ⚠️ DELETA TODAS AS CONVERSAS do owner_id do usuário (todas as empresas)
- * ⚡ Usa deleção em lotes para evitar timeout
+ * ⚡ Usa deleção em lotes pequenos para evitar timeout e respeitar RLS
  */
 export const cleanSupabaseConversations = async (): Promise<{ success: boolean; deletedCount?: number; error?: string }> => {
   try {
@@ -40,76 +39,91 @@ export const cleanSupabaseConversations = async (): Promise<{ success: boolean; 
       return { success: false, error: "Usuário não autenticado" };
     }
     
-    // Buscar TODAS as company_ids que o usuário tem acesso
-    const { data: userCompanies, error: companiesError } = await supabase
+    // Buscar company_id ATUAL do usuário (apenas a empresa ativa)
+    const { data: userRole, error: roleError } = await supabase
       .from('user_roles')
       .select('company_id')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .limit(1)
+      .single();
     
-    if (companiesError || !userCompanies || userCompanies.length === 0) {
-      return { success: false, error: "Erro ao buscar empresas do usuário" };
+    if (roleError || !userRole?.company_id) {
+      return { success: false, error: "Erro ao buscar empresa do usuário" };
     }
     
-    const companyIds = userCompanies.map(ur => ur.company_id);
+    const currentCompanyId = userRole.company_id;
     
     // Contar quantas mensagens serão deletadas
     const { count } = await supabase
       .from('conversas')
       .select('*', { count: 'exact', head: true })
-      .in('company_id', companyIds);
+      .eq('company_id', currentCompanyId);
     
     const totalMessages = count || 0;
     
-    console.log(`🧹 Deletando ${totalMessages} conversas de ${companyIds.length} empresa(s) em lotes...`);
+    console.log(`🧹 Deletando ${totalMessages} conversas da empresa atual em lotes pequenos...`);
     
-    // Deletar em lotes para evitar timeout
-    const BATCH_SIZE = 1000;
+    // Deletar em lotes PEQUENOS para evitar timeout e problemas de RLS
+    const BATCH_SIZE = 500; // Reduzido para evitar timeout
     let deletedTotal = 0;
     let hasMore = true;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 100; // Segurança contra loops infinitos
     
-    while (hasMore) {
-      // Buscar IDs de um lote
-      const { data: batch, error: fetchError } = await supabase
-        .from('conversas')
-        .select('id')
-        .in('company_id', companyIds)
-        .limit(BATCH_SIZE);
+    while (hasMore && attempts < MAX_ATTEMPTS) {
+      attempts++;
       
-      if (fetchError) {
-        console.error('❌ Erro ao buscar lote:', fetchError);
-        return { success: false, error: fetchError.message };
+      try {
+        // Buscar IDs de um lote
+        const { data: batch, error: fetchError } = await supabase
+          .from('conversas')
+          .select('id')
+          .eq('company_id', currentCompanyId)
+          .limit(BATCH_SIZE);
+        
+        if (fetchError) {
+          console.error('❌ Erro ao buscar lote:', fetchError);
+          return { success: false, error: fetchError.message };
+        }
+        
+        if (!batch || batch.length === 0) {
+          hasMore = false;
+          break;
+        }
+        
+        // Deletar lote
+        const batchIds = batch.map(c => c.id);
+        const { error: deleteError } = await supabase
+          .from('conversas')
+          .delete()
+          .in('id', batchIds);
+        
+        if (deleteError) {
+          console.error('❌ Erro ao deletar lote:', deleteError);
+          // Tentar continuar com próximo lote mesmo com erro
+          await new Promise(resolve => setTimeout(resolve, 500));
+          continue;
+        }
+        
+        deletedTotal += batch.length;
+        console.log(`📊 Progresso: ${deletedTotal}/${totalMessages} conversas deletadas (tentativa ${attempts})`);
+        
+        // Se deletou menos que o tamanho do lote, não há mais registros
+        if (batch.length < BATCH_SIZE) {
+          hasMore = false;
+        }
+        
+        // Pausa maior entre lotes para evitar sobrecarga
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+      } catch (batchError: any) {
+        console.error('❌ Erro no lote:', batchError);
+        // Continuar mesmo com erro
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
-      
-      if (!batch || batch.length === 0) {
-        hasMore = false;
-        break;
-      }
-      
-      // Deletar lote
-      const batchIds = batch.map(c => c.id);
-      const { error: deleteError } = await supabase
-        .from('conversas')
-        .delete()
-        .in('id', batchIds);
-      
-      if (deleteError) {
-        console.error('❌ Erro ao deletar lote:', deleteError);
-        return { success: false, error: deleteError.message };
-      }
-      
-      deletedTotal += batch.length;
-      console.log(`📊 Progresso: ${deletedTotal}/${totalMessages} conversas deletadas`);
-      
-      // Se deletou menos que o tamanho do lote, não há mais registros
-      if (batch.length < BATCH_SIZE) {
-        hasMore = false;
-      }
-      
-      // Pequena pausa entre lotes para não sobrecarregar o banco
-      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    console.log(`✅ ${deletedTotal} mensagens deletadas da tabela conversas (todas as empresas)`);
+    console.log(`✅ ${deletedTotal} mensagens deletadas da tabela conversas`);
     return { success: true, deletedCount: deletedTotal };
     
   } catch (error: any) {
