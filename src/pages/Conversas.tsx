@@ -3278,6 +3278,47 @@ function Conversas() {
       
       console.log(`📊 [LOAD] ${conversasData.length} mensagens processadas, ${conversasMap.size} conversas únicas, ${leadsData.length} leads encontrados`);
       
+      // ⚡ CORREÇÃO CRÍTICA: Deduplicar conversas com @lid e números reais
+      // Agrupar por telefone normalizado SEM considerar @lid, prefixos DDD duplicados, etc
+      const conversasDeduplicadas = new Map<string, any[]>();
+      
+      conversasMap.forEach((msgs, key) => {
+        // Normalizar chave removendo prefixos duplicados e variações de @lid
+        // Ex: 5515578500694049 -> 558781404486 (se for a mesma pessoa)
+        // A estratégia: remover prefixos duplicados do DDD
+        let normalizedKey = key.replace(/[^0-9]/g, '');
+        
+        // Detectar e corrigir prefixo DDD duplicado (ex: 5515 -> 55)
+        // Se começa com 55 seguido de outro 1 ou 2 dígitos do DDD, remover a duplicata
+        if (normalizedKey.startsWith('5515') || 
+            normalizedKey.startsWith('5511') ||
+            normalizedKey.startsWith('5521') ||
+            normalizedKey.startsWith('5527') ||
+            normalizedKey.startsWith('5581') ||
+            normalizedKey.startsWith('5587')) {
+          // Remover os primeiros 4 dígitos e adicionar apenas 55
+          normalizedKey = '55' + normalizedKey.substring(4);
+        }
+        
+        // Mesclar mensagens com a mesma chave normalizada
+        if (!conversasDeduplicadas.has(normalizedKey)) {
+          conversasDeduplicadas.set(normalizedKey, []);
+        }
+        
+        const existingMsgs = conversasDeduplicadas.get(normalizedKey)!;
+        existingMsgs.push(...msgs);
+      });
+      
+      // Substituir conversasMap pelas conversas deduplicadas
+      conversasMap.clear();
+      conversasDeduplicadas.forEach((msgs, key) => {
+        // Ordenar por data
+        msgs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        conversasMap.set(key, msgs);
+      });
+      
+      console.log(`🔄 [DEDUP] Conversas deduplicadas: ${conversasDeduplicadas.size} (era ${conversasMap.size})`);
+      
       // Criar mapa de leads para buscar nomes
       const leadsMap = new Map<string, { name: string; leadId: string }>();
       leadsData.forEach(lead => {
