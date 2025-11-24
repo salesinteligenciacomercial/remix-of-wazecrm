@@ -2021,7 +2021,7 @@ function Conversas() {
               
               // ⚡ CORREÇÃO CRÍTICA: Log detalhado antes da validação para mensagens recebidas
               // ⚡ CORREÇÃO: Verificar fromme de forma mais robusta
-              const isReceivedMessage = novaConversa.fromme === false || novaConversa.fromme === 'false' || novaConversa.fromme === null || novaConversa.fromme === undefined;
+              const isReceivedMessage = novaConversa.fromme === false || String(novaConversa.fromme) === 'false' || novaConversa.fromme === null || novaConversa.fromme === undefined;
               if (isReceivedMessage) {
                 console.log('📥 [REALTIME] Mensagem RECEBIDA detectada:', {
                   id: novaConversa.id,
@@ -2173,7 +2173,7 @@ function Conversas() {
                     // ✅ CORREÇÃO CRÍTICA: Usar APENAS fromme para determinar lado da mensagem
                     // fromme === true ou 'true' → sender: "user" (lado direito)
                     // fromme === false, 'false', null, undefined → sender: "contact" (lado esquerdo)
-                    sender: (novaConversa.fromme === true || novaConversa.fromme === 'true') ? 'user' : 'contact',
+                    sender: (novaConversa.fromme === true || String(novaConversa.fromme) === 'true') ? 'user' : 'contact',
                     timestamp: new Date(novaConversa.created_at), delivered: true,
                     type: (novaConversa.tipo_mensagem === 'audio' ? 'audio' : novaConversa.tipo_mensagem === 'image' ? 'image' : novaConversa.tipo_mensagem === 'video' ? 'video' : novaConversa.tipo_mensagem === 'pdf' || (novaConversa.tipo_mensagem === 'document' && novaConversa.mensagem?.includes('[Documento:')) ? 'pdf' : novaConversa.tipo_mensagem === 'document' ? 'document' : 'text') as Message["type"],
                     mediaUrl: novaConversa.midia_url, fileName: novaConversa.arquivo_nome
