@@ -1046,6 +1046,95 @@ export type Database = {
         }
         Relationships: []
       }
+      quick_message_categories: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          id?: string
+          name: string
+          owner_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_message_categories_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quick_messages: {
+        Row: {
+          category_id: string | null
+          company_id: string
+          content: string
+          created_at: string | null
+          id: string
+          media_url: string | null
+          message_type: string | null
+          owner_id: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          company_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          media_url?: string | null
+          message_type?: string | null
+          owner_id: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          company_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          media_url?: string | null
+          message_type?: string | null
+          owner_id?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_messages_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "quick_message_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quick_messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_permissions: {
         Row: {
           company_id: string | null
