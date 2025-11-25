@@ -4557,13 +4557,30 @@ function Conversas() {
         fromme: true, // Marcar como mensagem enviada pelo usuário
       }).select('id, midia_url').single();
 
+      // ⚡ Log detalhado para debugging
+      console.log('📊 [MEDIA-SEND] Tentativa de salvar no banco:', {
+        numeroNormalizado,
+        type,
+        fileName: file.name,
+        hasDataUrl: !!dataUrl,
+        dataUrlLength: dataUrl?.length || 0,
+        companyId: userRole?.company_id,
+        contactName: selectedConv.contactName
+      });
+
       if (dbError) {
-        console.error('❌ Erro ao salvar mensagem no banco:', dbError);
+        console.error('❌ [MEDIA-SEND] Erro detalhado ao salvar mensagem:', {
+          error: dbError,
+          message: dbError.message,
+          details: dbError.details,
+          hint: dbError.hint,
+          code: dbError.code
+        });
         toast.error('Erro ao salvar mensagem no histórico');
         // Não bloquear o envio mesmo com erro no banco
         console.warn('⚠️ Mídia enviada mas com problema ao salvar no banco');
       } else {
-        console.log('✅ Mensagem salva no banco:', inserted);
+        console.log('✅ [MEDIA-SEND] Mensagem salva no banco:', inserted);
       }
 
       // ⚡ CORREÇÃO: Usar data URL para exibição imediata e permanente

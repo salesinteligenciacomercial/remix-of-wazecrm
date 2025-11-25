@@ -584,11 +584,30 @@ export function ConversaPopup({
         fromme: true, // Marcar como mensagem enviada pelo usuário
       }).select('id').single();
 
+      // ⚡ Log detalhado para debugging
+      console.log('📊 [CONVERSA-POPUP] Tentativa de salvar mídia no banco:', {
+        telefoneNormalizado,
+        type,
+        fileName: file.name,
+        hasDataUrl: !!dataUrl,
+        dataUrlLength: dataUrl?.length || 0,
+        companyId,
+        leadName
+      });
+
       if (dbError) {
-        console.error("❌ Erro ao salvar mensagem no banco:", dbError);
+        console.error("❌ [CONVERSA-POPUP] Erro detalhado ao salvar mensagem:", {
+          error: dbError,
+          message: dbError.message,
+          details: dbError.details,
+          hint: dbError.hint,
+          code: dbError.code
+        });
         toast.error("Erro ao salvar mensagem no histórico");
         // Não bloquear o envio mesmo com erro no banco
         console.warn("⚠️ Mídia enviada mas com problema ao salvar no banco");
+      } else {
+        console.log('✅ [CONVERSA-POPUP] Mensagem salva no banco:', inserted);
       }
 
       const newMessage: Message = {
