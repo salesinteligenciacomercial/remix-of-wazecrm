@@ -98,7 +98,7 @@ export function Sidebar({
             <span className="text-white font-bold text-xl">W</span>
           </div> : <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
-              <span className="text-white font-bold text-xl">M</span>
+              <span className="text-white font-bold text-xl">W</span>
             </div>
             <div>
               <span className="text-sidebar-foreground font-bold text-lg block leading-tight">​MOTION</span>
