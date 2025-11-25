@@ -36,7 +36,8 @@ export function TarefasProvider({ children }: { children: React.ReactNode }) {
       .select(`
         *,
         assignee:assignee_id(id, full_name),
-        lead:lead_id(id, name)
+        lead:lead_id(id, name),
+        owner:owner_id(id, full_name)
       `)
       .order('created_at', { ascending: false });
     
@@ -65,6 +66,7 @@ export function TarefasProvider({ children }: { children: React.ReactNode }) {
         ...task,
         assignee_name: task.assignee?.full_name,
         lead_name: task.lead?.name,
+        owner_name: task.owner?.full_name,
         responsaveis_names
       };
     }));

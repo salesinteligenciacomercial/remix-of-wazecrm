@@ -69,6 +69,8 @@ interface Task {
   time_tracking_iniciado?: string;
   time_tracking_pausado?: boolean;
   attachments?: { name: string; url: string; type?: string }[];
+  owner_id?: string;
+  owner_name?: string;
 }
 
 interface TaskCardProps {
@@ -99,6 +101,8 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState("");
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [ownerName, setOwnerName] = useState<string | null>(task.owner_name || null);
+  const [isOwnTask, setIsOwnTask] = useState(true);
 
   // ✅ MELHORADO: Usar hook useTaskTimer para gerenciar timer
   const {
@@ -127,6 +131,41 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
   useEffect(() => {
     setLocalComments(task.comments || []);
   }, [task.comments, task.id]);
+
+  // Buscar nome do criador e verificar se é tarefa própria
+  useEffect(() => {
+    const checkOwnership = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        setIsOwnTask(task.owner_id === user.id);
+        
+        // Se já tiver owner_name, usar ele
+        if (task.owner_name) {
+          setOwnerName(task.owner_name);
+          return;
+        }
+        
+        // Senão, buscar do banco
+        if (task.owner_id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', task.owner_id)
+            .maybeSingle();
+          
+          if (profile?.full_name) {
+            setOwnerName(profile.full_name);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao verificar criador da tarefa:", error);
+      }
+    };
+    
+    checkOwnership();
+  }, [task.owner_id, task.owner_name]);
 
   // Normalizar telefone brasileiro
   const normalizePhoneBR = (raw?: string): string | null => {
@@ -621,7 +660,7 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       {...listeners}
       className={`group relative mb-3 border-0 shadow-card hover:shadow-lg transition-all duration-300 overflow-hidden cursor-grab active:cursor-grabbing ${
         isOverdue ? 'ring-2 ring-red-500/50 border-red-200' : ''
-      }`}
+      } ${!isOwnTask ? 'opacity-60' : ''}`}
     >
       <div className="absolute inset-0 bg-gradient-card opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       
@@ -668,6 +707,13 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
                     {isOverdue && <span className="ml-1 text-red-500">🔴</span>}
                   </CardTitle>
                   
+                  {/* Mostrar nome do criador quando não for tarefa própria */}
+                  {!isOwnTask && ownerName && (
+                    <span className="text-[10px] text-muted-foreground/70 truncate">
+                      Criado por: {ownerName}
+                    </span>
+                  )}
+                  
                   {/* Data movida para abaixo do título */}
                   {task.due_date && (
                     <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-md self-start mt-1 ${
@@ -685,6 +731,13 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
                   {task.title}
                   {isOverdue && <span className="ml-2 text-red-500">🔴</span>}
                 </CardTitle>
+                
+                {/* Mostrar nome do criador quando não for tarefa própria */}
+                {!isOwnTask && ownerName && (
+                  <span className="text-[10px] text-muted-foreground/70">
+                    Criado por: {ownerName}
+                  </span>
+                )}
                 
                 {/* Data movida para abaixo do título */}
                 {task.due_date && (
