@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Paperclip } from "lucide-react";
 
 interface MediaUploadProps {
-  onFileSelected: (file: File) => void;
+  onFileSelected: (file: File, caption: string, type: string) => void;
 }
 
 export function MediaUpload({ onFileSelected }: MediaUploadProps) {
@@ -15,7 +15,19 @@ export function MediaUpload({ onFileSelected }: MediaUploadProps) {
 
     setUploading(true);
     try {
-      onFileSelected(file);
+      // ⚡ CORREÇÃO: Determinar tipo do arquivo baseado no mimeType
+      let fileType = 'document';
+      if (file.type.startsWith('image/')) {
+        fileType = 'image';
+      } else if (file.type.startsWith('video/')) {
+        fileType = 'video';
+      } else if (file.type.startsWith('audio/')) {
+        fileType = 'audio';
+      } else if (file.type === 'application/pdf') {
+        fileType = 'pdf';
+      }
+
+      onFileSelected(file, '', fileType);
     } finally {
       setUploading(false);
     }
