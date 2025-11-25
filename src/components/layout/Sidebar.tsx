@@ -59,7 +59,10 @@ export function Sidebar({
     toast
   } = useToast();
   const [isMobile, setIsMobile] = useState(false);
-  const { canAccess, loading: permissionsLoading } = usePermissions();
+  const {
+    canAccess,
+    loading: permissionsLoading
+  } = usePermissions();
 
   // Detectar se é mobile e colapsar automaticamente
   useEffect(() => {
@@ -92,7 +95,7 @@ export function Sidebar({
       {/* Logo */}
       <div className="flex h-16 items-center justify-center px-3 border-b border-sidebar-border/50">
         {effectiveCollapsed ? <div className="h-10 w-10 rounded-xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
-            <span className="text-white font-bold text-xl">​M</span>
+            <span className="text-white font-bold text-xl">W</span>
           </div> : <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
               <span className="text-white font-bold text-xl">M</span>
@@ -107,14 +110,12 @@ export function Sidebar({
       {/* Navigation */}
       <TooltipProvider delayDuration={0}>
         <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
-          {navigation
-            .filter(item => {
-              // Se estiver carregando permissões, mostrar todos (comportamento padrão)
-              if (permissionsLoading) return true;
-              // Verificar se pode acessar o menu
-              return canAccess(item.menuKey || '');
-            })
-            .map(item => <Tooltip key={item.name}>
+          {navigation.filter(item => {
+          // Se estiver carregando permissões, mostrar todos (comportamento padrão)
+          if (permissionsLoading) return true;
+          // Verificar se pode acessar o menu
+          return canAccess(item.menuKey || '');
+        }).map(item => <Tooltip key={item.name}>
               <TooltipTrigger asChild>
                 <NavLink to={item.href} className={({
               isActive
