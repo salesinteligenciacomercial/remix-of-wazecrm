@@ -237,7 +237,7 @@ serve(async (req) => {
         number: isGroup ? (target as any).groupId : (target as any).number,
         mediatype: mediaType,
         mimetype: mimeType,
-        caption: validatedData.caption || validatedData.mensagem || "",
+        caption: validatedData.caption || validatedData.mensagem || " ",
         fileName: validatedData.fileName || 'arquivo',
         media: validatedData.mediaBase64,
       };
