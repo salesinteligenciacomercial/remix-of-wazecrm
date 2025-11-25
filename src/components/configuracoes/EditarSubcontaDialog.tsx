@@ -85,7 +85,7 @@ export function EditarSubcontaDialog({ company, open, onOpenChange, onSuccess }:
         .from("companies")
         .update({
           name: formData.name,
-          cnpj: formData.cnpj,
+          cnpj: formData.cnpj.trim() === '' ? null : formData.cnpj,
           plan: formData.plan,
           max_users: formData.max_users,
           max_leads: formData.max_leads,
@@ -97,7 +97,16 @@ export function EditarSubcontaDialog({ company, open, onOpenChange, onSuccess }:
         })
         .eq("id", company.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [EDITAR-SUBCONTA] Erro:', error);
+        
+        // Verificar se é erro de CNPJ duplicado
+        if (error.message?.includes('companies_cnpj_key') || error.message?.includes('duplicate key')) {
+          throw new Error(`O CNPJ ${formData.cnpj} já está cadastrado em outra empresa. Por favor, use outro CNPJ ou deixe em branco.`);
+        }
+        
+        throw error;
+      }
 
       toast({
         title: "Subconta atualizada",
