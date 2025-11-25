@@ -7817,7 +7817,7 @@ function Conversas() {
                     </div>
                   )}
                   <div className="flex items-center gap-2">
-                    <MediaUpload onFileSelected={handleSendMedia as any} />
+                    <MediaUpload onFileSelected={handleSendMedia} />
                     <Input
                       placeholder="Escreva sua mensagem..."
                       value={messageInput}
