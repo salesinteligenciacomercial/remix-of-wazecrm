@@ -4619,12 +4619,12 @@ function Conversas() {
 
       const { data, error } = await enviarWhatsApp({
         numero: numeroNormalizado,
-        mensagem: caption || '',
+        mensagem: caption || ' ',
         tipo_mensagem: type,
         mediaBase64: base64,
         fileName: file.name,
         mimeType: file.type,
-        caption: caption || '',
+        caption: caption || ' ',
         ...quotedPayload,
       });
 
