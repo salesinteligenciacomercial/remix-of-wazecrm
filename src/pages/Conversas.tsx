@@ -92,7 +92,7 @@ interface QuickMessage {
   title: string;
   content: string;
   category: string;
-  type?: "text" | "image" | "video"; // Tipo de mensagem
+  type?: 'text' | 'image' | 'video' | 'audio' | 'document'; // Tipo de mensagem
   mediaUrl?: string; // URL base64 da mídia
   fileName?: string; // Nome do arquivo
   mimeType?: string; // Tipo MIME do arquivo
@@ -1031,7 +1031,7 @@ function Conversas() {
   const [newQuickContent, setNewQuickContent] = useState("");
   const [newQuickCategory, setNewQuickCategory] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newQuickMessageType, setNewQuickMessageType] = useState<"text" | "image" | "video">("text");
+  const [newQuickMessageType, setNewQuickMessageType] = useState<"text" | "image" | "video" | "audio" | "document">("text");
   const [newQuickMediaFile, setNewQuickMediaFile] = useState<File | null>(null);
   const [newQuickMediaPreview, setNewQuickMediaPreview] = useState<string | null>(null);
   // Estados para edição
@@ -1041,7 +1041,7 @@ function Conversas() {
   const [editMessageContent, setEditMessageContent] = useState("");
   const [editMessageCategory, setEditMessageCategory] = useState("");
   const [editCategoryName, setEditCategoryName] = useState("");
-  const [editMessageType, setEditMessageType] = useState<"text" | "image" | "video">("text");
+  const [editMessageType, setEditMessageType] = useState<"text" | "image" | "video" | "audio" | "document">("text");
   const [editMessageMediaFile, setEditMessageMediaFile] = useState<File | null>(null);
   const [editMessageMediaPreview, setEditMessageMediaPreview] = useState<string | null>(null);
   const [reminderTitle, setReminderTitle] = useState("");
@@ -3914,20 +3914,55 @@ function Conversas() {
     }
   };
 
-  const loadQuickMessages = () => {
-    const saved = localStorage.getItem(QUICK_MESSAGES_KEY);
-    if (saved) {
-      setQuickMessages(JSON.parse(saved));
-    } else {
-      setQuickMessages([]);
+  const loadQuickMessages = async () => {
+    try {
+      const { data: companyData } = await supabase.rpc('get_my_company_id');
+      if (!companyData) return;
+
+      const { data, error } = await supabase
+        .from('quick_messages')
+        .select('*')
+        .eq('company_id', companyData)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formatted = data?.map(msg => ({
+        id: msg.id,
+        title: msg.title,
+        content: msg.content,
+        category: msg.category_id || '',
+        type: msg.message_type as 'text' | 'image' | 'video' | 'audio' | 'document',
+        mediaUrl: msg.media_url || undefined,
+      })) || [];
+
+      setQuickMessages(formatted);
+    } catch (error) {
+      console.error('Erro ao carregar mensagens rápidas:', error);
     }
   };
 
-  const loadQuickCategories = () => {
-    const saved = localStorage.getItem(QUICK_CATEGORIES_KEY);
-    if (saved) {
-      setQuickCategories(JSON.parse(saved));
-    } else {
+  const loadQuickCategories = async () => {
+    try {
+      const { data: companyData } = await supabase.rpc('get_my_company_id');
+      if (!companyData) return;
+
+      const { data, error } = await supabase
+        .from('quick_message_categories')
+        .select('*')
+        .eq('company_id', companyData)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const formatted = data?.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+      })) || [];
+
+      setQuickCategories(formatted);
+    } catch (error) {
+      console.error('Erro ao carregar categorias:', error);
       const initialCategories = [
         { id: "1", name: "Atendimento" },
         { id: "2", name: "Suporte" },
@@ -4194,12 +4229,12 @@ function Conversas() {
   };
 
   const saveQuickMessages = (updated: QuickMessage[]) => {
-    localStorage.setItem(QUICK_MESSAGES_KEY, JSON.stringify(updated));
+    // Apenas atualiza estado local - o save real acontece no addQuickMessage
     setQuickMessages(updated);
   };
 
   const saveQuickCategories = (updated: QuickMessageCategory[]) => {
-    localStorage.setItem(QUICK_CATEGORIES_KEY, JSON.stringify(updated));
+    // Apenas atualiza estado local - o save real acontece no addQuickCategory
     setQuickCategories(updated);
   };
 
@@ -5288,71 +5323,124 @@ function Conversas() {
       return;
     }
 
-    let mediaUrl = "";
-    let fileName = "";
-    let mimeType = "";
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
 
-    // Converter mídia para base64 se houver
-    if (newQuickMediaFile) {
-      try {
-        mediaUrl = await convertFileToBase64(newQuickMediaFile);
-        fileName = newQuickMediaFile.name;
-        mimeType = newQuickMediaFile.type;
-      } catch (error) {
-        toast.error("Erro ao processar arquivo de mídia");
-        return;
+      const { data: companyData } = await supabase.rpc('get_my_company_id');
+      if (!companyData) throw new Error('Company não encontrada');
+
+      let mediaUrl = "";
+
+      // Converter mídia para base64 se houver
+      if (newQuickMediaFile) {
+        try {
+          mediaUrl = await convertFileToBase64(newQuickMediaFile);
+        } catch (error) {
+          toast.error("Erro ao processar arquivo de mídia");
+          return;
+        }
       }
-    }
 
-    const newMsg: QuickMessage = {
-      id: Date.now().toString(),
-      title: newQuickTitle,
-      content: newQuickContent || (newQuickMessageType === "image" ? "[Imagem]" : newQuickMessageType === "video" ? "[Vídeo]" : ""),
-      category: newQuickCategory,
-      type: newQuickMessageType,
-      mediaUrl: mediaUrl || undefined,
-      fileName: fileName || undefined,
-      mimeType: mimeType || undefined,
-    };
-    
-    saveQuickMessages([...quickMessages, newMsg]);
-    setNewQuickTitle("");
-    setNewQuickContent("");
-    setNewQuickCategory("");
-    setNewQuickMessageType("text");
-    setNewQuickMediaFile(null);
-    setNewQuickMediaPreview(null);
-    toast.success("Mensagem rápida criada!");
+      const { error } = await supabase
+        .from('quick_messages')
+        .insert({
+          company_id: companyData,
+          owner_id: user.id,
+          title: newQuickTitle,
+          content: newQuickContent || (newQuickMessageType === "image" ? "[Imagem]" : newQuickMessageType === "video" ? "[Vídeo]" : ""),
+          category_id: newQuickCategory,
+          message_type: newQuickMessageType,
+          media_url: mediaUrl || null,
+        });
+
+      if (error) throw error;
+
+      await loadQuickMessages();
+      setNewQuickTitle("");
+      setNewQuickContent("");
+      setNewQuickCategory("");
+      setNewQuickMessageType("text");
+      setNewQuickMediaFile(null);
+      setNewQuickMediaPreview(null);
+      toast.success("Mensagem rápida criada!");
+    } catch (error) {
+      console.error('Erro ao criar mensagem rápida:', error);
+      toast.error("Erro ao criar mensagem rápida");
+    }
   };
 
-  const addQuickCategory = () => {
+  const addQuickCategory = async () => {
     if (!newCategoryName.trim()) {
       toast.error("Digite o nome da categoria");
       return;
     }
-    const newCat: QuickMessageCategory = {
-      id: Date.now().toString(),
-      name: newCategoryName,
-    };
-    saveQuickCategories([...quickCategories, newCat]);
-    setNewCategoryName("");
-    toast.success("Categoria criada!");
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const { data: companyData } = await supabase.rpc('get_my_company_id');
+      if (!companyData) throw new Error('Company não encontrada');
+
+      const { error } = await supabase
+        .from('quick_message_categories')
+        .insert({
+          company_id: companyData,
+          owner_id: user.id,
+          name: newCategoryName,
+        });
+
+      if (error) throw error;
+
+      await loadQuickCategories();
+      setNewCategoryName("");
+      toast.success("Categoria criada!");
+    } catch (error) {
+      console.error('Erro ao criar categoria:', error);
+      toast.error("Erro ao criar categoria");
+    }
   };
 
-  const deleteQuickMessage = (id: string) => {
-    saveQuickMessages(quickMessages.filter(m => m.id !== id));
-    toast.success("Mensagem rápida removida!");
+  const deleteQuickMessage = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('quick_messages')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await loadQuickMessages();
+      toast.success("Mensagem rápida removida!");
+    } catch (error) {
+      console.error('Erro ao deletar mensagem:', error);
+      toast.error("Erro ao remover mensagem");
+    }
   };
 
-  const deleteQuickCategory = (id: string) => {
+  const deleteQuickCategory = async (id: string) => {
     // Verificar se há mensagens usando esta categoria
     const messagesInCategory = quickMessages.filter(m => m.category === id);
     if (messagesInCategory.length > 0) {
       toast.error("Não é possível excluir categoria com mensagens vinculadas");
       return;
     }
-    saveQuickCategories(quickCategories.filter(c => c.id !== id));
-    toast.success("Categoria removida!");
+    
+    try {
+      const { error } = await supabase
+        .from('quick_message_categories')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await loadQuickCategories();
+      toast.success("Categoria removida!");
+    } catch (error) {
+      console.error('Erro ao deletar categoria:', error);
+      toast.error("Erro ao remover categoria");
+    }
   };
 
   const sendQuickMessage = async (message: QuickMessage) => {
@@ -5416,54 +5504,48 @@ function Conversas() {
       return;
     }
 
-    let mediaUrl = editMessageMediaPreview || "";
-    let fileName = "";
-    let mimeType = "";
+    try {
+      let mediaUrl = editMessageMediaPreview || "";
 
-    // Se houver novo arquivo, converter para base64
-    if (editMessageMediaFile) {
-      try {
-        mediaUrl = await convertFileToBase64(editMessageMediaFile);
-        fileName = editMessageMediaFile.name;
-        mimeType = editMessageMediaFile.type;
-      } catch (error) {
-        toast.error("Erro ao processar arquivo de mídia");
-        return;
+      // Se houver novo arquivo, converter para base64
+      if (editMessageMediaFile) {
+        try {
+          mediaUrl = await convertFileToBase64(editMessageMediaFile);
+        } catch (error) {
+          toast.error("Erro ao processar arquivo de mídia");
+          return;
+        }
       }
-    } else if (editMessageMediaPreview) {
-      // Manter dados do arquivo existente se não houver novo
-      const existingMsg = quickMessages.find(m => m.id === editingMessageId);
-      if (existingMsg) {
-        fileName = existingMsg.fileName || "";
-        mimeType = existingMsg.mimeType || "";
-      }
+
+      const { error } = await supabase
+        .from('quick_messages')
+        .update({
+          title: editMessageTitle,
+          content: editMessageContent || (editMessageType === "image" ? "[Imagem]" : editMessageType === "video" ? "[Vídeo]" : ""),
+          category_id: editMessageCategory,
+          message_type: editMessageType,
+          media_url: mediaUrl || null,
+        })
+        .eq('id', editingMessageId);
+
+      if (error) throw error;
+
+      await loadQuickMessages();
+      setEditingMessageId(null);
+      setEditMessageTitle("");
+      setEditMessageContent("");
+      setEditMessageCategory("");
+      setEditMessageType("text");
+      setEditMessageMediaFile(null);
+      setEditMessageMediaPreview(null);
+      toast.success("Mensagem editada com sucesso!");
+    } catch (error) {
+      console.error('Erro ao editar mensagem:', error);
+      toast.error("Erro ao editar mensagem");
     }
-
-    const updated = quickMessages.map(m => 
-      m.id === editingMessageId 
-        ? { 
-            ...m, 
-            title: editMessageTitle, 
-            content: editMessageContent || (editMessageType === "image" ? "[Imagem]" : editMessageType === "video" ? "[Vídeo]" : ""), 
-            category: editMessageCategory,
-            type: editMessageType,
-            mediaUrl: mediaUrl || undefined,
-            fileName: fileName || undefined,
-            mimeType: mimeType || undefined,
-          }
-        : m
-    );
-    saveQuickMessages(updated);
-    setEditingMessageId(null);
-    setEditMessageTitle("");
-    setEditMessageContent("");
-    setEditMessageCategory("");
-    setEditMessageType("text");
-    setEditMessageMediaFile(null);
-    setEditMessageMediaPreview(null);
-    toast.success("Mensagem editada com sucesso!");
   };
 
+  // Função para cancelar edição de mensagem
   // Função para cancelar edição de mensagem
   const cancelEditMessage = () => {
     setEditingMessageId(null);
@@ -5485,20 +5567,28 @@ function Conversas() {
   };
 
   // Função para salvar edição de categoria
-  const saveEditedCategory = () => {
+  const saveEditedCategory = async () => {
     if (!editingCategoryId || !editCategoryName.trim()) {
       toast.error("Digite o nome da categoria");
       return;
     }
-    const updated = quickCategories.map(c => 
-      c.id === editingCategoryId 
-        ? { ...c, name: editCategoryName }
-        : c
-    );
-    saveQuickCategories(updated);
-    setEditingCategoryId(null);
-    setEditCategoryName("");
-    toast.success("Categoria editada com sucesso!");
+    
+    try {
+      const { error } = await supabase
+        .from('quick_message_categories')
+        .update({ name: editCategoryName })
+        .eq('id', editingCategoryId);
+
+      if (error) throw error;
+
+      await loadQuickCategories();
+      setEditingCategoryId(null);
+      setEditCategoryName("");
+      toast.success("Categoria editada com sucesso!");
+    } catch (error) {
+      console.error('Erro ao editar categoria:', error);
+      toast.error("Erro ao editar categoria");
+    }
   };
 
   // Função para cancelar edição de categoria
