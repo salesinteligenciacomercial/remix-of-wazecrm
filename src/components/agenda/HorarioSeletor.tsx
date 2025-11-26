@@ -61,10 +61,9 @@ export function HorarioSeletor({
           const compFim = new Date(comp.data_hora_fim);
 
           // Verificar se há sobreposição de horários
+          // Um horário está ocupado se o novo compromisso começaria durante um existente
           return (
-            (inicioCompromisso >= compInicio && inicioCompromisso < compFim) ||
-            (fimCompromisso > compInicio && fimCompromisso <= compFim) ||
-            (inicioCompromisso <= compInicio && fimCompromisso >= compFim)
+            inicioCompromisso >= compInicio && inicioCompromisso < compFim
           );
         });
 
