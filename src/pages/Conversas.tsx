@@ -1073,16 +1073,36 @@ function Conversas() {
               return;
             }
             
+            // Buscar nome do usuário que enviou (se for mensagem da equipe)
+            let sentBy: string | undefined;
+            const isFromMe = novaMensagem.fromme === true || String(novaMensagem.fromme) === 'true';
+            if (isFromMe && novaMensagem.owner_id) {
+              try {
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('full_name, email')
+                  .eq('id', novaMensagem.owner_id)
+                  .single();
+                
+                if (profile) {
+                  sentBy = profile.full_name || profile.email || 'Usuário';
+                }
+              } catch (error) {
+                console.error('❌ [REALTIME] Erro ao buscar nome do usuário:', error);
+              }
+            }
+            
             // Criar objeto de mensagem
             const novaMensagemObj: Message = {
               id: novaMensagem.id,
               content: novaMensagem.mensagem || '',
               type: (novaMensagem.tipo_mensagem === 'texto' ? 'text' : novaMensagem.tipo_mensagem || 'text') as any,
-              sender: (novaMensagem.fromme === true || String(novaMensagem.fromme) === 'true') ? 'user' : 'contact',
+              sender: isFromMe ? 'user' : 'contact',
               timestamp: new Date(novaMensagem.created_at || Date.now()),
               delivered: true,
               read: novaMensagem.status !== 'Recebida',
               mediaUrl: novaMensagem.midia_url,
+              sentBy: sentBy, // Nome do usuário que enviou
             };
             
             // ⚡ CRÍTICO: Atualizar conversa selecionada em tempo real
