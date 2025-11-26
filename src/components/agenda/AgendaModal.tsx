@@ -164,18 +164,18 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
       const inicioISO = dataHoraInicio.toISOString();
       const fimISO = dataHoraFim.toISOString();
 
-      // Buscar company_id do usuário
-      const { data: userProfile, error: userError } = await supabase
-        .from('profiles')
+      // Buscar company_id do usuário via user_roles
+      const { data: userRole, error: userError } = await supabase
+        .from('user_roles')
         .select('company_id')
-        .eq('id', session.user.id)
+        .eq('user_id', session.user.id)
         .single();
 
       if (userError) {
         throw new Error(`Erro ao buscar company_id: ${userError.message}`);
       }
 
-      const companyId = userProfile?.company_id;
+      const companyId = userRole?.company_id;
 
       // Criar compromisso no banco de dados
       const { data: compromisso, error: compromissoError } = await supabase
@@ -184,11 +184,11 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
           {
             company_id: companyId,
             lead_id: lead.id,
-            responsavel_id: session.user.id,
+            usuario_responsavel_id: session.user.id,
+            owner_id: session.user.id,
             data_hora_inicio: inicioISO,
             data_hora_fim: fimISO,
-            tipo: formData.tipo_servico,
-            descricao: formData.descricao,
+            tipo_servico: formData.tipo_servico,
             observacoes: formData.observacoes,
             custo_estimado: formData.custo_estimado ? parseFloat(formData.custo_estimado) : 0,
           },
@@ -224,10 +224,13 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
               {
                 company_id: companyId,
                 compromisso_id: compromisso.id,
-                data_hora_envio: dataLembreteISO,
+                canal: "whatsapp",
+                data_envio: dataLembreteISO,
                 destinatario: formData.destinatario_lembrete,
                 mensagem: mensagemLembrete,
-                status: "pendente",
+                status_envio: "pendente",
+                horas_antecedencia: horasAntecedenciaTotal,
+                telefone_responsavel: lead.telefone ? normalizePhoneBR(lead.telefone) : null,
               },
             ]);
 
