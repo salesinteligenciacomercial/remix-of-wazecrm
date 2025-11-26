@@ -2658,6 +2658,23 @@ function Conversas() {
       });
       
       const ownerNamesMap = new Map<string, string>();
+      
+      // ⚡ CORREÇÃO: Sempre adicionar o usuário atual ao mapa
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const { data: currentProfile } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .eq('id', authUser.id)
+          .single();
+        
+        if (currentProfile) {
+          ownerNamesMap.set(currentProfile.id, currentProfile.full_name || currentProfile.email || 'Você');
+          console.log('✅ [LOAD] Usuário atual adicionado ao mapa:', currentProfile.full_name || currentProfile.email);
+        }
+      }
+      
+      // Buscar nomes dos outros usuários que enviaram mensagens
       if (ownerIds.size > 0) {
         const { data: profilesData } = await supabase
           .from('profiles')
