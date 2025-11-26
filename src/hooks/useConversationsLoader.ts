@@ -46,11 +46,12 @@ export const useConversationsLoader = () => {
         userCompanyId = userRole.company_id;
       }
       
-      // ⚡ CORREÇÃO CRÍTICA: Remover limite para exibir TODAS as conversas
-      const MESSAGES_TO_FETCH = append ? 5000 : 10000; // Buscar TODAS as mensagens disponíveis
+      // ⚡ OTIMIZAÇÃO: Carregar apenas mensagens recentes inicialmente
+      const MESSAGES_TO_FETCH = append ? 200 : 500; // Carregamento incremental otimizado
       
-      console.log(`📊 [LOAD] Carregando histórico completo: até ${MESSAGES_TO_FETCH} mensagens...`);
+      console.log(`📊 [LOAD] Carregando ${MESSAGES_TO_FETCH} mensagens recentes...`);
       
+      // ⚡ OTIMIZAÇÃO: Query mais simples e eficiente usando índices
       let query = supabase
         .from('conversas')
         .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, midia_url, fromme, company_id')
@@ -177,26 +178,28 @@ export const useConversationsLoader = () => {
         mensagens.push(conv);
       });
 
-      // Buscar leads - ⚡ CORREÇÃO: Remover limite para carregar TODOS os leads vinculados
+      // ⚡ OTIMIZAÇÃO: Buscar apenas leads necessários com query filtrada
       const telefonesUnicos = Array.from(conversasMap.keys())
         .map(tel => tel.replace(/[^0-9]/g, ''))
         .filter(tel => tel.length >= 10);
       
       let leadsData: any[] = [];
       if (telefonesUnicos.length > 0) {
-        const leadsResult = await supabase
-          .from('leads')
-          .select('id, phone, name, telefone')
-          .eq('company_id', userCompanyId)
-          .limit(1000); // ⚡ CORREÇÃO: Aumentar limite para carregar TODOS os leads
-        
-        if (!leadsResult.error && leadsResult.data) {
-          leadsData = leadsResult.data.filter(lead => {
-            const phoneRaw = lead.phone || lead.telefone;
-            if (!phoneRaw) return false;
-            const phoneKey = phoneRaw.replace(/[^0-9]/g, '');
-            return telefonesUnicos.some(tel => phoneKey.includes(tel) || tel.includes(phoneKey));
-          });
+        // Buscar em lotes para evitar queries muito grandes
+        const batchSize = 50;
+        for (let i = 0; i < telefonesUnicos.length; i += batchSize) {
+          const batch = telefonesUnicos.slice(i, i + batchSize);
+          
+          const leadsResult = await supabase
+            .from('leads')
+            .select('id, phone, name, telefone')
+            .eq('company_id', userCompanyId)
+            .or(batch.map(tel => `phone.ilike.%${tel}%,telefone.ilike.%${tel}%`).join(','))
+            .limit(batchSize);
+          
+          if (!leadsResult.error && leadsResult.data) {
+            leadsData.push(...leadsResult.data);
+          }
         }
       }
       
@@ -301,9 +304,10 @@ export const useConversationsLoader = () => {
         });
 
       setLoadingConversations(false);
-      setHasMoreConversations(false); // ⚡ CORREÇÃO: Todas as conversas são carregadas de uma vez
+      // ⚡ OTIMIZAÇÃO: Habilitar paginação se houver mais conversas
+      setHasMoreConversations(conversasData.length >= MESSAGES_TO_FETCH);
       
-      console.log(`✅ [LOAD] ${novasConversas.length} conversas carregadas no CRM`);
+      console.log(`✅ [LOAD] ${novasConversas.length} conversas carregadas (${conversasData.length} mensagens processadas)`);
       return novasConversas;
     } catch (error) {
       console.error('❌ Erro ao carregar conversas:', error);
