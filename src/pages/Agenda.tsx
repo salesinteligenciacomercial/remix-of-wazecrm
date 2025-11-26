@@ -335,7 +335,7 @@ export default function Agenda() {
     lead_id: "",
     data: format(new Date(), "yyyy-MM-dd"),
     hora_inicio: "09:00",
-    hora_fim: "10:00",
+    duracao_minutos: "30",
     tipo_servico: "", // Opcional - pode ficar vazio
     observacoes: "",
     custo_estimado: "",
@@ -747,13 +747,14 @@ export default function Agenda() {
       // === VALIDAÇÕES FRONTEND ===
       
       // 1. Validar data e horários
-      if (!formData.data || !formData.hora_inicio || !formData.hora_fim) {
-        toast.error("Por favor, preencha data e horários");
+      if (!formData.data || !formData.hora_inicio || !formData.duracao_minutos) {
+        toast.error("Por favor, preencha data, horário e duração");
         return;
       }
 
       const dataHoraInicio = new Date(`${formData.data}T${formData.hora_inicio}:00`);
-      const dataHoraFim = new Date(`${formData.data}T${formData.hora_fim}:00`);
+      const duracaoMin = parseInt(formData.duracao_minutos) || 30;
+      const dataHoraFim = new Date(dataHoraInicio.getTime() + duracaoMin * 60000);
       
       // 3. Validar se data/hora não está no passado (com margem de 1 minuto para evitar falsos positivos)
       const agora = new Date();
@@ -816,7 +817,7 @@ export default function Agenda() {
         tipo_servico: formData.tipo_servico,
         data: formData.data,
         hora_inicio: formData.hora_inicio,
-        hora_fim: formData.hora_fim,
+        duracao_minutos: formData.duracao_minutos,
         agenda_id: formData.agenda_id || 'nenhuma',
         lead_id: formData.lead_id || 'nenhum',
         custo_estimado: formData.custo_estimado || '0'
@@ -857,9 +858,9 @@ export default function Agenda() {
         const fimDisponivel = horaFimDisponivel * 60 + minutoFimDisponivel;
         
         const [horaInicio, minutoInicio] = formData.hora_inicio.split(':').map(Number);
-        const [horaFim, minutoFim] = formData.hora_fim.split(':').map(Number);
+        const duracaoMin = parseInt(formData.duracao_minutos) || 30;
         const inicioSolicitado = horaInicio * 60 + minutoInicio;
-        const fimSolicitado = horaFim * 60 + minutoFim;
+        const fimSolicitado = inicioSolicitado + duracaoMin;
 
         if (inicioSolicitado < inicioDisponivel || fimSolicitado > fimDisponivel) {
           toast.error(`O horário está fora do horário de funcionamento da agenda (${agendaSelecionada.disponibilidade.horario_inicio} - ${agendaSelecionada.disponibilidade.horario_fim})`);
@@ -1463,7 +1464,7 @@ export default function Agenda() {
       console.error('  FormData:', {
         tipo_servico: formData.tipo_servico,
         data: formData.data,
-        horarios: `${formData.hora_inicio} - ${formData.hora_fim}`,
+        horarios: `${formData.hora_inicio} + ${formData.duracao_minutos}min`,
         agenda: formData.agenda_id || 'nenhuma',
         lead: formData.lead_id || 'nenhum'
       });
@@ -1687,7 +1688,7 @@ export default function Agenda() {
       lead_id: "",
       data: format(new Date(), "yyyy-MM-dd"),
       hora_inicio: "09:00",
-      hora_fim: "10:00",
+      duracao_minutos: "30",
       tipo_servico: "", // Limpar para forçar nova seleção
       observacoes: "",
       custo_estimado: "",
@@ -2117,26 +2118,36 @@ export default function Agenda() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Horário de início <span className="text-destructive">*</span></Label>
-                    <Input 
-                      type="time" 
-                      value={formData.hora_inicio}
-                      onChange={(e) => setFormData({...formData, hora_inicio: e.target.value})}
-                      className={!formData.hora_inicio ? "border-amber-500" : ""}
-                    />
+                    <Label>Duração <span className="text-destructive">*</span></Label>
+                    <Select
+                      value={formData.duracao_minutos}
+                      onValueChange={(value) => setFormData({ ...formData, duracao_minutos: value })}
+                    >
+                      <SelectTrigger className={!formData.duracao_minutos ? "border-amber-500" : ""}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="15">15 min</SelectItem>
+                        <SelectItem value="30">30 min</SelectItem>
+                        <SelectItem value="45">45 min</SelectItem>
+                        <SelectItem value="60">1 hora</SelectItem>
+                        <SelectItem value="90">1h 30min</SelectItem>
+                        <SelectItem value="120">2 horas</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Horário de término <span className="text-destructive">*</span></Label>
+                  <Label>Horário de início <span className="text-destructive">*</span></Label>
                   <Input 
                     type="time" 
-                    value={formData.hora_fim}
-                    onChange={(e) => setFormData({...formData, hora_fim: e.target.value})}
-                    className={!formData.hora_fim ? "border-amber-500" : ""}
+                    value={formData.hora_inicio}
+                    onChange={(e) => setFormData({...formData, hora_inicio: e.target.value})}
+                    className={!formData.hora_inicio ? "border-amber-500" : ""}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Duração mínima de 15 minutos
+                    O horário de término será calculado automaticamente baseado na duração
                   </p>
                 </div>
 
@@ -2302,10 +2313,10 @@ export default function Agenda() {
                 <Button 
                   className="w-full" 
                   onClick={criarCompromisso}
-                  disabled={!formData.data || !formData.hora_inicio || !formData.hora_fim}
+                  disabled={!formData.data || !formData.hora_inicio || !formData.duracao_minutos}
                 >
-                  {!formData.data || !formData.hora_inicio || !formData.hora_fim 
-                    ? "Preencha os campos obrigatórios (data e horários)"
+                  {!formData.data || !formData.hora_inicio || !formData.duracao_minutos 
+                    ? "Preencha os campos obrigatórios (data, horário e duração)"
                     : "Criar Agendamento"
                   }
                 </Button>
