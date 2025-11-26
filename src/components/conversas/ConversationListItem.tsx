@@ -104,6 +104,7 @@ function ConversationListItemComponent({
         isSelected ? "bg-muted/70" : ""
       }`}
       onClick={onClick}
+      style={{ position: 'relative', overflow: 'visible' }}
     >
       <div className="flex gap-3 items-start">
         <Avatar className="h-12 w-12 flex-shrink-0">
@@ -180,14 +181,14 @@ function ConversationListItemComponent({
           </div>
         </div>
         
-        {/* BOTÃO DE MENU - POSIÇÃO ABSOLUTA NO CANTO SUPERIOR DIREITO */}
-        <div className="absolute top-2 right-2">
+        {/* 🛡️ BOTÃO DE MENU - PROTEÇÃO MÁXIMA CONTRA DESAPARECIMENTO */}
+        <div className="absolute top-2 right-2 z-50 conversation-menu-button-protected">
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button 
                 variant="ghost" 
                 size="icon"
-                className="h-8 w-8 bg-background/80 hover:bg-accent"
+                className="h-8 w-8 bg-background hover:bg-accent shadow-sm border border-border/50"
                 onClick={(e) => {
                   e.stopPropagation();
                   console.log('🔘 Menu clicado:', contactName);
