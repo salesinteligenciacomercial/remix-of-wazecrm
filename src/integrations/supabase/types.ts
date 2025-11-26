@@ -946,8 +946,10 @@ export type Database = {
           horas_antecedencia: number
           id: string
           mensagem: string | null
+          proxima_tentativa: string | null
           status_envio: string | null
           telefone_responsavel: string | null
+          tentativas: number | null
         }
         Insert: {
           canal: string
@@ -959,8 +961,10 @@ export type Database = {
           horas_antecedencia?: number
           id?: string
           mensagem?: string | null
+          proxima_tentativa?: string | null
           status_envio?: string | null
           telefone_responsavel?: string | null
+          tentativas?: number | null
         }
         Update: {
           canal?: string
@@ -972,8 +976,10 @@ export type Database = {
           horas_antecedencia?: number
           id?: string
           mensagem?: string | null
+          proxima_tentativa?: string | null
           status_envio?: string | null
           telefone_responsavel?: string | null
+          tentativas?: number | null
         }
         Relationships: [
           {
