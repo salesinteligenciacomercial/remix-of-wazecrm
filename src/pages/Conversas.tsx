@@ -7008,33 +7008,33 @@ function Conversas() {
               variant={filter === "waiting" ? "default" : "ghost"}
               size="sm"
               onClick={() => setFilter("waiting")}
-              className="relative"
+              className="relative flex flex-col items-center gap-0.5 h-auto py-1.5"
             >
-              Esperando
               {waitingCount > 0 && (
                 <Badge 
                   variant="destructive" 
-                  className="ml-2 bg-red-500 hover:bg-red-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center"
+                  className="bg-red-500 hover:bg-red-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs"
                 >
                   {waitingCount}
                 </Badge>
               )}
+              <span>Esperando</span>
             </Button>
             <Button
               variant={filter === "answered" ? "default" : "ghost"}
               size="sm"
               onClick={() => setFilter("answered")}
-              className="relative"
+              className="relative flex flex-col items-center gap-0.5 h-auto py-1.5"
             >
-              Em Atendimento
               {answeredCount > 0 && (
                 <Badge 
                   variant="default" 
-                  className="ml-2 bg-blue-500 hover:bg-blue-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center"
+                  className="bg-blue-500 hover:bg-blue-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs"
                 >
                   {answeredCount}
                 </Badge>
               )}
+              <span>Em Atendimento</span>
             </Button>
             <Button
               variant={filter === "resolved" ? "default" : "ghost"}
