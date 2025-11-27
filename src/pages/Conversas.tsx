@@ -771,9 +771,9 @@ function Conversas() {
         return lastMessage.sender === 'contact';
       });
     } else if (filter === "answered") {
-      // ✅ Filtro "Respondidos": Conversas que estavam aguardando e foram respondidas
+      // ✅ Filtro "Em Atendimento": Conversas ativas onde já houve resposta nossa
       // Critérios: última mensagem é do usuário (sender === 'user') + não está finalizada
-      // Quando responder uma conversa que estava em "aguardando", ela vai IMEDIATAMENTE para "respondidos"
+      // Quando responder uma conversa que estava em "aguardando", ela vai para "em atendimento"
       filtered = filtered.filter((conv) => {
         if (conv.isGroup === true) return false; // Excluir grupos
         if (conv.status === 'resolved') return false; // Excluir finalizadas
@@ -7012,7 +7012,7 @@ function Conversas() {
               size="sm"
               onClick={() => setFilter("answered")}
             >
-              Respondidos
+              Em Atendimento
             </Button>
             <Button
               variant={filter === "resolved" ? "default" : "ghost"}
