@@ -1073,11 +1073,22 @@ function Conversas() {
               return;
             }
             
-            // ⚡ CORREÇÃO: Usar sent_by do banco de dados (já salvo permanentemente)
-            const sentBy = novaMensagem.sent_by || undefined;
-            console.log('🔍 [REALTIME] Usando sent_by do banco:', sentBy);
-            
             const isFromMe = novaMensagem.fromme === true || String(novaMensagem.fromme) === 'true';
+            
+            // ⚡ FASE 1: Buscar sent_by do banco (permanente) ou buscar do owner_id se necessário
+            let sentBy = novaMensagem.sent_by || undefined;
+            
+            // Se não tem sent_by mas tem owner_id, buscar nome do usuário
+            if (!sentBy && novaMensagem.owner_id && isFromMe) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('full_name')
+                .eq('id', novaMensagem.owner_id)
+                .single();
+              sentBy = profile?.full_name;
+            }
+            
+            console.log('🔍 [REALTIME] Usando sent_by:', sentBy);
             
             // ⚡ CORREÇÃO: Mapear tipos de mensagem corretamente (document → pdf)
             const tipoMensagem = novaMensagem.tipo_mensagem === 'texto' ? 'text' :
@@ -2373,17 +2384,15 @@ function Conversas() {
       // Não usar INITIAL_LIMIT para limitar conversas - todas devem ser exibidas
       const MESSAGES_PER_CONVERSATION = 10; // Aumentar para 10 últimas mensagens por conversa (melhor histórico)
       
-      // ⚡ CORREÇÃO CRÍTICA: Aumentar drasticamente limite de mensagens para garantir que TODAS as conversas sejam carregadas
-      // Usar limite maior para garantir que todas as conversas sejam encontradas
-      const MESSAGES_TO_FETCH = append ? 2000 : 5000; // Buscar MUITO mais mensagens para garantir histórico completo de TODAS as conversas
+      // ⚡ FASE 1 - OTIMIZAÇÃO: Reduzir drasticamente o limite de mensagens para performance
+      // REMOVER midia_url da query para evitar carregar GBs de dados BASE64
+      const MESSAGES_TO_FETCH = append ? 200 : 500; // Reduzido de 5000 para 500 (10x mais rápido)
       
-      // ⚡ CORREÇÃO CRÍTICA: Buscar TODAS as mensagens (enviadas e recebidas) sem filtros restritivos
-      // Não filtrar por status, fromme ou qualquer outro campo - garantir que todas apareçam
+      // ⚡ FASE 1 - OTIMIZAÇÃO CRÍTICA: Não buscar midia_url (economiza GBs), adicionar sent_by e owner_id
       let query = supabase
         .from('conversas')
-        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, midia_url, fromme')
+        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, sent_by, owner_id')
         .eq('company_id', companyId)
-        // ⚡ CORREÇÃO: Não adicionar filtros adicionais - carregar TODAS as mensagens
         .order('created_at', { ascending: false });
       
       // ⚡ CORREÇÃO: Para append, buscar mensagens mais antigas usando a data da última mensagem carregada
@@ -3966,9 +3975,42 @@ function Conversas() {
     setSyncStatus('syncing');
 
     try {
-      console.log('📤 Enviando mídia via edge function...');
+      console.log('📤 [FASE 3] Enviando mídia via edge function...');
 
-      // Converter arquivo para base64
+      // ⚡ FASE 3: Fazer upload para Supabase Storage ANTES de enviar pelo WhatsApp
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .single();
+      
+      const userId = (await supabase.auth.getUser()).data.user?.id;
+      const timestamp = Date.now();
+      const filePath = `${userRole?.company_id}/${userId}/${timestamp}_${file.name}`;
+      
+      // Upload para Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('conversation-media')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+      
+      if (uploadError) {
+        console.error('❌ Erro ao fazer upload para Storage:', uploadError);
+        throw new Error('Erro ao fazer upload da mídia');
+      }
+      
+      console.log('✅ [FASE 3] Upload para Storage concluído:', uploadData.path);
+      
+      // Gerar URL pública da mídia
+      const { data: { publicUrl } } = supabase.storage
+        .from('conversation-media')
+        .getPublicUrl(uploadData.path);
+      
+      console.log('📍 [FASE 3] URL pública da mídia:', publicUrl);
+
+      // Converter arquivo para base64 para enviar pelo WhatsApp
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -4006,24 +4048,16 @@ function Conversas() {
         throw error;
       }
 
-      console.log('✅ Mídia enviada com sucesso');
+      console.log('✅ [FASE 3] Mídia enviada com sucesso via WhatsApp');
 
-      // Salvar no Supabase e obter ID para manter sincronizado
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+      // ⚡ FASE 3: Salvar no banco com URL do Storage (não BASE64)
+      // Buscar nome do usuário para assinatura
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', userId)
         .single();
-
-      // ⚡ CORREÇÃO: Criar data URL para salvar no banco e exibição
-      const dataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          resolve(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      });
-
+      
       const { data: inserted, error: dbError } = await supabase.from('conversas').insert({
         numero: numeroNormalizado,
         telefone_formatado: numeroNormalizado,
@@ -4033,10 +4067,11 @@ function Conversas() {
         tipo_mensagem: type,
         nome_contato: selectedConv.contactName,
         arquivo_nome: file.name,
-        midia_url: dataUrl, // ⚡ CORREÇÃO: Salvar URL da mídia no banco
+        midia_url: publicUrl, // ⚡ FASE 3: Salvar URL do Storage (não BASE64!)
         company_id: userRole?.company_id,
-        owner_id: (await supabase.auth.getUser()).data.user?.id, // ID do usuário que enviou
-        fromme: true, // Marcar como mensagem enviada pelo usuário
+        owner_id: userId,
+        sent_by: userProfile?.full_name, // ⚡ FASE 1: Adicionar assinatura permanente
+        fromme: true,
       }).select('id, midia_url').single();
 
       // ⚡ Log detalhado para debugging
@@ -4044,8 +4079,8 @@ function Conversas() {
         numeroNormalizado,
         type,
         fileName: file.name,
-        hasDataUrl: !!dataUrl,
-        dataUrlLength: dataUrl?.length || 0,
+        hasStorageUrl: !!publicUrl,
+        storageUrlLength: publicUrl?.length || 0,
         companyId: userRole?.company_id,
         contactName: selectedConv.contactName
       });
@@ -4065,7 +4100,7 @@ function Conversas() {
         console.log('✅ [MEDIA-SEND] Mensagem salva no banco:', inserted);
       }
 
-      // ⚡ CORREÇÃO: Usar data URL para exibição imediata e permanente
+      // ⚡ FASE 3: Usar URL do Storage para exibição
       const newMessage: Message = {
         id: (inserted?.id || Date.now()).toString(),
         content: caption || '[Mídia]',
@@ -4074,10 +4109,10 @@ function Conversas() {
         timestamp: new Date(),
         delivered: true,
         read: false,
-        mediaUrl: dataUrl, // ⚡ CORREÇÃO: Usar data URL permanente
+        mediaUrl: publicUrl, // ⚡ FASE 3: Usar URL do Storage
         fileName: file.name,
         mimeType: file.type,
-        sentBy: userName || "Você", // Adicionar quem enviou
+        sentBy: userProfile?.full_name || userName || "Você",
       };
 
       // ⚡ CORREÇÃO CRÍTICA: Ordenar mensagens por timestamp após adicionar nova mensagem
