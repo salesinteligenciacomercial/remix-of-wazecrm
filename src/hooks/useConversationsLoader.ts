@@ -54,7 +54,7 @@ export const useConversationsLoader = () => {
       // ⚡ OTIMIZAÇÃO: Query mais simples e eficiente usando índices
       let query = supabase
         .from('conversas')
-        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, midia_url, fromme, company_id, sent_by')
+        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, midia_url, fromme, company_id, sent_by, assigned_user_id')
         .eq('company_id', userCompanyId)
         .order('created_at', { ascending: false });
       
@@ -219,6 +219,31 @@ export const useConversationsLoader = () => {
         }
       });
 
+      // ⚡ Buscar informações dos usuários responsáveis pelo atendimento
+      const assignedUserIds = Array.from(new Set(
+        validConversas
+          .map(c => c.assigned_user_id)
+          .filter(id => id)
+      ));
+      
+      const usersMap = new Map<string, { id: string; name: string; avatar?: string }>();
+      if (assignedUserIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .in('id', assignedUserIds);
+        
+        if (usersData) {
+          usersData.forEach(user => {
+            usersMap.set(user.id, {
+              id: user.id,
+              name: user.full_name || user.id,
+              avatar: user.avatar_url || undefined
+            });
+          });
+        }
+      }
+
       // Criar conversas - ⚡ CORREÇÃO DEFINITIVA: Priorizar nome do lead e unificar nomes variantes
       const novasConversas: Conversation[] = Array.from(conversasMap.entries())
         .map(([telefone, mensagens]) => {
@@ -290,6 +315,10 @@ export const useConversationsLoader = () => {
             }
           }
 
+          // Buscar usuário responsável (última mensagem com assigned_user_id)
+          const assignedUserId = mensagens.find(m => m.assigned_user_id)?.assigned_user_id;
+          const assignedUser = assignedUserId ? usersMap.get(assignedUserId) : undefined;
+
           return {
             id: leadInfo?.leadId || `conv-${telefone}`,
             contactName,
@@ -301,6 +330,7 @@ export const useConversationsLoader = () => {
             tags: [],
             phoneNumber: telefone,
             isGroup,
+            assignedUser,
           };
         });
 

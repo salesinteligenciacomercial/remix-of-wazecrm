@@ -87,6 +87,11 @@ interface Conversation {
   avatarUrl?: string;
   phoneNumber?: string;
   isGroup?: boolean;
+  assignedUser?: {
+    id: string;
+    name: string;
+    avatar?: string;
+  };
 }
 
 interface QuickMessage {
@@ -7131,6 +7136,7 @@ function Conversas() {
               leadId={leadsVinculados[conv.id] || leadsVinculados[safeFormatPhoneNumber(conv.id)]}
               isGroup={conv.isGroup}
               isBlocked={blockedGroups.has(conv.phoneNumber || conv.id)}
+              assignedUser={conv.assignedUser}
               onToggleBlock={conv.isGroup ? () => {
                 const groupId = conv.phoneNumber || conv.id;
                 const isBlocked = blockedGroups.has(groupId);
