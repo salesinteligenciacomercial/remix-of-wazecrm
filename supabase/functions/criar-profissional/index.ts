@@ -1,0 +1,166 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.1'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+interface CriarProfissionalRequest {
+  nome: string
+  email: string
+  senha: string
+  telefone?: string
+  especialidade?: string
+  company_id: string
+}
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
+  try {
+    // Obter credenciais do Supabase
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing Supabase credentials')
+    }
+
+    // Cliente admin (service role) para criar usuário
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Parse do body
+    const body: CriarProfissionalRequest = await req.json()
+    const { nome, email, senha, telefone, especialidade, company_id } = body
+
+    console.log('[criar-profissional] Iniciando criação de profissional:', { email, nome })
+
+    // Validações básicas
+    if (!nome || !email || !senha || !company_id) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Campos obrigatórios: nome, email, senha, company_id' 
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    if (senha.length < 6) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'A senha deve ter no mínimo 6 caracteres' 
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    // Verificar se email já existe
+    const { data: existingProf } = await supabaseAdmin
+      .from('profissionais')
+      .select('id')
+      .eq('email', email)
+      .single()
+
+    if (existingProf) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Email já cadastrado' 
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    // 1. Criar usuário no Auth
+    console.log('[criar-profissional] Criando usuário no Auth...')
+    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: senha,
+      email_confirm: true, // Confirmar email automaticamente
+      user_metadata: {
+        full_name: nome,
+        role: 'profissional'
+      }
+    })
+
+    if (authError || !authUser.user) {
+      console.error('[criar-profissional] Erro ao criar usuário no Auth:', authError)
+      throw new Error(`Erro ao criar usuário: ${authError?.message || 'Unknown error'}`)
+    }
+
+    console.log('[criar-profissional] Usuário criado no Auth:', authUser.user.id)
+
+    // 2. Criar registro na tabela profissionais
+    console.log('[criar-profissional] Criando registro de profissional...')
+    const { data: profissional, error: profError } = await supabaseAdmin
+      .from('profissionais')
+      .insert({
+        user_id: authUser.user.id,
+        nome,
+        email,
+        telefone: telefone || null,
+        especialidade: especialidade || null,
+        company_id
+      })
+      .select()
+      .single()
+
+    if (profError) {
+      console.error('[criar-profissional] Erro ao criar profissional:', profError)
+      // Se falhar ao criar profissional, deletar usuário criado
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
+      throw new Error(`Erro ao criar profissional: ${profError.message}`)
+    }
+
+    console.log('[criar-profissional] Profissional criado com sucesso:', profissional.id)
+
+    // 3. Criar profile
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .insert({
+        id: authUser.user.id,
+        full_name: nome,
+        email,
+        role: 'profissional'
+      })
+
+    if (profileError) {
+      console.warn('[criar-profissional] Aviso ao criar profile:', profileError)
+    }
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        profissional,
+        message: 'Profissional criado com sucesso'
+      }),
+      { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+
+  } catch (error) {
+    console.error('[criar-profissional] Erro:', error)
+    return new Response(
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Erro desconhecido' 
+      }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
+})
