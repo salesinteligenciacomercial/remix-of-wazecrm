@@ -2409,7 +2409,7 @@ function Conversas() {
       // ⚡ FASE 1 - OTIMIZAÇÃO CRÍTICA: Não buscar midia_url (economiza GBs), adicionar sent_by e owner_id
       let query = supabase
         .from('conversas')
-        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, sent_by, owner_id')
+        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, sent_by, owner_id, midia_url, arquivo_nome')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false });
       
