@@ -514,6 +514,13 @@ export function EditarCompromissoDialog({
                   // Salvar mensagem no CRM para ficar visível
                   if (!envioError) {
                     try {
+                      const { data: { user } } = await supabase.auth.getUser();
+                      const { data: userProfile } = user ? await supabase
+                        .from('profiles')
+                        .select('full_name, email')
+                        .eq('id', user.id)
+                        .single() : { data: null };
+                      
                       await supabase.from('conversas').insert({
                         numero: telefoneNormalizado,
                         telefone_formatado: telefoneNormalizado,
@@ -523,6 +530,8 @@ export function EditarCompromissoDialog({
                         tipo_mensagem: 'text',
                         nome_contato: leadData.name,
                         company_id: userRole.company_id,
+                        owner_id: user?.id,
+                        sent_by: userProfile?.full_name || userProfile?.email || 'Você',
                         fromme: true,
                         created_at: new Date().toISOString()
                       });

@@ -330,6 +330,22 @@ serve(async (req) => {
                   // Salvar mensagem de lembrete na tabela conversas para ficar visível no CRM
                   try {
                     const leadNome = lembrete.compromisso.lead?.name || 'Contato';
+                    
+                    // Buscar nome do usuário responsável pelo compromisso para assinatura
+                    let sentBy = 'Sistema';
+                    const responsavelId = lembrete.compromisso.usuario_responsavel_id;
+                    if (responsavelId) {
+                      const { data: profileData } = await supabase
+                        .from('profiles')
+                        .select('full_name, email')
+                        .eq('id', responsavelId)
+                        .single();
+                      
+                      if (profileData) {
+                        sentBy = profileData.full_name || profileData.email || 'Sistema';
+                      }
+                    }
+                    
                     const { error: dbError } = await supabase.from('conversas').insert([{
                       numero: telefoneFormatado,
                       telefone_formatado: telefoneFormatado,
@@ -340,6 +356,8 @@ serve(async (req) => {
                       nome_contato: leadNome,
                       company_id: lembrete.compromisso.company_id || companyId,
                       lead_id: lembrete.compromisso.lead_id,
+                      owner_id: responsavelId,
+                      sent_by: sentBy,
                       fromme: true,
                     }]);
                     
