@@ -144,7 +144,7 @@ export const useConversationsCache = (companyId: string | null) => {
       // ⚡ OTIMIZADO: Buscar apenas campos essenciais sem mídia pesada (500 mensagens recentes)
       const { data: conversasData, error } = await supabase
         .from('conversas')
-        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme')
+        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, midia_url, arquivo_nome, sent_by, owner_id')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
         .limit(500);
