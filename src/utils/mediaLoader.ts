@@ -44,47 +44,53 @@ export async function getMediaUrl(messageId: string, type?: string): Promise<str
           hasMediaKey: !!mediaData.mediaKey
         });
         
-        // Chamar edge function que usa Evolution API para baixar mídia
-        const response = await supabase.functions.invoke('download-media', {
-          body: { 
-            company_id: message.company_id,
-            messageId: mediaData.messageId,
-            url: mediaData.url,
-            mediaKey: mediaData.mediaKey,
-            mimetype: mediaData.mimetype || type || message.tipo_mensagem,
-            type: mediaData.type || type || message.tipo_mensagem
+        try {
+          // Chamar edge function que usa Evolution API para baixar mídia
+          const response = await supabase.functions.invoke('download-media', {
+            body: { 
+              company_id: message.company_id,
+              messageId: mediaData.messageId,
+              url: mediaData.url,
+              mediaKey: mediaData.mediaKey,
+              mimetype: mediaData.mimetype || type || message.tipo_mensagem,
+              type: mediaData.type || type || message.tipo_mensagem
+            }
+          });
+
+          if (response.error) {
+            console.error('❌ [MEDIA-LOADER] Erro na edge function:', response.error);
+            throw new Error(`Erro ao baixar mídia: ${response.error.message}`);
           }
-        });
 
-        if (response.error) {
-          console.error('❌ [MEDIA-LOADER] Erro na edge function:', response.error);
-          throw new Error(`Erro ao baixar mídia: ${response.error.message}`);
-        }
+          // A edge function retorna o base64 da mídia
+          const base64Data = response.data?.base64;
+          const mimeType = response.data?.mimetype || mediaData.mimetype || 'audio/ogg; codecs=opus';
+          
+          if (!base64Data) {
+            console.error('❌ [MEDIA-LOADER] Edge function não retornou base64');
+            throw new Error('Edge function não retornou dados');
+          }
 
-        // A edge function retorna o base64 da mídia
-        const base64Data = response.data?.base64;
-        if (!base64Data) {
-          console.error('❌ [MEDIA-LOADER] Edge function não retornou base64');
-          throw new Error('Edge function não retornou dados');
+          // Converter base64 para blob
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: mimeType });
+          
+          const url = URL.createObjectURL(blob);
+          console.log('✅ [MEDIA-LOADER] Mídia carregada via Evolution API:', {
+            blobSize: blob.size,
+            blobType: blob.type,
+            mediaType: type || message.tipo_mensagem
+          });
+          return url;
+        } catch (downloadError) {
+          console.error('❌ [MEDIA-LOADER] Erro ao baixar mídia:', downloadError);
+          throw downloadError;
         }
-
-        // Converter base64 para blob
-        const mimeType = mediaData.mimetype || 'audio/ogg; codecs=opus';
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: mimeType });
-        
-        const url = URL.createObjectURL(blob);
-        console.log('✅ [MEDIA-LOADER] Mídia carregada via Evolution API:', {
-          blobSize: blob.size,
-          blobType: blob.type,
-          mediaType: type || message.tipo_mensagem
-        });
-        return url;
       }
     } catch (jsonError) {
       // Não é JSON, pode ser URL simples
