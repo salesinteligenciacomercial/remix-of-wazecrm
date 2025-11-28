@@ -4545,6 +4545,15 @@ function Conversas() {
         try {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
+            // Buscar nome do usuário para salvar no sent_by
+            const { data: userProfile } = await supabase
+              .from('profiles')
+              .select('full_name, email')
+              .eq('id', user.id)
+              .single();
+            
+            const sentByName = userProfile?.full_name || userProfile?.email || 'Você';
+            
             const { data: userRole } = await supabase
               .from('user_roles')
               .select('company_id')
@@ -4565,6 +4574,7 @@ function Conversas() {
                 nome_contato: selectedConv.contactName,
                 company_id: userRole.company_id,
                 owner_id: user.id, // Adicionar ID do usuário que enviou
+                sent_by: sentByName, // ⚡ CORREÇÃO: Salvar nome do usuário permanentemente
                 fromme: true,
                 replied_to_message: repliedMessage || null,
               }]);
