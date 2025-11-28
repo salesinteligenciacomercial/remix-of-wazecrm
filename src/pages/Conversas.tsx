@@ -3961,6 +3961,13 @@ function Conversas() {
           .select('company_id')
           .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
           .single();
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: userProfile } = user ? await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', user.id)
+          .single() : { data: null };
+        
         const isGroup = /@g\.us$/.test(String(selectedConv.id));
         const telefone_formatado = isGroup ? null : normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
         await supabase.from('conversas').insert([{
@@ -3973,6 +3980,9 @@ function Conversas() {
           tipo_mensagem: 'text',
           nome_contato: selectedConv.contactName,
           company_id: userRole?.company_id,
+          owner_id: user?.id,
+          sent_by: userProfile?.full_name || userProfile?.email || 'Você',
+          fromme: true,
         }]);
       }
     } catch (err) {
@@ -4255,6 +4265,14 @@ function Conversas() {
         .select('company_id')
         .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
         .single();
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: userProfile } = user ? await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', user.id)
+        .single() : { data: null };
+      
       const { data: inserted, error: dbError } = await supabase.from('conversas').insert([{
         numero: numeroNormalizado,
         telefone_formatado: numeroNormalizado,
@@ -4266,7 +4284,8 @@ function Conversas() {
         arquivo_nome: 'audio.ogg',
         midia_url: audioDataUrl, // ⚡ CORREÇÃO: Salvar data URL do áudio
         company_id: userRole?.company_id,
-        owner_id: (await supabase.auth.getUser()).data.user?.id, // ID do usuário que enviou
+        owner_id: user?.id, // ID do usuário que enviou
+        sent_by: userProfile?.full_name || userProfile?.email || 'Você', // ⚡ ASSINATURA PERMANENTE
         fromme: true, // ⚡ CORREÇÃO: Marcar como mensagem enviada pelo usuário
       }]).select('id, midia_url').single();
       if (dbError) {
@@ -5393,6 +5412,13 @@ function Conversas() {
                 
                 // Salvar mensagem de confirmação na tabela conversas para ficar visível no CRM
                 try {
+                  const { data: { user } } = await supabase.auth.getUser();
+                  const { data: userProfile } = user ? await supabase
+                    .from('profiles')
+                    .select('full_name, email')
+                    .eq('id', user.id)
+                    .single() : { data: null };
+                  
                   const { error: dbError } = await supabase.from('conversas').insert([{
                     numero: telefoneNormalizado,
                     telefone_formatado: telefoneNormalizado,
@@ -5403,6 +5429,8 @@ function Conversas() {
                     nome_contato: leadVinculado.name || leadVinculado.nome,
                     company_id: companyId,
                     lead_id: leadVinculado.id,
+                    owner_id: user?.id,
+                    sent_by: userProfile?.full_name || userProfile?.email || 'Você',
                     fromme: true,
                   }]);
                   
@@ -6829,6 +6857,13 @@ function Conversas() {
         .single();
 
       // CORREÇÃO: Inserir mensagem de finalização com status Resolvida e fromme: true
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: userProfile } = user ? await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', user.id)
+        .single() : { data: null };
+      
       await supabase.from('conversas').insert([{
         numero: numeroNormalizado,
         telefone_formatado: numeroNormalizado,
@@ -6838,6 +6873,8 @@ function Conversas() {
         tipo_mensagem: 'text',
         nome_contato: selectedConv.contactName,
         company_id: userRole?.company_id,
+        owner_id: user?.id,
+        sent_by: userProfile?.full_name || userProfile?.email || 'Você',
         fromme: true, // ⚡ CRÍTICO: Marcar como mensagem enviada para aparecer no lado direito
       }]);
 

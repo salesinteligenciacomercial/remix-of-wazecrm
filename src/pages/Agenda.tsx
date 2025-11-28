@@ -1302,6 +1302,13 @@ export default function Agenda() {
                 
                 // Salvar mensagem de confirmação na tabela conversas para ficar visível no CRM
                 try {
+                  const { data: { user } } = await supabase.auth.getUser();
+                  const { data: userProfile } = user ? await supabase
+                    .from('profiles')
+                    .select('full_name, email')
+                    .eq('id', user.id)
+                    .single() : { data: null };
+                  
                   const { error: dbError } = await supabase.from('conversas').insert([{
                     numero: telefone,
                     telefone_formatado: telefone,
@@ -1312,6 +1319,8 @@ export default function Agenda() {
                     nome_contato: leadSelecionado.name,
                     company_id: userRole.company_id,
                     lead_id: formData.lead_id,
+                    owner_id: user?.id,
+                    sent_by: userProfile?.full_name || userProfile?.email || 'Você',
                     fromme: true,
                   }]);
                   
@@ -1554,6 +1563,13 @@ export default function Agenda() {
                   // Salvar mensagem no CRM para ficar visível
                   if (!envioError) {
                     try {
+                      const { data: { user } } = await supabase.auth.getUser();
+                      const { data: userProfile } = user ? await supabase
+                        .from('profiles')
+                        .select('full_name, email')
+                        .eq('id', user.id)
+                        .single() : { data: null };
+                      
                       await supabase.from('conversas').insert({
                         numero: telefoneNormalizado,
                         telefone_formatado: telefoneNormalizado,
@@ -1563,6 +1579,8 @@ export default function Agenda() {
                         tipo_mensagem: 'text',
                         nome_contato: leadData.name,
                         company_id: userRole.company_id,
+                        owner_id: user?.id,
+                        sent_by: userProfile?.full_name || userProfile?.email || 'Você',
                         fromme: true,
                         created_at: new Date().toISOString()
                       });
