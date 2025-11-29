@@ -1482,6 +1482,7 @@ export type Database = {
           owner_id: string
           priority: string
           responsaveis: string[] | null
+          start_date: string | null
           status: string
           tags: string[] | null
           tempo_gasto: number | null
@@ -1506,6 +1507,7 @@ export type Database = {
           owner_id: string
           priority?: string
           responsaveis?: string[] | null
+          start_date?: string | null
           status?: string
           tags?: string[] | null
           tempo_gasto?: number | null
@@ -1530,6 +1532,7 @@ export type Database = {
           owner_id?: string
           priority?: string
           responsaveis?: string[] | null
+          start_date?: string | null
           status?: string
           tags?: string[] | null
           tempo_gasto?: number | null
