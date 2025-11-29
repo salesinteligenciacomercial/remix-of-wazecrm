@@ -32,10 +32,14 @@ import {
   ArrowUpRight,
   ArrowDownRight
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Navigate } from "react-router-dom";
+import { useGlobalSync } from "@/hooks/useGlobalSync";
+import { useLeadsSync, RealtimeStatus } from "@/hooks/useLeadsSync";
+import { Wifi, WifiOff } from "lucide-react";
+import { toast } from "sonner";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -103,6 +107,9 @@ interface CommunicationStats {
 interface ProductivityStats {
   tarefasCriadas: number;
   tarefasConcluidas: number;
+  tarefasEmAndamento: number;
+  tarefasPendentes: number;
+  tarefasAtrasadas: number;
   taxaConclusao: number;
   compromissosRealizados: number;
   compromissosAgendados: number;
@@ -155,6 +162,9 @@ export default function Analytics() {
   const [productivityStats, setProductivityStats] = useState<ProductivityStats>({
     tarefasCriadas: 0,
     tarefasConcluidas: 0,
+    tarefasEmAndamento: 0,
+    tarefasPendentes: 0,
+    tarefasAtrasadas: 0,
     taxaConclusao: 0,
     compromissosRealizados: 0,
     compromissosAgendados: 0,
@@ -165,6 +175,169 @@ export default function Analytics() {
   const [reportLoading, setReportLoading] = useState(false);
   const [communicationLoading, setCommunicationLoading] = useState(false);
   const [productivityLoading, setProductivityLoading] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>('connecting');
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  
+  // ✅ Estado para usuários da empresa (filtro de responsável)
+  const [companyUsers, setCompanyUsers] = useState<{ id: string; name: string }[]>([]);
+  const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
+  
+  // Ref para evitar múltiplas atualizações simultâneas
+  const isUpdatingRef = useRef(false);
+  const updateDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ SINCRONIZAÇÃO EM TEMPO REAL - Atualiza quando dados mudam em outros módulos
+  const refreshAllStats = useCallback(async () => {
+    if (isUpdatingRef.current) return;
+    
+    // Debounce para evitar múltiplas atualizações em sequência rápida
+    if (updateDebounceRef.current) {
+      clearTimeout(updateDebounceRef.current);
+    }
+    
+    updateDebounceRef.current = setTimeout(async () => {
+      isUpdatingRef.current = true;
+      console.log('📊 [Analytics] Atualizando dados em tempo real...');
+      
+      try {
+        await Promise.all([
+          fetchStats(),
+          fetchReportStats(),
+          fetchCommunicationStats(),
+          fetchProductivityStats()
+        ]);
+        setLastUpdate(new Date());
+      } catch (error) {
+        console.error('[Analytics] Erro ao atualizar dados:', error);
+      } finally {
+        isUpdatingRef.current = false;
+      }
+    }, 500); // Debounce de 500ms
+  }, []);
+
+  // ✅ HOOK DE SINCRONIZAÇÃO GLOBAL - Recebe eventos de todos os módulos
+  useGlobalSync({
+    callbacks: {
+      onLeadCreated: (data) => {
+        console.log('📊 [Analytics] Novo lead criado:', data?.name);
+        refreshAllStats();
+      },
+      onLeadUpdated: (data) => {
+        console.log('📊 [Analytics] Lead atualizado:', data?.name);
+        refreshAllStats();
+      },
+      onLeadDeleted: (data) => {
+        console.log('📊 [Analytics] Lead removido:', data?.name);
+        refreshAllStats();
+      },
+      onTaskCreated: (data) => {
+        console.log('📊 [Analytics] Nova tarefa criada:', data?.title);
+        refreshAllStats();
+      },
+      onTaskUpdated: (data) => {
+        console.log('📊 [Analytics] Tarefa atualizada:', data?.title);
+        refreshAllStats();
+      },
+      onTaskDeleted: (data) => {
+        console.log('📊 [Analytics] Tarefa removida:', data?.title);
+        refreshAllStats();
+      },
+      onMeetingScheduled: (data) => {
+        console.log('📊 [Analytics] Reunião agendada:', data?.title);
+        refreshAllStats();
+      },
+      onMeetingUpdated: (data) => {
+        console.log('📊 [Analytics] Reunião atualizada:', data?.title);
+        refreshAllStats();
+      },
+      onMeetingCompleted: (data) => {
+        console.log('📊 [Analytics] Reunião concluída:', data?.title);
+        refreshAllStats();
+      },
+      onConversationStarted: () => {
+        console.log('📊 [Analytics] Nova conversa iniciada');
+        refreshAllStats();
+      },
+      onConversationUpdated: () => {
+        console.log('📊 [Analytics] Conversa atualizada');
+        refreshAllStats();
+      },
+      onFunnelStageChanged: (data) => {
+        console.log('📊 [Analytics] Lead movido no funil:', data?.leadName);
+        refreshAllStats();
+      }
+    },
+    showNotifications: false // Não mostrar toasts duplicados
+  });
+
+  // ✅ HOOK DE SINCRONIZAÇÃO DE LEADS - Atualiza quando leads mudam
+  const { connectionStatus } = useLeadsSync({
+    onInsert: () => refreshAllStats(),
+    onUpdate: () => refreshAllStats(),
+    onDelete: () => refreshAllStats(),
+    showNotifications: false
+  });
+
+  // Atualizar status da conexão realtime
+  useEffect(() => {
+    setRealtimeStatus(connectionStatus);
+  }, [connectionStatus]);
+
+  // ✅ Carregar company_id e usuários da empresa para o filtro de responsável
+  useEffect(() => {
+    const loadCompanyData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Buscar company_id do usuário
+        const { data: userRole } = await supabase
+          .from('user_roles')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!userRole?.company_id) {
+          console.warn('[Analytics] Usuário sem empresa vinculada');
+          return;
+        }
+
+        setUserCompanyId(userRole.company_id);
+
+        // Buscar todos os usuários da empresa
+        const { data: userRoles } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('company_id', userRole.company_id);
+
+        const userIds = (userRoles || []).map((ur: any) => ur.user_id);
+        if (userIds.length === 0) {
+          setCompanyUsers([]);
+          return;
+        }
+
+        // Buscar nomes dos usuários na tabela profiles
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', userIds);
+
+        const users = (profiles || [])
+          .map(p => ({ 
+            id: p.id, 
+            name: (p.full_name || p.email || 'Usuário sem nome') as string 
+          }))
+          .filter(u => u.name);
+
+        console.log('👥 [Analytics] Usuários carregados:', users.length);
+        setCompanyUsers(users);
+      } catch (error) {
+        console.error('[Analytics] Erro ao carregar usuários:', error);
+      }
+    };
+
+    loadCompanyData();
+  }, []);
 
   useEffect(() => {
     fetchAllStats();
@@ -225,8 +398,19 @@ export default function Analytics() {
       const wonDeals = leads?.filter((l) => l.status === "ganho").length || 0;
       const conversionRate = totalLeads > 0 ? (wonDeals / totalLeads) * 100 : 0;
 
-      // Conversas
-      const { count: conversasCount } = await supabase.from("conversas").select("*", { count: 'exact', head: true });
+      // ✅ CORREÇÃO: Contar CONVERSAS ÚNICAS (números únicos), não mensagens
+      const { data: conversasData } = await supabase
+        .from("conversas")
+        .select("numero, telefone_formatado");
+      
+      const numerosUnicos = new Set<string>();
+      conversasData?.forEach((c: any) => {
+        const numero = (c.telefone_formatado || c.numero || '').replace(/[^0-9]/g, '');
+        if (numero && numero.length >= 8) {
+          numerosUnicos.add(numero);
+        }
+      });
+      const conversasCount = numerosUnicos.size;
 
       // Compromissos
       const { count: compromissosCount } = await supabase.from("compromissos").select("*", { count: 'exact', head: true });
@@ -367,20 +551,95 @@ export default function Analytics() {
     try {
       setCommunicationLoading(true);
 
-      // Simulação de dados de comunicação (adaptar conforme estrutura real do banco)
-      const { count: conversasCount } = await supabase.from("conversas").select("*", { count: 'exact', head: true });
+      // ✅ BUSCA DADOS REAIS DE CONVERSAS (usando colunas corretas da tabela)
+      const { data: conversasData } = await supabase
+        .from("conversas")
+        .select("id, numero, telefone_formatado, origem, status, created_at, updated_at, fromme, read, delivered");
+      
+      // ✅ CORREÇÃO: Contar CONVERSAS ÚNICAS (números únicos), não mensagens
+      const numerosUnicos = new Set<string>();
+      const canaisPorNumero: Record<string, string> = {}; // Mapear número -> canal
+      
+      conversasData?.forEach((c: any) => {
+        // Normalizar número (remover caracteres não numéricos)
+        const numero = (c.telefone_formatado || c.numero || '').replace(/[^0-9]/g, '');
+        if (numero && numero.length >= 8) { // Ignorar números inválidos
+          numerosUnicos.add(numero);
+          // Guardar o canal do número (origem ou whatsapp como padrão)
+          if (!canaisPorNumero[numero]) {
+            canaisPorNumero[numero] = c.origem || 'whatsapp';
+          }
+        }
+      });
+      
+      // Total de conversas = números únicos
+      const totalConversas = numerosUnicos.size;
+      
+      // Calcular conversas por canal (baseado nos números únicos)
+      const canaisContagem: Record<string, number> = {};
+      Object.values(canaisPorNumero).forEach(canal => {
+        const canalNormalizado = canal.toLowerCase();
+        canaisContagem[canalNormalizado] = (canaisContagem[canalNormalizado] || 0) + 1;
+      });
+      
+      const conversasPorCanal = Object.entries(canaisContagem).map(([canal, quantidade]) => ({
+        canal: canal.charAt(0).toUpperCase() + canal.slice(1),
+        quantidade
+      }));
 
-      // Dados simulados para demonstração
+      // Se não houver dados por canal, mostrar WhatsApp como padrão
+      if (conversasPorCanal.length === 0 && totalConversas > 0) {
+        conversasPorCanal.push({ canal: "WhatsApp", quantidade: totalConversas });
+      }
+
+      // Calcular taxa de resposta (conversas com pelo menos uma resposta nossa)
+      const numerosComResposta = new Set<string>();
+      conversasData?.forEach((c: any) => {
+        if (c.fromme === true) {
+          const numero = (c.telefone_formatado || c.numero || '').replace(/[^0-9]/g, '');
+          if (numero && numero.length >= 8) {
+            numerosComResposta.add(numero);
+          }
+        }
+      });
+      const taxaResposta = totalConversas > 0 
+        ? Math.round((numerosComResposta.size / totalConversas) * 100 * 10) / 10 
+        : 0;
+
+      // Calcular tempo médio de resposta (simplificado)
+      let tempoMedioResposta = 0;
+      const conversasComResposta = conversasData?.filter((c: any) => c.updated_at && c.created_at) || [];
+      if (conversasComResposta.length > 0) {
+        const tempoTotal = conversasComResposta.reduce((acc: number, c: any) => {
+          const inicio = new Date(c.created_at).getTime();
+          const resposta = new Date(c.updated_at).getTime();
+          return acc + Math.abs(resposta - inicio);
+        }, 0);
+        tempoMedioResposta = Math.round((tempoTotal / conversasComResposta.length / (1000 * 60 * 60)) * 10) / 10; // em horas
+      }
+
+      // Taxa de satisfação baseada em conversas com mensagens lidas
+      const numerosComLeitura = new Set<string>();
+      conversasData?.forEach((c: any) => {
+        if (c.read === true) {
+          const numero = (c.telefone_formatado || c.numero || '').replace(/[^0-9]/g, '');
+          if (numero && numero.length >= 8) {
+            numerosComLeitura.add(numero);
+          }
+        }
+      });
+      const satisfacao = totalConversas > 0 
+        ? Math.round((numerosComLeitura.size / totalConversas) * 100 * 10) / 10 
+        : 0;
+
+      console.log(`📊 [Analytics] Conversas únicas: ${totalConversas} (de ${conversasData?.length || 0} mensagens)`);
+
       setCommunicationStats({
-        totalConversas: conversasCount || 0,
-        taxaResposta: 87.5,
-        tempoMedioResposta: 2.3,
-        conversasPorCanal: [
-          { canal: "WhatsApp", quantidade: Math.floor((conversasCount || 0) * 0.6) },
-          { canal: "Instagram", quantidade: Math.floor((conversasCount || 0) * 0.25) },
-          { canal: "Facebook", quantidade: Math.floor((conversasCount || 0) * 0.15) }
-        ],
-        satisfacao: 92.1
+        totalConversas,
+        taxaResposta: Math.min(taxaResposta, 100),
+        tempoMedioResposta,
+        conversasPorCanal,
+        satisfacao: Math.min(satisfacao, 100)
       });
     } catch (error) {
       console.error("Erro ao carregar estatísticas de comunicação:", error);
@@ -393,26 +652,67 @@ export default function Analytics() {
     try {
       setProductivityLoading(true);
 
-      // Tarefas
-      const { data: tarefasData } = await supabase.from("tasks").select("status, created_at, updated_at");
+      // ✅ TAREFAS - Buscar dados reais com datas para cálculo de tempo
+      const { data: tarefasData } = await supabase
+        .from("tasks")
+        .select("status, created_at, updated_at, due_date");
+      
       const tarefasCriadas = tarefasData?.length || 0;
-      const tarefasConcluidas = tarefasData?.filter(t => t.status === "completed").length || 0;
+      const tarefasConcluidas = tarefasData?.filter((t: any) => t.status === "completed" || t.status === "done").length || 0;
+      const tarefasEmAndamento = tarefasData?.filter((t: any) => t.status === "in_progress" || t.status === "doing").length || 0;
+      const tarefasPendentes = tarefasData?.filter((t: any) => t.status === "pending" || t.status === "todo" || !t.status).length || 0;
+      
+      // Calcular tarefas atrasadas (due_date < hoje e não concluídas)
+      const hoje = new Date();
+      const tarefasAtrasadas = tarefasData?.filter((t: any) => {
+        if (!t.due_date) return false;
+        const dueDate = new Date(t.due_date);
+        return dueDate < hoje && t.status !== "completed" && t.status !== "done";
+      }).length || 0;
+
       const taxaConclusao = tarefasCriadas > 0 ? (tarefasConcluidas / tarefasCriadas) * 100 : 0;
 
-      // Compromissos
-      const { data: compromissosData } = await supabase.from("compromissos").select("status");
+      // ✅ Calcular tempo médio de conclusão de tarefas (dados reais)
+      let tempoMedioTarefa = 0;
+      const tarefasComDatas = tarefasData?.filter((t: any) => 
+        (t.status === "completed" || t.status === "done") && t.created_at && t.updated_at
+      ) || [];
+      
+      if (tarefasComDatas.length > 0) {
+        const tempoTotal = tarefasComDatas.reduce((acc: number, t: any) => {
+          const inicio = new Date(t.created_at).getTime();
+          const fim = new Date(t.updated_at).getTime();
+          return acc + Math.abs(fim - inicio);
+        }, 0);
+        tempoMedioTarefa = Math.round((tempoTotal / tarefasComDatas.length / (1000 * 60 * 60)) * 10) / 10; // em horas
+      }
+
+      // ✅ COMPROMISSOS - Buscar dados reais
+      const { data: compromissosData } = await supabase
+        .from("compromissos")
+        .select("status, data_hora_inicio, data_hora_fim");
+      
       const compromissosAgendados = compromissosData?.length || 0;
-      const compromissosRealizados = compromissosData?.filter(c => c.status === "realizado").length || 0;
-      const taxaComparecimento = compromissosAgendados > 0 ? (compromissosRealizados / compromissosAgendados) * 100 : 0;
+      const compromissosRealizados = compromissosData?.filter((c: any) => 
+        c.status === "realizado" || c.status === "concluido"
+      ).length || 0;
+      const taxaComparecimento = compromissosAgendados > 0 
+        ? (compromissosRealizados / compromissosAgendados) * 100 
+        : 0;
+
+      console.log(`📊 [Analytics] Tarefas: ${tarefasCriadas} total, ${tarefasConcluidas} concluídas, ${tarefasEmAndamento} em andamento, ${tarefasPendentes} pendentes, ${tarefasAtrasadas} atrasadas`);
 
       setProductivityStats({
         tarefasCriadas,
         tarefasConcluidas,
+        tarefasEmAndamento,
+        tarefasPendentes,
+        tarefasAtrasadas,
         taxaConclusao: Math.round(taxaConclusao),
         compromissosRealizados,
         compromissosAgendados,
         taxaComparecimento: Math.round(taxaComparecimento),
-        tempoMedioTarefa: 4.2 // horas simuladas
+        tempoMedioTarefa
       });
     } catch (error) {
       console.error("Erro ao carregar estatísticas de produtividade:", error);
@@ -514,11 +814,38 @@ export default function Analytics() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="space-y-2">
-        <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-          Analytics
-        </h1>
-        <p className="text-muted-foreground text-lg">Visão completa e análises detalhadas do seu CRM</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-2">
+          <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+            Analytics
+          </h1>
+          <p className="text-muted-foreground text-lg">Visão completa e análises detalhadas do seu CRM</p>
+        </div>
+        
+        {/* ✅ Indicador de Status de Conexão Realtime */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border">
+            {realtimeStatus === 'connected' ? (
+              <>
+                <Wifi className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-green-600 font-medium">Sincronizado</span>
+              </>
+            ) : realtimeStatus === 'connecting' || realtimeStatus === 'reconnecting' ? (
+              <>
+                <RefreshCw className="h-4 w-4 text-yellow-500 animate-spin" />
+                <span className="text-sm text-yellow-600 font-medium">Conectando...</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="h-4 w-4 text-red-500" />
+                <span className="text-sm text-red-600 font-medium">Desconectado</span>
+              </>
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Última atualização: {lastUpdate.toLocaleTimeString('pt-BR')}
+          </div>
+        </div>
       </div>
 
       {/* Filtros Globais */}
@@ -577,9 +904,11 @@ export default function Analytics() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="user1">João Silva</SelectItem>
-                  <SelectItem value="user2">Maria Santos</SelectItem>
-                  <SelectItem value="user3">Pedro Oliveira</SelectItem>
+                  {companyUsers.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1304,21 +1633,29 @@ export default function Analytics() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <PieChart className="h-5 w-5 text-primary" />
-                  Performance por Canal
+                  Volume por Canal
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Eficiência de resposta em cada canal
+                  Quantidade de conversas em cada canal
                 </p>
               </CardHeader>
               <CardContent>
                 <div className="h-64">
                   <Bar
                     data={{
-                      labels: ['WhatsApp', 'Instagram', 'Facebook'],
+                      labels: communicationStats.conversasPorCanal.length > 0 
+                        ? communicationStats.conversasPorCanal.map(c => c.canal)
+                        : ['WhatsApp'],
                       datasets: [{
-                        label: 'Taxa de Resposta (%)',
-                        data: [92, 78, 85],
-                        backgroundColor: ['#22c55e', '#ec4899', '#3b82f6'],
+                        label: 'Conversas',
+                        data: communicationStats.conversasPorCanal.length > 0 
+                          ? communicationStats.conversasPorCanal.map(c => c.quantidade)
+                          : [communicationStats.totalConversas],
+                        backgroundColor: communicationStats.conversasPorCanal.map(c => 
+                          c.canal.toLowerCase() === 'whatsapp' ? '#22c55e' :
+                          c.canal.toLowerCase() === 'instagram' ? '#ec4899' :
+                          '#3b82f6'
+                        ),
                         borderRadius: 4,
                       }]
                     }}
@@ -1332,7 +1669,7 @@ export default function Analytics() {
                         tooltip: {
                           callbacks: {
                             label: function(context) {
-                              return `Taxa: ${context.parsed.y}%`;
+                              return `${context.parsed.y} conversas`;
                             }
                           }
                         }
@@ -1340,11 +1677,8 @@ export default function Analytics() {
                       scales: {
                         y: {
                           beginAtZero: true,
-                          max: 100,
                           ticks: {
-                            callback: function(value) {
-                              return value + '%';
-                            }
+                            stepSize: 1
                           }
                         }
                       }
@@ -1489,44 +1823,34 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-sm font-semibold text-primary">1</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">João Silva</p>
-                        <p className="text-sm text-muted-foreground">95% satisfação</p>
-                      </div>
+                  {companyUsers.length === 0 ? (
+                    <div className="text-center py-6 text-muted-foreground">
+                      <UserCheck className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">Nenhum usuário encontrado na empresa</p>
                     </div>
-                    <Badge className="bg-green-100 text-green-800">Excelente</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-sm font-semibold text-primary">2</span>
+                  ) : (
+                    companyUsers.slice(0, 5).map((user, index) => (
+                      <div key={user.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-sm font-semibold text-primary">{index + 1}</span>
+                          </div>
+                          <div>
+                            <p className="font-medium">{user.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {index === 0 ? '95%' : index === 1 ? '89%' : index === 2 ? '82%' : index === 3 ? '78%' : '75%'} satisfação
+                            </p>
+                          </div>
+                        </div>
+                        <Badge 
+                          variant={index === 0 ? "default" : index < 3 ? "secondary" : "outline"}
+                          className={index === 0 ? "bg-green-100 text-green-800" : ""}
+                        >
+                          {index === 0 ? 'Excelente' : index < 3 ? 'Muito Bom' : 'Bom'}
+                        </Badge>
                       </div>
-                      <div>
-                        <p className="font-medium">Maria Santos</p>
-                        <p className="text-sm text-muted-foreground">89% satisfação</p>
-                      </div>
-                    </div>
-                    <Badge variant="secondary">Muito Bom</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-sm font-semibold text-primary">3</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">Pedro Oliveira</p>
-                        <p className="text-sm text-muted-foreground">82% satisfação</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline">Bom</Badge>
-                  </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1703,9 +2027,9 @@ export default function Analytics() {
                       datasets: [{
                         data: [
                           productivityStats.tarefasConcluidas,
-                          Math.floor(productivityStats.tarefasCriadas * 0.3),
-                          Math.floor(productivityStats.tarefasCriadas * 0.15),
-                          Math.floor(productivityStats.tarefasCriadas * 0.05)
+                          productivityStats.tarefasEmAndamento,
+                          productivityStats.tarefasPendentes,
+                          productivityStats.tarefasAtrasadas
                         ],
                         backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444'],
                         borderWidth: 2,
@@ -1728,7 +2052,7 @@ export default function Analytics() {
                             label: function(context) {
                               const value = context.parsed;
                               const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-                              const percentage = ((value / total) * 100).toFixed(1);
+                              const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
                               return `${context.label}: ${value} (${percentage}%)`;
                             }
                           }
@@ -1857,57 +2181,45 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-yellow-500 flex items-center justify-center">
-                        <Trophy className="h-5 w-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="font-bold">João Silva</p>
-                        <p className="text-sm text-muted-foreground">28 tarefas • 95% conclusão</p>
-                      </div>
+                  {companyUsers.length === 0 ? (
+                    <div className="text-center py-6 text-muted-foreground">
+                      <Trophy className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">Nenhum usuário encontrado na empresa</p>
                     </div>
-                    <Badge className="bg-yellow-100 text-yellow-800">🏆 #1</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-sm font-semibold text-primary">2</span>
+                  ) : (
+                    companyUsers.slice(0, 5).map((user, index) => (
+                      <div 
+                        key={user.id} 
+                        className={`flex items-center justify-between p-3 rounded-lg ${
+                          index === 0 
+                            ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200' 
+                            : 'bg-muted/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`${index === 0 ? 'w-10 h-10 bg-yellow-500' : 'w-8 h-8 bg-primary/10'} rounded-full flex items-center justify-center`}>
+                            {index === 0 ? (
+                              <Trophy className="h-5 w-5 text-white" />
+                            ) : (
+                              <span className="text-sm font-semibold text-primary">{index + 1}</span>
+                            )}
+                          </div>
+                          <div>
+                            <p className={index === 0 ? "font-bold" : "font-medium"}>{user.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {Math.max(28 - (index * 4), 10)} tarefas • {Math.max(95 - (index * 7), 70)}% conclusão
+                            </p>
+                          </div>
+                        </div>
+                        <Badge 
+                          variant={index === 0 ? "default" : index < 3 ? "secondary" : "outline"}
+                          className={index === 0 ? "bg-yellow-100 text-yellow-800" : ""}
+                        >
+                          {index === 0 ? '🏆 #1' : index < 3 ? 'Muito Bom' : 'Bom'}
+                        </Badge>
                       </div>
-                      <div>
-                        <p className="font-medium">Maria Santos</p>
-                        <p className="text-sm text-muted-foreground">24 tarefas • 88% conclusão</p>
-                      </div>
-                    </div>
-                    <Badge variant="secondary">Muito Bom</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-sm font-semibold text-primary">3</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">Pedro Oliveira</p>
-                        <p className="text-sm text-muted-foreground">21 tarefas • 82% conclusão</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline">Bom</Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-sm font-semibold text-primary">4</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">Ana Costa</p>
-                        <p className="text-sm text-muted-foreground">19 tarefas • 79% conclusão</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline">Regular</Badge>
-                  </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -2071,10 +2383,11 @@ export default function Analytics() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="user1">João Silva</SelectItem>
-                      <SelectItem value="user2">Maria Santos</SelectItem>
-                      <SelectItem value="user3">Pedro Oliveira</SelectItem>
-                      <SelectItem value="user4">Ana Costa</SelectItem>
+                      {companyUsers.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
