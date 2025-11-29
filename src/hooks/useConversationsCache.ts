@@ -45,7 +45,7 @@ interface CacheData {
   companyId: string;
 }
 
-const CACHE_KEY = 'conversas_cache_v1';
+const CACHE_KEY = 'conversas_cache_v2'; // ⚡ v2: Corrigido sentBy
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutos
 
 export const useConversationsCache = (companyId: string | null) => {
@@ -142,13 +142,13 @@ export const useConversationsCache = (companyId: string | null) => {
     try {
       console.log('📡 [DATABASE] Carregando histórico...');
 
-      // ⚡ OTIMIZADO: Buscar apenas campos essenciais sem mídia pesada (500 mensagens recentes)
+      // ⚡ OTIMIZADO: Query com campos essenciais
       const { data: conversasData, error } = await supabase
         .from('conversas')
-        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, midia_url, arquivo_nome, sent_by, owner_id')
+        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, arquivo_nome, sent_by, owner_id, midia_url')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
-        .limit(500);
+        .limit(300); // ⚡ Reduzido para 300 (mais rápido)
 
       if (error) throw error;
 
@@ -162,6 +162,29 @@ export const useConversationsCache = (companyId: string | null) => {
       );
 
       console.log(`✅ [DATABASE] ${validConversas.length} mensagens válidas`);
+
+      // ⚡ FASE 2.2: Buscar nomes dos usuários baseado nos owner_id (ANTES de processar mensagens)
+      const ownerIdsSet = new Set<string>();
+      validConversas.forEach(conv => {
+        if (conv.owner_id && (conv.fromme === true || conv.status === 'Enviada')) {
+          ownerIdsSet.add(conv.owner_id);
+        }
+      });
+      
+      const ownerNamesMap = new Map<string, string>();
+      if (ownerIdsSet.size > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', Array.from(ownerIdsSet));
+        
+        if (profilesData) {
+          profilesData.forEach(profile => {
+            ownerNamesMap.set(profile.id, profile.full_name || profile.email || 'Usuário');
+          });
+        }
+        console.log(`👥 [DATABASE] ${ownerNamesMap.size} nomes de usuários carregados`);
+      }
 
       // ⚡ FASE 2.3: Agrupar APENAS por telefone (ignorar nome)
       const conversasMap = new Map<string, any[]>();
@@ -179,23 +202,41 @@ export const useConversationsCache = (companyId: string | null) => {
 
       // Converter para formato Conversation
       const conversations: Conversation[] = Array.from(conversasMap.entries()).map(([telefone, mensagens]) => {
+        // ⚡ OTIMIZAÇÃO: Deduplicar apenas por ID (mais rápido)
+        const mensagensDeduplicadas = Array.from(new Map(mensagens.map(m => [m.id, m])).values());
+        
         // ⚡ Últimas 100 mensagens por conversa (otimização)
-        const mensagensOrdenadas = mensagens
+        const mensagensOrdenadas = mensagensDeduplicadas
           .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         
         const mensagensRecentes = mensagensOrdenadas.slice(-100);
         
         const messagensFormatadas: Message[] = mensagensRecentes
-          .map(m => ({
-            id: m.id || `msg-${Date.now()}-${Math.random()}`,
-            content: m.mensagem || '',
-            type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
-            sender: (m.fromme === true || m.status === 'Enviada') ? "user" : "contact",
-            timestamp: new Date(m.created_at || Date.now()),
-            delivered: true,
-            read: m.status !== 'Recebida',
-            sentBy: m.sent_by || undefined, // ⚡ CORREÇÃO: Incluir assinatura do banco
-          }));
+          .map(m => {
+            const isFromMe = m.fromme === true || m.status === 'Enviada';
+            // ⚡ CORREÇÃO DEFINITIVA: Usar sent_by do banco, com fallback pelo owner_id
+            // 1. Primeiro, tenta usar sent_by do banco (já salvo permanentemente)
+            // 2. Se não tiver sent_by, busca pelo owner_id no ownerNamesMap
+            // 3. Se nenhum funcionar e for mensagem enviada, usa "Equipe"
+            let sentBy = m.sent_by || undefined;
+            
+            if (!sentBy && isFromMe && m.owner_id) {
+              sentBy = ownerNamesMap.get(m.owner_id) || "Equipe";
+            } else if (!sentBy && isFromMe) {
+              sentBy = "Equipe"; // Fallback final
+            }
+            
+            return {
+              id: m.id || `msg-${Date.now()}-${Math.random()}`,
+              content: m.mensagem || '',
+              type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
+              sender: isFromMe ? "user" : "contact",
+              timestamp: new Date(m.created_at || Date.now()),
+              delivered: true,
+              read: m.status !== 'Recebida',
+              sentBy: sentBy, // ⚡ CORREÇÃO: Incluir assinatura do banco com fallback
+            };
+          });
 
         // ⚡ Pegar primeiro nome_contato disponível (já está garantido pelo trigger)
         const contactName = mensagens.find(m => m.nome_contato)?.nome_contato || telefone;
@@ -210,7 +251,8 @@ export const useConversationsCache = (companyId: string | null) => {
           statusConversa = "answered";
         } else if (ultimaMensagem) {
           // ⚡ MELHORIA: Verificar se é conversa "ao vivo" (interação recente)
-          const TEMPO_CONVERSA_AO_VIVO = 5 * 60 * 1000; // 5 minutos
+          // Se o usuário respondeu recentemente, manter em "Em Atendimento"
+          const TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000; // 10 minutos (aumentado)
           const agora = Date.now();
           
           const ultimaMensagemDoUsuario = [...messagensFormatadas]
@@ -222,15 +264,17 @@ export const useConversationsCache = (companyId: string | null) => {
               ? ultimaMensagemDoUsuario.timestamp.getTime() 
               : new Date(ultimaMensagemDoUsuario.timestamp).getTime();
             
-            const tempoUltimaMsgContato = ultimaMensagem.timestamp instanceof Date 
-              ? ultimaMensagem.timestamp.getTime() 
-              : new Date(ultimaMensagem.timestamp).getTime();
+            // ⚡ CORREÇÃO: Apenas verificar se o usuário respondeu recentemente
+            // Não precisa que o contato também tenha respondido recentemente
+            const usuarioRespondeuRecentemente = (agora - tempoUltimaMsgUsuario) < TEMPO_CONVERSA_AO_VIVO;
             
-            // Conversa ao vivo = ambos interagiram nos últimos 5 min
-            if ((agora - tempoUltimaMsgUsuario) < TEMPO_CONVERSA_AO_VIVO && 
-                (agora - tempoUltimaMsgContato) < TEMPO_CONVERSA_AO_VIVO) {
+            if (usuarioRespondeuRecentemente) {
               statusConversa = "answered"; // Manter em "Em Atendimento"
+            } else {
+              statusConversa = "waiting"; // Usuário não respondeu - aguardando
             }
+          } else {
+            statusConversa = "waiting"; // Sem resposta do usuário
           }
         }
 
@@ -323,13 +367,13 @@ export const useConversationsCache = (companyId: string | null) => {
     }
   }, [companyId, loadFromCache, loadFromDatabase, saveToCache]);
 
-  // 🚀 Auto-sync quando companyId muda
-  useEffect(() => {
-    if (companyId) {
-      console.log('🚀 [CACHE] Iniciando sync para company:', companyId);
-      syncConversations();
-    }
-  }, [companyId]);
+  // ⚡ REMOVIDO: Auto-sync automático para evitar loop infinito
+  // O componente Conversas.tsx controla quando carregar
+  // useEffect(() => {
+  //   if (companyId) {
+  //     syncConversations();
+  //   }
+  // }, [companyId]);
 
   // 🔄 Atualizar conversa específica
   const updateConversation = useCallback((updatedConv: Conversation) => {

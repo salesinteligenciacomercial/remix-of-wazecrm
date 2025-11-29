@@ -46,15 +46,15 @@ export const useConversationsLoader = () => {
         userCompanyId = userRole.company_id;
       }
       
-      // ⚡ OTIMIZAÇÃO: Carregar apenas mensagens recentes inicialmente
-      const MESSAGES_TO_FETCH = append ? 200 : 500; // Carregamento incremental otimizado
+      // ⚡ OTIMIZAÇÃO EXTREMA: Carregar menos mensagens para performance
+      const MESSAGES_TO_FETCH = append ? 100 : 300; // Reduzido para carregamento rápido
       
       console.log(`📊 [LOAD] Carregando ${MESSAGES_TO_FETCH} mensagens recentes...`);
       
-      // ⚡ OTIMIZAÇÃO: Query mais simples e eficiente usando índices
+      // ⚡ OTIMIZAÇÃO: Query com campos essenciais
       let query = supabase
         .from('conversas')
-        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, midia_url, fromme, company_id, sent_by, assigned_user_id')
+        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, company_id, sent_by, assigned_user_id, owner_id, midia_url')
         .eq('company_id', userCompanyId)
         .order('created_at', { ascending: false });
       
@@ -243,6 +243,28 @@ export const useConversationsLoader = () => {
           });
         }
       }
+      
+      // ⚡ CORREÇÃO: Buscar nomes dos usuários por owner_id para exibir assinatura correta
+      const ownerIds = Array.from(new Set(
+        validConversas
+          .filter(c => c.owner_id && (c.fromme === true || String(c.fromme) === 'true'))
+          .map(c => c.owner_id)
+      ));
+      
+      const ownerNamesMap = new Map<string, string>();
+      if (ownerIds.length > 0) {
+        const { data: ownersData } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', ownerIds);
+        
+        if (ownersData) {
+          ownersData.forEach(owner => {
+            ownerNamesMap.set(owner.id, owner.full_name || owner.email || 'Usuário');
+          });
+        }
+        console.log(`👥 [LOAD] ${ownerNamesMap.size} nomes de usuários carregados por owner_id`);
+      }
 
       // Criar conversas - ⚡ CORREÇÃO DEFINITIVA: Priorizar nome do lead e unificar nomes variantes
       const novasConversas: Conversation[] = Array.from(conversasMap.entries())
@@ -288,20 +310,29 @@ export const useConversationsLoader = () => {
           // MELHORIA: Carregar TODAS as mensagens carregadas do banco
           const messagensFormatadas: Message[] = mensagens
             .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-            .map(m => ({
-              id: m.id || `msg-${Date.now()}-${Math.random()}`,
-              content: m.mensagem || '',
-              type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
-              // ✅ CORREÇÃO CRÍTICA: Usar APENAS fromme para determinar sender
-              // fromme === true → mensagem enviada pelo usuário (sender: "user")
-              // fromme === false/null → mensagem recebida do contato (sender: "contact")
-              sender: (m.fromme === true || String(m.fromme) === 'true') ? "user" : "contact",
-              timestamp: new Date(m.created_at || Date.now()),
-              delivered: true,
-              read: m.status !== 'Recebida',
-              mediaUrl: m.midia_url,
-              sentBy: m.sent_by || undefined, // ✅ CORREÇÃO: Incluir assinatura do remetente
-            }));
+            .map(m => {
+              const isFromMe = m.fromme === true || String(m.fromme) === 'true';
+              // ⚡ CORREÇÃO DEFINITIVA: Usar sent_by do banco, com fallback pelo owner_id
+              let sentBy = m.sent_by || undefined;
+              
+              if (!sentBy && isFromMe && m.owner_id) {
+                sentBy = ownerNamesMap.get(m.owner_id) || "Equipe";
+              } else if (!sentBy && isFromMe) {
+                sentBy = "Equipe"; // Fallback final
+              }
+              
+              return {
+                id: m.id || `msg-${Date.now()}-${Math.random()}`,
+                content: m.mensagem || '',
+                type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
+                sender: isFromMe ? "user" : "contact",
+                timestamp: new Date(m.created_at || Date.now()),
+                delivered: true,
+                read: m.status !== 'Recebida',
+                mediaUrl: m.midia_url,
+                sentBy: sentBy, // ✅ CORREÇÃO: Incluir assinatura com fallback correto
+              };
+            });
 
           const ultimaMensagem = messagensFormatadas[messagensFormatadas.length - 1];
           let statusConversa: "waiting" | "answered" | "resolved" = "waiting";
@@ -314,7 +345,8 @@ export const useConversationsLoader = () => {
               statusConversa = "answered";
             } else {
               // ⚡ MELHORIA: Verificar se é uma conversa "ao vivo" (interação recente)
-              const TEMPO_CONVERSA_AO_VIVO = 5 * 60 * 1000; // 5 minutos
+              // Se o usuário respondeu recentemente, manter em "Em Atendimento"
+              const TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000; // 10 minutos (aumentado)
               const agora = Date.now();
               
               const ultimaMensagemDoUsuario = [...messagensFormatadas]
@@ -326,19 +358,17 @@ export const useConversationsLoader = () => {
                   ? ultimaMensagemDoUsuario.timestamp.getTime() 
                   : new Date(ultimaMensagemDoUsuario.timestamp).getTime();
                 
-                const tempoUltimaMsgContato = ultimaMensagem.timestamp instanceof Date 
-                  ? ultimaMensagem.timestamp.getTime() 
-                  : new Date(ultimaMensagem.timestamp).getTime();
+                // ⚡ CORREÇÃO: Apenas verificar se o usuário respondeu recentemente
+                // Não precisa que o contato também tenha respondido recentemente
+                const usuarioRespondeuRecentemente = (agora - tempoUltimaMsgUsuario) < TEMPO_CONVERSA_AO_VIVO;
                 
-                // Conversa ao vivo = ambos interagiram nos últimos 5 min
-                if ((agora - tempoUltimaMsgUsuario) < TEMPO_CONVERSA_AO_VIVO && 
-                    (agora - tempoUltimaMsgContato) < TEMPO_CONVERSA_AO_VIVO) {
+                if (usuarioRespondeuRecentemente) {
                   statusConversa = "answered"; // Manter em "Em Atendimento"
                 } else {
-                  statusConversa = "waiting";
+                  statusConversa = "waiting"; // Usuário não respondeu - aguardando
                 }
               } else {
-                statusConversa = "waiting";
+                statusConversa = "waiting"; // Sem resposta do usuário
               }
             }
           }

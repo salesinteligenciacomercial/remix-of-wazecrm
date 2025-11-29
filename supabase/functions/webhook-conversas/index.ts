@@ -1126,47 +1126,37 @@ serve(async (req) => {
       fromme: validatedData.fromMe === true, // CORREÇÃO: fromme minúsculo (PostgreSQL converte para lowercase)
     };
     
-    // ⚡ CORREÇÃO DEFINITIVA: Se mensagem foi enviada (fromMe = true), SEMPRE adicionar assinatura
-    if (validatedData.fromMe === true) {
-      // Primeiro, garantir que tenha uma assinatura padrão
-      insertData.sent_by = "Equipe";
+    // ⚡ CORREÇÃO DEFINITIVA: Se mensagem foi enviada (fromMe = true), verificar se já existe no banco
+    // Isso evita duplicação quando o CRM já salvou a mensagem antes do webhook receber
+    if (validatedData.fromMe === true && companyId) {
+      // Verificar se mensagem já existe (salva pelo CRM)
+      const mensagemTexto = validatedData.mensagem?.substring(0, 100) || '';
+      const { data: mensagemExistente } = await supabase
+        .from('conversas')
+        .select('id, sent_by, owner_id')
+        .eq('company_id', companyId)
+        .eq('telefone_formatado', telefoneFormatadoFinal)
+        .eq('fromme', true)
+        .ilike('mensagem', `${mensagemTexto.substring(0, 50)}%`)
+        .gte('created_at', new Date(Date.now() - 60000).toISOString()) // Últimos 60 segundos
+        .limit(1)
+        .maybeSingle();
       
-      if (companyId) {
-        try {
-          // Buscar usuários da empresa para tentar identificar quem enviou
-          const { data: companyUsers } = await supabase
-            .from('user_roles')
-            .select('user_id, role')
-            .eq('company_id', companyId)
-            .order('role', { ascending: true }); // admin primeiro
-          
-          if (companyUsers && companyUsers.length > 0) {
-            // Buscar nomes de todos os usuários da empresa
-            const userIds = companyUsers.map(u => u.user_id);
-            const { data: profiles } = await supabase
-              .from('profiles')
-              .select('id, full_name, email')
-              .in('id', userIds);
-            
-            if (profiles && profiles.length > 0) {
-              // Usar o primeiro usuário com nome preenchido
-              const userWithName = profiles.find(p => p.full_name && p.full_name.trim() !== '');
-              if (userWithName) {
-                insertData.sent_by = userWithName.full_name;
-                insertData.owner_id = userWithName.id;
-              } else if (profiles[0]) {
-                // Fallback: usar email se não tiver nome
-                insertData.sent_by = profiles[0].email || "Equipe";
-                insertData.owner_id = profiles[0].id;
-              }
-            }
-          }
-          console.log('✅ [WEBHOOK] Assinatura DEFINITIVA adicionada:', insertData.sent_by);
-        } catch (error) {
-          console.error('⚠️ [WEBHOOK] Erro ao buscar assinatura, usando fallback "Equipe":', error);
-          // Manter o fallback "Equipe" já definido acima
-        }
+      if (mensagemExistente) {
+        console.log('⚠️ [WEBHOOK] Mensagem enviada já existe no banco (salva pelo CRM), ignorando duplicata:', {
+          id: mensagemExistente.id,
+          sent_by: mensagemExistente.sent_by
+        });
+        return new Response(
+          JSON.stringify({ success: true, message: 'Mensagem já existe, ignorando duplicata' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
+      
+      // ⚡ CORREÇÃO: Mensagem enviada pelo WhatsApp App/Web (fora do CRM)
+      // Marcar como "WhatsApp" para diferenciar de mensagens enviadas pelo CRM
+      insertData.sent_by = "WhatsApp";
+      console.log('📱 [WEBHOOK] Mensagem enviada pelo WhatsApp App/Web detectada, usando assinatura "WhatsApp"');
     }
     
     // ⚡ CORREÇÃO: Adicionar company_id apenas se existir

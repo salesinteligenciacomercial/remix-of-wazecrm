@@ -155,15 +155,15 @@ interface Meeting {
 }
 
 const CONVERSATIONS_KEY = "continuum_conversations";
-const CONVERSATIONS_CACHE_KEY = "continuum_conversations_cache"; // Cache para carregamento instantâneo
-const CONVERSATIONS_CACHE_TIMESTAMP_KEY = "continuum_conversations_cache_timestamp";
+const CONVERSATIONS_CACHE_KEY = "continuum_conversations_cache_v2"; // ⚡ v2: Corrigido sentBy
+const CONVERSATIONS_CACHE_TIMESTAMP_KEY = "continuum_conversations_cache_timestamp_v2"; // ⚡ v2: Corrigido sentBy
 const QUICK_MESSAGES_KEY = "continuum_quick_messages";
 const QUICK_CATEGORIES_KEY = "continuum_quick_categories";
 const REMINDERS_KEY = "continuum_reminders";
 const SCHEDULED_MESSAGES_KEY = "continuum_scheduled_messages";
 const MEETINGS_KEY = "continuum_meetings";
 const AI_MODE_KEY = "continuum_ai_mode";
-const CACHE_MAX_AGE = 10 * 60 * 1000; // Cache válido por 10 minutos (aumentado para melhor performance)
+const CACHE_MAX_AGE = 30 * 60 * 1000; // Cache válido por 30 minutos (carregamento instantâneo)
 
 const initialConversations: Conversation[] = [
   {
@@ -237,33 +237,9 @@ function Conversas() {
     addMessage: addCachedMessage
   } = useConversationsCache(userCompanyId);
 
-  // ⚡ CARREGAR FOTOS DE PERFIL de forma assíncrona para todas as conversas
-  useEffect(() => {
-    if (!userCompanyId || cachedConversations.length === 0) return;
-
-    const loadAvatars = async () => {
-      const conversationsWithAvatars = await Promise.all(
-        cachedConversations.map(async (conv) => {
-          // Se já tem foto real (não é placeholder), não recarregar
-          if (conv.avatarUrl && !conv.avatarUrl.includes('ui-avatars.com')) {
-            return conv;
-          }
-
-          const phoneNumber = conv.phoneNumber || conv.id;
-          const profilePic = await getProfilePictureWithFallback(phoneNumber, userCompanyId, conv.contactName);
-          
-          return {
-            ...conv,
-            avatarUrl: profilePic || conv.avatarUrl
-          };
-        })
-      );
-
-      setConversations(conversationsWithAvatars);
-    };
-
-    loadAvatars();
-  }, [cachedConversations, userCompanyId]);
+  // ⚡ DESATIVADO: Carregamento de avatares movido para lazy loading
+  // Para evitar loops e melhorar performance
+  // Avatares são carregados quando a conversa é aberta
   
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
@@ -1206,12 +1182,40 @@ function Conversas() {
                       });
                       
                       // Atualizar status baseado na última mensagem
+                      // ⚡ CORREÇÃO: Verificar se conversa está "ao vivo" antes de mudar para waiting
                       let novoStatus: "waiting" | "answered" | "resolved" = conv.status;
                       if (conv.status !== 'resolved') {
                         if (novaMensagemObj.sender === 'user') {
                           novoStatus = 'answered';
                         } else if (novaMensagemObj.sender === 'contact') {
-                          novoStatus = 'waiting';
+                          // ⚡ CORREÇÃO: Verificar se o usuário respondeu recentemente (conversa ao vivo)
+                          const TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000; // 10 minutos
+                          const agora = Date.now();
+                          
+                          // Buscar última mensagem do usuário nas mensagens atualizadas
+                          const ultimaMsgUsuario = novasMensagens
+                            .filter(m => m.sender === 'user')
+                            .sort((a, b) => {
+                              const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+                              const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+                              return timeB - timeA;
+                            })[0];
+                          
+                          if (ultimaMsgUsuario) {
+                            const tempoUltimaResposta = ultimaMsgUsuario.timestamp instanceof Date 
+                              ? ultimaMsgUsuario.timestamp.getTime() 
+                              : new Date(ultimaMsgUsuario.timestamp).getTime();
+                            
+                            const usuarioRespondeuRecentemente = (agora - tempoUltimaResposta) < TEMPO_CONVERSA_AO_VIVO;
+                            
+                            if (usuarioRespondeuRecentemente) {
+                              novoStatus = 'answered'; // Manter em atendimento (conversa ao vivo)
+                            } else {
+                              novoStatus = 'waiting'; // Usuário não respondeu recentemente
+                            }
+                          } else {
+                            novoStatus = 'waiting'; // Sem resposta do usuário
+                          }
                         }
                       }
                       
@@ -2079,136 +2083,69 @@ function Conversas() {
     }
   }, [location, conversations, userCompanyId]);
 
-  // 📡 CRÍTICO: Configurar canal realtime APENAS quando userCompanyId estiver disponível
-  // ⚡ NOTA: Este useEffect foi removido porque já existe um useEffect anterior (linha 1727)
-  // que configura o canal realtime. O código duplicado estava causando conflitos.
-  
-  // ⚡ INSTANTÂNEO: Carregar do cache IMEDIATAMENTE (sem esperar userCompanyId)
-  // ⚡ CRÍTICO: Executar ANTES de qualquer outra coisa para carregamento instantâneo
+  // ⚡ CARREGAMENTO ÚNICO E OTIMIZADO: Cache primeiro, depois banco
   useEffect(() => {
-    // ⚡ Carregar do cache instantaneamente (tempo 0) - SEM esperar userCompanyId ou qualquer outra coisa
-    const loadFromCache = () => {
-      try {
-        const cachedData = sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
-        const cacheTimestamp = sessionStorage.getItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY);
-        
-        if (cachedData && cacheTimestamp) {
-          const age = Date.now() - parseInt(cacheTimestamp, 10);
-          // ⚡ Aumentar tempo de cache válido para 10 minutos (era 5)
-          if (age < CACHE_MAX_AGE) {
-            const cachedConversations = JSON.parse(cachedData);
-            
-            // ⚡ CORREÇÃO: Converter strings de data de volta para objetos Date
-            const restoredConversations = cachedConversations.map((conv: any) => ({
-              ...conv,
-              messages: (conv.messages || []).map((msg: any) => ({
-                ...msg,
-                timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
-              }))
-            }));
-            
-            console.log(`⚡ [CACHE] Carregando ${restoredConversations.length} conversas do cache INSTANTANEAMENTE (${age}ms atrás)`);
-            setConversations(restoredConversations);
-            // ⚡ CRÍTICO: Setar loadingConversations como false IMEDIATAMENTE para exibir conversas do cache
-            setLoadingConversations(false);
-            return true; // Cache válido
-          } else {
-            console.log('⏱️ [CACHE] Cache expirado, será recarregado do Supabase');
-          }
-        }
-        return false; // Cache inválido ou não existe
-      } catch (error) {
-        console.error('❌ [CACHE] Erro ao carregar do cache:', error);
-        return false;
-      }
-    };
-
-    // Executar imediatamente
-    loadFromCache();
-  }, []); // ⚡ Executar apenas uma vez no mount
-  
-  // ⚡ INSTANTÂNEO: Carregar do cache IMEDIATAMENTE (sem esperar userCompanyId)
-  // ⚡ CRÍTICO: Executar ANTES de qualquer outra coisa para carregamento instantâneo
-  useEffect(() => {
-    // ⚡ Carregar do cache instantaneamente (tempo 0) - SEM esperar userCompanyId ou qualquer outra coisa
-    const loadFromCache = () => {
-      try {
-        const cachedData = sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
-        const cacheTimestamp = sessionStorage.getItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY);
-        
-        if (cachedData && cacheTimestamp) {
-          const age = Date.now() - parseInt(cacheTimestamp, 10);
-          // ⚡ Aumentar tempo de cache válido para 10 minutos (era 5)
-          if (age < CACHE_MAX_AGE) {
-            const cachedConversations = JSON.parse(cachedData);
-            
-            // ⚡ CORREÇÃO: Converter strings de data de volta para objetos Date
-            const restoredConversations = cachedConversations.map((conv: any) => ({
-              ...conv,
-              messages: (conv.messages || []).map((msg: any) => ({
-                ...msg,
-                timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
-              }))
-            }));
-            
-            console.log(`⚡ [CACHE] Carregando ${restoredConversations.length} conversas do cache INSTANTANEAMENTE (${age}ms atrás)`);
-            setConversations(restoredConversations);
-            // ⚡ CRÍTICO: Setar loadingConversations como false IMEDIATAMENTE para exibir conversas do cache
-            setLoadingConversations(false);
-            return true; // Cache válido
-          } else {
-            console.log('⏰ [CACHE] Cache expirado, recarregando...');
-            sessionStorage.removeItem(CONVERSATIONS_CACHE_KEY);
-            sessionStorage.removeItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY);
-          }
-        }
-      } catch (error) {
-        console.error('❌ [CACHE] Erro ao carregar cache:', error);
-      }
-      return false; // Cache inválido ou não existe
-    };
-    
-    // ⚡ Carregar do cache IMEDIATAMENTE (sem esperar nada)
-    loadFromCache();
-  }, []); // ⚡ Executar apenas uma vez no mount - INSTANTÂNEO (antes de tudo)
-
-  // 📡 CARREGAMENTO INSTANTÂNEO: Usar hook de cache para zero tempo de espera
-  // ⚡ O hook carrega do localStorage imediatamente e sincroniza em background
-  useEffect(() => {
-    if (!userCompanyId) return;
-    
     // ⚡ Evitar múltiplos carregamentos
     if (initialLoadRef.current) return;
+    
+    // ⚡ PASSO 1: Tentar carregar do cache INSTANTANEAMENTE
+    try {
+      const cachedData = sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
+      const cacheTimestamp = sessionStorage.getItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY);
+      
+      if (cachedData && cacheTimestamp) {
+        const age = Date.now() - parseInt(cacheTimestamp, 10);
+        if (age < CACHE_MAX_AGE) {
+          const cachedConversations = JSON.parse(cachedData);
+          const restoredConversations = cachedConversations.map((conv: any) => ({
+            ...conv,
+            messages: (conv.messages || []).map((msg: any) => ({
+              ...msg,
+              timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
+            }))
+          }));
+          
+          console.log(`⚡ [CACHE] ${restoredConversations.length} conversas carregadas do cache`);
+          setConversations(restoredConversations);
+          setLoadingConversations(false);
+        }
+      }
+    } catch (error) {
+      console.error('❌ [CACHE] Erro ao carregar cache:', error);
+    }
+    
+    // ⚡ PASSO 2: Carregar do banco quando companyId estiver disponível
+    if (!userCompanyId) return;
+    
     initialLoadRef.current = true;
+    console.log('⚡ [LOAD] Carregando conversas para company:', userCompanyId);
     
-    console.log('⚡ [INSTANT] Carregamento instantâneo iniciado');
-    
-    // ⚡ OTIMIZAÇÃO: Verificar se já temos cache válido antes de forçar refresh
-    // Se já temos cache, não forçar refresh para evitar delay desnecessário
-    const cachedData = sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
-    const cacheTimestamp = sessionStorage.getItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY);
-    const hasValidCache = cachedData && cacheTimestamp && (Date.now() - parseInt(cacheTimestamp, 10)) < CACHE_MAX_AGE;
-    
-    // Se já temos cache válido, sincronizar em background sem forçar refresh
-    syncConversations(hasValidCache ? false : true).then(() => {
-      console.log('✅ [INSTANT] Conversas disponíveis instantaneamente');
+    loadSupabaseConversations().then(() => {
+      console.log('✅ [LOAD] Conversas carregadas');
     }).catch((err) => {
-      console.error('❌ [INSTANT] Erro:', err);
+      console.error('❌ [LOAD] Erro:', err);
       initialLoadRef.current = false;
     });
-  }, [userCompanyId, syncConversations]);
+  }, [userCompanyId]); // ⚡ Executar quando userCompanyId mudar
 
-  // Fallback: polling com jitter enquanto desconectado
+  // Fallback: polling com jitter enquanto desconectado (OTIMIZADO)
   useEffect(() => {
-    if (realtimeConnectionStatus === 'connected') return;
+    // ⚡ CORREÇÃO: Só fazer polling se realmente desconectado E se já carregou inicialmente
+    if (realtimeConnectionStatus === 'connected' || !initialLoadRef.current) return;
+    
     const schedule = () => {
-      const jitter = 8000 + Math.floor(Math.random() * 4000); // 8-12s
+      const jitter = 15000 + Math.floor(Math.random() * 5000); // 15-20s (aumentado para reduzir carga)
       pollingTimeoutRef.current = setTimeout(async () => {
         try {
-          console.log('⏱️ [FALLBACK] Polling de conversas (jitter) por desconexão do realtime');
-          await loadSupabaseConversations();
+          console.log('⏱️ [FALLBACK] Polling de conversas (jitter)');
+          // ⚡ CORREÇÃO: Não chamar loadSupabaseConversations se já está carregando
+          if (!loadingConversations) {
+            await loadSupabaseConversations();
+          }
         } finally {
-          if (realtimeConnectionStatus === 'disconnected' || realtimeConnectionStatus === 'error') schedule();
+          if (realtimeConnectionStatus === 'disconnected' || realtimeConnectionStatus === 'error') {
+            schedule();
+          }
         }
       }, jitter);
     };
@@ -2399,18 +2336,16 @@ function Conversas() {
       }
     }
       
-      // ⚡ CORREÇÃO: Remover limite de conversas - carregar TODAS as conversas do WhatsApp
-      // Não usar INITIAL_LIMIT para limitar conversas - todas devem ser exibidas
-      const MESSAGES_PER_CONVERSATION = 10; // Aumentar para 10 últimas mensagens por conversa (melhor histórico)
+      // ⚡ OTIMIZAÇÃO EXTREMA: Carregamento ultra-rápido
+      const MESSAGES_PER_CONVERSATION = 5; // Reduzido para 5 (carrega mais depois)
       
-      // ⚡ FASE 1 - OTIMIZAÇÃO: Reduzir drasticamente o limite de mensagens para performance
-      // REMOVER midia_url da query para evitar carregar GBs de dados BASE64
-      const MESSAGES_TO_FETCH = append ? 200 : 500; // Reduzido de 5000 para 500 (10x mais rápido)
+      // ⚡ FASE 1 - OTIMIZAÇÃO EXTREMA: Carregar menos mensagens inicialmente
+      const MESSAGES_TO_FETCH = append ? 100 : 300; // Reduzido de 500 para 300 (mais rápido)
       
-      // ⚡ FASE 1 - OTIMIZAÇÃO CRÍTICA: Não buscar midia_url (economiza GBs), adicionar sent_by e owner_id
+      // ⚡ OTIMIZAÇÃO: Query com campos essenciais (midia_url necessário para exibir mídias)
       let query = supabase
         .from('conversas')
-        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, sent_by, owner_id, midia_url, arquivo_nome')
+        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, sent_by, owner_id, arquivo_nome, midia_url')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false });
       
@@ -2799,10 +2734,10 @@ function Conversas() {
         conversasDeduplicadas.get(telefoneCorreto)!.push(...msgs);
       });
       
-      // ETAPA 4: Substituir conversasMap pelas conversas deduplicadas
+      // ETAPA 4: Substituir conversasMap pelas conversas deduplicadas (OTIMIZADO)
       conversasMap.clear();
       conversasDeduplicadas.forEach((msgs, key) => {
-        // Ordenar por data e remover mensagens duplicadas (mesmo ID)
+        // ⚡ OTIMIZAÇÃO: Deduplicar apenas por ID (mais rápido)
         const uniqueMsgs = Array.from(new Map(msgs.map(m => [m.id, m])).values());
         uniqueMsgs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         conversasMap.set(key, uniqueMsgs);
@@ -2997,9 +2932,16 @@ function Conversas() {
             const isFromMe = m.fromme === true || m.fromme === 'true';
             const sender: "user" | "contact" = isFromMe ? "user" : "contact";
             
-            // ⚡ CORREÇÃO DEFINITIVA: Usar sent_by do banco de dados (já salvo permanentemente)
+            // ⚡ CORREÇÃO DEFINITIVA: Usar sent_by do banco, com fallback pelo owner_id
+            // 1. Primeiro, tenta usar sent_by do banco (já salvo permanentemente)
+            // 2. Se não tiver sent_by, busca pelo owner_id no ownerNamesMap
+            // 3. Se nenhum funcionar e for mensagem enviada (fromme=true), usa "Equipe"
             let sentBy: string | undefined = m.sent_by || undefined;
-            console.log('🔍 [SENTBY] Usando sent_by do banco para mensagem:', m.id, '-> sent_by:', sentBy);
+            
+            // ⚡ FALLBACK: Se não tiver sent_by mas tiver owner_id, buscar nome do usuário
+            if (!sentBy && m.owner_id && isFromMe) {
+              sentBy = ownerNamesMap.get(m.owner_id) || "Equipe";
+            }
             
             return {
               id: m.id || `msg-${Date.now()}-${Math.random()}`,
@@ -3042,8 +2984,8 @@ function Conversas() {
             statusConversa = "answered";
           } else {
             // ⚡ MELHORIA: Verificar se é uma conversa "ao vivo" (interação recente)
-            // Se há mensagens do usuário nos últimos 5 minutos, considerar "em atendimento"
-            const TEMPO_CONVERSA_AO_VIVO = 5 * 60 * 1000; // 5 minutos em ms
+            // Se o usuário respondeu recentemente, manter em "Em Atendimento" mesmo com novas mensagens do contato
+            const TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000; // 10 minutos em ms (aumentado para dar mais margem)
             const agora = Date.now();
             
             // Buscar última mensagem enviada pelo usuário
@@ -3056,22 +2998,16 @@ function Conversas() {
                 ? ultimaMensagemDoUsuario.timestamp.getTime() 
                 : new Date(ultimaMensagemDoUsuario.timestamp).getTime();
               
-              const tempoUltimaMensagemContato = ultimaMensagem.timestamp instanceof Date 
-                ? ultimaMensagem.timestamp.getTime() 
-                : new Date(ultimaMensagem.timestamp).getTime();
-              
-              // Se o usuário respondeu há menos de 5 minutos, é conversa ao vivo
+              // ⚡ CORREÇÃO: Se o usuário respondeu nos últimos 10 minutos, conversa está "ao vivo"
+              // Não precisa que o contato também tenha respondido recentemente
               const usuarioRespondeuRecentemente = (agora - tempoUltimaMensagemUsuario) < TEMPO_CONVERSA_AO_VIVO;
-              // Se a mensagem do contato é recente (últimos 5 min), é conversa ao vivo
-              const contatoRespondeuRecentemente = (agora - tempoUltimaMensagemContato) < TEMPO_CONVERSA_AO_VIVO;
               
-              // Conversa ao vivo = ambos interagiram recentemente
-              if (usuarioRespondeuRecentemente && contatoRespondeuRecentemente) {
+              if (usuarioRespondeuRecentemente) {
                 statusConversa = "answered"; // Manter em "Em Atendimento"
-                console.log('🔴 [STATUS] Conversa AO VIVO detectada - mantendo em atendimento');
+                // Log removido para evitar poluição do console
               } else {
-                // Conversa não está ao vivo - contato aguardando resposta
-                statusConversa = "waiting";
+                // Usuário não respondeu recentemente - contato aguardando resposta
+            statusConversa = "waiting";
               }
             } else {
               // Sem mensagem do usuário = aguardando primeira resposta
