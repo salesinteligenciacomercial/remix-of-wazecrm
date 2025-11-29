@@ -815,11 +815,11 @@ export default function Analytics() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="space-y-2">
-          <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-            Analytics
-          </h1>
-          <p className="text-muted-foreground text-lg">Visão completa e análises detalhadas do seu CRM</p>
+      <div className="space-y-2">
+        <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+          Analytics
+        </h1>
+        <p className="text-muted-foreground text-lg">Visão completa e análises detalhadas do seu CRM</p>
         </div>
         
         {/* ✅ Indicador de Status de Conexão Realtime */}
@@ -1827,28 +1827,28 @@ export default function Analytics() {
                     <div className="text-center py-6 text-muted-foreground">
                       <UserCheck className="h-8 w-8 mx-auto mb-2 opacity-30" />
                       <p className="text-sm">Nenhum usuário encontrado na empresa</p>
-                    </div>
+                      </div>
                   ) : (
                     companyUsers.slice(0, 5).map((user, index) => (
                       <div key={user.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                             <span className="text-sm font-semibold text-primary">{index + 1}</span>
-                          </div>
-                          <div>
+                      </div>
+                      <div>
                             <p className="font-medium">{user.name}</p>
                             <p className="text-sm text-muted-foreground">
                               {index === 0 ? '95%' : index === 1 ? '89%' : index === 2 ? '82%' : index === 3 ? '78%' : '75%'} satisfação
                             </p>
-                          </div>
-                        </div>
+                      </div>
+                    </div>
                         <Badge 
                           variant={index === 0 ? "default" : index < 3 ? "secondary" : "outline"}
                           className={index === 0 ? "bg-green-100 text-green-800" : ""}
                         >
                           {index === 0 ? 'Excelente' : index < 3 ? 'Muito Bom' : 'Bom'}
                         </Badge>
-                      </div>
+                  </div>
                     ))
                   )}
                 </div>
@@ -2196,28 +2196,28 @@ export default function Analytics() {
                             : 'bg-muted/30'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3">
                           <div className={`${index === 0 ? 'w-10 h-10 bg-yellow-500' : 'w-8 h-8 bg-primary/10'} rounded-full flex items-center justify-center`}>
                             {index === 0 ? (
-                              <Trophy className="h-5 w-5 text-white" />
+                        <Trophy className="h-5 w-5 text-white" />
                             ) : (
                               <span className="text-sm font-semibold text-primary">{index + 1}</span>
                             )}
-                          </div>
-                          <div>
+                      </div>
+                      <div>
                             <p className={index === 0 ? "font-bold" : "font-medium"}>{user.name}</p>
                             <p className="text-sm text-muted-foreground">
                               {Math.max(28 - (index * 4), 10)} tarefas • {Math.max(95 - (index * 7), 70)}% conclusão
                             </p>
-                          </div>
-                        </div>
+                      </div>
+                    </div>
                         <Badge 
                           variant={index === 0 ? "default" : index < 3 ? "secondary" : "outline"}
                           className={index === 0 ? "bg-yellow-100 text-yellow-800" : ""}
                         >
                           {index === 0 ? '🏆 #1' : index < 3 ? 'Muito Bom' : 'Bom'}
                         </Badge>
-                      </div>
+                  </div>
                     ))
                   )}
                 </div>
