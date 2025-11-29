@@ -779,12 +779,14 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
                         deadlineInfo.status === 'overdue' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-muted/50 text-muted-foreground'
                       }`}>
                         <CalendarIcon className="h-3 w-3" />
-                        <span className="font-medium">
-                          {deadlineInfo.startDate && deadlineInfo.endDate 
-                            ? `${deadlineInfo.startDate.toLocaleDateString("pt-BR")} - ${deadlineInfo.endDate.toLocaleDateString("pt-BR")}`
-                            : deadlineInfo.endDate?.toLocaleDateString("pt-BR")
-                          }
-                        </span>
+                      <span className="font-medium">
+                        {deadlineInfo.startDate && deadlineInfo.endDate 
+                          ? `${deadlineInfo.startDate.toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit', year: '2-digit' })} - Prazo: ${deadlineInfo.endDate.toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit', year: '2-digit' })}`
+                          : deadlineInfo.endDate
+                            ? `Prazo: ${deadlineInfo.endDate.toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit', year: '2-digit' })}`
+                            : ''
+                        }
+                      </span>
                       </div>
                       {/* Contador de dias e progresso */}
                       <div className={`flex items-center gap-2 text-[10px] px-2 ${
@@ -834,8 +836,10 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
                       <CalendarIcon className="h-3 w-3" />
                       <span className="font-medium">
                         {deadlineInfo.startDate && deadlineInfo.endDate 
-                          ? `${deadlineInfo.startDate.toLocaleDateString("pt-BR")} - ${deadlineInfo.endDate.toLocaleDateString("pt-BR")}`
-                          : deadlineInfo.endDate?.toLocaleDateString("pt-BR")
+                          ? `${deadlineInfo.startDate.toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit', year: '2-digit' })} - Prazo: ${deadlineInfo.endDate.toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit', year: '2-digit' })}`
+                          : deadlineInfo.endDate
+                            ? `Prazo: ${deadlineInfo.endDate.toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit', year: '2-digit' })}`
+                            : ''
                         }
                       </span>
                     </div>
