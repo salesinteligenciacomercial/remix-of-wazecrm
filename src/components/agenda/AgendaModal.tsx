@@ -135,12 +135,31 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
       const dataInicio = new Date(formData.data + "T00:00:00");
       const dataFim = new Date(formData.data + "T23:59:59");
 
-      const { data: compromissos } = await supabase
+      // Buscar apenas compromissos da agenda principal do usuário
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: agendaPrincipal } = await supabase
+        .from("agendas")
+        .select("id")
+        .eq("owner_id", user.id)
+        .eq("tipo", "principal")
+        .single();
+
+      let query = supabase
         .from("compromissos")
-        .select("id, data_hora_inicio, data_hora_fim")
+        .select("id, data_hora_inicio, data_hora_fim, agenda_id")
         .gte("data_hora_inicio", dataInicio.toISOString())
         .lte("data_hora_inicio", dataFim.toISOString());
 
+      // Filtrar pela agenda principal ou compromissos sem agenda
+      if (agendaPrincipal) {
+        query = query.or(`agenda_id.eq.${agendaPrincipal.id},agenda_id.is.null`);
+      }
+
+      const { data: compromissos } = await query;
+      
+      console.log('📅 [AgendaModal] Compromissos carregados para agenda principal:', compromissos?.length || 0);
       setCompromissosExistentes(compromissos || []);
     } catch (error) {
       console.error("Erro ao carregar compromissos:", error);

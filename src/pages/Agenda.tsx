@@ -864,17 +864,45 @@ export default function Agenda() {
   };
 
   // Carregar compromissos existentes para o dia selecionado no formulário
+  // IMPORTANTE: Filtra por agenda_id para garantir individualidade de cada agenda
   const carregarFormCompromissos = async () => {
     try {
       const dataInicio = new Date(formData.data + "T00:00:00");
       const dataFim = new Date(formData.data + "T23:59:59");
 
-      const { data: compromissos } = await supabase
+      let query = supabase
         .from("compromissos")
-        .select("id, data_hora_inicio, data_hora_fim")
+        .select("id, data_hora_inicio, data_hora_fim, agenda_id")
         .gte("data_hora_inicio", dataInicio.toISOString())
         .lte("data_hora_inicio", dataFim.toISOString());
 
+      // Se uma agenda específica foi selecionada, filtrar apenas os compromissos dessa agenda
+      if (formData.agenda_id) {
+        query = query.eq("agenda_id", formData.agenda_id);
+        console.log('📅 [Agenda] Filtrando compromissos por agenda_id:', formData.agenda_id);
+      } else {
+        // Se nenhuma agenda foi selecionada (agenda geral), buscar compromissos sem agenda_id
+        // ou criar uma query para a agenda principal do usuário
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: agendaPrincipal } = await supabase
+            .from("agendas")
+            .select("id")
+            .eq("owner_id", user.id)
+            .eq("tipo", "principal")
+            .single();
+          
+          if (agendaPrincipal) {
+            // Buscar compromissos da agenda principal OU compromissos sem agenda
+            query = query.or(`agenda_id.eq.${agendaPrincipal.id},agenda_id.is.null`);
+            console.log('📅 [Agenda] Filtrando compromissos da agenda principal:', agendaPrincipal.id);
+          }
+        }
+      }
+
+      const { data: compromissos } = await query;
+      
+      console.log('📅 [Agenda] Compromissos carregados para a agenda:', compromissos?.length || 0);
       setFormCompromissosExistentes(compromissos || []);
     } catch (error) {
       console.error("Erro ao carregar compromissos do formulário:", error);
@@ -886,16 +914,16 @@ export default function Agenda() {
     setFormData(prev => ({ ...prev, hora_inicio: horario }));
   };
 
-  // Carregar horário comercial, compromissos e configurações quando a data mudar ou dialog abrir
+  // Carregar horário comercial, compromissos e configurações quando a data, agenda ou dialog mudar
   useEffect(() => {
     if (formData.data && novoCompromissoOpen) {
       carregarFormHorarioComercial();
       carregarFormCompromissos();
       // Garantir que as configurações estão carregadas ao abrir o popup
       carregarConfiguracoes();
-      console.log('📅 [Agenda] Popup aberto - tempoMedioPadrao atual:', tempoMedioPadrao);
+      console.log('📅 [Agenda] Popup aberto - tempoMedioPadrao atual:', tempoMedioPadrao, '- Agenda:', formData.agenda_id || 'principal');
     }
-  }, [formData.data, novoCompromissoOpen]);
+  }, [formData.data, formData.agenda_id, novoCompromissoOpen]); // Adicionado formData.agenda_id para recarregar ao mudar agenda
 
   const criarCompromisso = async () => {
     try {
