@@ -1065,17 +1065,61 @@ export default function Agenda() {
         }
 
         // Validar disponibilidade - dia da semana
-        const diasSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
-        const diaSemana = diasSemana[dataHoraInicio.getDay()];
+        // Suporta ambos formatos: 'dias_funcionamento' (novo) e 'dias' (antigo)
+        // Também suporta formato completo ('segunda', 'terca') e abreviado ('seg', 'ter')
+        const diasSemanaCompleto = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+        const diasSemanaAbreviado = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+        const indiceDia = dataHoraInicio.getDay();
+        const diaSemanaCompleto = diasSemanaCompleto[indiceDia];
+        const diaSemanaAbreviado = diasSemanaAbreviado[indiceDia];
         
-        if (!agendaSelecionada.disponibilidade?.dias?.includes(diaSemana)) {
+        // Verificar em ambos campos e formatos
+        const diasConfig = agendaSelecionada.disponibilidade?.dias_funcionamento || 
+                          agendaSelecionada.disponibilidade?.dias;
+        
+        const diaValido = !diasConfig || // Se não tem config, aceita qualquer dia
+                          diasConfig.includes(diaSemanaCompleto) || 
+                          diasConfig.includes(diaSemanaAbreviado);
+        
+        if (!diaValido) {
           toast.error(`A agenda "${agendaSelecionada.nome}" não está disponível neste dia da semana`);
           return;
         }
 
         // Validar disponibilidade - horário
-        const [horaInicioDisponivel, minutoInicioDisponivel] = agendaSelecionada.disponibilidade.horario_inicio.split(':').map(Number);
-        const [horaFimDisponivel, minutoFimDisponivel] = agendaSelecionada.disponibilidade.horario_fim.split(':').map(Number);
+        // Suporta formato novo (periodos) e antigo (horario_inicio/horario_fim)
+        const disp = agendaSelecionada.disponibilidade || {};
+        let horarioInicioStr = "08:00";
+        let horarioFimStr = "18:00";
+        
+        if (disp.periodos) {
+          // Formato novo - calcular horário de início e fim baseado nos períodos ativos
+          const periodos = disp.periodos;
+          const horariosAtivos: string[] = [];
+          
+          if (periodos.manha?.ativo) {
+            horariosAtivos.push(periodos.manha.inicio, periodos.manha.fim);
+          }
+          if (periodos.tarde?.ativo) {
+            horariosAtivos.push(periodos.tarde.inicio, periodos.tarde.fim);
+          }
+          if (periodos.noite?.ativo) {
+            horariosAtivos.push(periodos.noite.inicio, periodos.noite.fim);
+          }
+          
+          if (horariosAtivos.length > 0) {
+            horariosAtivos.sort();
+            horarioInicioStr = horariosAtivos[0];
+            horarioFimStr = horariosAtivos[horariosAtivos.length - 1];
+          }
+        } else if (disp.horario_inicio && disp.horario_fim) {
+          // Formato antigo
+          horarioInicioStr = disp.horario_inicio;
+          horarioFimStr = disp.horario_fim;
+        }
+        
+        const [horaInicioDisponivel, minutoInicioDisponivel] = horarioInicioStr.split(':').map(Number);
+        const [horaFimDisponivel, minutoFimDisponivel] = horarioFimStr.split(':').map(Number);
         const inicioDisponivel = horaInicioDisponivel * 60 + minutoInicioDisponivel;
         const fimDisponivel = horaFimDisponivel * 60 + minutoFimDisponivel;
         
@@ -1085,7 +1129,7 @@ export default function Agenda() {
         const fimSolicitado = inicioSolicitado + duracaoMin;
 
         if (inicioSolicitado < inicioDisponivel || fimSolicitado > fimDisponivel) {
-          toast.error(`O horário está fora do horário de funcionamento da agenda (${agendaSelecionada.disponibilidade.horario_inicio} - ${agendaSelecionada.disponibilidade.horario_fim})`);
+          toast.error(`O horário está fora do horário de funcionamento da agenda (${horarioInicioStr} - ${horarioFimStr})`);
           return;
         }
 
