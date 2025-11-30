@@ -29,11 +29,30 @@ serve(async (req) => {
     // Buscar configuração e prompt personalizado
     const { data: iaConfig } = await supabase
       .from('ia_configurations')
-      .select('custom_prompts')
+      .select('*')
       .eq('company_id', companyId)
       .single();
 
     const customPrompt = iaConfig?.custom_prompts?.agendamento?.custom_prompt;
+
+    // Buscar histórico da conversa se habilitado
+    let conversationHistory = '';
+    if (iaConfig?.read_conversation_history) {
+      const { data: mensagens } = await supabase
+        .from('conversas')
+        .select('fromme, mensagem, created_at')
+        .eq('numero', leadData?.phone || leadData?.telefone)
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .limit(iaConfig.history_messages_count || 10);
+      
+      if (mensagens && mensagens.length > 0) {
+        conversationHistory = '\n\nHISTÓRICO DA CONVERSA:\n' + 
+          mensagens.reverse().map((m: any) => 
+            `${m.fromme ? 'Atendente' : 'Cliente'}: ${m.mensagem}`
+          ).join('\n');
+      }
+    }
 
     // Funções disponíveis para a IA
     const tools = [
@@ -146,7 +165,7 @@ Use as funções disponíveis para:
 
 Responda de forma natural e helpful. Máximo 5 linhas.`;
 
-    const systemPrompt = customPrompt || defaultPrompt;
+    const systemPrompt = (customPrompt || defaultPrompt) + conversationHistory;
 
     console.log('📅 IA Agendamento - Processando:', { conversationId, message: message.substring(0, 50) });
 
