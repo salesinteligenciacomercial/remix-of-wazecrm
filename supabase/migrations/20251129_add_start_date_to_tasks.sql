@@ -16,3 +16,5 @@ END $$;
 -- Criar índice para melhorar performance de consultas por período
 CREATE INDEX IF NOT EXISTS idx_tasks_date_range ON tasks(start_date, due_date) WHERE start_date IS NOT NULL;
 
+
+

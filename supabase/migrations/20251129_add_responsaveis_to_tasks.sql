@@ -16,3 +16,5 @@ END $$;
 -- Criar índice GIN para melhorar performance de consultas por responsáveis
 CREATE INDEX IF NOT EXISTS idx_tasks_responsaveis ON tasks USING GIN(responsaveis) WHERE responsaveis IS NOT NULL AND array_length(responsaveis, 1) > 0;
 
+
+

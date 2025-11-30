@@ -165,133 +165,55 @@ export function NovaTarefaDialog({
 
       console.log('📤 Enviando dados para criar tarefa:', normalizedData);
 
-      let data: any = null;
-      let error: any = null;
-      
-      // Tentar criar via Edge Function primeiro
-      try {
-        const result = await supabase.functions.invoke("api-tarefas", {
-          body: {
-            action: "criar_tarefa",
-            data: normalizedData,
-          },
-        });
-        
-        // Verificar se há erro na resposta
-        if (result.error) {
-          console.error("❌ Erro da Edge Function:", result.error);
-          error = result.error;
-          
-          // Se for erro de validação, mostrar detalhes e retornar
-          if (result.data?.code === 'VALIDATION_ERROR') {
-            toast.error(`Erro de validação: ${result.data.details || result.error.message}`);
-            return;
-          }
-        } else {
-          // Sucesso!
-          data = result.data;
-        }
-      } catch (invokeError: any) {
-        // Quando a Edge Function retorna non-2xx, o Supabase lança uma exceção
-        console.error("❌ Exceção ao invocar Edge Function:", invokeError);
-        error = invokeError;
-      }
+      // ✅ CORREÇÃO: Criar tarefa diretamente no banco (Edge Function não suporta start_date)
+      const { data: userRole } = await supabase
+        .from("user_roles")
+        .select("company_id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
 
-      // Se houve erro (seja na resposta ou exceção), tentar fallback
-      if (error) {
-        console.warn('⚠️ Edge Function falhou, tentando criar tarefa diretamente no banco...');
-        try {
-          const { data: userRole } = await supabase
-            .from("user_roles")
-            .select("company_id")
-            .eq("user_id", session.user.id)
-            .maybeSingle();
-
-          if (!userRole?.company_id) {
-            toast.error('Empresa não encontrada');
-            return;
-          }
-
-          // SOLUÇÃO DEFINITIVA: Usar apenas campos que DEFINITIVAMENTE existem na tabela
-          // Baseado na estrutura real da tabela tasks
-          const taskInsert: any = {
-            title: normalizedData.title,
-            description: normalizedData.description || null,
-            priority: normalizedData.priority || 'media',
-            start_date: normalizedData.start_date || null, // Data início do prazo
-            due_date: normalizedData.due_date || null, // Data final do prazo
-            assignee_id: normalizedData.assignee_id || null,
-            lead_id: normalizedData.lead_id || null,
-            column_id: normalizedData.column_id || null,
-            board_id: normalizedData.board_id || null,
-            company_id: userRole.company_id,
-            owner_id: session.user.id,
-            status: 'pendente',
-          };
-
-          // Tentar inserir com campos básicos primeiro
-          let directTask, directError;
-          const result = await supabase
-            .from('tasks')
-            .insert([taskInsert])
-            .select()
-            .single();
-          
-          directTask = result.data;
-          directError = result.error;
-
-          // Se falhou, pode ser por causa de algum campo opcional
-          // Tentar novamente apenas com campos essenciais
-          if (directError && directError.message?.includes('column')) {
-            console.warn('⚠️ Erro com campo opcional, tentando apenas campos essenciais...');
-            const essentialTaskInsert: any = {
-              title: normalizedData.title,
-              description: normalizedData.description || null,
-              priority: normalizedData.priority || 'media',
-              start_date: normalizedData.start_date || null,
-              due_date: normalizedData.due_date || null,
-              assignee_id: normalizedData.assignee_id || null,
-              lead_id: normalizedData.lead_id || null,
-              company_id: userRole.company_id,
-              owner_id: session.user.id,
-              status: 'pendente',
-            };
-            
-            const retryResult = await supabase
-              .from('tasks')
-              .insert([essentialTaskInsert])
-              .select()
-              .single();
-            
-            directTask = retryResult.data;
-            directError = retryResult.error;
-          }
-
-          if (directError) {
-            console.error('❌ Erro ao criar tarefa diretamente:', directError);
-            toast.error(`Erro ao criar tarefa: ${directError.message || 'Erro desconhecido'}`);
-            return;
-          }
-
-          if (directTask) {
-            console.log('✅ Tarefa criada diretamente no banco (fallback)');
-            data = { success: true, data: directTask };
-            error = null;
-          }
-        } catch (fallbackError: any) {
-          console.error('❌ Erro no fallback:', fallbackError);
-          toast.error(`Erro ao criar tarefa: ${fallbackError?.message || 'Erro desconhecido'}`);
-          return;
-        }
-      }
-
-      // Se ainda houver erro após o fallback, mostrar mensagem
-      if (error) {
-        console.error("Erro ao criar tarefa (edge):", error);
-        const errorMessage = error?.message || error?.error?.message || "Erro ao criar tarefa";
-        toast.error(errorMessage);
+      if (!userRole?.company_id) {
+        toast.error('Empresa não encontrada');
         return;
       }
+
+      // Construir objeto de inserção com todos os campos necessários
+      const taskInsert: any = {
+        title: normalizedData.title,
+        description: normalizedData.description || null,
+        priority: normalizedData.priority || 'media',
+        start_date: normalizedData.start_date || null, // ✅ Data início do prazo
+        due_date: normalizedData.due_date || null, // Data final do prazo
+        assignee_id: normalizedData.assignee_id || null,
+        responsaveis: normalizedData.responsaveis || [],
+        lead_id: normalizedData.lead_id || null,
+        column_id: normalizedData.column_id || null,
+        board_id: normalizedData.board_id || null,
+        checklist: normalizedData.checklist && normalizedData.checklist.length > 0 ? normalizedData.checklist : null,
+        tags: normalizedData.tags && normalizedData.tags.length > 0 ? normalizedData.tags : null,
+        company_id: userRole.company_id,
+        owner_id: session.user.id,
+        status: 'pendente',
+      };
+
+      console.log('📤 [NovaTarefa] Dados para inserção:', taskInsert);
+
+      const { data: directTask, error: directError } = await supabase
+        .from('tasks')
+        .insert([taskInsert])
+        .select()
+        .single();
+
+      if (directError) {
+        console.error('❌ Erro ao criar tarefa:', directError);
+        toast.error(`Erro ao criar tarefa: ${directError.message || 'Erro desconhecido'}`);
+        return;
+      }
+
+      console.log('✅ Tarefa criada com sucesso no banco!', directTask);
+      
+      const data = { success: true, data: directTask };
+      const error = null;
 
       // Verificar se temos dados válidos
       if (!data || !data.data) {

@@ -5262,38 +5262,73 @@ function Conversas() {
 
   const carregarMeetingHorarioComercial = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data: agendas } = await supabase
         .from("agendas")
         .select("*")
+        .eq("owner_id", user.id)
         .eq("tipo", "principal")
-        .limit(1)
         .single();
 
       if (agendas && agendas.disponibilidade && typeof agendas.disponibilidade === 'object') {
         setMeetingAgendaSelecionada(agendas);
         const disp = agendas.disponibilidade as any;
-        setMeetingHorarioComercial({
-          manha: {
-            inicio: disp.horario_inicio || "08:00",
-            fim: "12:00",
-            ativo: true,
-          },
-          tarde: {
-            inicio: "14:00",
-            fim: disp.horario_fim || "18:00",
-            ativo: true,
-          },
-          noite: {
-            inicio: "19:00",
-            fim: "23:00",
-            ativo: false,
-          },
-          intervalo_almoco: {
-            inicio: "12:00",
-            fim: "14:00",
-            ativo: true,
-          },
-        });
+        
+        // O horário comercial é salvo em disponibilidade.periodos
+        const periodos = disp.periodos || disp;
+        
+        // Verificar se está no formato novo (com períodos manha, tarde, noite)
+        if (periodos.manha && periodos.tarde) {
+          // Formato novo - usar diretamente
+          setMeetingHorarioComercial({
+            manha: {
+              inicio: periodos.manha.inicio || "08:00",
+              fim: periodos.manha.fim || "12:00",
+              ativo: periodos.manha.ativo !== false,
+            },
+            tarde: {
+              inicio: periodos.tarde.inicio || "14:00",
+              fim: periodos.tarde.fim || "18:00",
+              ativo: periodos.tarde.ativo !== false,
+            },
+            noite: {
+              inicio: periodos.noite?.inicio || "19:00",
+              fim: periodos.noite?.fim || "23:00",
+              ativo: periodos.noite?.ativo === true,
+            },
+            intervalo_almoco: {
+              inicio: periodos.intervalo_almoco?.inicio || "12:00",
+              fim: periodos.intervalo_almoco?.fim || "14:00",
+              ativo: periodos.intervalo_almoco?.ativo !== false,
+            },
+          });
+        } else {
+          // Formato antigo - converter
+          setMeetingHorarioComercial({
+            manha: {
+              inicio: disp.horario_inicio || "08:00",
+              fim: "12:00",
+              ativo: true,
+            },
+            tarde: {
+              inicio: "14:00",
+              fim: disp.horario_fim || "18:00",
+              ativo: true,
+            },
+            noite: {
+              inicio: "19:00",
+              fim: "23:00",
+              ativo: false,
+            },
+            intervalo_almoco: {
+              inicio: "12:00",
+              fim: "14:00",
+              ativo: true,
+            },
+          });
+        }
       }
     } catch (error) {
       console.error("Erro ao carregar horário comercial:", error);

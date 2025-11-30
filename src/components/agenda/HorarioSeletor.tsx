@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { format, parse, isAfter, isBefore, addMinutes } from "date-fns";
+import { format, parse, isAfter, isBefore, addMinutes, isToday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { HorarioComercial } from "./HorarioComercialConfig";
 
@@ -38,10 +38,13 @@ export function HorarioSeletor({
     const horarios: Array<{
       horario: string;
       disponivel: boolean;
+      passado: boolean;
       compromissos: Compromisso[];
     }> = [];
 
     const dataBase = parse(data, "yyyy-MM-dd", new Date());
+    const agora = new Date();
+    const ehHoje = isSameDay(dataBase, agora);
 
     // Função para adicionar horários de um período
     const adicionarHorariosPeriodo = (inicio: string, fim: string) => {
@@ -56,6 +59,9 @@ export function HorarioSeletor({
         const inicioCompromisso = parse(`${data} ${horarioStr}`, "yyyy-MM-dd HH:mm", new Date());
         const fimCompromisso = addMinutes(inicioCompromisso, duracaoMinutos);
 
+        // Verificar se o horário já passou (apenas se for hoje)
+        const horarioPassou = ehHoje && isBefore(inicioCompromisso, agora);
+
         const compromissosNoHorario = compromissosExistentes.filter((comp) => {
           const compInicio = new Date(comp.data_hora_inicio);
           const compFim = new Date(comp.data_hora_fim);
@@ -67,13 +73,14 @@ export function HorarioSeletor({
           );
         });
 
-        // Se permite simultâneo, sempre disponível
-        // Se não permite, só disponível se não houver compromissos
-        const disponivel = permitirSimultaneo || compromissosNoHorario.length === 0;
+        // Se permite simultâneo, sempre disponível (exceto se passou)
+        // Se não permite, só disponível se não houver compromissos e não passou
+        const disponivel = !horarioPassou && (permitirSimultaneo || compromissosNoHorario.length === 0);
 
         horarios.push({
           horario: horarioStr,
           disponivel,
+          passado: horarioPassou,
           compromissos: compromissosNoHorario,
         });
 
@@ -113,12 +120,13 @@ export function HorarioSeletor({
   }, [data, horarioComercial, compromissosExistentes, duracaoMinutos, permitirSimultaneo]);
 
   const totalDisponiveis = horariosDisponiveis.filter((h) => h.disponivel).length;
-  const totalOcupados = horariosDisponiveis.filter((h) => !h.disponivel).length;
+  const totalOcupados = horariosDisponiveis.filter((h) => !h.disponivel && !h.passado).length;
+  const totalPassados = horariosDisponiveis.filter((h) => h.passado).length;
 
   return (
     <div className="space-y-4">
       {/* Estatísticas */}
-      <div className="flex items-center gap-4 text-sm">
+      <div className="flex items-center gap-4 text-sm flex-wrap">
         <div className="flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-green-600" />
           <span className="text-muted-foreground">
@@ -129,6 +137,12 @@ export function HorarioSeletor({
           <XCircle className="h-4 w-4 text-red-600" />
           <span className="text-muted-foreground">{totalOcupados} ocupados</span>
         </div>
+        {totalPassados > 0 && (
+          <div className="flex items-center gap-2">
+            <Ban className="h-4 w-4 text-gray-400" />
+            <span className="text-muted-foreground">{totalPassados} passados</span>
+          </div>
+        )}
         {permitirSimultaneo && (
           <Badge variant="secondary" className="ml-auto">
             <Clock className="h-3 w-3 mr-1" />
@@ -143,6 +157,7 @@ export function HorarioSeletor({
           {horariosDisponiveis.map((item) => {
             const isSelected = horarioSelecionado === item.horario;
             const hasCompromissos = item.compromissos.length > 0;
+            const isPassado = item.passado;
 
             return (
               <Button
@@ -150,18 +165,25 @@ export function HorarioSeletor({
                 type="button"
                 variant={isSelected ? "default" : "outline"}
                 size="sm"
-                disabled={!item.disponivel && !permitirSimultaneo}
+                disabled={!item.disponivel}
                 onClick={() => onSelecionarHorario(item.horario)}
                 className={cn(
                   "relative flex flex-col items-center justify-center h-auto py-3",
-                  !item.disponivel && !permitirSimultaneo && "opacity-50 cursor-not-allowed",
-                  hasCompromissos && "border-red-500 bg-red-50 dark:bg-red-950/20"
+                  !item.disponivel && "opacity-50 cursor-not-allowed",
+                  hasCompromissos && !isPassado && "border-red-500 bg-red-50 dark:bg-red-950/20",
+                  isPassado && "border-gray-300 bg-gray-100 dark:bg-gray-800/50 line-through"
                 )}
               >
-                <span className="text-sm font-medium">{item.horario}</span>
+                <span className={cn("text-sm font-medium", isPassado && "text-gray-400")}>{item.horario}</span>
                 
                 {/* Indicador visual de status */}
-                {hasCompromissos && (
+                {isPassado && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                  </div>
+                )}
+                
+                {!isPassado && hasCompromissos && (
                   <div className="flex items-center gap-1 mt-1">
                     <div className="h-1.5 w-1.5 rounded-full bg-red-600" />
                     <span className="text-xs text-muted-foreground">
@@ -170,7 +192,7 @@ export function HorarioSeletor({
                   </div>
                 )}
                 
-                {!hasCompromissos && item.disponivel && (
+                {!isPassado && !hasCompromissos && item.disponivel && (
                   <div className="h-1.5 w-1.5 rounded-full bg-green-600 mt-1" />
                 )}
               </Button>
@@ -188,6 +210,10 @@ export function HorarioSeletor({
         <div className="flex items-center gap-2">
           <div className="h-3 w-3 rounded-full bg-red-600" />
           <span>Ocupado</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-3 w-3 rounded-full bg-gray-400" />
+          <span>Passado</span>
         </div>
         {permitirSimultaneo && (
           <div className="flex items-center gap-2">

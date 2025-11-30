@@ -78,7 +78,9 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
   );
   const [assigneeId, setAssigneeId] = useState(task.assignee_id || "none");
   const [leadId, setLeadId] = useState(task.lead_id || "none");
-  const [responsaveis, setResponsaveis] = useState<string[]>(task.responsaveis || []);
+  const [responsaveis, setResponsaveis] = useState<string[]>(
+    Array.isArray(task.responsaveis) ? task.responsaveis : []
+  );
   const [users, setUsers] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -106,7 +108,14 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
       setDueDate(task.due_date ? new Date(task.due_date).toISOString().split("T")[0] : "");
       setAssigneeId(task.assignee_id || "none");
       setLeadId(task.lead_id || "none");
-      setResponsaveis(task.responsaveis || []);
+      // ✅ CORREÇÃO: Garantir que responsaveis é sempre um array válido
+      const responsaveisArray = Array.isArray(task.responsaveis) ? task.responsaveis : [];
+      setResponsaveis(responsaveisArray);
+      console.log('📋 [EditarTarefa] Carregando tarefa:', { 
+        id: task.id, 
+        responsaveis_original: task.responsaveis,
+        responsaveis_array: responsaveisArray 
+      });
       setChecklist(task.checklist || []);
       setTags(task.tags || []);
       setComments(task.comments || []);
@@ -205,91 +214,78 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
       const startDateIso = startDate ? new Date(`${startDate}T00:00:00`).toISOString() : null;
       const dueDateIso = dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null;
       
+      // ✅ DEBUG: Verificar valores das datas
+      console.log('📅 [EditarTarefa] Valores de data:', {
+        startDate_estado: startDate,
+        startDateIso,
+        dueDate_estado: dueDate,
+        dueDateIso
+      });
+      
       // Se não tiver assignee_id definido, usar o primeiro responsável
       const primaryAssignee = (assigneeId && assigneeId !== 'none') 
         ? assigneeId 
         : (responsaveis.length > 0 ? responsaveis[0] : null);
 
-      // Tentar usar Edge Function primeiro
-      let edgeFunctionError = null;
-      try {
-        const { error } = await supabase.functions.invoke("api-tarefas", {
-          body: {
-            action: "editar_tarefa",
-            data: {
-              task_id: task.id,
-              title: title.trim(),
-              description: description.trim(),
-              priority,
-              start_date: startDateIso,
-              due_date: dueDateIso,
-              assignee_id: primaryAssignee,
-              responsaveis,
-              lead_id: leadId === 'none' ? null : leadId,
-              checklist,
-              tags,
-              comments,
-              attachments,
-            },
-          },
-        });
-
-        if (error) {
-          edgeFunctionError = error;
-          throw error;
-        }
-      } catch (edgeError: any) {
-        // Se a Edge Function falhar, tentar atualizar diretamente no banco
-        console.warn("Edge Function falhou, tentando atualização direta:", edgeError);
-        
-        // Buscar company_id para preservar isolamento multi-tenant
-        const { data: { session } } = await supabase.auth.getSession();
-        let companyId = null;
-        if (session) {
-          const { data: userRole } = await supabase
-            .from('user_roles')
-            .select('company_id')
-            .eq('user_id', session.user.id)
-            .maybeSingle();
-          companyId = userRole?.company_id;
-        }
-
-        // Atualizar diretamente no banco
-        // Construir objeto de atualização apenas com campos que existem no schema
-        const updateData: any = {
-          title: title.trim(),
-          description: description.trim(),
-          priority,
-          start_date: startDateIso, // Data início do prazo
-          due_date: dueDateIso, // Data final do prazo
-          assignee_id: primaryAssignee,
-          responsaveis: responsaveis || [],
-          lead_id: leadId === 'none' ? null : leadId,
-          checklist: checklist && checklist.length > 0 ? checklist : null,
-          tags: tags && tags.length > 0 ? tags : null,
-          comments: comments && comments.length > 0 ? comments : null,
-          attachments: attachments && attachments.length > 0 ? attachments : null,
-          company_id: companyId, // Preservar company_id
-          updated_at: new Date().toISOString()
-        };
-        
-        // NOTA: A coluna 'responsaveis' foi removida da atualização direta
-        // pois pode não existir no schema atual do banco de dados
-        // Se a coluna existir e for necessária, deve ser adicionada via migration
-        
-        const { error: dbError } = await supabase
-          .from('tasks')
-          .update(updateData)
-          .eq('id', task.id);
-
-        if (dbError) {
-          console.error("Erro ao atualizar tarefa (direto):", dbError);
-          throw dbError;
-        }
-        
-        // Avisar que foi usado fallback
-        console.log("Tarefa atualizada diretamente no banco (fallback)");
+      // ✅ CORREÇÃO: Usar atualização direta ao invés da Edge Function
+      // A Edge Function pode não suportar o campo start_date
+      console.log('📤 [EditarTarefa] Usando atualização direta no banco...');
+      
+      // Buscar company_id atual
+      const { data: { user } } = await supabase.auth.getUser();
+      let companyId = null;
+      if (user) {
+        const { data: userRole } = await supabase
+          .from('user_roles')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        companyId = userRole?.company_id;
       }
+
+      // ✅ DEBUG: Verificar responsáveis antes de salvar
+      console.log('👥 [EditarTarefa] Responsáveis:', {
+        responsaveis_estado: responsaveis,
+        responsaveis_length: responsaveis?.length,
+        assigneeId_estado: assigneeId,
+        primaryAssignee
+      });
+
+      // Construir objeto de atualização
+      const updateData: any = {
+        title: title.trim(),
+        description: description.trim(),
+        priority,
+        start_date: startDateIso, // ✅ Data início do prazo
+        due_date: dueDateIso, // Data final do prazo
+        assignee_id: primaryAssignee,
+        responsaveis: Array.isArray(responsaveis) ? responsaveis : [], // ✅ Garantir que é array
+        lead_id: leadId === 'none' ? null : leadId,
+        checklist: checklist && checklist.length > 0 ? checklist : null,
+        tags: tags && tags.length > 0 ? tags : null,
+        comments: comments && comments.length > 0 ? comments : null,
+        attachments: attachments && attachments.length > 0 ? attachments : null,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Preservar company_id se existir
+      if (companyId) {
+        updateData.company_id = companyId;
+      }
+      
+      console.log('📤 [EditarTarefa] Dados para atualização:', updateData);
+      
+      const { error: dbError } = await supabase
+        .from('tasks')
+        .update(updateData)
+        .eq('id', task.id);
+
+      if (dbError) {
+        console.error("❌ Erro ao atualizar tarefa:", dbError);
+        throw dbError;
+      }
+      
+      console.log("✅ Tarefa atualizada com sucesso no banco!");
 
       toast.success("Tarefa atualizada com sucesso!");
       setOpen(false);

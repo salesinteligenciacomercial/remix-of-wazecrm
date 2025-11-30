@@ -35,6 +35,7 @@ import { Switch } from "@/components/ui/switch";
 import { EditarCompromissoDialog } from "@/components/agenda/EditarCompromissoDialog";
 import { AgendaColaboradores } from "@/components/agenda/AgendaColaboradores";
 import { HorarioComercialConfig, criarHorarioPadrao, converterHorarioAntigo, HorarioComercial } from "@/components/agenda/HorarioComercialConfig";
+import { HorarioSeletor } from "@/components/agenda/HorarioSeletor";
 
 interface Lembrete {
   id: string;
@@ -350,6 +351,16 @@ export default function Agenda() {
   
   const [leadSearch, setLeadSearch] = useState("");
   const [selectedLeadName, setSelectedLeadName] = useState("");
+  
+  // Estados para o seletor de horários do formulário (igual ao menu Conversas)
+  const [formHorarioComercial, setFormHorarioComercial] = useState<HorarioComercial>({
+    manha: { inicio: "08:00", fim: "12:00", ativo: true },
+    tarde: { inicio: "14:00", fim: "18:00", ativo: true },
+    noite: { inicio: "19:00", fim: "23:00", ativo: false },
+    intervalo_almoco: { inicio: "12:00", fim: "14:00", ativo: true }
+  });
+  const [formCompromissosExistentes, setFormCompromissosExistentes] = useState<any[]>([]);
+  const [formAgendaSelecionada, setFormAgendaSelecionada] = useState<any>(null);
 
   const filteredLeads = useMemo(() => {
     if (!leadSearch.trim()) return leads;
@@ -741,6 +752,123 @@ export default function Agenda() {
       toast.error("Erro ao carregar lembretes");
     }
   };
+
+  // Carregar horário comercial para o seletor de horários do formulário
+  const carregarFormHorarioComercial = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: agendas } = await supabase
+        .from("agendas")
+        .select("*")
+        .eq("owner_id", user.id)
+        .eq("tipo", "principal")
+        .single();
+
+      if (agendas && agendas.disponibilidade && typeof agendas.disponibilidade === 'object') {
+        setFormAgendaSelecionada(agendas);
+        const disp = agendas.disponibilidade as any;
+        
+        // O horário comercial é salvo em disponibilidade.periodos
+        const periodos = disp.periodos || disp;
+        
+        // Verificar se está no formato novo (com períodos manha, tarde, noite)
+        if (periodos.manha && periodos.tarde) {
+          // Formato novo - usar diretamente
+          setFormHorarioComercial({
+            manha: {
+              inicio: periodos.manha.inicio || "08:00",
+              fim: periodos.manha.fim || "12:00",
+              ativo: periodos.manha.ativo !== false, // default true
+            },
+            tarde: {
+              inicio: periodos.tarde.inicio || "14:00",
+              fim: periodos.tarde.fim || "18:00",
+              ativo: periodos.tarde.ativo !== false, // default true
+            },
+            noite: {
+              inicio: periodos.noite?.inicio || "19:00",
+              fim: periodos.noite?.fim || "23:00",
+              ativo: periodos.noite?.ativo === true, // default false - só ativa se explicitamente true
+            },
+            intervalo_almoco: {
+              inicio: periodos.intervalo_almoco?.inicio || "12:00",
+              fim: periodos.intervalo_almoco?.fim || "14:00",
+              ativo: periodos.intervalo_almoco?.ativo !== false, // default true
+            },
+          });
+        } else {
+          // Formato antigo - converter
+          setFormHorarioComercial({
+            manha: {
+              inicio: disp.horario_inicio || "08:00",
+              fim: "12:00",
+              ativo: true,
+            },
+            tarde: {
+              inicio: "14:00",
+              fim: disp.horario_fim || "18:00",
+              ativo: true,
+            },
+            noite: {
+              inicio: "19:00",
+              fim: "23:00",
+              ativo: false,
+            },
+            intervalo_almoco: {
+              inicio: "12:00",
+              fim: "14:00",
+              ativo: true,
+            },
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar horário comercial do formulário:", error);
+    }
+  };
+
+  // Carregar compromissos existentes para o dia selecionado no formulário
+  const carregarFormCompromissos = async () => {
+    try {
+      const dataInicio = new Date(formData.data + "T00:00:00");
+      const dataFim = new Date(formData.data + "T23:59:59");
+
+      const { data: compromissos } = await supabase
+        .from("compromissos")
+        .select("id, data_hora_inicio, data_hora_fim")
+        .gte("data_hora_inicio", dataInicio.toISOString())
+        .lte("data_hora_inicio", dataFim.toISOString());
+
+      setFormCompromissosExistentes(compromissos || []);
+    } catch (error) {
+      console.error("Erro ao carregar compromissos do formulário:", error);
+    }
+  };
+
+  // Função para selecionar horário no formulário
+  const handleSelecionarHorarioForm = (horario: string) => {
+    setFormData(prev => ({ ...prev, hora_inicio: horario }));
+  };
+
+  // Carregar horário comercial e compromissos quando a data mudar ou dialog abrir
+  useEffect(() => {
+    if (formData.data && novoCompromissoOpen) {
+      carregarFormHorarioComercial();
+      carregarFormCompromissos();
+    }
+  }, [formData.data, novoCompromissoOpen]);
+
+  // Atualizar duração do formulário quando o tempo médio padrão mudar
+  useEffect(() => {
+    if (tempoMedioPadrao && !novoCompromissoOpen) {
+      setFormData(prev => ({
+        ...prev,
+        duracao_minutos: tempoMedioPadrao.toString()
+      }));
+    }
+  }, [tempoMedioPadrao]);
 
   const criarCompromisso = async () => {
     try {
@@ -1706,7 +1834,7 @@ export default function Agenda() {
       lead_id: "",
       data: format(new Date(), "yyyy-MM-dd"),
       hora_inicio: "09:00",
-      duracao_minutos: "30",
+      duracao_minutos: tempoMedioPadrao.toString(), // Usar tempo médio configurado
       tipo_servico: "", // Limpar para forçar nova seleção
       observacoes: "",
       custo_estimado: "",
@@ -1915,12 +2043,18 @@ export default function Agenda() {
                   <Input 
                     type="number" 
                     min="5"
-                    step="5"
+                    max="480"
+                    step="1"
                     value={tempoMedioPadrao}
-                    onChange={(e) => setTempoMedioPadrao(parseInt(e.target.value) || 30)}
+                    onChange={(e) => {
+                      const valor = parseInt(e.target.value);
+                      if (valor >= 5 && valor <= 480) {
+                        setTempoMedioPadrao(valor);
+                      }
+                    }}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Duração média padrão para cada compromisso
+                    Duração média padrão para cada compromisso (mínimo 5 min, máximo 8 horas)
                   </p>
                 </div>
 
@@ -2145,24 +2279,36 @@ export default function Agenda() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="10">10 min</SelectItem>
                         <SelectItem value="15">15 min</SelectItem>
+                        <SelectItem value="20">20 min</SelectItem>
+                        <SelectItem value="25">25 min</SelectItem>
                         <SelectItem value="30">30 min</SelectItem>
+                        <SelectItem value="40">40 min</SelectItem>
                         <SelectItem value="45">45 min</SelectItem>
+                        <SelectItem value="50">50 min</SelectItem>
                         <SelectItem value="60">1 hora</SelectItem>
+                        <SelectItem value="75">1h 15min</SelectItem>
                         <SelectItem value="90">1h 30min</SelectItem>
                         <SelectItem value="120">2 horas</SelectItem>
+                        <SelectItem value="150">2h 30min</SelectItem>
+                        <SelectItem value="180">3 horas</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
+                {/* Seletor de Horários Disponíveis - igual ao menu Conversas */}
                 <div className="space-y-2">
-                  <Label>Horário de início <span className="text-destructive">*</span></Label>
-                  <Input 
-                    type="time" 
-                    value={formData.hora_inicio}
-                    onChange={(e) => setFormData({...formData, hora_inicio: e.target.value})}
-                    className={!formData.hora_inicio ? "border-amber-500" : ""}
+                  <Label>Selecione o Horário <span className="text-destructive">*</span></Label>
+                  <HorarioSeletor
+                    data={formData.data}
+                    horarioComercial={formHorarioComercial}
+                    compromissosExistentes={formCompromissosExistentes}
+                    horarioSelecionado={formData.hora_inicio}
+                    duracaoMinutos={parseInt(formData.duracao_minutos) || 30}
+                    permitirSimultaneo={formAgendaSelecionada?.permite_simultaneo || false}
+                    onSelecionarHorario={handleSelecionarHorarioForm}
                   />
                   <p className="text-xs text-muted-foreground">
                     O horário de término será calculado automaticamente baseado na duração
