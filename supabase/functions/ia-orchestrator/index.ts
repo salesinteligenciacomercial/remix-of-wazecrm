@@ -23,11 +23,56 @@ serve(async (req) => {
     // Verificar configurações de IA da empresa
     const { data: config } = await supabase
       .from('ia_configurations')
-      .select('custom_prompts')
+      .select('*')
       .eq('company_id', companyId)
       .single();
 
     const customPrompts = config?.custom_prompts || {};
+
+    // ⚠️ VERIFICAR BLOQUEIOS ANTES DE PROCESSAR
+    
+    // 1. Verificar tags bloqueadas
+    if (config?.block_by_tags && config?.blocked_tags?.length > 0 && leadData) {
+      const leadTags = leadData.tags || [];
+      const hasBlockedTag = leadTags.some((tag: string) => config.blocked_tags.includes(tag));
+      if (hasBlockedTag) {
+        console.log('🚫 Lead bloqueado por tag:', leadTags);
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Lead bloqueado - não responder',
+            blocked: true 
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // 2. Verificar funil/etapa bloqueados
+    if (config?.block_by_funnel && leadData) {
+      if (config?.blocked_funnels?.includes(leadData.funil_id)) {
+        console.log('🚫 Lead bloqueado por funil:', leadData.funil_id);
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Lead bloqueado por funil - não responder',
+            blocked: true 
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (config?.blocked_stages?.includes(leadData.etapa_id)) {
+        console.log('🚫 Lead bloqueado por etapa:', leadData.etapa_id);
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Lead bloqueado por etapa - não responder',
+            blocked: true 
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // Detectar intenção da mensagem
     const messageLower = message.toLowerCase();
