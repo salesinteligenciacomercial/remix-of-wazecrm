@@ -876,23 +876,16 @@ export default function Agenda() {
     setFormData(prev => ({ ...prev, hora_inicio: horario }));
   };
 
-  // Carregar horário comercial e compromissos quando a data mudar ou dialog abrir
+  // Carregar horário comercial, compromissos e configurações quando a data mudar ou dialog abrir
   useEffect(() => {
     if (formData.data && novoCompromissoOpen) {
       carregarFormHorarioComercial();
       carregarFormCompromissos();
+      // Garantir que as configurações estão carregadas ao abrir o popup
+      carregarConfiguracoes();
+      console.log('📅 [Agenda] Popup aberto - tempoMedioPadrao atual:', tempoMedioPadrao);
     }
   }, [formData.data, novoCompromissoOpen]);
-
-  // Atualizar duração do formulário quando o tempo médio padrão mudar
-  useEffect(() => {
-    if (tempoMedioPadrao && !novoCompromissoOpen) {
-      setFormData(prev => ({
-        ...prev,
-        duracao_minutos: tempoMedioPadrao.toString()
-      }));
-    }
-  }, [tempoMedioPadrao]);
 
   const criarCompromisso = async () => {
     try {
