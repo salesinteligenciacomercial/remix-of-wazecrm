@@ -924,6 +924,10 @@ export function ConversaPopup({
       }
 
       const companyId = await getCompanyId();
+      
+      // Buscar dados do usuário para assinatura
+      const { data: { user } } = await supabase.auth.getUser();
+      
       await supabase.from("conversas").insert([
         {
           numero: telefoneNormalizado,
@@ -934,6 +938,9 @@ export function ConversaPopup({
           tipo_mensagem: 'audio',
           nome_contato: leadName,
           company_id: companyId,
+          owner_id: user?.id,
+          sent_by: currentUserName || "Equipe", // ✅ Assinatura do usuário
+          fromme: true, // ✅ Marcar como enviada pelo usuário
         },
       ]);
 
@@ -945,6 +952,7 @@ export function ConversaPopup({
         timestamp: new Date(),
         delivered: true,
         mediaUrl: URL.createObjectURL(audioBlob),
+        sentBy: currentUserName || "Equipe", // ✅ Assinatura na mensagem local
       };
 
       setMessages((prev) => [...prev, newMessage]);

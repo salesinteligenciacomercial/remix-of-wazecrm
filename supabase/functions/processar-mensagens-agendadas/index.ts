@@ -123,11 +123,26 @@ Deno.serve(async (req) => {
             })
             .eq('id', message.id);
 
+          // Buscar nome do usuário que agendou a mensagem para assinatura
+          let sentBy = 'Equipe';
+          if ((message as any).owner_id) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', (message as any).owner_id)
+              .maybeSingle();
+            
+            if (profile?.full_name) {
+              sentBy = profile.full_name;
+            }
+          }
+          
           // Criar registro na tabela conversas para exibir a mensagem enviada no CRM
           const { error: conversaError } = await supabase
             .from('conversas')
             .insert({
               numero: message.phone_number,
+              telefone_formatado: message.phone_number,
               mensagem: message.message_content,
               origem: 'WhatsApp',
               status: 'Enviada',
@@ -135,7 +150,8 @@ Deno.serve(async (req) => {
               nome_contato: (message as any).contact_name || message.phone_number,
               owner_id: (message as any).owner_id,
               company_id: message.company_id,
-              fromme: true, // CORRIGIDO: usar fromme (minúsculo) como está no banco
+              fromme: true,
+              sent_by: sentBy, // ✅ Assinatura do usuário que agendou
               created_at: new Date().toISOString()
             });
 
