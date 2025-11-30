@@ -686,14 +686,21 @@ export default function Agenda() {
   const carregarConfiguracoes = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.log('📅 [Agenda] Usuário não encontrado para carregar configurações');
+        return;
+      }
 
-      const { data: agenda } = await supabase
+      console.log('📅 [Agenda] Carregando configurações para usuário:', user.id);
+
+      const { data: agenda, error } = await supabase
         .from('agendas')
         .select('*')
         .eq('owner_id', user.id)
         .eq('tipo', 'principal')
         .single();
+
+      console.log('📅 [Agenda] Resultado da busca:', { agenda, error });
 
       if (agenda) {
         // Carregar horário comercial
@@ -704,20 +711,30 @@ export default function Agenda() {
           setHorarioComercial(converterHorarioAntigo(agenda.disponibilidade));
         }
 
-        // Carregar tempo médio - primeiro tenta do campo direto, depois do disponibilidade
-        const tempoMedio = agenda.tempo_medio_servico || 
-                          (agenda.disponibilidade as any)?.tempo_medio_servico || 
-                          30;
+        // Carregar tempo médio - prioridade: campo direto > disponibilidade > padrão
+        let tempoMedio = 30; // valor padrão
+        
+        if (agenda.tempo_medio_servico && agenda.tempo_medio_servico > 0) {
+          tempoMedio = agenda.tempo_medio_servico;
+          console.log('📅 [Agenda] Tempo médio do campo direto:', tempoMedio);
+        } else if ((agenda.disponibilidade as any)?.tempo_medio_servico) {
+          tempoMedio = (agenda.disponibilidade as any).tempo_medio_servico;
+          console.log('📅 [Agenda] Tempo médio da disponibilidade:', tempoMedio);
+        }
+        
         setTempoMedioPadrao(tempoMedio);
-        console.log('📅 [Agenda] Tempo médio padrão carregado:', tempoMedio);
+        console.log('📅 [Agenda] ✅ Tempo médio padrão DEFINIDO:', tempoMedio);
         
         // Carregar canal de lembrete
         if ((agenda.disponibilidade as any)?.canal_lembrete_padrao) {
           setCanalLembretePadrao((agenda.disponibilidade as any).canal_lembrete_padrao);
         }
+      } else {
+        console.log('📅 [Agenda] Nenhuma agenda encontrada, usando padrão 30 min');
+        setTempoMedioPadrao(30);
       }
     } catch (error) {
-      console.error('Erro ao carregar configurações:', error);
+      console.error('❌ [Agenda] Erro ao carregar configurações:', error);
     }
   };
 
@@ -2119,37 +2136,50 @@ export default function Agenda() {
                         canal_lembrete_padrao: canalLembretePadrao,
                       };
 
+                      console.log('💾 [Agenda] Salvando configurações:', {
+                        tempoMedioPadrao,
+                        disponibilidade,
+                        agendaExistente: agendaExistente?.id
+                      });
+
                       if (agendaExistente) {
                         // Atualizar agenda existente
-            const { error } = await supabase
-              .from('agendas')
-              .update({
-                disponibilidade: disponibilidade as any,
+                        const { error, data } = await supabase
+                          .from('agendas')
+                          .update({
+                            disponibilidade: disponibilidade as any,
                             tempo_medio_servico: tempoMedioPadrao,
                             updated_at: new Date().toISOString(),
                           })
-                          .eq('id', agendaExistente.id);
+                          .eq('id', agendaExistente.id)
+                          .select();
 
+                        console.log('💾 [Agenda] Resultado update:', { error, data });
                         if (error) throw error;
                       } else {
                         // Criar nova agenda
-                        const { error } = await supabase
+                        const { error, data } = await supabase
                           .from('agendas')
                           .insert({
                             nome: 'Agenda Principal',
                             tipo: 'principal',
-                owner_id: user.id,
-                company_id: userRole.company_id,
-                disponibilidade: disponibilidade as any,
+                            owner_id: user.id,
+                            company_id: userRole.company_id,
+                            disponibilidade: disponibilidade as any,
                             tempo_medio_servico: tempoMedioPadrao,
                             capacidade_simultanea: 1,
                             status: 'ativo',
-                          });
+                          })
+                          .select();
 
+                        console.log('💾 [Agenda] Resultado insert:', { error, data });
                         if (error) throw error;
                       }
 
-                      toast.success("Configurações salvas com sucesso!");
+                      // Recarregar configurações para garantir que os valores estão atualizados
+                      await carregarConfiguracoes();
+                      
+                      toast.success(`Configurações salvas! Tempo: ${tempoMedioPadrao} minutos`);
                       setConfiguracoesOpen(false);
                     } catch (error: any) {
                       console.error('Erro ao salvar configurações:', error);
