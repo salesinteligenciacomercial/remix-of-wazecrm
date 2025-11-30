@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, User, Trash2, Clock, DollarSign, Copy, ExternalLink, Link2, Check } from "lucide-react";
+import { Plus, User, Trash2, Clock, DollarSign, Copy, ExternalLink, Link2, Check, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { HorarioComercialConfig, criarHorarioPadrao, converterHorarioAntigo, HorarioComercial } from "./HorarioComercialConfig";
@@ -28,6 +28,8 @@ export function AgendaColaboradores() {
   const [agendas, setAgendas] = useState<Agenda[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [agendaEditando, setAgendaEditando] = useState<Agenda | null>(null);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
@@ -221,6 +223,70 @@ export function AgendaColaboradores() {
     } catch (error: any) {
       console.error('Erro ao excluir agenda:', error);
       toast.error(error.message || "Erro ao excluir agenda");
+    }
+  };
+
+  // Estado para formulário de edição
+  const [editFormData, setEditFormData] = useState({
+    nome: "",
+    tipo: "colaborador",
+    status: "ativo",
+    capacidade_simultanea: 1,
+    tempo_medio_servico: 30,
+    horarioComercial: criarHorarioPadrao(),
+    dias_funcionamento: ["segunda", "terca", "quarta", "quinta", "sexta"],
+  });
+
+  const abrirEdicao = (agenda: Agenda) => {
+    setAgendaEditando(agenda);
+    
+    // Carregar dados da agenda no formulário de edição
+    const disponibilidade = agenda.disponibilidade || {};
+    const periodos = disponibilidade.periodos || criarHorarioPadrao();
+    const dias = disponibilidade.dias_funcionamento || ["segunda", "terca", "quarta", "quinta", "sexta"];
+    
+    setEditFormData({
+      nome: agenda.nome,
+      tipo: agenda.tipo,
+      status: agenda.status,
+      capacidade_simultanea: agenda.capacidade_simultanea || 1,
+      tempo_medio_servico: agenda.tempo_medio_servico || 30,
+      horarioComercial: periodos,
+      dias_funcionamento: dias,
+    });
+    
+    setEditDialogOpen(true);
+  };
+
+  const salvarEdicao = async () => {
+    if (!agendaEditando) return;
+
+    try {
+      const { error } = await supabase
+        .from('agendas')
+        .update({
+          nome: editFormData.nome,
+          tipo: editFormData.tipo,
+          status: editFormData.status,
+          capacidade_simultanea: editFormData.capacidade_simultanea,
+          tempo_medio_servico: editFormData.tempo_medio_servico,
+          disponibilidade: {
+            dias_funcionamento: editFormData.dias_funcionamento,
+            periodos: editFormData.horarioComercial,
+          } as any,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', agendaEditando.id);
+
+      if (error) throw error;
+
+      toast.success("Agenda atualizada com sucesso!");
+      setEditDialogOpen(false);
+      setAgendaEditando(null);
+      carregarAgendas();
+    } catch (error: any) {
+      console.error('Erro ao atualizar agenda:', error);
+      toast.error(error.message || "Erro ao atualizar agenda");
     }
   };
 
@@ -489,6 +555,15 @@ export function AgendaColaboradores() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    onClick={() => abrirEdicao(agenda)}
+                    title="Editar agenda"
+                    className="text-blue-600 hover:text-blue-600 hover:bg-blue-600/10"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => excluirAgenda(agenda.id)}
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                     title="Excluir agenda"
@@ -633,6 +708,136 @@ export function AgendaColaboradores() {
           </CardContent>
         </Card>
       )}
+
+      {/* Dialog de Edição */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Agenda - {agendaEditando?.nome}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nome *</Label>
+                <Input
+                  placeholder="Ex: Dr. João Silva"
+                  value={editFormData.nome}
+                  onChange={(e) => setEditFormData({ ...editFormData, nome: e.target.value })}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Tipo</Label>
+                <Select
+                  value={editFormData.tipo}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, tipo: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="colaborador">Colaborador</SelectItem>
+                    <SelectItem value="recurso">Recurso</SelectItem>
+                    <SelectItem value="sala">Sala</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={editFormData.status}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, status: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ativo">Ativo</SelectItem>
+                    <SelectItem value="inativo">Inativo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Capacidade Simultânea</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={editFormData.capacidade_simultanea}
+                  onChange={(e) => setEditFormData({ ...editFormData, capacidade_simultanea: parseInt(e.target.value) || 1 })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tempo Médio (minutos)</Label>
+              <Input
+                type="number"
+                min="5"
+                step="1"
+                value={editFormData.tempo_medio_servico}
+                onChange={(e) => setEditFormData({ ...editFormData, tempo_medio_servico: parseInt(e.target.value) || 30 })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Dias de Funcionamento</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Selecione os dias da semana em que este colaborador trabalha
+              </p>
+              <div className="grid grid-cols-7 gap-1">
+                {diasSemanaConfig.map((dia) => (
+                  <Button
+                    key={dia.id}
+                    type="button"
+                    variant={editFormData.dias_funcionamento.includes(dia.id) ? "default" : "outline"}
+                    size="sm"
+                    className="h-9 px-2"
+                    onClick={() => {
+                      if (editFormData.dias_funcionamento.includes(dia.id)) {
+                        setEditFormData({
+                          ...editFormData,
+                          dias_funcionamento: editFormData.dias_funcionamento.filter(d => d !== dia.id)
+                        });
+                      } else {
+                        setEditFormData({
+                          ...editFormData,
+                          dias_funcionamento: [...editFormData.dias_funcionamento, dia.id]
+                        });
+                      }
+                    }}
+                  >
+                    {dia.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Horário de Funcionamento</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Configure os períodos de atendimento
+              </p>
+              <HorarioComercialConfig 
+                horario={editFormData.horarioComercial}
+                onChange={(horario) => setEditFormData({ ...editFormData, horarioComercial: horario })}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="flex-1">
+                Cancelar
+              </Button>
+              <Button onClick={salvarEdicao} className="flex-1">
+                Salvar Alterações
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
