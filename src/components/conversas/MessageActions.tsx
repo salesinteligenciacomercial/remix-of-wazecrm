@@ -16,7 +16,8 @@ import {
   ThumbsUp,
   Laugh,
   Frown,
-  Angry
+  Angry,
+  Download
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -24,6 +25,9 @@ interface MessageActionsProps {
   messageId: string;
   content: string;
   sender: "user" | "contact";
+  messageType?: "text" | "image" | "audio" | "pdf" | "video" | "contact";
+  mediaUrl?: string;
+  fileName?: string;
   onReply: (messageId: string) => void;
   onEdit: (messageId: string, newContent: string) => void;
   onDelete: (messageId: string, forEveryone: boolean) => void;
@@ -34,6 +38,9 @@ export function MessageActions({
   messageId,
   content,
   sender,
+  messageType,
+  mediaUrl,
+  fileName,
   onReply,
   onEdit,
   onDelete,
@@ -57,6 +64,55 @@ export function MessageActions({
       title: "✅ Reação enviada",
       description: `${emoji} adicionado à mensagem`
     });
+  };
+
+  const handleDownload = async () => {
+    if (!mediaUrl) {
+      toast({
+        title: "❌ Erro",
+        description: "URL do arquivo não disponível",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      console.log('📥 [DOWNLOAD] Iniciando download:', { mediaUrl, fileName });
+      
+      // Fazer fetch do arquivo
+      const response = await fetch(mediaUrl);
+      if (!response.ok) throw new Error('Erro ao baixar arquivo');
+      
+      const blob = await response.blob();
+      
+      // Criar URL temporária do blob
+      const url = window.URL.createObjectURL(blob);
+      
+      // Criar elemento <a> temporário para download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName || `arquivo-${messageId}`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Limpar
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "✅ Download concluído",
+        description: `${fileName || 'Arquivo'} baixado com sucesso`
+      });
+      
+      console.log('✅ [DOWNLOAD] Download concluído');
+    } catch (error) {
+      console.error('❌ [DOWNLOAD] Erro ao baixar:', error);
+      toast({
+        title: "❌ Erro no download",
+        description: "Não foi possível baixar o arquivo",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -109,6 +165,17 @@ export function MessageActions({
             <Reply className="h-4 w-4 mr-2" />
             Responder
           </DropdownMenuItem>
+          
+          {/* Opção de Download para mídias */}
+          {mediaUrl && (messageType === "image" || messageType === "video" || messageType === "audio" || messageType === "pdf") && (
+            <DropdownMenuItem onClick={() => {
+              handleDownload();
+              setShowEmojiPicker(false);
+            }}>
+              <Download className="h-4 w-4 mr-2" />
+              Baixar
+            </DropdownMenuItem>
+          )}
           
           {sender === "user" && (
             <>
