@@ -9,7 +9,6 @@ import {
 import { 
   MoreVertical, 
   Reply, 
-  Trash2, 
   Smile,
   Heart,
   ThumbsUp,
@@ -173,20 +172,6 @@ export function MessageActions({
             }}>
               <Download className="h-4 w-4 mr-2" />
               Baixar
-            </DropdownMenuItem>
-          )}
-          
-          {sender === "user" && (
-            <DropdownMenuItem 
-              onClick={() => {
-                const confirmDelete = window.confirm("Excluir mensagem para todos?");
-                onDelete(messageId, confirmDelete);
-                setShowEmojiPicker(false);
-              }}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Excluir
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>
