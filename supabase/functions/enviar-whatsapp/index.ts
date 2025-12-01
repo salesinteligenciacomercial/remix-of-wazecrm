@@ -241,15 +241,18 @@ serve(async (req) => {
           }
         }
         
+        // ⚡ CORREÇÃO: Para PDF/documentos, usar caption vazio se não fornecido
+        const captionToUse = validatedData.caption || validatedData.mensagem || '';
+        
         bodyPayload = {
           number: isGroup ? (target as any).groupId : (target as any).number,
           mediatype: mediaType,
           mimetype: mimeType,
-          caption: validatedData.caption || validatedData.mensagem || " ",
+          caption: captionToUse,
           fileName: validatedData.fileName || 'arquivo',
           media: validatedData.mediaBase64,
         };
-        console.log(`📸 Enviando mídia base64 (${mediaType})`);
+        console.log(`📸 Enviando mídia base64 (${mediaType}), caption: "${captionToUse}"`);
       }
     } else if (validatedData.mediaUrl) {
       // Enviar mídia via URL - Formato Evolution API
