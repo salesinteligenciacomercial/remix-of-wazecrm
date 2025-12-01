@@ -372,11 +372,6 @@ function Conversas() {
           }, timeout);
         });
 
-        // ⚡ CORREÇÃO: Verificar se supabase.functions existe antes de chamar
-        if (!supabase || !supabase.functions) {
-          throw new Error('Supabase functions não está disponível. Verifique a conexão.');
-        }
-
         // Promise da edge function
         const functionPromise = supabase.functions.invoke(functionName, { body });
 
@@ -500,11 +495,6 @@ function Conversas() {
           }
         });
         
-        // ⚡ CORREÇÃO: Verificar se supabase.functions existe antes de chamar
-        if (!supabase || !supabase.functions) {
-          throw new Error('Supabase functions não está disponível. Verifique a conexão.');
-        }
-
         // ⚡ CORREÇÃO: Adicionar timeout explícito para evitar travamento
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error('Timeout após 30 segundos')), 30000);
@@ -1048,9 +1038,7 @@ function Conversas() {
   useEffect(() => {
     if (!userCompanyId) return;
 
-    console.log('🔴 [REALTIME] Iniciando escuta de mensagens em tempo real...', {
-      company_id: userCompanyId
-    });
+    console.log('🔴 [REALTIME] Iniciando escuta de mensagens em tempo real...');
     
     const channel = supabase
       .channel('conversas-realtime')
@@ -1063,17 +1051,11 @@ function Conversas() {
           filter: `company_id=eq.${userCompanyId}`
         },
         async (payload) => {
-          const novaMensagem = payload.new as any;
-          
-          console.log('📨 [REALTIME] Nova mensagem capturada:', {
-            eventType: payload.eventType,
-            fromme: novaMensagem?.fromme,
-            numero: novaMensagem?.numero,
-            mensagem: novaMensagem?.mensagem?.substring(0, 50),
-            payload: payload
-          });
+          console.log('📨 [REALTIME] Nova mensagem recebida:', payload);
           
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const novaMensagem = payload.new;
+            
             // Validar company_id e telefone
             if (novaMensagem.company_id !== userCompanyId) {
               console.warn('⚠️ [REALTIME] Mensagem de outra company ignorada');
@@ -1088,24 +1070,6 @@ function Conversas() {
             
             const isFromMe = novaMensagem.fromme === true || String(novaMensagem.fromme) === 'true';
             
-            console.log('🔍 [REALTIME] Processando mensagem:', {
-              id: novaMensagem.id,
-              fromme: novaMensagem.fromme,
-              frommeType: typeof novaMensagem.fromme,
-              isFromMe: isFromMe,
-              sender: isFromMe ? 'user' : 'contact',
-              mensagem: novaMensagem.mensagem?.substring(0, 50)
-            });
-            
-            // ⚡ CORREÇÃO CRÍTICA: Recarregar conversas do banco para garantir atualização imediata
-            // Isso garante que TODAS as mensagens (enviadas e recebidas) apareçam instantaneamente
-            console.log('🔄 [REALTIME] Recarregando conversas após nova mensagem...');
-            await loadSupabaseConversations();
-            
-            console.log('✅ [REALTIME] Conversas recarregadas com sucesso');
-            
-            // ⚡ MANTER O CÓDIGO ANTIGO COMENTADO PARA REFERÊNCIA
-            /*
             // ⚡ FASE 1: Buscar sent_by do banco (permanente) ou buscar do owner_id se necessário
             let sentBy = novaMensagem.sent_by || undefined;
             
@@ -1120,16 +1084,208 @@ function Conversas() {
             }
             
             console.log('🔍 [REALTIME] Usando sent_by:', sentBy);
-            */
             
-            // ⚡ COMENTADO TEMPORARIAMENTE - usando reload completo em vez de update incremental
-            /*
+            // ⚡ CORREÇÃO: Mapear tipos de mensagem corretamente (document → pdf)
             const tipoMensagem = novaMensagem.tipo_mensagem === 'texto' ? 'text' :
-...
+                                novaMensagem.tipo_mensagem === 'image' ? 'image' :
+                                novaMensagem.tipo_mensagem === 'audio' ? 'audio' :
+                                novaMensagem.tipo_mensagem === 'video' ? 'video' :
+                                novaMensagem.tipo_mensagem === 'document' ? 'pdf' :
+                                novaMensagem.tipo_mensagem || 'text';
+            
+            // Criar objeto de mensagem
+            const novaMensagemObj: Message = {
+              id: novaMensagem.id,
+              content: novaMensagem.mensagem || '',
+              type: tipoMensagem as any,
+              sender: isFromMe ? 'user' : 'contact',
+              timestamp: new Date(novaMensagem.created_at || Date.now()),
+              delivered: true,
+              read: novaMensagem.status !== 'Recebida',
+              mediaUrl: novaMensagem.midia_url,
+              fileName: novaMensagem.arquivo_nome,
+              mimeType: novaMensagem.tipo_mensagem === 'video' ? 'video/mp4' : 
+                       novaMensagem.tipo_mensagem === 'audio' ? 'audio/mpeg' :
+                       novaMensagem.tipo_mensagem === 'image' ? 'image/jpeg' :
+                       novaMensagem.tipo_mensagem === 'document' ? 'application/pdf' : undefined,
+              sentBy: sentBy,
+            };
+            
+            console.log('📨 [REALTIME] Mensagem criada com sentBy:', {
+              id: novaMensagemObj.id,
+              sender: novaMensagemObj.sender,
+              sentBy: novaMensagemObj.sentBy,
+              owner_id: novaMensagem.owner_id
+            });
+            
+            // ⚡ CRÍTICO: Atualizar conversa selecionada em tempo real
+            setSelectedConv(prevSelected => {
+              if (!prevSelected) return prevSelected;
+              
+              // Verificar se a mensagem pertence à conversa selecionada
+              const telSelected = (prevSelected.phoneNumber || prevSelected.id || '').replace(/[^0-9]/g, '');
+              if (telSelected === telefone) {
+                // Verificar se mensagem já existe
+                const mensagemJaExiste = prevSelected.messages.some(m => m.id === novaMensagem.id);
+                if (!mensagemJaExiste) {
+                  console.log('✅ [REALTIME] Atualizando conversa SELECIONADA com nova mensagem');
+                  
+                  const novasMensagens = [...prevSelected.messages, novaMensagemObj].sort((a, b) => {
+                    const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+                    const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+                    return timeA - timeB;
+                  });
+                  
+                  // Atualizar status baseado na última mensagem
+                  let novoStatus: "waiting" | "answered" | "resolved" = prevSelected.status;
+                  if (prevSelected.status !== 'resolved') {
+                    if (novaMensagemObj.sender === 'user') {
+                      novoStatus = 'answered';
+                    } else if (novaMensagemObj.sender === 'contact') {
+                      novoStatus = 'waiting';
+                    }
+                  }
+                  
+                  return {
+                    ...prevSelected,
+                    messages: novasMensagens,
+                    lastMessage: novaMensagem.mensagem || '',
+                    status: novoStatus,
+                    unread: novaMensagemObj.sender === 'contact' ? (prevSelected.unread || 0) + 1 : 0,
+                  };
+                }
+              }
+              return prevSelected;
+            });
+            
+            // Atualizar lista de conversas
+            setConversations(prev => {
+              const telefoneKey = telefone;
+              const conversaExistente = prev.find(c => {
+                const tel = (c.phoneNumber || c.id || '').replace(/[^0-9]/g, '');
+                return tel === telefoneKey;
+              });
+              
+              if (conversaExistente) {
+                // Atualizar conversa existente
+                const mensagemJaExiste = conversaExistente.messages.some(m => m.id === novaMensagem.id);
+                
+                if (!mensagemJaExiste) {
+                  console.log('✅ [REALTIME] Adicionando mensagem à conversa existente:', conversaExistente.contactName);
+                  
+                  return prev.map(conv => {
+                    if (conv.id === conversaExistente.id) {
+                      const novasMensagens = [...conv.messages, novaMensagemObj].sort((a, b) => {
+                        const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+                        const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+                        return timeA - timeB;
+                      });
+                      
+                      // Atualizar status baseado na última mensagem
+                      // ⚡ CORREÇÃO: Verificar se conversa está "ao vivo" antes de mudar para waiting
+                      let novoStatus: "waiting" | "answered" | "resolved" = conv.status;
+                      if (conv.status !== 'resolved') {
+                        if (novaMensagemObj.sender === 'user') {
+                          novoStatus = 'answered';
+                        } else if (novaMensagemObj.sender === 'contact') {
+                          // ⚡ CORREÇÃO: Verificar se o usuário respondeu recentemente (conversa ao vivo)
+                          const TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000; // 10 minutos
+                          const agora = Date.now();
+                          
+                          // Buscar última mensagem do usuário nas mensagens atualizadas
+                          const ultimaMsgUsuario = novasMensagens
+                            .filter(m => m.sender === 'user')
+                            .sort((a, b) => {
+                              const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+                              const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+                              return timeB - timeA;
+                            })[0];
+                          
+                          if (ultimaMsgUsuario) {
+                            const tempoUltimaResposta = ultimaMsgUsuario.timestamp instanceof Date 
+                              ? ultimaMsgUsuario.timestamp.getTime() 
+                              : new Date(ultimaMsgUsuario.timestamp).getTime();
+                            
+                            const usuarioRespondeuRecentemente = (agora - tempoUltimaResposta) < TEMPO_CONVERSA_AO_VIVO;
+                            
+                            if (usuarioRespondeuRecentemente) {
+                              novoStatus = 'answered'; // Manter em atendimento (conversa ao vivo)
+                            } else {
+                              novoStatus = 'waiting'; // Usuário não respondeu recentemente
+                            }
+                          } else {
+                            novoStatus = 'waiting'; // Sem resposta do usuário
+                          }
+                        }
+                      }
+                      
+                      return {
+                        ...conv,
+                        messages: novasMensagens,
+                        lastMessage: novaMensagem.mensagem || '',
+                        status: novoStatus,
+                        unread: novaMensagemObj.sender === 'contact' ? (conv.unread || 0) + 1 : 0,
+                      };
+                    }
+                    return conv;
+                  });
+                } else {
+                  console.log('⚠️ [REALTIME] Mensagem duplicada ignorada:', novaMensagem.id);
+                  return prev;
+                }
+              } else {
+                // Criar nova conversa
+                console.log('✅ [REALTIME] Criando nova conversa para:', telefoneKey);
+                
+                const novaConversa: Conversation = {
+                  id: novaMensagem.lead_id || `conv-${telefoneKey}`,
+                  contactName: novaMensagem.nome_contato || telefoneKey,
+                  channel: 'whatsapp' as const,
+                  status: novaMensagemObj.sender === 'user' ? 'answered' : 'waiting',
+                  lastMessage: novaMensagem.mensagem || '',
+                  unread: novaMensagemObj.sender === 'contact' ? 1 : 0,
+                  messages: [novaMensagemObj],
+                  tags: [],
+                  phoneNumber: telefoneKey,
+                  isGroup: novaMensagem.is_group || /@g\.us$/.test(novaMensagem.numero || ''),
+                };
+                
+                return [novaConversa, ...prev];
+              }
+            });
+            
+            // ⚡ CORREÇÃO CRÍTICA: Tocar som de notificação APENAS para mensagens novas recebidas do contato
+            // Verificar: 1) É do contato (fromme === false), 2) É INSERT (não UPDATE), 3) Não foi notificada antes
+            const isFromContact = novaMensagem.fromme === false || String(novaMensagem.fromme) === 'false';
+            const isNewMessage = payload.eventType === 'INSERT';
+            const notAlreadyNotified = !notifiedMessagesRef.current.has(novaMensagem.id);
+            
+            if (isFromContact && isNewMessage && notAlreadyNotified) {
+              // Marcar como notificada
+              notifiedMessagesRef.current.add(novaMensagem.id);
+              
+              // Limpar set se ficar muito grande (manter apenas últimas 100 mensagens)
+              if (notifiedMessagesRef.current.size > 100) {
+                const idsArray = Array.from(notifiedMessagesRef.current);
+                notifiedMessagesRef.current = new Set(idsArray.slice(-100));
+              }
+              
+              console.log('🔔 [REALTIME] Disparando notificação para mensagem nova:', novaMensagem.id);
+              
+              const audio = new Audio('/notification.mp3');
+              audio.play().catch(() => {});
+              
+              toast.info(`Nova mensagem de ${novaMensagem.nome_contato || 'contato'}`, {
+                duration: 3000,
+              });
+            } else {
+              console.log('⚠️ [REALTIME] Notificação ignorada:', {
+                isFromContact,
+                isNewMessage,
+                notAlreadyNotified,
                 messageId: novaMensagem.id
               });
             }
-            */
           }
         }
       )
@@ -3843,32 +3999,14 @@ function Conversas() {
     try {
       console.log('📤 [FASE 3] Enviando mídia via edge function...');
 
-      // ⚡ FASE 3: Validar usuário autenticado primeiro
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) {
-        console.error('❌ [MEDIA] Usuário não autenticado');
-        toast.error('Erro: usuário não autenticado');
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return;
-      }
-
-      const userId = authUser.id;
-
       // ⚡ FASE 3: Fazer upload para Supabase Storage ANTES de enviar pelo WhatsApp
-      const { data: userRole, error: userRoleError } = await supabase
+      const { data: userRole } = await supabase
         .from('user_roles')
         .select('company_id')
-        .eq('user_id', userId)
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
         .single();
-
-      if (userRoleError || !userRole?.company_id) {
-        console.error('❌ [MEDIA] Erro ao buscar company_id:', userRoleError);
-        toast.error('Erro: não foi possível identificar a empresa');
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return;
-      }
+      
+      const userId = (await supabase.auth.getUser()).data.user?.id;
       const timestamp = Date.now();
       const filePath = `${userRole?.company_id}/${userId}/${timestamp}_${file.name}`;
       
@@ -3917,14 +4055,6 @@ function Conversas() {
 
       // Enviar via edge function (retry via wrapper interno)
       const numeroNormalizado = normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
-      if (!numeroNormalizado) {
-        console.error('❌ [MEDIA] Número de telefone inválido');
-        toast.error('Erro: número de telefone inválido');
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return;
-      }
-
       const quotedPayload = replyingTo && selectedConv.messages.find(m => m.id === replyingTo)
         ? {
             quoted: {
@@ -3934,14 +4064,14 @@ function Conversas() {
             quotedMessageId: replyingTo
           }
         : {};
-      
+
       console.log('📤 Enviando mídia via WhatsApp:', {
         tipo: type,
         fileName: file.name,
         hasBase64: !!base64,
         base64Length: base64.length,
         caption: caption || '[sem legenda]',
-        companyId: userRole.company_id // Já validado acima
+        companyId: userRole?.company_id
       });
 
       const { data, error } = await enviarWhatsApp({
@@ -3952,74 +4082,17 @@ function Conversas() {
         fileName: file.name,
         mimeType: file.type,
         caption: caption || '',
-        company_id: userRole.company_id, // Já validado acima
+        company_id: userRole?.company_id,
         ...quotedPayload,
       });
 
-      // ⚡ CORREÇÃO CRÍTICA: Log detalhado da resposta para debug
-      console.log('🔍 [MEDIA] Resposta completa do enviarWhatsApp:', {
-        tipo: type,
-        fileName: file.name,
-        hasError: !!error,
-        errorMessage: error?.message,
-        hasData: !!data,
-        dataSuccess: data?.success,
-        dataErrorCode: data?.errorCode,
-        dataMessage: data?.message
-      });
-
-      // ⚡ CORREÇÃO CRÍTICA: Verificação combinada de erro e sucesso
-      // Verificar se há erro OU se data não existe OU se success não é true
-      const hasError = !!error;
-      const hasData = !!data;
-      const isSuccess = hasData && data.success === true;
-      
-      // ⚡ DECISÃO FINAL: Só continuar se NÃO houver erro E data existe E success é true
-      if (hasError || !hasData || !isSuccess) {
-        const errorMessage = error?.message || data?.message || data?.errorCode || `Erro ao enviar ${type}`;
-        console.error('❌ [MEDIA] Mídia NÃO foi enviada. Detalhes:', {
-          tipo: type,
-          fileName: file.name,
-          hasError,
-          hasData,
-          isSuccess,
-          errorMessage: error?.message,
-          dataSuccess: data?.success,
-          dataErrorCode: data?.errorCode,
-          dataMessage: data?.message
-        });
-        toast.error(`Erro ao enviar ${type}: ${errorMessage}`);
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return; // ⚡ CORREÇÃO CRÍTICA: Retornar aqui para não salvar no banco nem atualizar UI
+      if (error) {
+        throw error;
       }
 
-      // ⚡ VALIDAÇÃO FINAL: Confirmar que realmente foi bem-sucedido antes de continuar
-      // Se chegou aqui, significa que: !hasError && hasData && isSuccess
-      console.log('✅ [MEDIA] Mídia enviada com sucesso via WhatsApp. Confirmação final:', {
-        tipo: type,
-        fileName: file.name,
-        success: data.success,
-        numero: numeroNormalizado
-      });
-
-      // ⚡ PROTEÇÃO FINAL ABSOLUTA: Verificar novamente antes de salvar (redundância de segurança)
-      // Esta verificação é redundante mas garante que não salvamos por engano
-      if (error || !data || data.success !== true) {
-        console.error('❌ [MEDIA] ERRO CRÍTICO: Tentativa de salvar mídia que não foi enviada! Bloqueando salvamento.');
-        toast.error(`Erro crítico: ${type} não foi enviado`);
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return;
-      }
+      console.log('✅ [FASE 3] Mídia enviada com sucesso via WhatsApp');
 
       // ⚡ FASE 3: Salvar no banco com URL do Storage (não BASE64)
-      // ⚡ PROTEÇÃO: Verificar novamente antes de cada operação crítica
-      if (!data || data.success !== true) {
-        console.error('❌ [MEDIA] ERRO: Tentativa de salvar após verificação falhou!');
-        return;
-      }
-
       // Buscar nome do usuário para assinatura
       const { data: userProfile } = await supabase
         .from('profiles')
@@ -4037,7 +4110,7 @@ function Conversas() {
         nome_contato: selectedConv.contactName,
         arquivo_nome: file.name,
         midia_url: publicUrl, // ⚡ FASE 3: Salvar URL do Storage (não BASE64!)
-        company_id: userRole.company_id, // Já validado acima
+        company_id: userRole?.company_id,
         owner_id: userId,
         sent_by: userProfile?.full_name, // ⚡ FASE 1: Adicionar assinatura permanente
         fromme: true,
@@ -4050,7 +4123,7 @@ function Conversas() {
         fileName: file.name,
         hasStorageUrl: !!publicUrl,
         storageUrlLength: publicUrl?.length || 0,
-        companyId: userRole.company_id, // Já validado acima
+        companyId: userRole?.company_id,
         contactName: selectedConv.contactName
       });
 
@@ -4070,25 +4143,77 @@ function Conversas() {
       }
 
       // ⚡ FASE 3: Usar URL do Storage para exibição
-      // ⚡ CORREÇÃO: Não adicionar mensagem ao estado local aqui
-      // A mensagem será carregada do banco ao recarregar conversas
-      console.log('✅ [MEDIA] Mensagem salva no banco, será carregada ao recarregar conversas');
+      const newMessage: Message = {
+        id: (inserted?.id || Date.now()).toString(),
+        content: caption || '[Mídia]',
+        type: type as "image" | "audio" | "pdf" | "video",
+        sender: "user",
+        timestamp: new Date(),
+        delivered: true,
+        read: false,
+        mediaUrl: publicUrl, // ⚡ FASE 3: Usar URL do Storage
+        fileName: file.name,
+        mimeType: file.type,
+        sentBy: userProfile?.full_name || userName || "Equipe",
+      };
 
-      // ⚡ CORREÇÃO CRÍTICA: Recarregar conversas do banco para exibir mensagem enviada
-      // Isso garante que a mensagem apareça no CRM após envio
-      console.log('🔄 [MEDIA] Recarregando conversas para exibir mensagem enviada...');
-      
+      // ⚡ CORREÇÃO CRÍTICA: Ordenar mensagens por timestamp após adicionar nova mensagem
+      const sortMessagesByTimestamp = (messages: Message[]): Message[] => {
+        return [...messages].sort((a, b) => {
+          const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+          const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+          return timeA - timeB;
+        });
+      };
+
+      // ⚡ CORREÇÃO: Calcular status dinamicamente
+      const sortedMessagesWithNew = sortMessagesByTimestamp([...selectedConv.messages, newMessage]);
+      const newStatus = calculateConversationStatus(sortedMessagesWithNew);
+
+      const updatedConversations = conversations.map((conv) =>
+        conv.id === selectedConv.id
+          ? {
+              ...conv,
+              messages: sortedMessagesWithNew,
+              lastMessage: newMessage.content,
+              status: newStatus,
+              unread: 0,
+            }
+          : conv
+      );
+
+      saveConversations(updatedConversations);
+      setSelectedConv({
+        ...selectedConv,
+        messages: sortedMessagesWithNew,
+        status: newStatus,
+      });
+
+      // Atualizar status no banco de dados para sincronização em tempo real
       try {
-        await loadSupabaseConversations();
-        console.log('✅ [MEDIA] Conversas recarregadas com sucesso');
+        const telefoneFormatado = selectedConv.phoneNumber?.replace(/[^0-9]/g, '') || selectedConv.id.replace(/[^0-9]/g, '');
+        const { error: updateError } = await supabase
+          .from('conversas')
+          .update({ status: 'Enviada' })
+          .eq('telefone_formatado', telefoneFormatado)
+          .eq('company_id', userCompanyId);
+
+        if (updateError) {
+          console.error('❌ Erro ao atualizar status no banco:', updateError);
+        } else {
+          console.log('✅ Status atualizado no banco para "Enviada"');
+        }
       } catch (error) {
-        console.error('❌ [MEDIA] Erro ao recarregar conversas:', error);
+        console.error('❌ Erro ao sincronizar status:', error);
       }
+
+      // já salvo acima
 
       setSyncStatus('synced');
       setTimeout(() => setSyncStatus('idle'), 1000);
       
-      toast.success('Mídia enviada com sucesso');
+      // Não mostrar notificação ao enviar mídia - apenas logs
+      console.log('✅ Mídia enviada com sucesso');
     } catch (error) {
       console.error("❌ Erro ao enviar mídia:", error);
       setSyncStatus('error');
@@ -4149,39 +4274,14 @@ function Conversas() {
       });
 
       // 3️⃣ Buscar company_id para envio via WhatsApp
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) {
-        console.error('❌ Usuário não autenticado');
-        toast.error('Erro: usuário não autenticado');
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return;
-      }
-
-      const { data: userRole, error: userRoleError } = await supabase
+      const { data: userRole } = await supabase
         .from('user_roles')
         .select('company_id')
-        .eq('user_id', authUser.id)
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
         .single();
-
-      if (userRoleError || !userRole?.company_id) {
-        console.error('❌ Erro ao buscar company_id:', userRoleError);
-        toast.error('Erro: não foi possível identificar a empresa');
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return;
-      }
 
       // Enviar via WhatsApp com company_id
       const numeroNormalizado = normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
-      if (!numeroNormalizado) {
-        console.error('❌ Número de telefone inválido');
-        toast.error('Erro: número de telefone inválido');
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return;
-      }
-
       const quotedPayload = replyingTo && selectedConv.messages.find(m => m.id === replyingTo)
         ? {
             quoted: {
@@ -4196,7 +4296,7 @@ function Conversas() {
         numeroNormalizado,
         hasBase64: !!base64,
         base64Length: base64.length,
-        companyId: userRole.company_id
+        companyId: userRole?.company_id
       });
 
       const { data, error } = await enviarWhatsApp({
@@ -4207,81 +4307,25 @@ function Conversas() {
         fileName: 'audio.ogg',
         mimeType: 'audio/ogg; codecs=opus',
         caption: '',
-        company_id: userRole.company_id,
+        company_id: userRole?.company_id,
         ...quotedPayload,
       });
 
-      // ⚡ CORREÇÃO CRÍTICA: Log detalhado da resposta para debug
-      console.log('🔍 [AUDIO] Resposta completa do enviarWhatsApp:', {
-        hasError: !!error,
-        errorMessage: error?.message,
-        hasData: !!data,
-        dataSuccess: data?.success,
-        dataErrorCode: data?.errorCode,
-        dataMessage: data?.message,
-        dataType: typeof data,
-        dataKeys: data ? Object.keys(data) : []
-      });
-
-      // ⚡ CORREÇÃO CRÍTICA: Verificação simplificada e direta
-      // REGRA: Só continuar se NÃO houver erro E data existe E data.success é explicitamente true
-      const canContinue = !error && data && data.success === true;
-      
-      if (!canContinue) {
-        // Determinar mensagem de erro
-        let errorMessage = 'Erro ao enviar áudio';
-        if (error?.message) {
-          errorMessage = error.message;
-        } else if (data?.message) {
-          errorMessage = data.message;
-        } else if (data?.errorCode) {
-          errorMessage = `Erro: ${data.errorCode}`;
-        }
-        
-        console.error('❌ [AUDIO] Áudio NÃO foi enviado. Bloqueando salvamento. Detalhes:', {
-          hasError: !!error,
-          errorMessage: error?.message,
-          hasData: !!data,
-          dataSuccess: data?.success,
-          dataSuccessType: typeof data?.success,
-          dataErrorCode: data?.errorCode,
-          dataMessage: data?.message,
-          canContinue: false
-        });
-        toast.error(`Erro ao enviar áudio: ${errorMessage}`);
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return; // ⚡ CORREÇÃO CRÍTICA: Retornar aqui para não salvar no banco nem atualizar UI
+      if (error) {
+        console.error('❌ Erro ao enviar áudio via WhatsApp:', error);
+        toast.error('Erro ao enviar áudio. Tente novamente.');
+        throw error;
       }
 
-      // ⚡ VALIDAÇÃO FINAL: Confirmar que realmente foi bem-sucedido antes de continuar
-      // Se chegou aqui, significa que: !hasError && hasData && isSuccess
-      console.log('✅ [AUDIO] Áudio enviado com sucesso via WhatsApp. Confirmação final:', {
-        success: data.success,
-        numero: numeroNormalizado,
-        hasError: false,
-        hasData: true,
-        isSuccess: true
-      });
+      console.log('✅ Áudio enviado com sucesso via WhatsApp');
 
-      // ⚡ PROTEÇÃO FINAL ABSOLUTA: Verificar novamente antes de salvar (redundância de segurança)
-      // Esta verificação é redundante mas garante que não salvamos por engano
-      if (error || !data || data.success !== true) {
-        console.error('❌ [AUDIO] ERRO CRÍTICO: Tentativa de salvar áudio que não foi enviado! Bloqueando salvamento.');
-        toast.error('Erro crítico: áudio não foi enviado');
-        setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return;
-      }
-
-      // 4️⃣ Salvar no banco com URL do Storage (só se o envio foi bem-sucedido)
-      // ⚠️ ATENÇÃO: Este código só executa se todas as verificações passaram
-
-      const { data: userProfile } = await supabase
+      // 4️⃣ Salvar no banco com URL do Storage
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: userProfile } = user ? await supabase
         .from('profiles')
         .select('full_name, email')
-        .eq('id', authUser.id)
-        .single();
+        .eq('id', user.id)
+        .single() : { data: null };
       
       const { data: inserted, error: dbError } = await supabase.from('conversas').insert([{
         numero: numeroNormalizado,
@@ -4293,8 +4337,8 @@ function Conversas() {
         nome_contato: selectedConv.contactName,
         arquivo_nome: 'audio.ogg',
         midia_url: storageUrl, // ⚡ CORREÇÃO CRÍTICA: Salvar URL do Storage
-        company_id: userRole.company_id, // Já validado acima
-        owner_id: authUser.id, // Já validado acima
+        company_id: userRole?.company_id,
+        owner_id: user?.id,
         sent_by: userProfile?.full_name || userProfile?.email || 'Equipe',
         fromme: true,
       }]).select('id, midia_url').single();
@@ -4306,19 +4350,61 @@ function Conversas() {
         console.log('✅ Mensagem de áudio salva no banco com Storage URL:', inserted?.midia_url);
       }
 
-      // ⚡ CORREÇÃO: Não adicionar mensagem ao estado local aqui
-      // A mensagem será carregada do banco ao recarregar conversas
-      console.log('✅ [AUDIO] Mensagem salva no banco, será carregada ao recarregar conversas');
+      const newMessage: Message = {
+        id: (inserted?.id || Date.now()).toString(),
+        content: "[Áudio]",
+        type: "audio",
+        sender: "user",
+        timestamp: new Date(),
+        delivered: true,
+        read: false,
+        mediaUrl: storageUrl, // ⚡ CORREÇÃO CRÍTICA: Usar URL do Storage
+        sentBy: userName || "Equipe",
+      };
 
-      // ⚡ CORREÇÃO CRÍTICA: Recarregar conversas do banco para exibir mensagem enviada
-      // Isso garante que a mensagem apareça no CRM após envio
-      console.log('🔄 [AUDIO] Recarregando conversas para exibir áudio enviado...');
-      
+      // ⚡ CORREÇÃO CRÍTICA: Ordenar mensagens por timestamp após adicionar nova mensagem
+      const sortMessagesByTimestamp = (messages: Message[]): Message[] => {
+        return [...messages].sort((a, b) => {
+          const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+          const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+          return timeA - timeB;
+        });
+      };
+
+      // ⚡ CORREÇÃO: Calcular status dinamicamente
+      const sortedMessagesWithNew = sortMessagesByTimestamp([...selectedConv.messages, newMessage]);
+      const newStatus = calculateConversationStatus(sortedMessagesWithNew);
+
+      const updatedConversations = conversations.map((conv) =>
+        conv.id === selectedConv.id
+          ? {
+              ...conv,
+              messages: sortedMessagesWithNew,
+              lastMessage: "[Áudio]",
+              status: newStatus,
+              unread: 0,
+            }
+          : conv
+      );
+
+      saveConversations(updatedConversations);
+      setSelectedConv({
+        ...selectedConv,
+        messages: sortedMessagesWithNew,
+        status: newStatus,
+      });
+
+      // Atualizar status no banco de dados
       try {
-        await loadSupabaseConversations();
-        console.log('✅ [AUDIO] Conversas recarregadas com sucesso');
+        const telefoneFormatado = selectedConv.phoneNumber?.replace(/[^0-9]/g, '') || selectedConv.id.replace(/[^0-9]/g, '');
+        await supabase
+          .from('conversas')
+          .update({ status: 'Enviada' })
+          .eq('telefone_formatado', telefoneFormatado)
+          .eq('company_id', userCompanyId);
+        console.log('✅ Status atualizado no banco após enviar áudio');
       } catch (error) {
-        console.error('❌ [AUDIO] Erro ao recarregar conversas:', error);
+        console.error('❌ Erro ao sincronizar status do áudio:', error);
       }
 
       // Iniciar transcrição automática
@@ -4333,7 +4419,8 @@ function Conversas() {
       setSyncStatus('synced');
       setTimeout(() => setSyncStatus('idle'), 1000);
       
-      toast.success('Áudio enviado com sucesso');
+      // Não mostrar notificação ao enviar áudio - apenas logs
+      console.log('✅ Áudio enviado com sucesso');
     } catch (error) {
       console.error("❌ Erro ao enviar áudio:", error);
       setSyncStatus('error');
@@ -5502,13 +5589,6 @@ function Conversas() {
                 company_id: companyId,
                 mensagemLength: mensagemConfirmacao.length
               });
-              
-              // ⚡ CORREÇÃO: Verificar se supabase.functions existe antes de chamar
-              if (!supabase || !supabase.functions) {
-                console.error('❌ [CONFIRMAÇÃO] Supabase functions não está disponível');
-                toast.warning("Compromisso criado, mas não foi possível enviar a confirmação imediata.");
-                return;
-              }
               
               const { data: resultConfirmacao, error: confirmacaoError } = await supabase.functions.invoke('enviar-whatsapp', {
                 body: {
@@ -6894,27 +6974,13 @@ function Conversas() {
     console.log('📞 [ENVIAR-WHATSAPP] Resultado do sendWhatsAppWithRetry:', {
       success: result?.success,
       errorCode: result?.errorCode,
-      message: result?.message,
-      hasResult: !!result
+      message: result?.message
     });
     
-    // ⚡ CORREÇÃO CRÍTICA: Verificar explicitamente se result existe E se success é true
-    if (result && result.success === true) {
-      console.log('✅ [ENVIAR-WHATSAPP] Envio bem-sucedido, retornando data sem erro');
+    if (result && result.success) {
       return { data: result, error: null } as const;
     }
-    
-    // ⚡ CORREÇÃO CRÍTICA: Se result não existe ou success não é true, retornar erro
-    const errorMessage = result?.message || result?.errorCode || 'Falha ao enviar mensagem';
-    console.error('❌ [ENVIAR-WHATSAPP] Envio falhou, retornando erro:', {
-      hasResult: !!result,
-      success: result?.success,
-      errorMessage
-    });
-    return { 
-      data: result || null, 
-      error: { message: errorMessage } 
-    } as const;
+    return { data: result, error: { message: result?.message || 'Falha ao enviar mensagem' } } as const;
   };
 
   // Normaliza destino: preserva JID de grupo (@g.us). Para contatos, mantém apenas dígitos com prefixo 55.

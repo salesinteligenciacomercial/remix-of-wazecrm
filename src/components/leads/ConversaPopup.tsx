@@ -909,9 +909,7 @@ export function ConversaPopup({
 
       const telefoneNormalizado = normalizePhoneBR(leadPhone)!;
 
-      console.log('🎤 [AUDIO] Enviando áudio via WhatsApp...', { telefoneNormalizado });
-
-      const response = await enviarWhatsApp({
+      const { error: whatsappError } = await enviarWhatsApp({
         numero: telefoneNormalizado,
         mensagem: 'Áudio enviado',
         tipo_mensagem: 'audio',
@@ -921,33 +919,16 @@ export function ConversaPopup({
         caption: '',
       });
 
-      // ✅ CORREÇÃO: Verificar erro tanto em response.error quanto em response.data.error
-      const hasError = response.error || (response.data && (response.data.error || response.data.code) && !response.data.success);
-      
-      if (hasError) {
-        const errorMessage = response.error?.message || response.data?.error || response.data?.message || 'Erro ao enviar áudio';
-        console.error('❌ [AUDIO] Erro ao enviar áudio:', errorMessage);
-        toast.error(`Erro ao enviar áudio: ${errorMessage}`);
-        throw new Error(errorMessage);
+      if (whatsappError) {
+        throw whatsappError;
       }
-
-      // ✅ CORREÇÃO: Verificar se o envio foi bem-sucedido antes de salvar no banco
-      if (!response.data || !response.data.success) {
-        const errorMessage = response.data?.error || response.data?.message || 'Falha ao enviar áudio';
-        console.error('❌ [AUDIO] Envio não foi bem-sucedido:', errorMessage);
-        toast.error(`Erro ao enviar áudio: ${errorMessage}`);
-        throw new Error(errorMessage);
-      }
-
-      console.log('✅ [AUDIO] Áudio enviado com sucesso via WhatsApp');
 
       const companyId = await getCompanyId();
       
       // Buscar dados do usuário para assinatura
       const { data: { user } } = await supabase.auth.getUser();
       
-      // ✅ CORREÇÃO: Só salvar no banco se o envio foi bem-sucedido
-      const { error: dbError } = await supabase.from("conversas").insert([
+      await supabase.from("conversas").insert([
         {
           numero: telefoneNormalizado,
           telefone_formatado: telefoneNormalizado,
@@ -962,11 +943,6 @@ export function ConversaPopup({
           fromme: true, // ✅ Marcar como enviada pelo usuário
         },
       ]);
-
-      if (dbError) {
-        console.error('❌ [AUDIO] Erro ao salvar mensagem no banco:', dbError);
-        toast.error('Áudio enviado, mas houve erro ao salvar no histórico');
-      }
 
       const newMessage: Message = {
         id: Date.now().toString(),
@@ -983,10 +959,9 @@ export function ConversaPopup({
       toast.success("Áudio enviado com sucesso!");
 
       emitGlobalEvent({ type: 'conversation-updated', source: 'conversa-popup', data: { numero: telefoneNormalizado, content: 'Áudio enviado', messageType: 'audio' } });
-    } catch (error: any) {
-      console.error("❌ [AUDIO] Erro ao enviar áudio:", error);
-      const errorMessage = error?.message || 'Erro ao enviar áudio. Verifique sua conexão e tente novamente.';
-      toast.error(errorMessage);
+    } catch (error) {
+      console.error("Erro ao enviar áudio:", error);
+      toast.error("Erro ao enviar áudio");
     } finally {
       setSending(false);
     }

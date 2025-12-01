@@ -70,5 +70,3 @@ WHERE fromme = true;
 
 
 
-
-

@@ -54,5 +54,3 @@ FROM public.conversas;
 
 
 
-
-
