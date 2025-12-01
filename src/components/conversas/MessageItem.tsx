@@ -241,6 +241,9 @@ function MessageItemComponent({
               messageId={message.id}
               content={message.content}
               sender={message.sender}
+              messageType={message.type}
+              mediaUrl={mediaUrl || message.mediaUrl}
+              fileName={message.fileName}
               onReply={onReply}
               onEdit={onEdit}
               onDelete={onDelete}
