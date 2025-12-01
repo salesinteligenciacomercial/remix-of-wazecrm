@@ -648,13 +648,38 @@ serve(async (req) => {
             console.log('✅ [WEBHOOK @LID] Usando remoteJidAlt (número REAL da Evolution):', {
               numeroAnterior: validatedData.numero,
               numeroREAL: numeroLimpo,
-              lidDescartado: validatedData.numero
+              lidDescartado: validatedData.numero,
+              fromMe: validatedData.fromMe
             });
+            
+            // ✅ Se é mensagem enviada (fromMe) E temos número real via remoteJidAlt,
+            // pular busca de lead por nome - usar o número real diretamente
+            if (validatedData.fromMe === true) {
+              console.log('📱 [WEBHOOK @LID + fromMe] Mensagem ENVIADA com número real - continuando sem buscar lead');
+              // Buscar lead por número real para vincular
+              const { data: leadByPhone } = await supabase
+                .from('leads')
+                .select('id, name, phone, telefone')
+                .eq('company_id', companyId)
+                .or(`phone.eq.${numeroLimpo},telefone.eq.${numeroLimpo}`)
+                .limit(1)
+                .maybeSingle();
+              
+              if (leadByPhone) {
+                leadId = leadByPhone.id;
+                console.log('✅ [WEBHOOK @LID + fromMe] Lead encontrado por número real:', {
+                  leadId,
+                  nome: leadByPhone.name,
+                  numeroReal: numeroLimpo
+                });
+              }
+              // Não bloquear se não encontrar lead - mensagem enviada pode ser para contato novo
+            }
           }
         }
         
-        // 🔥 PRIORIDADE 2: Se não tem remoteJidAlt, buscar lead por NOME
-        if (validatedData.nome_contato && numeroLimpo && numeroLimpo.length < 12) {
+        // 🔥 PRIORIDADE 2: Se não tem remoteJidAlt OU não é mensagem enviada, buscar lead por NOME
+        if (validatedData.nome_contato && numeroLimpo && numeroLimpo.length < 12 && validatedData.fromMe !== true) {
           console.log('🔍 [WEBHOOK @LID] remoteJidAlt não disponível - Buscando lead por NOME:', {
             nome: validatedData.nome_contato,
             numeroLid: numeroLimpo
@@ -684,19 +709,25 @@ serve(async (req) => {
             }
           } else {
             console.log('⚠️ [WEBHOOK @LID] Lead não encontrado por nome');
-            console.log('🚫 [WEBHOOK @LID] BLOQUEANDO TOTALMENTE - número @lid não confiável');
-            
-            return new Response(JSON.stringify({
-              success: true,
-              message: 'Número @lid não confiável - aguardando número real',
-              blocked: true
-            }), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json', ...corsHeaders }
-            });
+            // ⚠️ APENAS bloquear se for mensagem RECEBIDA sem lead
+            // Mensagens ENVIADAS podem ser para contatos novos
+            if (!validatedData.fromMe) {
+              console.log('🚫 [WEBHOOK @LID] BLOQUEANDO mensagem RECEBIDA - número @lid não confiável');
+              return new Response(JSON.stringify({
+                success: true,
+                message: 'Número @lid não confiável - aguardando número real',
+                blocked: true
+              }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders }
+              });
+            } else {
+              console.log('✅ [WEBHOOK @LID + fromMe] Permitindo mensagem ENVIADA mesmo sem lead encontrado');
+            }
           }
-        } else if (!validatedData.nome_contato) {
-          console.log('🚫 [WEBHOOK @LID] Nome do contato ausente - BLOQUEANDO TOTALMENTE');
+        } else if (!validatedData.nome_contato && !validatedData.fromMe) {
+          // ⚠️ APENAS bloquear mensagens RECEBIDAS sem nome
+          console.log('🚫 [WEBHOOK @LID] Nome do contato ausente em mensagem RECEBIDA - BLOQUEANDO');
           
           return new Response(JSON.stringify({
             success: true,
