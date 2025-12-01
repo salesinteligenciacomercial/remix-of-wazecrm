@@ -4065,29 +4065,24 @@ function Conversas() {
           }
         : {};
 
-      // ⚡ CORREÇÃO: Para PDF e documentos, enviar mensagem descritiva ao invés de espaço vazio
-      const mensagemEnvio = caption.trim() 
-        ? caption 
-        : (type === 'pdf' || type === 'document') 
-          ? `Documento: ${file.name}` 
-          : 'Mídia enviada';
-
       console.log('📤 Enviando mídia via WhatsApp:', {
         tipo: type,
         fileName: file.name,
         hasBase64: !!base64,
         base64Length: base64.length,
-        mensagem: mensagemEnvio
+        caption: caption || '[sem legenda]',
+        companyId: userRole?.company_id
       });
 
       const { data, error } = await enviarWhatsApp({
         numero: numeroNormalizado,
-        mensagem: mensagemEnvio,
+        mensagem: caption || '',
         tipo_mensagem: type,
         mediaBase64: base64,
         fileName: file.name,
         mimeType: file.type,
-        caption: mensagemEnvio,
+        caption: caption || '',
+        company_id: userRole?.company_id,
         ...quotedPayload,
       });
 
@@ -4278,7 +4273,14 @@ function Conversas() {
         reader.readAsDataURL(audioBlob);
       });
 
-      // 3️⃣ Enviar via WhatsApp
+      // 3️⃣ Buscar company_id para envio via WhatsApp
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .single();
+
+      // Enviar via WhatsApp com company_id
       const numeroNormalizado = normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
       const quotedPayload = replyingTo && selectedConv.messages.find(m => m.id === replyingTo)
         ? {
@@ -4293,36 +4295,31 @@ function Conversas() {
       console.log('🎤 Enviando áudio via WhatsApp:', {
         numeroNormalizado,
         hasBase64: !!base64,
-        base64Length: base64.length
+        base64Length: base64.length,
+        companyId: userRole?.company_id
       });
 
       const { data, error } = await enviarWhatsApp({
         numero: numeroNormalizado,
-        mensagem: 'Áudio de voz',
+        mensagem: '',
         tipo_mensagem: 'audio',
         mediaBase64: base64,
         fileName: 'audio.ogg',
         mimeType: 'audio/ogg; codecs=opus',
-        caption: 'Áudio de voz',
+        caption: '',
+        company_id: userRole?.company_id,
         ...quotedPayload,
       });
 
       if (error) {
         console.error('❌ Erro ao enviar áudio via WhatsApp:', error);
-        toast.error('Erro ao enviar áudio pelo WhatsApp. Tente novamente.');
-        throw error; // Interromper processo se falhar o envio
-      } else {
-        console.log('✅ Áudio enviado com sucesso via WhatsApp');
-        toast.success('Áudio enviado com sucesso!');
+        toast.error('Erro ao enviar áudio. Tente novamente.');
+        throw error;
       }
 
+      console.log('✅ Áudio enviado com sucesso via WhatsApp');
+
       // 4️⃣ Salvar no banco com URL do Storage
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-        .single();
-      
       const { data: { user } } = await supabase.auth.getUser();
       const { data: userProfile } = user ? await supabase
         .from('profiles')
