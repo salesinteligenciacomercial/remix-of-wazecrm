@@ -252,11 +252,13 @@ serve(async (req) => {
           fileName: validatedData.fileName || 'arquivo',
           media: validatedData.mediaBase64,
         };
-        console.log(`📸 [PDF-SEND] Enviando mídia base64 (${mediaType}):`, {
+        console.log(`📸 [EDGE-PDF-SEND] Enviando mídia base64 (${mediaType}):`, {
           caption: captionToUse,
           fileName: validatedData.fileName,
           mimeType,
-          base64Length: validatedData.mediaBase64.length,
+          temBase64: !!validatedData.mediaBase64,
+          base64Length: validatedData.mediaBase64?.length || 0,
+          base64Inicio: validatedData.mediaBase64?.substring(0, 50) || 'VAZIO',
           targetNumber: bodyPayload.number
         });
       }

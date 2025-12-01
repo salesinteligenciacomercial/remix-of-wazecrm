@@ -4009,11 +4009,25 @@ function Conversas() {
       const userId = (await supabase.auth.getUser()).data.user?.id;
       
       // FASE 2: Converter arquivo para base64 PRIMEIRO
-      console.log('🔄 [FASE 2] Convertendo arquivo para base64...');
+      console.log('🔄 [FASE 2] Convertendo arquivo para base64...', {
+        nome: file.name,
+        tipo: type,
+        tamanho: file.size,
+        mimeType: file.type
+      });
+      
       const base64Data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const result = reader.result as string;
+          
+          console.log('📊 [FASE 2] FileReader onloadend:', {
+            hasResult: !!result,
+            resultType: typeof result,
+            resultLength: result?.length || 0,
+            inicio: result?.substring(0, 100)
+          });
+          
           if (!result) {
             console.error('❌ FileReader retornou resultado vazio');
             reject(new Error('Erro ao ler arquivo'));
@@ -4022,6 +4036,14 @@ function Conversas() {
           
           // Extrair base64 (remover prefixo data:...)
           const base64 = result.includes(',') ? result.split(',')[1] : result;
+          
+          console.log('📊 [FASE 2] Após extração do base64:', {
+            temVirgula: result.includes(','),
+            tamanhoAntes: result.length,
+            tamanhoDepois: base64.length,
+            inicio: base64.substring(0, 50),
+            vazio: !base64 || base64.length === 0
+          });
           
           if (!base64 || base64.length === 0) {
             console.error('❌ Base64 vazio após extração');
@@ -4032,7 +4054,8 @@ function Conversas() {
           console.log('✅ [FASE 2] Conversão concluída:', {
             tamanhoOriginal: file.size,
             tamanhoBase64: base64.length,
-            tipo: type
+            tipo: type,
+            primeirosCaracteres: base64.substring(0, 30)
           });
           resolve(base64);
         };
@@ -4070,8 +4093,19 @@ function Conversas() {
       console.log('📍 [FASE 3] URL pública:', publicUrl);
 
       // FASE 4: Enviar via WhatsApp usando base64
-      console.log('📤 [FASE 4] Enviando via WhatsApp...');
       const numeroNormalizado = normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
+      
+      console.log('📤 [FASE 4] Enviando via WhatsApp...', {
+        numero: numeroNormalizado,
+        tipo: type,
+        fileName: file.name,
+        mimeType: file.type,
+        temBase64: !!base64Data,
+        tamanhoBase64: base64Data.length,
+        caption: caption || '[sem legenda]',
+        inicio: base64Data.substring(0, 50)
+      });
+      
       const quotedPayload = replyingTo && selectedConv.messages.find(m => m.id === replyingTo)
         ? {
             quoted: {
