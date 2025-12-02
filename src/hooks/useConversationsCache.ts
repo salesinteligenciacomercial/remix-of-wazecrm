@@ -45,13 +45,14 @@ interface CacheData {
   companyId: string;
 }
 
-const CACHE_KEY = 'conversas_cache_v2'; // ⚡ v2: Corrigido sentBy
+const CACHE_KEY = 'conversas_cache_v3'; // ⚡ v3: Melhorias de sincronização
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutos
 
 export const useConversationsCache = (companyId: string | null) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastSync, setLastSync] = useState<number>(0);
+  const [isSyncing, setIsSyncing] = useState(false); // ✅ FASE 3: Flag de sincronização
 
   // ⚡ FASE 1: Carregar imediatamente do cache quando companyId estiver disponível
   useEffect(() => {
@@ -319,13 +320,21 @@ export const useConversationsCache = (companyId: string | null) => {
   }, [companyId]);
 
   // 🔄 Sincronizar: cache → banco (background)
+  // ✅ FASE 2 & 3: Melhorias de sincronização multi-usuário
   const syncConversations = useCallback(async (forceRefresh: boolean = false) => {
     if (!companyId) {
       console.log('⏳ [SYNC] Aguardando companyId...');
       return;
     }
 
+    // ✅ FASE 3: Evitar sincronizações simultâneas
+    if (isSyncing && !forceRefresh) {
+      console.log('⏳ [SYNC] Sincronização já em andamento, ignorando...');
+      return;
+    }
+
     setIsLoading(true);
+    setIsSyncing(true);
 
     try {
       // 1️⃣ Tentar cache primeiro (carregamento instantâneo)
@@ -337,7 +346,7 @@ export const useConversationsCache = (companyId: string | null) => {
           setIsLoading(false);
           setLastSync(Date.now());
           
-          // 2️⃣ Atualizar em segundo plano
+          // 2️⃣ ✅ FASE 3: Atualizar em segundo plano (delay reduzido de 1000ms para 500ms)
           setTimeout(async () => {
             console.log('🔄 [SYNC] Atualizando em segundo plano...');
             const fresh = await loadFromDatabase();
@@ -345,8 +354,10 @@ export const useConversationsCache = (companyId: string | null) => {
               console.log(`✅ [SYNC] ${fresh.length} conversas atualizadas`);
               setConversations(fresh);
               saveToCache(fresh);
+              setLastSync(Date.now());
             }
-          }, 1000);
+            setIsSyncing(false);
+          }, 500); // ✅ FASE 3: Delay reduzido para 500ms
           
           return;
         }
@@ -364,8 +375,9 @@ export const useConversationsCache = (companyId: string | null) => {
       toast.error('Erro ao sincronizar conversas');
     } finally {
       setIsLoading(false);
+      setIsSyncing(false);
     }
-  }, [companyId, loadFromCache, loadFromDatabase, saveToCache]);
+  }, [companyId, loadFromCache, loadFromDatabase, saveToCache, isSyncing]);
 
   // ⚡ REMOVIDO: Auto-sync automático para evitar loop infinito
   // O componente Conversas.tsx controla quando carregar
@@ -411,6 +423,7 @@ export const useConversationsCache = (companyId: string | null) => {
   return {
     conversations,
     isLoading,
+    isSyncing, // ✅ FASE 3: Expor flag de sincronização
     lastSync,
     syncConversations,
     updateConversation,
