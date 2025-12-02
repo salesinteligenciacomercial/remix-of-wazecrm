@@ -720,12 +720,16 @@ function Conversas() {
   const waitingCount = useMemo(() => {
     return conversations.filter((conv) => {
       if (conv.isGroup === true) return false;
-      if (conv.status === 'resolved') return false;
       
       const lastMessage = conv.messages?.[conv.messages.length - 1];
       if (!lastMessage) return false;
       
-      // Verificar tempo desde última mensagem
+      // ✅ CORREÇÃO: Incluir conversas finalizadas que receberam nova mensagem do contato
+      if (conv.status === 'resolved') {
+        return lastMessage.sender === 'contact';
+      }
+      
+      // Para conversas não finalizadas, aplicar regra de tempo (5 minutos)
       const lastMsgTime = lastMessage.timestamp instanceof Date 
         ? lastMessage.timestamp.getTime() 
         : new Date(lastMessage.timestamp).getTime();
@@ -777,16 +781,23 @@ function Conversas() {
       // ✅ Filtro "Grupos": Mostrar APENAS grupos (bloqueados e não bloqueados aparecem aqui)
       filtered = filtered.filter((conv) => conv.isGroup === true);
     } else if (filter === "waiting") {
-      // ✅ Filtro "Aguardando": Contatos que enviaram mensagem mas conversa está inativa (>5min)
-      // Critérios: última mensagem é do contato + passou mais de 5 minutos sem interação
+      // ✅ Filtro "Aguardando": Contatos que enviaram mensagem e aguardam resposta
+      // Critérios:
+      // 1. Conversas não finalizadas: última mensagem é do contato + passou mais de 5 minutos sem interação
+      // 2. Conversas finalizadas: qualquer nova mensagem do contato (independente do tempo)
       filtered = filtered.filter((conv) => {
         if (conv.isGroup === true) return false; // Excluir grupos
-        if (conv.status === 'resolved') return false; // Excluir finalizadas
         
         const lastMessage = conv.messages?.[conv.messages.length - 1];
         if (!lastMessage) return false;
         
-        // Verificar tempo desde última mensagem
+        // ✅ CORREÇÃO: Se conversa finalizada recebeu nova mensagem do contato, mostrar em "Esperando"
+        if (conv.status === 'resolved') {
+          // Conversa finalizada que recebeu nova mensagem do contato deve aparecer em "Esperando"
+          return lastMessage.sender === 'contact';
+        }
+        
+        // Para conversas não finalizadas, aplicar regra de tempo (5 minutos)
         const lastMsgTime = lastMessage.timestamp instanceof Date 
           ? lastMessage.timestamp.getTime() 
           : new Date(lastMessage.timestamp).getTime();
@@ -819,10 +830,17 @@ function Conversas() {
         return lastMessage.sender === 'user' || timeSinceLastMsg <= ACTIVE_CONVERSATION_THRESHOLD;
       });
     } else if (filter === "resolved") {
-      // ✅ Filtro "Finalizados": Conversas marcadas como finalizadas com o botão "Finalizar atendimento"
+      // ✅ Filtro "Resolvidos": Conversas finalizadas que NÃO receberam novas mensagens do contato
       filtered = filtered.filter((conv) => {
         if (conv.isGroup === true) return false; // Excluir grupos
-        return conv.status === 'resolved';
+        if (conv.status !== 'resolved') return false; // Apenas finalizadas
+        
+        const lastMessage = conv.messages?.[conv.messages.length - 1];
+        if (!lastMessage) return true; // Se não tem mensagem, mantém no resolvidos
+        
+        // ✅ CORREÇÃO: Se última mensagem é do contato, conversa deve ir para "Esperando", não "Resolvidos"
+        // Apenas conversas finalizadas SEM novas mensagens do contato ficam em "Resolvidos"
+        return lastMessage.sender !== 'contact';
       });
     }
 
