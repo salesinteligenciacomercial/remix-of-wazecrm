@@ -1148,13 +1148,14 @@ function Conversas() {
                   });
                   
                   // Atualizar status baseado na última mensagem
+                  // ⚡ CORREÇÃO: Se conversa estava 'resolved' e contato enviou mensagem, mover para 'waiting'
                   let novoStatus: "waiting" | "answered" | "resolved" = prevSelected.status;
-                  if (prevSelected.status !== 'resolved') {
-                    if (novaMensagemObj.sender === 'user') {
-                      novoStatus = 'answered';
-                    } else if (novaMensagemObj.sender === 'contact') {
-                      novoStatus = 'waiting';
-                    }
+                  if (novaMensagemObj.sender === 'user') {
+                    novoStatus = 'answered';
+                  } else if (novaMensagemObj.sender === 'contact') {
+                    // ⚡ CRÍTICO: Sempre mudar para 'waiting' quando contato envia mensagem
+                    // Isso inclui conversas que estavam 'resolved' - contato respondeu!
+                    novoStatus = 'waiting';
                   }
                   
                   return {
@@ -1193,40 +1194,40 @@ function Conversas() {
                       });
                       
                       // Atualizar status baseado na última mensagem
-                      // ⚡ CORREÇÃO: Verificar se conversa está "ao vivo" antes de mudar para waiting
+                      // ⚡ CORREÇÃO CRÍTICA: Se contato envia mensagem, SEMPRE mudar status
+                      // Isso inclui conversas 'resolved' - contato respondeu = volta para 'waiting'
                       let novoStatus: "waiting" | "answered" | "resolved" = conv.status;
-                      if (conv.status !== 'resolved') {
-                        if (novaMensagemObj.sender === 'user') {
-                          novoStatus = 'answered';
-                        } else if (novaMensagemObj.sender === 'contact') {
-                          // ⚡ CORREÇÃO: Verificar se o usuário respondeu recentemente (conversa ao vivo)
-                          const TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000; // 10 minutos
-                          const agora = Date.now();
+                      if (novaMensagemObj.sender === 'user') {
+                        novoStatus = 'answered';
+                      } else if (novaMensagemObj.sender === 'contact') {
+                        // ⚡ CRÍTICO: Contato enviou mensagem = conversa volta a precisar de atenção
+                        // Verificar se o usuário respondeu recentemente (conversa ao vivo)
+                        const TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000; // 10 minutos
+                        const agora = Date.now();
+                        
+                        // Buscar última mensagem do usuário nas mensagens atualizadas
+                        const ultimaMsgUsuario = novasMensagens
+                          .filter(m => m.sender === 'user')
+                          .sort((a, b) => {
+                            const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+                            const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+                            return timeB - timeA;
+                          })[0];
+                        
+                        if (ultimaMsgUsuario) {
+                          const tempoUltimaResposta = ultimaMsgUsuario.timestamp instanceof Date 
+                            ? ultimaMsgUsuario.timestamp.getTime() 
+                            : new Date(ultimaMsgUsuario.timestamp).getTime();
                           
-                          // Buscar última mensagem do usuário nas mensagens atualizadas
-                          const ultimaMsgUsuario = novasMensagens
-                            .filter(m => m.sender === 'user')
-                            .sort((a, b) => {
-                              const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
-                              const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
-                              return timeB - timeA;
-                            })[0];
+                          const usuarioRespondeuRecentemente = (agora - tempoUltimaResposta) < TEMPO_CONVERSA_AO_VIVO;
                           
-                          if (ultimaMsgUsuario) {
-                            const tempoUltimaResposta = ultimaMsgUsuario.timestamp instanceof Date 
-                              ? ultimaMsgUsuario.timestamp.getTime() 
-                              : new Date(ultimaMsgUsuario.timestamp).getTime();
-                            
-                            const usuarioRespondeuRecentemente = (agora - tempoUltimaResposta) < TEMPO_CONVERSA_AO_VIVO;
-                            
-                            if (usuarioRespondeuRecentemente) {
-                              novoStatus = 'answered'; // Manter em atendimento (conversa ao vivo)
-                            } else {
-                              novoStatus = 'waiting'; // Usuário não respondeu recentemente
-                            }
+                          if (usuarioRespondeuRecentemente) {
+                            novoStatus = 'answered'; // Manter em atendimento (conversa ao vivo)
                           } else {
-                            novoStatus = 'waiting'; // Sem resposta do usuário
+                            novoStatus = 'waiting'; // Usuário não respondeu recentemente
                           }
+                        } else {
+                          novoStatus = 'waiting'; // Sem resposta do usuário
                         }
                       }
                       
@@ -3183,31 +3184,49 @@ function Conversas() {
                   return timeA - timeB;
                 });
               
-              // ⚡ CORREÇÃO CRÍTICA: Preservar status 'resolved' se conversa estava finalizada
-              // Só atualizar status se conversa não estava finalizada
-              const statusPreservado = conversaExistente.status === 'resolved' 
-                ? 'resolved' 
-                : novaConv.status;
+              // ⚡ CORREÇÃO CRÍTICA: Se conversa estava 'resolved' mas tem nova mensagem do contato,
+              // ela deve voltar para 'waiting' para aparecer no filtro correto
+              let statusFinal = novaConv.status;
+              if (conversaExistente.status === 'resolved') {
+                // Verificar se a última mensagem é do contato
+                const ultimaMensagem = todasMensagens[todasMensagens.length - 1];
+                if (ultimaMensagem?.sender === 'contact') {
+                  // ⚡ Contato respondeu a uma conversa finalizada = volta para 'waiting'
+                  statusFinal = 'waiting';
+                  console.log(`🔄 [REATIVAÇÃO] Conversa ${novaConv.contactName} reativada: resolved -> waiting (contato respondeu)`);
+                } else {
+                  // Preservar 'resolved' se última mensagem não é do contato
+                  statusFinal = 'resolved';
+                }
+              }
               
-              console.log(`🔄 Preservando ${conversaExistente.messages.length} mensagens existentes + ${novasMensagens.length} novas para ${novaConv.contactName}, status: ${statusPreservado}`);
+              console.log(`🔄 Preservando ${conversaExistente.messages.length} mensagens existentes + ${novasMensagens.length} novas para ${novaConv.contactName}, status: ${statusFinal}`);
               
               return {
                 ...novaConv,
                 messages: todasMensagens, // Preservar histórico completo
                 lastMessage: novaConv.lastMessage, // Atualizar última mensagem
-                status: statusPreservado, // ⚡ PRESERVAR status 'resolved' se estava finalizada
+                status: statusFinal, // ⚡ Status atualizado baseado na última mensagem
                 isGroup: conversaExistente.isGroup, // ⚡ PRESERVAR flag de grupo
               };
             }
             
-            // Se não tem histórico completo, usar as mensagens do banco mas preservar status se estava finalizada
-            const statusPreservado = conversaExistente?.status === 'resolved' 
-              ? 'resolved' 
-              : novaConv.status;
+            // Se não tem histórico completo, verificar se deve reativar conversa finalizada
+            let statusFinal = novaConv.status;
+            if (conversaExistente?.status === 'resolved') {
+              // Verificar se a última mensagem é do contato
+              const ultimaMensagem = novaConv.messages?.[novaConv.messages.length - 1];
+              if (ultimaMensagem?.sender === 'contact') {
+                statusFinal = 'waiting';
+                console.log(`🔄 [REATIVAÇÃO] Conversa ${novaConv.contactName} reativada (sem histórico): resolved -> waiting`);
+              } else {
+                statusFinal = 'resolved';
+              }
+            }
             
             return {
               ...novaConv,
-              status: statusPreservado, // ⚡ PRESERVAR status 'resolved' se estava finalizada
+              status: statusFinal, // ⚡ Status atualizado baseado na última mensagem
               isGroup: conversaExistente?.isGroup ?? novaConv.isGroup, // ⚡ PRESERVAR flag de grupo
             };
           });
