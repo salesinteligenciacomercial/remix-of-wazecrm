@@ -713,12 +713,29 @@ function Conversas() {
     }
   };
 
+  // ⏰ Tempo limite para considerar conversa "ao vivo" (5 minutos)
+  const ACTIVE_CONVERSATION_THRESHOLD = 5 * 60 * 1000; // 5 minutos em milissegundos
+
   // Contador de conversas aguardando resposta
   const waitingCount = useMemo(() => {
-    return conversations.filter(
-      (conv) => conv.status === "waiting" && conv.isGroup !== true
-    ).length;
-  }, [conversations, blockedGroups]);
+    return conversations.filter((conv) => {
+      if (conv.isGroup === true) return false;
+      if (conv.status === 'resolved') return false;
+      
+      const lastMessage = conv.messages?.[conv.messages.length - 1];
+      if (!lastMessage) return false;
+      
+      // Verificar tempo desde última mensagem
+      const lastMsgTime = lastMessage.timestamp instanceof Date 
+        ? lastMessage.timestamp.getTime() 
+        : new Date(lastMessage.timestamp).getTime();
+      const now = Date.now();
+      const timeSinceLastMsg = now - lastMsgTime;
+      
+      // ✅ Só vai para "Esperando" se: última mensagem é do contato E passou mais de 5 minutos
+      return lastMessage.sender === 'contact' && timeSinceLastMsg > ACTIVE_CONVERSATION_THRESHOLD;
+    }).length;
+  }, [conversations]);
 
   // Contador de conversas em atendimento
   const answeredCount = useMemo(() => {
@@ -729,7 +746,15 @@ function Conversas() {
       const lastMessage = conv.messages?.[conv.messages.length - 1];
       if (!lastMessage) return false;
       
-      return lastMessage.sender === 'user';
+      // Verificar tempo desde última mensagem
+      const lastMsgTime = lastMessage.timestamp instanceof Date 
+        ? lastMessage.timestamp.getTime() 
+        : new Date(lastMessage.timestamp).getTime();
+      const now = Date.now();
+      const timeSinceLastMsg = now - lastMsgTime;
+      
+      // ✅ Está em atendimento se: última mensagem é do usuário OU houve interação nos últimos 5 minutos
+      return lastMessage.sender === 'user' || timeSinceLastMsg <= ACTIVE_CONVERSATION_THRESHOLD;
     }).length;
   }, [conversations]);
 
@@ -752,33 +777,46 @@ function Conversas() {
       // ✅ Filtro "Grupos": Mostrar APENAS grupos (bloqueados e não bloqueados aparecem aqui)
       filtered = filtered.filter((conv) => conv.isGroup === true);
     } else if (filter === "waiting") {
-      // ✅ Filtro "Aguardando": Contatos que enviaram mensagem e ainda não foram respondidos
-      // Critérios: última mensagem é do contato (sender === 'contact') + não está finalizada
+      // ✅ Filtro "Aguardando": Contatos que enviaram mensagem mas conversa está inativa (>5min)
+      // Critérios: última mensagem é do contato + passou mais de 5 minutos sem interação
       filtered = filtered.filter((conv) => {
         if (conv.isGroup === true) return false; // Excluir grupos
         if (conv.status === 'resolved') return false; // Excluir finalizadas
         
-        // Verificar se a última mensagem é do contato (aguardando resposta)
         const lastMessage = conv.messages?.[conv.messages.length - 1];
         if (!lastMessage) return false;
         
-        // ✅ Se última mensagem é do contato = aguardando resposta
-        return lastMessage.sender === 'contact';
+        // Verificar tempo desde última mensagem
+        const lastMsgTime = lastMessage.timestamp instanceof Date 
+          ? lastMessage.timestamp.getTime() 
+          : new Date(lastMessage.timestamp).getTime();
+        const now = Date.now();
+        const timeSinceLastMsg = now - lastMsgTime;
+        
+        // ✅ Só mostra em "Esperando" se última mensagem é do contato E passou mais de 5 minutos
+        return lastMessage.sender === 'contact' && timeSinceLastMsg > ACTIVE_CONVERSATION_THRESHOLD;
       });
     } else if (filter === "answered") {
-      // ✅ Filtro "Em Atendimento": Conversas ativas onde já houve resposta nossa
-      // Critérios: última mensagem é do usuário (sender === 'user') + não está finalizada
-      // Quando responder uma conversa que estava em "aguardando", ela vai para "em atendimento"
+      // ✅ Filtro "Em Atendimento": Conversas ativas em tempo real
+      // Critérios: última mensagem é do usuário OU houve interação nos últimos 5 minutos
+      // Quando há diálogo ao vivo, a conversa permanece aqui mesmo que contato responda
       filtered = filtered.filter((conv) => {
         if (conv.isGroup === true) return false; // Excluir grupos
         if (conv.status === 'resolved') return false; // Excluir finalizadas
         
-        // Verificar se a última mensagem é do usuário (foi respondida)
         const lastMessage = conv.messages?.[conv.messages.length - 1];
         if (!lastMessage) return false;
         
-        // ✅ Se última mensagem é do usuário = foi respondida
-        return lastMessage.sender === 'user';
+        // Verificar tempo desde última mensagem
+        const lastMsgTime = lastMessage.timestamp instanceof Date 
+          ? lastMessage.timestamp.getTime() 
+          : new Date(lastMessage.timestamp).getTime();
+        const now = Date.now();
+        const timeSinceLastMsg = now - lastMsgTime;
+        
+        // ✅ Está em atendimento se: última mensagem é do usuário OU houve interação nos últimos 5 minutos
+        // Isso mantém conversas em tempo real em "Em Atendimento" mesmo quando contato responde
+        return lastMessage.sender === 'user' || timeSinceLastMsg <= ACTIVE_CONVERSATION_THRESHOLD;
       });
     } else if (filter === "resolved") {
       // ✅ Filtro "Finalizados": Conversas marcadas como finalizadas com o botão "Finalizar atendimento"
@@ -7445,7 +7483,32 @@ function Conversas() {
               channel={conv.channel}
               lastMessage={conv.lastMessage}
               timestamp={new Date(conv.messages[conv.messages.length - 1]?.timestamp)}
-              unread={conv.unread}
+              unread={(() => {
+                // ✅ Calcular mensagens não lidas apenas para conversas em atendimento ativo
+                const lastMessage = conv.messages?.[conv.messages.length - 1];
+                if (!lastMessage) return 0;
+                
+                const lastMsgTime = lastMessage.timestamp instanceof Date 
+                  ? lastMessage.timestamp.getTime() 
+                  : new Date(lastMessage.timestamp).getTime();
+                const now = Date.now();
+                const timeSinceLastMsg = now - lastMsgTime;
+                
+                // Se está em atendimento ativo (menos de 5min) e última mensagem é do contato
+                // mostrar contador de mensagens não lidas do contato
+                if (timeSinceLastMsg <= ACTIVE_CONVERSATION_THRESHOLD && lastMessage.sender === 'contact') {
+                  // Contar mensagens do contato desde última mensagem do usuário
+                  let unreadCount = 0;
+                  for (let i = conv.messages.length - 1; i >= 0; i--) {
+                    const msg = conv.messages[i];
+                    if (msg.sender === 'user') break; // Parar ao encontrar mensagem do usuário
+                    if (msg.sender === 'contact') unreadCount++;
+                  }
+                  return unreadCount;
+                }
+                
+                return conv.unread || 0;
+              })()}
               isSelected={selectedConv?.id === conv.id}
               avatarUrl={conv.avatarUrl}
               tags={conv.tags}
