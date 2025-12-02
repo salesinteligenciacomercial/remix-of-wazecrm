@@ -232,6 +232,8 @@ function Conversas() {
   const { 
     conversations: cachedConversations, 
     isLoading: cacheLoading,
+    isSyncing: cacheSyncing, // ✅ FASE 3: Flag de sincronização
+    lastSync: cacheLastSync, // ✅ FASE 4: Timestamp da última sincronização
     syncConversations,
     updateConversation: updateCachedConversation,
     addMessage: addCachedMessage
@@ -713,14 +715,23 @@ function Conversas() {
     }
   };
 
-  // Contador de conversas aguardando resposta
+  // ✅ FASE 1 CORRIGIDA: Contador de conversas aguardando resposta
+  // Usa MESMA lógica do filtro real para consistência
   const waitingCount = useMemo(() => {
-    return conversations.filter(
-      (conv) => conv.status === "waiting" && conv.isGroup !== true
-    ).length;
-  }, [conversations, blockedGroups]);
+    return conversations.filter((conv) => {
+      if (conv.isGroup === true) return false; // Excluir grupos
+      if (conv.status === 'resolved') return false; // Excluir finalizadas
+      
+      // ✅ CORRIGIDO: Mesma lógica do filtro "waiting"
+      const lastMessage = conv.messages?.[conv.messages.length - 1];
+      if (!lastMessage) return false;
+      
+      return lastMessage.sender === 'contact';
+    }).length;
+  }, [conversations]);
 
-  // Contador de conversas em atendimento
+  // ✅ FASE 1 CORRIGIDA: Contador de conversas em atendimento
+  // Usa MESMA lógica do filtro real para consistência
   const answeredCount = useMemo(() => {
     return conversations.filter((conv) => {
       if (conv.isGroup === true) return false;
@@ -1291,13 +1302,37 @@ function Conversas() {
       )
       .subscribe((status) => {
         console.log('🔴 [REALTIME] Status da conexão:', status);
+        // ✅ FASE 4: Atualizar status de conexão
+        if (status === 'SUBSCRIBED') {
+          setRealtimeConnectionStatus('connected');
+          setRealtimeReconnectAttempts(0);
+        } else if (status === 'CHANNEL_ERROR') {
+          setRealtimeConnectionStatus('error');
+        } else if (status === 'CLOSED') {
+          setRealtimeConnectionStatus('disconnected');
+        } else if (status === 'TIMED_OUT') {
+          setRealtimeConnectionStatus('disconnected');
+          // ✅ FASE 2: Reconexão automática com backoff exponencial
+          if (realtimeReconnectAttempts < 5) {
+            const delay = Math.min(1000 * Math.pow(2, realtimeReconnectAttempts), 30000);
+            console.log(`🔄 [REALTIME] Tentando reconectar em ${delay}ms (tentativa ${realtimeReconnectAttempts + 1})`);
+            setRealtimeReconnectAttempts(prev => prev + 1);
+            setTimeout(() => {
+              setRealtimeConnectionStatus('connecting');
+            }, delay);
+          }
+        }
       });
+    
+    // Definir status inicial
+    setRealtimeConnectionStatus('connecting');
     
     return () => {
       console.log('🔴 [REALTIME] Desconectando canal de realtime...');
+      setRealtimeConnectionStatus('disconnected');
       supabase.removeChannel(channel);
     };
-  }, [userCompanyId]);
+  }, [userCompanyId, realtimeReconnectAttempts]);
 
   // ✅ SINCRONIZAÇÃO AUTOMÁTICA a cada 30 segundos (backup do realtime)
   useEffect(() => {
@@ -7367,6 +7402,44 @@ function Conversas() {
             />
           </div>
 
+          {/* ✅ FASE 4: Indicadores de Sincronização */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              {/* Status de conexão realtime */}
+              <div className={`flex items-center gap-1 text-xs ${
+                realtimeConnectionStatus === 'connected' ? 'text-green-500' : 
+                realtimeConnectionStatus === 'connecting' ? 'text-yellow-500' : 
+                'text-red-500'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  realtimeConnectionStatus === 'connected' ? 'bg-green-500' : 
+                  realtimeConnectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 
+                  'bg-red-500'
+                }`} />
+                <span className="hidden sm:inline">
+                  {realtimeConnectionStatus === 'connected' ? 'Conectado' : 
+                   realtimeConnectionStatus === 'connecting' ? 'Conectando...' : 
+                   'Desconectado'}
+                </span>
+              </div>
+              
+              {/* Indicador de sincronização */}
+              {cacheSyncing && (
+                <div className="flex items-center gap-1 text-xs text-blue-500">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  <span className="hidden sm:inline">Sincronizando...</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Última sincronização */}
+            {cacheLastSync > 0 && (
+              <span className="text-xs text-muted-foreground hidden md:inline">
+                Atualizado: {format(new Date(cacheLastSync), "HH:mm:ss", { locale: ptBR })}
+              </span>
+            )}
+          </div>
+          
           {/* Filters */}
           <div className="flex gap-2 flex-wrap">
             <Button
