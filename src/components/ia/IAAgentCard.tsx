@@ -135,6 +135,10 @@ export function IAAgentCard({
   const [selectedFunnelToBlock, setSelectedFunnelToBlock] = useState("");
   const [selectedStageToBlock, setSelectedStageToBlock] = useState("");
   
+  // Estados para agendas de profissionais (IA de Agendamento)
+  const [availableAgendas, setAvailableAgendas] = useState<{id: string, nome: string, tipo: string, profissional_nome?: string}[]>([]);
+  const [selectedAgendas, setSelectedAgendas] = useState<string[]>([]);
+  
   // Estados para Base de Conhecimento
   const [empresaNome, setEmpresaNome] = useState("");
   const [empresaDescricao, setEmpresaDescricao] = useState("");
@@ -207,6 +211,27 @@ export function IAAgentCard({
           .select('id, nome, funil_id');
           
         if (etapas) setAvailableStages(etapas);
+        
+        // Carregar agendas de profissionais (para IA de Agendamento)
+        const { data: agendas } = await supabase
+          .from('agendas')
+          .select(`
+            id, 
+            nome, 
+            tipo,
+            profissionais:responsavel_id (nome)
+          `)
+          .eq('company_id', userRole.company_id)
+          .eq('status', 'ativo');
+          
+        if (agendas) {
+          setAvailableAgendas(agendas.map(a => ({
+            id: a.id,
+            nome: a.nome,
+            tipo: a.tipo,
+            profissional_nome: (a.profissionais as any)?.nome
+          })));
+        }
       } catch (error) {
         console.error('Erro ao carregar funis/etapas:', error);
       }
@@ -271,7 +296,7 @@ export function IAAgentCard({
           url: a.url,
           conteudoExtraido: a.conteudoExtraido
         })),
-        // Casos Antes e Depois (apenas para IA de Atendimento)
+        // Casos Antes e Depois (para IA de Atendimento e Agendamento)
         casos_antes_depois: casosAntesDepois.map(c => ({
           id: c.id,
           titulo: c.titulo,
@@ -281,7 +306,9 @@ export function IAAgentCard({
           imagemDepois: c.imagemDepois,
           videoAntes: c.videoAntes,
           videoDepois: c.videoDepois
-        }))
+        })),
+        // Agendas selecionadas para consulta (IA de Agendamento)
+        agendas_selecionadas: selectedAgendas
       },
       // Treinamentos
       training_data: treinamentos
@@ -1437,8 +1464,112 @@ export function IAAgentCard({
                           </div>
                         </div>
                         
-                        {/* Seção Antes e Depois - Apenas para IA de Atendimento */}
-                        {id === 'atendimento' && (
+                        {/* Seletor de Agendas - Apenas para IA de Agendamento */}
+                        {id === 'agendamento' && (
+                          <>
+                            <Separator />
+                            
+                            <div className="p-4 border rounded-lg space-y-4 bg-gradient-to-br from-green-50/50 to-emerald-50/50 dark:from-green-950/20 dark:to-emerald-950/20">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                                  <Calendar className="h-5 w-5 text-white" />
+                                </div>
+                                <div>
+                                  <Label className="text-base">📅 Agendas para Consulta de Horários</Label>
+                                  <p className="text-sm text-muted-foreground">
+                                    Selecione quais agendas a IA deve consultar para verificar disponibilidade
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {/* Seletor de Agendas */}
+                              <div className="space-y-3">
+                                {availableAgendas.length > 0 ? (
+                                  <div className="space-y-2">
+                                    {availableAgendas.map(agenda => (
+                                      <div 
+                                        key={agenda.id}
+                                        className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                                          selectedAgendas.includes(agenda.id)
+                                            ? 'border-green-500 bg-green-50 dark:bg-green-950/30'
+                                            : 'border-border hover:border-green-300 hover:bg-green-50/50'
+                                        }`}
+                                        onClick={() => {
+                                          if (selectedAgendas.includes(agenda.id)) {
+                                            setSelectedAgendas(selectedAgendas.filter(a => a !== agenda.id));
+                                          } else {
+                                            setSelectedAgendas([...selectedAgendas, agenda.id]);
+                                          }
+                                        }}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-3">
+                                            <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                                              selectedAgendas.includes(agenda.id) 
+                                                ? 'bg-green-500 text-white' 
+                                                : 'bg-muted'
+                                            }`}>
+                                              {selectedAgendas.includes(agenda.id) ? (
+                                                <CheckCircle className="h-4 w-4" />
+                                              ) : (
+                                                <Calendar className="h-4 w-4" />
+                                              )}
+                                            </div>
+                                            <div>
+                                              <p className="font-medium text-sm">{agenda.nome}</p>
+                                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <Badge variant="outline" className="text-[10px]">
+                                                  {agenda.tipo === 'colaborador' ? 'Profissional' : 'Agenda Geral'}
+                                                </Badge>
+                                                {agenda.profissional_nome && (
+                                                  <span>• {agenda.profissional_nome}</span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="p-6 text-center border-2 border-dashed rounded-lg">
+                                    <Calendar className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+                                    <p className="text-sm font-medium">Nenhuma agenda encontrada</p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Crie agendas no menu "Agenda" para a IA poder consultar horários
+                                    </p>
+                                  </div>
+                                )}
+                                
+                                {selectedAgendas.length > 0 && (
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary">
+                                      {selectedAgendas.length} agenda(s) selecionada(s)
+                                    </Badge>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Info */}
+                              <div className="p-3 bg-green-100 dark:bg-green-950/30 rounded-lg">
+                                <div className="flex items-start gap-2">
+                                  <Lightbulb className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                  <div className="text-xs text-green-700 dark:text-green-300">
+                                    <p className="font-medium mb-1">Como funciona:</p>
+                                    <ul className="list-disc list-inside space-y-0.5">
+                                      <li>A IA consulta apenas as agendas selecionadas</li>
+                                      <li>Verifica automaticamente horários disponíveis</li>
+                                      <li>Permite agendar em qualquer agenda marcada</li>
+                                    </ul>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                        
+                        {/* Seção Antes e Depois - Para IA de Atendimento e Agendamento */}
+                        {(id === 'atendimento' || id === 'agendamento') && (
                           <>
                             <Separator />
                             
