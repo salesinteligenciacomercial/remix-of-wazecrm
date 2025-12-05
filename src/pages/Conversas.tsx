@@ -2121,49 +2121,60 @@ function Conversas() {
     }
   }, [location, conversations, userCompanyId]);
 
-  // ⚡ CARREGAMENTO ÚNICO E OTIMIZADO: Cache primeiro, depois banco
+  // ⚡ CARREGAMENTO INSTANTÂNEO: Carregar conversas imediatamente
   useEffect(() => {
-    // ⚡ Evitar múltiplos carregamentos
-    if (initialLoadRef.current) return;
-    
-    // ⚡ PASSO 1: Tentar carregar do cache INSTANTANEAMENTE
-    try {
-      const cachedData = sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
-      const cacheTimestamp = sessionStorage.getItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY);
-      
-      if (cachedData && cacheTimestamp) {
-        const age = Date.now() - parseInt(cacheTimestamp, 10);
-        if (age < CACHE_MAX_AGE) {
-          const cachedConversations = JSON.parse(cachedData);
-          const restoredConversations = cachedConversations.map((conv: any) => ({
-            ...conv,
-            messages: (conv.messages || []).map((msg: any) => ({
-              ...msg,
-              timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
-            }))
-          }));
-          
-          console.log(`⚡ [CACHE] ${restoredConversations.length} conversas carregadas do cache`);
-          setConversations(restoredConversations);
-          setLoadingConversations(false);
+    // ⚡ PASSO 1: Tentar carregar do cache INSTANTANEAMENTE (mesmo sem userCompanyId)
+    if (!initialLoadRef.current) {
+      try {
+        const cachedData = sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
+        const cacheTimestamp = sessionStorage.getItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY);
+        
+        if (cachedData && cacheTimestamp) {
+          const age = Date.now() - parseInt(cacheTimestamp, 10);
+          if (age < CACHE_MAX_AGE) {
+            const cachedConversations = JSON.parse(cachedData);
+            const restoredConversations = cachedConversations.map((conv: any) => ({
+              ...conv,
+              messages: (conv.messages || []).map((msg: any) => ({
+                ...msg,
+                timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
+              }))
+            }));
+            
+            console.log(`⚡ [CACHE] ${restoredConversations.length} conversas carregadas do cache`);
+            setConversations(restoredConversations);
+            setLoadingConversations(false);
+          }
         }
+      } catch (error) {
+        console.error('❌ [CACHE] Erro ao carregar cache:', error);
       }
-    } catch (error) {
-      console.error('❌ [CACHE] Erro ao carregar cache:', error);
     }
     
     // ⚡ PASSO 2: Carregar do banco quando companyId estiver disponível
-    if (!userCompanyId) return;
+    if (!userCompanyId) {
+      // ⚡ CORREÇÃO: Se não tem userCompanyId, chamar loadSupabaseConversations para obtê-lo
+      console.log('⚡ [LOAD] userCompanyId não disponível, iniciando carregamento para obter...');
+      loadSupabaseConversations().then(() => {
+        console.log('✅ [LOAD] Conversas carregadas (obteve userCompanyId)');
+        initialLoadRef.current = true;
+      }).catch((err) => {
+        console.error('❌ [LOAD] Erro ao carregar:', err);
+      });
+      return;
+    }
     
-    initialLoadRef.current = true;
-    console.log('⚡ [LOAD] Carregando conversas para company:', userCompanyId);
-    
-    loadSupabaseConversations().then(() => {
-      console.log('✅ [LOAD] Conversas carregadas');
-    }).catch((err) => {
-      console.error('❌ [LOAD] Erro:', err);
-      initialLoadRef.current = false;
-    });
+    // ⚡ Carregar do banco se ainda não carregou
+    if (!initialLoadRef.current) {
+      console.log('⚡ [LOAD] Carregando conversas para company:', userCompanyId);
+      
+      loadSupabaseConversations().then(() => {
+        console.log('✅ [LOAD] Conversas carregadas');
+        initialLoadRef.current = true;
+      }).catch((err) => {
+        console.error('❌ [LOAD] Erro:', err);
+      });
+    }
   }, [userCompanyId]); // ⚡ Executar quando userCompanyId mudar
 
   // Fallback: polling com jitter enquanto desconectado (OTIMIZADO)
