@@ -1110,46 +1110,58 @@ export type Database = {
       }
       lembretes: {
         Row: {
+          ativo: boolean | null
           canal: string
           company_id: string | null
           compromisso_id: string
           created_at: string | null
           data_envio: string | null
+          data_hora_envio: string | null
           destinatario: string
           horas_antecedencia: number
           id: string
           mensagem: string | null
+          proxima_data_envio: string | null
           proxima_tentativa: string | null
+          recorrencia: string | null
           status_envio: string | null
           telefone_responsavel: string | null
           tentativas: number | null
         }
         Insert: {
+          ativo?: boolean | null
           canal: string
           company_id?: string | null
           compromisso_id: string
           created_at?: string | null
           data_envio?: string | null
+          data_hora_envio?: string | null
           destinatario?: string
           horas_antecedencia?: number
           id?: string
           mensagem?: string | null
+          proxima_data_envio?: string | null
           proxima_tentativa?: string | null
+          recorrencia?: string | null
           status_envio?: string | null
           telefone_responsavel?: string | null
           tentativas?: number | null
         }
         Update: {
+          ativo?: boolean | null
           canal?: string
           company_id?: string | null
           compromisso_id?: string
           created_at?: string | null
           data_envio?: string | null
+          data_hora_envio?: string | null
           destinatario?: string
           horas_antecedencia?: number
           id?: string
           mensagem?: string | null
+          proxima_data_envio?: string | null
           proxima_tentativa?: string | null
+          recorrencia?: string | null
           status_envio?: string | null
           telefone_responsavel?: string | null
           tentativas?: number | null

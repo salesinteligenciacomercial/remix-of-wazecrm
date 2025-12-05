@@ -1355,6 +1355,7 @@ function Conversas() {
   const [reminderMessage, setReminderMessage] = useState(""); // Mensagem a ser enviada
   const [reminderDestinatario, setReminderDestinatario] = useState<"lead" | "responsavel" | "ambos">("lead"); // Destinatário
   const [reminderEnviar, setReminderEnviar] = useState(true); // Se deve enviar mensagem
+  const [reminderRecorrencia, setReminderRecorrencia] = useState<"" | "semanal" | "quinzenal" | "mensal">(""); // Recorrência
   const [scheduledContent, setScheduledContent] = useState("");
   const [scheduledDatetime, setScheduledDatetime] = useState("");
   const [meetingTitle, setMeetingTitle] = useState("");
@@ -5247,11 +5248,15 @@ function Conversas() {
               canal: 'whatsapp',
               horas_antecedencia: 0,
               data_envio: dataEnvio.toISOString(),
+              data_hora_envio: dataEnvio.toISOString(),
+              proxima_data_envio: dataEnvio.toISOString(),
               mensagem: reminderMessage,
               status_envio: 'pendente',
               destinatario: 'lead',
               telefone_responsavel: telefoneDestino,
               company_id: companyId,
+              recorrencia: reminderRecorrencia || null,
+              ativo: true,
             });
           } else {
             toast.warning("Lead sem telefone cadastrado - lembrete para lead não será enviado");
@@ -5278,11 +5283,15 @@ function Conversas() {
               canal: 'whatsapp',
               horas_antecedencia: 0,
               data_envio: dataEnvio.toISOString(),
+              data_hora_envio: dataEnvio.toISOString(),
+              proxima_data_envio: dataEnvio.toISOString(),
               mensagem: mensagemResponsavel,
               status_envio: 'pendente',
               destinatario: 'responsavel',
               telefone_responsavel: telefoneResponsavel,
               company_id: companyId,
+              recorrencia: reminderRecorrencia || null,
+              ativo: true,
             });
           } else {
             toast.warning("Responsável sem telefone cadastrado - lembrete não será enviado para você");
@@ -5309,6 +5318,7 @@ function Conversas() {
       setReminderMessage("");
       setReminderDestinatario("lead");
       setReminderEnviar(true);
+      setReminderRecorrencia("");
       
       const mensagemSucesso = reminderEnviar 
         ? "Lembrete criado! Mensagem será enviada na data/hora programada."
@@ -9117,13 +9127,37 @@ function Conversas() {
                                     placeholder="Ex: Ligar para cliente, Retornar proposta..."
                                   />
                                 </div>
-                                <div>
-                                  <Label>Data e Hora</Label>
-                                  <Input
-                                    type="datetime-local"
-                                    value={reminderDatetime}
-                                    onChange={(e) => setReminderDatetime(e.target.value)}
-                                  />
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <Label>Data e Hora</Label>
+                                    <Input
+                                      type="datetime-local"
+                                      value={reminderDatetime}
+                                      onChange={(e) => setReminderDatetime(e.target.value)}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Recorrência</Label>
+                                    <Select 
+                                      value={reminderRecorrencia} 
+                                      onValueChange={(value: "" | "semanal" | "quinzenal" | "mensal") => setReminderRecorrencia(value)}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Sem recorrência" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="">Sem recorrência</SelectItem>
+                                        <SelectItem value="semanal">Semanal (toda semana)</SelectItem>
+                                        <SelectItem value="quinzenal">Quinzenal (a cada 15 dias)</SelectItem>
+                                        <SelectItem value="mensal">Mensal (todo mês)</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {reminderRecorrencia === 'semanal' && "O lembrete será enviado toda semana no mesmo dia e hora"}
+                                      {reminderRecorrencia === 'quinzenal' && "O lembrete será enviado a cada 15 dias"}
+                                      {reminderRecorrencia === 'mensal' && "O lembrete será enviado todo mês no mesmo dia e hora"}
+                                    </p>
+                                  </div>
                                 </div>
                                 <div>
                                   <Label>Observações Internas <span className="text-xs text-muted-foreground">(não será enviado)</span></Label>
@@ -9289,7 +9323,19 @@ function Conversas() {
                                                   <p className="text-sm text-muted-foreground">
                                                     <strong>Canal:</strong> {lembrete.canal.toUpperCase()} | 
                                                     <strong> Antecedência:</strong> {lembrete.horas_antecedencia}h
+                                                    {(lembrete as any).recorrencia && (
+                                                      <> | <strong>Recorrência:</strong> {
+                                                        (lembrete as any).recorrencia === 'semanal' ? 'Semanal' :
+                                                        (lembrete as any).recorrencia === 'quinzenal' ? 'Quinzenal' :
+                                                        (lembrete as any).recorrencia === 'mensal' ? 'Mensal' : 'N/A'
+                                                      }</>
+                                                    )}
                                                   </p>
+                                                  {(lembrete as any).proxima_data_envio && (lembrete as any).recorrencia && lembrete.status_envio === 'enviado' && (
+                                                    <p className="text-xs text-primary">
+                                                      <strong>Próximo envio:</strong> {format(parseISO((lembrete as any).proxima_data_envio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                                    </p>
+                                                  )}
                                                   {lembrete.data_envio && (
                                                     <p className="text-xs text-muted-foreground">
                                                       {lembrete.status_envio === 'enviado' ? 'Enviado em: ' : 'Última tentativa: '}
