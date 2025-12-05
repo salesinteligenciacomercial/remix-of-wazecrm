@@ -187,14 +187,14 @@ async function transformEvolutionPayload(body: any, supabase: any) {
   // ⚡ CORREÇÃO CRÍTICA: Detectar grupos de forma mais robusta (case insensitive)
   const isGroup = /@g\.us/i.test(remoteJid);
   
-  // 🚫 BLOQUEAR MENSAGENS DE GRUPOS - Não salvar no banco para economia de storage
+  // ⚠️ Grupos agora são controlados por configuração da company
+  // A verificação será feita no handler principal após identificar a company
   if (isGroup) {
-    console.log('🚫 [WEBHOOK] Mensagem de grupo ignorada para economia de storage:', {
+    console.log('👥 [WEBHOOK] Mensagem de grupo detectada, será verificada a permissão:', {
       remoteJid,
       pushName: data.pushName,
       fromMe: data.key.fromMe
     });
-    throw new Error('IGNORE: Mensagem de grupo não será salva (configuração de otimização)');
   }
   
   // ⚡ CORREÇÃO CRÍTICA: Para @lid, NÃO extrair número do remoteJid
@@ -589,6 +589,48 @@ serve(async (req) => {
     // ⚡ CORREÇÃO CRÍTICA: Detectar se é grupo de forma mais robusta
     // Verificar is_group OU se o número contém @g.us em qualquer posição (case insensitive)
     const isGroup = validatedData.is_group === true || /@g\.us/i.test(validatedData.numero);
+    
+    // 🔒 VERIFICAR PERMISSÃO DE GRUPOS: Só continuar se a company permitir mensagens de grupos
+    if (isGroup && companyId) {
+      console.log('👥 [WEBHOOK] Verificando permissão de grupos para company:', companyId);
+      
+      const { data: companySettings, error: companyError } = await supabase
+        .from('companies')
+        .select('allow_group_messages')
+        .eq('id', companyId)
+        .single();
+      
+      if (companyError) {
+        console.error('❌ [WEBHOOK] Erro ao verificar permissão de grupos:', companyError);
+      }
+      
+      const allowGroupMessages = companySettings?.allow_group_messages === true;
+      
+      if (!allowGroupMessages) {
+        console.log('🚫 [WEBHOOK] Mensagem de grupo BLOQUEADA - Company não permite:', {
+          companyId,
+          groupJid: validatedData.numero,
+          allowGroupMessages
+        });
+        return new Response(
+          JSON.stringify({ success: true, message: 'Mensagem de grupo ignorada - funcionalidade não habilitada' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.log('✅ [WEBHOOK] Mensagem de grupo PERMITIDA - Company autorizada:', {
+        companyId,
+        groupJid: validatedData.numero
+      });
+    } else if (isGroup && !companyId) {
+      // Se não identificamos a company, bloquear grupos por segurança
+      console.log('🚫 [WEBHOOK] Mensagem de grupo BLOQUEADA - Company não identificada');
+      return new Response(
+        JSON.stringify({ success: true, message: 'Mensagem de grupo ignorada - company não identificada' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     let numeroLimpo = isGroup ? null : validatedData.numero.replace(/[^0-9]/g, '');
     
     if (!isGroup && numeroLimpo) {
@@ -622,7 +664,7 @@ serve(async (req) => {
       
       console.log('🔍 Número normalizado final (contato):', numeroLimpo);
     } else if (isGroup) {
-      console.log('👥 Mensagem de grupo detectada. JID:', validatedData.numero);
+      console.log('👥 Mensagem de grupo detectada (PERMITIDA). JID:', validatedData.numero);
     }
 
     // Se temos company_id, buscar lead apenas nessa company

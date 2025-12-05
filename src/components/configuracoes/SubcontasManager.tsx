@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Plus, Pencil, Trash2, Users, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Building2, Plus, Pencil, Trash2, Users, RefreshCw, CheckCircle2, AlertCircle, UsersRound } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +30,7 @@ interface Subconta {
   max_leads: number;
   created_at: string;
   settings: any;
+  allow_group_messages: boolean;
 }
 
 export function SubcontasManager() {
@@ -250,6 +252,38 @@ export function SubcontasManager() {
     }
   };
 
+  const toggleGroupMessages = async (subcontaId: string, currentValue: boolean) => {
+    try {
+      const newValue = !currentValue;
+      
+      const { error } = await supabase
+        .from('companies')
+        .update({ allow_group_messages: newValue })
+        .eq('id', subcontaId);
+
+      if (error) throw error;
+
+      // Atualizar estado local
+      setSubcontas(prev => prev.map(s => 
+        s.id === subcontaId ? { ...s, allow_group_messages: newValue } : s
+      ));
+
+      toast({
+        title: newValue ? 'Grupos ativados' : 'Grupos desativados',
+        description: newValue 
+          ? 'Esta subconta agora pode receber mensagens de grupos do WhatsApp.'
+          : 'Esta subconta não receberá mais mensagens de grupos do WhatsApp.',
+      });
+    } catch (error: any) {
+      console.error('Erro ao alterar configuração de grupos:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao alterar configuração',
+        description: error.message,
+      });
+    }
+  };
+
   const getPlanBadge = (plan: string) => {
     const variants: Record<string, any> = {
       free: 'secondary',
@@ -372,6 +406,18 @@ export function SubcontasManager() {
                         <strong>Contato:</strong> {subconta.settings.responsavel} • {subconta.settings.email}
                       </div>
                     )}
+                    {/* Toggle de Grupos */}
+                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50">
+                      <UsersRound className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Receber mensagens de grupos:</span>
+                      <Switch
+                        checked={subconta.allow_group_messages || false}
+                        onCheckedChange={() => toggleGroupMessages(subconta.id, subconta.allow_group_messages || false)}
+                      />
+                      <span className={`text-xs font-medium ${subconta.allow_group_messages ? 'text-green-600' : 'text-muted-foreground'}`}>
+                        {subconta.allow_group_messages ? 'Ativado' : 'Desativado'}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
