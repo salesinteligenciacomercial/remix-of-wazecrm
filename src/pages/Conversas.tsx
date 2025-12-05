@@ -6923,7 +6923,7 @@ function Conversas() {
       {/* Sidebar esquerda - tema cinza claro */}
       <div className="w-[380px] flex-shrink-0 bg-muted/30 border-r border-border flex flex-col">
         {/* Header */}
-        <div className="p-4 bg-background border-b border-border">
+        <div className="px-3 py-4 bg-background border-b border-border">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-semibold text-foreground">Conversas</h1>
             <div className="flex gap-2 items-center">
@@ -7106,7 +7106,7 @@ function Conversas() {
           </div>
           
           {/* Filters */}
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-1 flex-wrap -mx-1">
             <Button variant={filter === "all" ? "default" : "ghost"} size="sm" onClick={() => setFilter("all")} className="relative flex flex-col items-center gap-0.5 h-auto py-1.5">
               {conversations.length > 0 && <Badge variant="secondary" className="min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
                   {conversations.filter(c => !c.isGroup || !blockedGroups.has(c.phoneNumber || c.id)).length}
