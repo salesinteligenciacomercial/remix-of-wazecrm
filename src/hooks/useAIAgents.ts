@@ -74,6 +74,8 @@ export interface AgentConfig {
       videoAntes?: string;
       videoDepois?: string;
     }>;
+    // Agendas selecionadas para consulta (IA de Agendamento)
+    agendas_selecionadas?: string[];
   };
   // Treinamentos
   training_data?: Array<{

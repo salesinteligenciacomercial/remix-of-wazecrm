@@ -262,6 +262,7 @@ serve(async (req) => {
     // BUSCAR PROMPT PERSONALIZADO DA BASE DE DADOS
     // ========================================
     let promptPersonalizado = null;
+    let agendasSelecionadas: string[] = [];
     
     if (companyId) {
       const { data: iaConfig } = await supabase
@@ -274,6 +275,11 @@ serve(async (req) => {
       if (iaConfig?.custom_prompts) {
         const customPrompts = iaConfig.custom_prompts as any;
         promptPersonalizado = customPrompts.agendamento || customPrompts.default || null;
+        
+        // Buscar agendas selecionadas para consulta
+        if (customPrompts.agendamento?.knowledge_base?.agendas_selecionadas) {
+          agendasSelecionadas = customPrompts.agendamento.knowledge_base.agendas_selecionadas;
+        }
       }
     }
 
@@ -314,11 +320,28 @@ ${compromissos.compromissos_futuros.map((c: any) =>
     const horariosHoje = await tools.buscar_horarios_disponiveis({ data: hoje });
     const horariosAmanha = await tools.buscar_horarios_disponiveis({ data: amanha });
     
+    // Buscar agendas disponíveis para contexto
+    let agendasContext = '';
+    if (agendasSelecionadas.length > 0) {
+      const { data: agendas } = await supabase
+        .from('agendas')
+        .select('id, nome, tipo')
+        .in('id', agendasSelecionadas)
+        .eq('status', 'ativo');
+      
+      if (agendas && agendas.length > 0) {
+        agendasContext = `
+AGENDAS DISPONÍVEIS:
+${agendas.map((a: any) => `- ${a.nome} (${a.tipo === 'colaborador' ? 'Profissional' : 'Agenda Geral'})`).join('\n')}
+`;
+      }
+    }
+    
     const horariosContext = `
 HORÁRIOS DISPONÍVEIS:
 Hoje (${hoje}): ${horariosHoje.horarios_disponiveis?.slice(0, 5).join(', ') || 'Nenhum'} ${horariosHoje.horarios_disponiveis?.length > 5 ? `e mais ${horariosHoje.horarios_disponiveis.length - 5}` : ''}
 Amanhã (${amanha}): ${horariosAmanha.horarios_disponiveis?.slice(0, 5).join(', ') || 'Nenhum'} ${horariosAmanha.horarios_disponiveis?.length > 5 ? `e mais ${horariosAmanha.horarios_disponiveis.length - 5}` : ''}
-`;
+${agendasContext}`;
 
     // ========================================
     // CONSTRUIR PROMPT FINAL
