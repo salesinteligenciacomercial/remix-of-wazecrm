@@ -332,8 +332,8 @@ function Conversas() {
   const [isContactInactive, setIsContactInactive] = useState(false);
   const [restoringConversation, setRestoringConversation] = useState(false);
   
-  // MELHORIA: Estados para sincronização realtime
-  const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting' | 'error'>('disconnected');
+  // MELHORIA: Estados para sincronização realtime - Iniciar como conectado para UX instantânea
+  const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting' | 'error'>('connected');
   const [realtimeReconnectAttempts, setRealtimeReconnectAttempts] = useState(0);
   const realtimeChannelRef = useRef<any>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1325,8 +1325,7 @@ function Conversas() {
         }
       });
     
-    // Definir status inicial
-    setRealtimeConnectionStatus('connecting');
+    // Status inicial já é 'connected' para UX instantânea
     
     return () => {
       console.log('🔴 [REALTIME] Desconectando canal de realtime...');
