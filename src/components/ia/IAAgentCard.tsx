@@ -180,6 +180,21 @@ export function IAAgentCard({
   const [tempAntes, setTempAntes] = useState<{ url: string; tipo: 'imagem' | 'video' } | null>(null);
   const [tempDepois, setTempDepois] = useState<{ url: string; tipo: 'imagem' | 'video' } | null>(null);
   
+  // Estados para arquivos de teste na aba "Testar"
+  interface TestFile {
+    id: string;
+    type: 'image' | 'pdf' | 'audio' | 'video';
+    base64: string;
+    name: string;
+    mimeType: string;
+    previewUrl?: string;
+  }
+  const [testFiles, setTestFiles] = useState<TestFile[]>([]);
+  const testImageInputRef = useRef<HTMLInputElement>(null);
+  const testPdfInputRef = useRef<HTMLInputElement>(null);
+  const testAudioInputRef = useRef<HTMLInputElement>(null);
+  const testVideoInputRef = useRef<HTMLInputElement>(null);
+  
   const { updateAgentConfig, testAgent, loading } = useAIAgents();
   
   // Carregar funis e etapas disponíveis
@@ -625,17 +640,86 @@ export function IAAgentCard({
     toast.success('Caso removido');
   };
 
-  const handleTestAgent = async () => {
-    if (!testMessage.trim()) {
-      toast.error("Digite uma mensagem para testar");
+  // Funções para gerenciar arquivos de teste
+  const fileToBase64Test = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Retornar apenas a parte base64, sem o prefixo data:...
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleTestFileSelect = async (event: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'pdf' | 'audio' | 'video') => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validar tamanho (max 20MB)
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 20MB.');
       return;
+    }
+
+    try {
+      const base64 = await fileToBase64Test(file);
+      const newFile: TestFile = {
+        id: `test-file-${Date.now()}`,
+        type,
+        base64,
+        name: file.name,
+        mimeType: file.type,
+        previewUrl: type === 'image' ? URL.createObjectURL(file) : undefined
+      };
+      
+      setTestFiles(prev => [...prev, newFile]);
+      toast.success(`${file.name} anexado!`);
+    } catch (error) {
+      console.error('Erro ao processar arquivo:', error);
+      toast.error('Erro ao processar arquivo');
+    }
+
+    // Limpar input
+    event.target.value = '';
+  };
+
+  const removeTestFile = (fileId: string) => {
+    const file = testFiles.find(f => f.id === fileId);
+    if (file?.previewUrl) {
+      URL.revokeObjectURL(file.previewUrl);
+    }
+    setTestFiles(prev => prev.filter(f => f.id !== fileId));
+  };
+
+  const clearTestFiles = () => {
+    testFiles.forEach(f => {
+      if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+    });
+    setTestFiles([]);
+  };
+
+  const handleTestAgent = async () => {
+    if (!testMessage.trim() && testFiles.length === 0) {
+      toast.error("Digite uma mensagem ou anexe um arquivo para testar");
+      return;
+    }
+    
+    // Montar conteúdo da mensagem do usuário
+    let userContent = testMessage;
+    if (testFiles.length > 0) {
+      const fileDescriptions = testFiles.map(f => `[${f.type.toUpperCase()}: ${f.name}]`).join(' ');
+      userContent = userContent ? `${userContent}\n${fileDescriptions}` : fileDescriptions;
     }
     
     // Adicionar mensagem do usuário ao chat
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: testMessage,
+      content: userContent,
       timestamp: new Date()
     };
     setChatMessages(prev => [...prev, userMessage]);
@@ -643,7 +727,18 @@ export function IAAgentCard({
     setTesting(true);
     
     try {
-      const result = await testAgent(id, testMessage);
+      // Preparar arquivos para envio
+      const filesToSend = testFiles.map(f => ({
+        type: f.type,
+        base64: f.base64,
+        name: f.name,
+        mimeType: f.mimeType
+      }));
+      
+      const result = await testAgent(id, testMessage, filesToSend.length > 0 ? filesToSend : undefined);
+      
+      // Limpar arquivos após envio
+      clearTestFiles();
       
       // Adicionar resposta da IA ao chat
       if (result) {
@@ -673,6 +768,7 @@ export function IAAgentCard({
 
   const handleClearChat = () => {
     setChatMessages([]);
+    clearTestFiles();
   };
 
   return (
@@ -2203,6 +2299,29 @@ export function IAAgentCard({
                         </div>
                       </ScrollArea>
                       
+                      {/* Preview dos arquivos anexados */}
+                      {testFiles.length > 0 && (
+                        <div className="py-2 px-3 bg-muted/50 rounded-lg">
+                          <p className="text-xs text-muted-foreground mb-2">Arquivos anexados:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {testFiles.map(file => (
+                              <div key={file.id} className="flex items-center gap-2 bg-background rounded-lg px-2 py-1 border">
+                                {file.type === 'image' && file.previewUrl && (
+                                  <img src={file.previewUrl} alt={file.name} className="h-8 w-8 object-cover rounded" />
+                                )}
+                                {file.type === 'pdf' && <FileType className="h-4 w-4 text-orange-500" />}
+                                {file.type === 'audio' && <FileAudio className="h-4 w-4 text-purple-500" />}
+                                {file.type === 'video' && <FileVideo className="h-4 w-4 text-red-500" />}
+                                <span className="text-xs truncate max-w-[100px]">{file.name}</span>
+                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => removeTestFile(file.id)}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
                       {/* Aviso */}
                       <div className="py-2 px-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg flex items-center gap-2 text-xs">
                         <AlertCircle className="h-3 w-3 text-amber-600 flex-shrink-0" />
@@ -2211,8 +2330,85 @@ export function IAAgentCard({
                         </span>
                       </div>
                       
+                      {/* Hidden file inputs */}
+                      <input 
+                        ref={testImageInputRef}
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => handleTestFileSelect(e, 'image')}
+                      />
+                      <input 
+                        ref={testPdfInputRef}
+                        type="file" 
+                        accept=".pdf,application/pdf" 
+                        className="hidden" 
+                        onChange={(e) => handleTestFileSelect(e, 'pdf')}
+                      />
+                      <input 
+                        ref={testAudioInputRef}
+                        type="file" 
+                        accept="audio/*" 
+                        className="hidden" 
+                        onChange={(e) => handleTestFileSelect(e, 'audio')}
+                      />
+                      <input 
+                        ref={testVideoInputRef}
+                        type="file" 
+                        accept="video/*" 
+                        className="hidden" 
+                        onChange={(e) => handleTestFileSelect(e, 'video')}
+                      />
+                      
+                      {/* Botões de anexo */}
+                      <div className="flex items-center gap-1 pt-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => testImageInputRef.current?.click()}
+                          disabled={testing}
+                          className="h-8 px-2"
+                          title="Anexar imagem"
+                        >
+                          <Image className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => testPdfInputRef.current?.click()}
+                          disabled={testing}
+                          className="h-8 px-2"
+                          title="Anexar PDF"
+                        >
+                          <FileType className="h-4 w-4 text-orange-600" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => testAudioInputRef.current?.click()}
+                          disabled={testing}
+                          className="h-8 px-2"
+                          title="Anexar áudio"
+                        >
+                          <FileAudio className="h-4 w-4 text-purple-600" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => testVideoInputRef.current?.click()}
+                          disabled={testing}
+                          className="h-8 px-2"
+                          title="Anexar vídeo"
+                        >
+                          <FileVideo className="h-4 w-4 text-red-600" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground ml-2">
+                          Anexar arquivo para testar
+                        </span>
+                      </div>
+                      
                       {/* Input de Mensagem */}
-                      <div className="flex gap-2 pt-3 border-t mt-2">
+                      <div className="flex gap-2 pt-2 border-t mt-2">
                         <Input
                           placeholder="Digite sua mensagem..."
                           value={testMessage}
@@ -2221,7 +2417,10 @@ export function IAAgentCard({
                           disabled={testing}
                           className="flex-1"
                         />
-                        <Button onClick={handleTestAgent} disabled={testing || !testMessage.trim()}>
+                        <Button 
+                          onClick={handleTestAgent} 
+                          disabled={testing || (!testMessage.trim() && testFiles.length === 0)}
+                        >
                           {testing ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
