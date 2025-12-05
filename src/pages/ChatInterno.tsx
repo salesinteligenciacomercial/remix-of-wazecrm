@@ -328,47 +328,86 @@ export default function ChatInterno() {
                 const isSelected = selectedConversation?.id === conv.id;
                 
                 return (
-                  <button
+                  <div
                     key={conv.id}
-                    onClick={() => handleConversationSelect(conv)}
-                    className={`w-full p-4 flex items-center gap-3 hover:bg-accent/50 transition-colors text-left ${
+                    className={`w-full p-4 flex items-center gap-3 hover:bg-accent/50 transition-colors ${
                       isSelected ? 'bg-accent' : ''
                     }`}
                   >
-                    <Avatar className="h-12 w-12 flex-shrink-0">
-                      <AvatarImage src={getConversationAvatar(conv) || undefined} />
-                      <AvatarFallback className={conv.is_group ? 'bg-primary/20' : 'bg-muted'}>
-                        {conv.is_group ? (
-                          <Users className="h-5 w-5 text-primary" />
-                        ) : (
-                          getInitials(getConversationName(conv))
-                        )}
-                      </AvatarFallback>
-                    </Avatar>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-foreground truncate">
-                          {getConversationName(conv)}
-                        </span>
-                        {conv.last_message && (
-                          <span className="text-xs text-muted-foreground flex-shrink-0">
-                            {format(new Date(conv.last_message.created_at), 'HH:mm', { locale: ptBR })}
+                    <button
+                      onClick={() => handleConversationSelect(conv)}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    >
+                      <Avatar className="h-12 w-12 flex-shrink-0">
+                        <AvatarImage src={getConversationAvatar(conv) || undefined} />
+                        <AvatarFallback className={conv.is_group ? 'bg-primary/20' : 'bg-muted'}>
+                          {conv.is_group ? (
+                            <Users className="h-5 w-5 text-primary" />
+                          ) : (
+                            getInitials(getConversationName(conv))
+                          )}
+                        </AvatarFallback>
+                      </Avatar>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-foreground truncate">
+                            {getConversationName(conv)}
                           </span>
-                        )}
+                          {conv.last_message && (
+                            <span className="text-xs text-muted-foreground flex-shrink-0">
+                              {format(new Date(conv.last_message.created_at), 'HH:mm', { locale: ptBR })}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between mt-1">
+                          <p className="text-sm text-muted-foreground truncate">
+                            {conv.last_message?.content || 'Sem mensagens'}
+                          </p>
+                          {conv.unread_count > 0 && (
+                            <Badge variant="destructive" className="ml-2 flex-shrink-0">
+                              {conv.unread_count}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between mt-1">
-                        <p className="text-sm text-muted-foreground truncate">
-                          {conv.last_message?.content || 'Sem mensagens'}
-                        </p>
-                        {conv.unread_count > 0 && (
-                          <Badge variant="destructive" className="ml-2 flex-shrink-0">
-                            {conv.unread_count}
-                          </Badge>
+                    </button>
+                    
+                    {/* Menu de três pontos */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 flex-shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-popover border shadow-lg z-50">
+                        {conv.is_group && (
+                          <>
+                            <DropdownMenuItem onClick={() => {
+                              setSelectedConversation(conv);
+                              setEditGroupOpen(true);
+                            }}>
+                              <Settings className="h-4 w-4 mr-2" />
+                              Editar grupo
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
                         )}
-                      </div>
-                    </div>
-                  </button>
+                        <DropdownMenuItem onClick={() => {
+                          setSelectedConversation(conv);
+                          setShareDialogOpen(true);
+                        }}>
+                          <Share2 className="h-4 w-4 mr-2" />
+                          Compartilhar item
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 );
               })}
             </div>
