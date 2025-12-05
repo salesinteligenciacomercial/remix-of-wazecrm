@@ -7128,7 +7128,8 @@ function Conversas() {
               {conversations.filter(c => !c.isGroup && c.status === 'resolved').length > 0 && <Badge variant="secondary" className="min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
                   {conversations.filter(c => !c.isGroup && c.status === 'resolved').length}
                 </Badge>}
-              <span>Resolvidos</span>
+              <span>Finalizados  
+            </span>
             </Button>
             <Button variant={filter === "group" ? "default" : "ghost"} size="sm" onClick={() => setFilter("group")} className="relative flex flex-col items-center gap-0.5 h-auto py-1.5">
               {conversations.filter(c => c.isGroup === true).length > 0 && <Badge variant="secondary" className="min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
