@@ -63,8 +63,8 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/agenda/:slug" element={<AgendaPublica />} />
             <Route path="/" element={<MainLayout />}>
-              <Route index element={<Navigate to="/kanban" replace />} />
-              <Route path="dashboard" element={<Dashboard />} />
+              <Route index element={<Navigate to="/analytics" replace />} />
+              <Route path="dashboard" element={<Navigate to="/analytics" replace />} />
               <Route path="leads" element={<Leads />} />
               <Route path="kanban" element={<Kanban />} />
               <Route path="tarefas" element={<Tarefas />} />
