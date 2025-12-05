@@ -2712,7 +2712,7 @@ function Conversas() {
 
       // ETAPA 3: Buscar assignments (responsáveis) das conversas
       // Buscar assignments para todos os telefones (para mostrar responsável e filtrar se necessário)
-      let assignmentsMap = new Map<string, string>(); // telefone -> nome do responsável
+      let assignmentsMap = new Map<string, { id: string; name: string }>(); // telefone -> {id, nome} do responsável
 
       // ⚡ CORREÇÃO: Buscar assignments de TODOS os telefones das conversas (sem limite)
       const telefonesParaBuscar = Array.from(conversasMap.keys()).map(tel => tel.replace(/[^0-9]/g, '')).filter(tel => tel.length >= 10);
@@ -2747,12 +2747,12 @@ function Conversas() {
           }
         }
 
-        // Processar todos os assignments encontrados - agora com NOMES
+        // Processar todos os assignments encontrados - agora com ID e NOME
         allAssignments.forEach((assignment: any) => {
           const telKey = assignment.telefone_formatado?.replace(/[^0-9]/g, '') || '';
           if (telKey && assignment.assigned_user_id) {
             const userName = assignedUserNamesMap.get(assignment.assigned_user_id) || 'Usuário';
-            assignmentsMap.set(telKey, userName);
+            assignmentsMap.set(telKey, { id: assignment.assigned_user_id, name: userName });
           }
         });
         console.log('👥 [LOAD] Responsáveis carregados:', assignmentsMap.size, 'conversas com responsável');
@@ -2914,9 +2914,9 @@ function Conversas() {
           }
         }
 
-        // Buscar responsável da conversa (se houver) - agora retorna NOME, não ID
+        // Buscar responsável da conversa (se houver) - agora retorna {id, nome}
         const telKey = telefone.replace(/[^0-9]/g, '');
-        const assignedUserName = assignmentsMap.get(telKey); // ⚡ CORRIGIDO: Agora é o nome do usuário
+        const assignedUserData = assignmentsMap.get(telKey); // ⚡ CORRIGIDO: Agora é {id, nome} do usuário
 
         const conversaCriada = {
           id: telefone,
@@ -2930,8 +2930,9 @@ function Conversas() {
           phoneNumber: telefone,
           avatarUrl: isGroup ? `https://ui-avatars.com/api/?name=${encodeURIComponent('Grupo')}&background=10b981&color=fff` : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName.substring(0, 2))}&background=0ea5e9&color=fff`,
           isGroup: isGroup,
-          // ⚡ CORREÇÃO CRÍTICA: Definir isGroup corretamente
-          responsavel: assignedUserName || undefined // ⚡ CORRIGIDO: Usar nome do usuário, não ID
+          // ⚡ CORREÇÃO: Incluir assignedUser com id e nome para filtros funcionarem
+          responsavel: assignedUserData?.id || undefined, // ID do responsável para filtros
+          assignedUser: assignedUserData ? { id: assignedUserData.id, name: assignedUserData.name } : undefined // Objeto completo para exibição
         };
 
         // ⚡ LOG: Debug de conversa criada
