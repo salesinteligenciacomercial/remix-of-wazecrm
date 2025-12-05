@@ -201,6 +201,7 @@ export type Database = {
       }
       companies: {
         Row: {
+          allow_group_messages: boolean | null
           cnpj: string | null
           created_at: string | null
           created_by: string | null
@@ -219,6 +220,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          allow_group_messages?: boolean | null
           cnpj?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -237,6 +239,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          allow_group_messages?: boolean | null
           cnpj?: string | null
           created_at?: string | null
           created_by?: string | null
