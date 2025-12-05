@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Download, X, Music } from 'lucide-react';
 import { PDFViewer } from './PDFViewer';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { downloadFile } from '@/utils/downloadFile';
 
 interface MediaPreviewDialogProps {
   open: boolean;
@@ -21,13 +22,7 @@ export const MediaPreviewDialog = ({
 }: MediaPreviewDialogProps) => {
 
   const handleDownload = () => {
-    const a = document.createElement('a');
-    a.href = mediaUrl;
-    a.download = fileName || 'download';
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    downloadFile(mediaUrl, fileName || 'download');
   };
 
   const renderContent = () => {

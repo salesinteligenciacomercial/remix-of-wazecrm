@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { MediaPreviewDialog } from './MediaPreviewDialog';
 import { PDFThumbnail } from './PDFThumbnail';
+import { downloadFile } from '@/utils/downloadFile';
 
 interface MessageItemProps {
   message: InternalMessage;
@@ -21,13 +22,7 @@ export const MessageItem = ({ message, isOwn }: MessageItemProps) => {
   const handleDownload = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (message.media_url) {
-      const a = document.createElement('a');
-      a.href = message.media_url;
-      a.download = message.file_name || 'download';
-      a.target = '_blank';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      downloadFile(message.media_url, message.file_name || 'download');
     }
   };
 
