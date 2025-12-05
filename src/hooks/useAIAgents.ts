@@ -289,8 +289,16 @@ export function useAIAgents() {
     }
   }, []);
 
-  // Testar um agente com uma mensagem
-  const testAgent = useCallback(async (agentType: string, message: string) => {
+  // Interface para arquivos de teste
+  interface TestFile {
+    type: 'image' | 'pdf' | 'audio' | 'video';
+    base64: string;
+    name: string;
+    mimeType: string;
+  }
+
+  // Testar um agente com uma mensagem e arquivos opcionais
+  const testAgent = useCallback(async (agentType: string, message: string, files?: TestFile[]) => {
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) throw new Error("Usuário não autenticado");
@@ -311,7 +319,7 @@ export function useAIAgents() {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const functionUrl = `${supabaseUrl}/functions/v1/ia-${agentType}`;
       
-      console.log(`🧪 Testando agente ia-${agentType}...`, { functionUrl });
+      console.log(`🧪 Testando agente ia-${agentType}...`, { functionUrl, filesCount: files?.length || 0 });
 
       const response = await fetch(functionUrl, {
         method: 'POST',
@@ -329,7 +337,8 @@ export function useAIAgents() {
             name: 'Lead Teste',
             phone: '5511999999999',
             company_id: userRole.company_id
-          }
+          },
+          files: files || []
         })
       });
 
