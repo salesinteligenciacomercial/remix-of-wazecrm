@@ -17,7 +17,7 @@ import { Navigate } from "react-router-dom";
 
 export default function IA() {
   const { canAccess, isAdmin, loading: permissionsLoading } = usePermissions();
-  const [agentStates, setAgentStates] = useState({ atendimento: true, agendamento: true, vendedora: true, suporte: false });
+  const [agentStates, setAgentStates] = useState({ atendimento: true, agendamento: true });
   const { getAgentConfigs, updateAgentConfig } = useAIAgents();
 
   // Verificar permissão de acesso à Automação
@@ -36,7 +36,7 @@ export default function IA() {
         .single();
       if (!userRole?.company_id) return;
       const configs = await getAgentConfigs();
-      const state = { atendimento: true, agendamento: true, vendedora: true, suporte: false } as any;
+      const state = { atendimento: true, agendamento: true } as any;
       if (configs && Array.isArray(configs)) {
         configs.forEach((c: any) => { state[c.agent_type] = !!c.enabled; });
       }
@@ -62,7 +62,7 @@ export default function IA() {
     {
       id: "atendimento",
       name: "IA de Atendimento",
-      description: "Pré-atendimento, qualificação e gestão de leads",
+      description: "Pré-atendimento, qualificação, vendas, suporte e gestão de leads",
       icon: Bot,
       color: "bg-blue-500",
       active: agentStates.atendimento,
@@ -83,32 +83,6 @@ export default function IA() {
         conversationsHandled: 18,
         avgResponseTime: "5s",
         successRate: "98%",
-      }
-    },
-    {
-      id: "vendedora",
-      name: "IA Vendedora",
-      description: "Conversão, negociação e fechamento de vendas",
-      icon: Sparkles,
-      color: "bg-purple-500",
-      active: agentStates.vendedora,
-      stats: {
-        conversationsHandled: 15,
-        avgResponseTime: "12s",
-        successRate: "89%",
-      }
-    },
-    {
-      id: "suporte",
-      name: "IA de Suporte",
-      description: "Resolução de dúvidas e pós-venda",
-      icon: Bot,
-      color: "bg-cyan-500",
-      active: agentStates.suporte,
-      stats: {
-        conversationsHandled: 9,
-        avgResponseTime: "15s",
-        successRate: "96%",
       }
     },
   ];
@@ -172,7 +146,7 @@ export default function IA() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-6 md:grid-cols-2">
             {aiAgents.map((agent) => (
               <IAAgentCard
                 key={agent.id}
