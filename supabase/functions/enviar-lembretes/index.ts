@@ -18,6 +18,10 @@ interface Lembrete {
   telefone_responsavel?: string;
   tentativas?: number;
   proxima_tentativa?: string;
+  recorrencia?: string | null;
+  data_hora_envio?: string | null;
+  proxima_data_envio?: string | null;
+  ativo?: boolean;
       compromisso: {
         id: string;
         data_hora_inicio: string;
@@ -57,6 +61,7 @@ serve(async (req) => {
     
     // Buscar lembretes pendentes com data_envio <= agora OU em retry com proxima_tentativa <= agora
     // Máximo 3 tentativas (0, 1, 2 = 3 tentativas)
+    // Apenas lembretes ativos (ativo = true ou null para compatibilidade)
     const { data: lembretesPendentes, error: pendentesError } = await supabase
       .from('lembretes')
       .select(`
@@ -77,7 +82,8 @@ serve(async (req) => {
       `)
       .eq('status_envio', 'pendente')
       .lte('data_envio', agoraISO)
-      .lte('tentativas', 2);
+      .lte('tentativas', 2)
+      .neq('ativo', false);
     
     // ✅ CORREÇÃO: Buscar lembretes SEM data_envio definido (legado)
     // Esses lembretes foram criados antes da correção e precisam ser processados
@@ -398,15 +404,52 @@ serve(async (req) => {
             }
 
             if (enviado) {
-              // Atualizar status do lembrete para enviado (sucesso)
-              // Não incrementar tentativas em caso de sucesso
-              await supabase
-                .from('lembretes')
-                .update({
-                  status_envio: 'enviado',
-                  data_envio: new Date().toISOString()
-                })
-                .eq('id', lembrete.id);
+              // Verificar se lembrete tem recorrência
+              const recorrencia = lembrete.recorrencia;
+              const ativo = lembrete.ativo !== false;
+              
+              if (recorrencia && ativo) {
+                // Calcular próxima data de envio baseado na recorrência
+                const dataAtual = new Date(lembrete.proxima_data_envio || lembrete.data_envio || new Date().toISOString());
+                let proximaData = new Date(dataAtual);
+                
+                switch (recorrencia) {
+                  case 'semanal':
+                    proximaData.setDate(proximaData.getDate() + 7);
+                    break;
+                  case 'quinzenal':
+                    proximaData.setDate(proximaData.getDate() + 15);
+                    break;
+                  case 'mensal':
+                    proximaData.setMonth(proximaData.getMonth() + 1);
+                    break;
+                }
+                
+                console.log(`🔄 Lembrete ${lembrete.id} é recorrente (${recorrencia}). Próximo envio: ${proximaData.toISOString()}`);
+                
+                // Atualizar lembrete para próximo envio (resetar status e tentativas)
+                await supabase
+                  .from('lembretes')
+                  .update({
+                    status_envio: 'pendente',
+                    data_envio: proximaData.toISOString(),
+                    proxima_data_envio: proximaData.toISOString(),
+                    tentativas: 0,
+                    proxima_tentativa: null
+                  })
+                  .eq('id', lembrete.id);
+                  
+                console.log(`✅ Lembrete ${lembrete.id} recorrente reagendado para ${proximaData.toISOString()}`);
+              } else {
+                // Sem recorrência - marcar como enviado definitivamente
+                await supabase
+                  .from('lembretes')
+                  .update({
+                    status_envio: 'enviado',
+                    data_envio: new Date().toISOString()
+                  })
+                  .eq('id', lembrete.id);
+              }
 
               // Atualizar flag no compromisso
               await supabase
