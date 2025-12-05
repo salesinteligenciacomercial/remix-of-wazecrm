@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ConversationList } from './ConversationList';
 import { ChatWindow } from './ChatWindow';
@@ -15,7 +15,26 @@ interface ChatDrawerProps {
 export const ChatDrawer = ({ open, onOpenChange }: ChatDrawerProps) => {
   const [selectedConversation, setSelectedConversation] = useState<InternalConversation | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const { conversations, loading, markAsRead, getConversationDisplayName, currentUserId } = useInternalChat();
+  const { 
+    conversations, 
+    loading, 
+    markAsRead, 
+    getConversationDisplayName, 
+    currentUserId,
+    createConversation,
+    getConversationById,
+    refresh 
+  } = useInternalChat();
+
+  // Update selected conversation when conversations list changes
+  useEffect(() => {
+    if (selectedConversation) {
+      const updated = conversations.find(c => c.id === selectedConversation.id);
+      if (updated) {
+        setSelectedConversation(updated);
+      }
+    }
+  }, [conversations]);
 
   const handleSelectConversation = (conversation: InternalConversation) => {
     setSelectedConversation(conversation);
@@ -26,12 +45,18 @@ export const ChatDrawer = ({ open, onOpenChange }: ChatDrawerProps) => {
     setSelectedConversation(null);
   };
 
-  const handleConversationCreated = (conversationId: string) => {
-    const newConvo = conversations.find(c => c.id === conversationId);
+  const handleConversationCreated = async (conversationId: string) => {
+    setShowNewDialog(false);
+    
+    // Refresh and get latest conversations
+    const updatedConversations = await refresh();
+    
+    // Find the new conversation from the refreshed list
+    const newConvo = updatedConversations.find(c => c.id === conversationId);
     if (newConvo) {
       setSelectedConversation(newConvo);
+      markAsRead(conversationId);
     }
-    setShowNewDialog(false);
   };
 
   return (
@@ -96,6 +121,7 @@ export const ChatDrawer = ({ open, onOpenChange }: ChatDrawerProps) => {
         open={showNewDialog}
         onOpenChange={setShowNewDialog}
         onCreated={handleConversationCreated}
+        createConversation={createConversation}
       />
     </>
   );

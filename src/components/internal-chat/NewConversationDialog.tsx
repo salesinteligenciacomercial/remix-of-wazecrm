@@ -12,7 +12,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
-import { useInternalChat } from '@/hooks/useInternalChat';
 import { Loader2, Users, User } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -20,12 +19,18 @@ interface NewConversationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (conversationId: string) => void;
+  createConversation: (
+    participantIds: string[],
+    isGroup: boolean,
+    name?: string
+  ) => Promise<string | null>;
 }
 
 export const NewConversationDialog = ({
   open,
   onOpenChange,
-  onCreated
+  onCreated,
+  createConversation
 }: NewConversationDialogProps) => {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isGroup, setIsGroup] = useState(false);
@@ -33,7 +38,6 @@ export const NewConversationDialog = ({
   const [creating, setCreating] = useState(false);
 
   const { getOtherMembers, loading: loadingMembers } = useTeamMembers();
-  const { createConversation } = useInternalChat();
 
   const otherMembers = getOtherMembers();
 
@@ -66,6 +70,7 @@ export const NewConversationDialog = ({
       );
 
       if (conversationId) {
+        toast.success('Conversa criada!');
         onCreated(conversationId);
         resetForm();
       } else {

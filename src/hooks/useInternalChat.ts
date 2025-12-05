@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamMember } from './useTeamMembers';
 
@@ -28,6 +28,12 @@ export const useInternalChat = () => {
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const conversationsRef = useRef<InternalConversation[]>([]);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   useEffect(() => {
     initializeChat();
@@ -58,7 +64,7 @@ export const useInternalChat = () => {
     }
   };
 
-  const loadConversations = async (userId: string) => {
+  const loadConversations = async (userId: string): Promise<InternalConversation[]> => {
     try {
       // Get conversations where user is a participant
       const { data: participations } = await supabase
@@ -68,7 +74,7 @@ export const useInternalChat = () => {
 
       if (!participations || participations.length === 0) {
         setConversations([]);
-        return;
+        return [];
       }
 
       const conversationIds = participations.map(p => p.conversation_id);
@@ -81,7 +87,7 @@ export const useInternalChat = () => {
         .in('id', conversationIds)
         .order('updated_at', { ascending: false });
 
-      if (!convos) return;
+      if (!convos) return [];
 
       // Get all participants for these conversations
       const { data: allParticipants } = await supabase
@@ -141,8 +147,10 @@ export const useInternalChat = () => {
       }));
 
       setConversations(enrichedConvos);
+      return enrichedConvos;
     } catch (error) {
       console.error('Error loading conversations:', error);
+      return [];
     }
   };
 
@@ -188,7 +196,7 @@ export const useInternalChat = () => {
     try {
       // For individual chats, check if conversation already exists
       if (!isGroup && participantIds.length === 1) {
-        const existingConvo = conversations.find(c => 
+        const existingConvo = conversationsRef.current.find(c => 
           !c.is_group &&
           c.participants.length === 2 &&
           c.participants.some(p => p.user_id === participantIds[0])
@@ -223,6 +231,7 @@ export const useInternalChat = () => {
 
       if (partError) throw partError;
 
+      // Refresh conversations and return the new ID
       await loadConversations(currentUserId);
       return newConvo.id;
     } catch (error) {
@@ -255,7 +264,7 @@ export const useInternalChat = () => {
     return conversations.reduce((sum, c) => sum + c.unread_count, 0);
   }, [conversations]);
 
-  const getConversationDisplayName = (conversation: InternalConversation): string => {
+  const getConversationDisplayName = useCallback((conversation: InternalConversation): string => {
     if (conversation.is_group && conversation.name) {
       return conversation.name;
     }
@@ -265,7 +274,18 @@ export const useInternalChat = () => {
     );
     
     return otherParticipant?.profile?.full_name || 'Usuário';
-  };
+  }, [currentUserId]);
+
+  const getConversationById = useCallback((id: string): InternalConversation | undefined => {
+    return conversationsRef.current.find(c => c.id === id);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    if (currentUserId) {
+      return await loadConversations(currentUserId);
+    }
+    return [];
+  }, [currentUserId]);
 
   return {
     conversations,
@@ -276,6 +296,7 @@ export const useInternalChat = () => {
     markAsRead,
     getTotalUnread,
     getConversationDisplayName,
-    refresh: () => currentUserId && loadConversations(currentUserId)
+    getConversationById,
+    refresh
   };
 };
