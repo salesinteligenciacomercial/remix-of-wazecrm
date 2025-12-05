@@ -14,12 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { 
-  MessageSquare, Instagram, Facebook, Send, Search, Bot, User, Paperclip, 
-  Clock, Calendar, Zap, FileText, Tag, TrendingUp, ArrowRightLeft, Image as ImageIcon,
-  Mic, FileUp, Check, CheckCheck, Phone, Video, Info, DollarSign, Users, Bell, Download, Volume2,
-  RefreshCw, CheckCircle2, AlertCircle, Reply, CheckSquare, X, Plus, Trash2, Loader2, UserCog
-} from "lucide-react";
+import { MessageSquare, Instagram, Facebook, Send, Search, Bot, User, Paperclip, Clock, Calendar, Zap, FileText, Tag, TrendingUp, ArrowRightLeft, Image as ImageIcon, Mic, FileUp, Check, CheckCheck, Phone, Video, Info, DollarSign, Users, Bell, Download, Volume2, RefreshCw, CheckCircle2, AlertCircle, Reply, CheckSquare, X, Plus, Trash2, Loader2, UserCog } from "lucide-react";
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -46,7 +41,6 @@ import { useConversationsCache } from "@/hooks/useConversationsCache";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTagsManager } from "@/hooks/useTagsManager";
 import * as evolutionAPI from "@/services/evolutionApi";
-
 interface Message {
   id: string;
   content: string;
@@ -69,7 +63,6 @@ interface Message {
     phone: string;
   };
 }
-
 interface Conversation {
   id: string;
   contactName: string;
@@ -93,7 +86,6 @@ interface Conversation {
     avatar?: string;
   };
 }
-
 interface QuickMessage {
   id: string;
   title: string;
@@ -104,12 +96,10 @@ interface QuickMessage {
   fileName?: string; // Nome do arquivo
   mimeType?: string; // Tipo MIME do arquivo
 }
-
 interface QuickMessageCategory {
   id: string;
   name: string;
 }
-
 interface Reminder {
   id: string;
   compromisso_id: string;
@@ -127,14 +117,12 @@ interface Reminder {
     lead_id?: string;
   };
 }
-
 interface ScheduledMessage {
   id: string;
   conversationId: string;
   content: string;
   datetime: string;
 }
-
 interface Meeting {
   id: string;
   lead_id?: string;
@@ -153,7 +141,6 @@ interface Meeting {
     phone?: string;
   };
 }
-
 const CONVERSATIONS_KEY = "continuum_conversations";
 const CONVERSATIONS_CACHE_KEY = "continuum_conversations_cache_v2"; // ⚡ v2: Corrigido sentBy
 const CONVERSATIONS_CACHE_TIMESTAMP_KEY = "continuum_conversations_cache_timestamp_v2"; // ⚡ v2: Corrigido sentBy
@@ -165,75 +152,122 @@ const MEETINGS_KEY = "continuum_meetings";
 const AI_MODE_KEY = "continuum_ai_mode";
 const CACHE_MAX_AGE = 30 * 60 * 1000; // Cache válido por 30 minutos (carregamento instantâneo)
 
-const initialConversations: Conversation[] = [
-  {
+const initialConversations: Conversation[] = [{
+  id: "1",
+  contactName: "João Silva",
+  channel: "whatsapp",
+  status: "waiting",
+  lastMessage: "Gostaria de saber mais sobre o produto",
+  unread: 2,
+  tags: ["cliente", "interesse"],
+  funnelStage: "Novo",
+  responsavel: "Você",
+  produto: "Sistema CRM Premium",
+  valor: "R$ 5.000,00",
+  anotacoes: "Cliente interessado em plano anual",
+  messages: [{
     id: "1",
-    contactName: "João Silva",
-    channel: "whatsapp",
-    status: "waiting",
-    lastMessage: "Gostaria de saber mais sobre o produto",
-    unread: 2,
-    tags: ["cliente", "interesse"],
-    funnelStage: "Novo",
-    responsavel: "Você",
-    produto: "Sistema CRM Premium",
-    valor: "R$ 5.000,00",
-    anotacoes: "Cliente interessado em plano anual",
-    messages: [
-      { id: "1", content: "Olá! Gostaria de saber mais sobre o produto", type: "text", sender: "contact", timestamp: new Date(Date.now() - 300000), delivered: true },
-      { id: "2", content: "Vocês têm disponibilidade para esta semana?", type: "text", sender: "contact", timestamp: new Date(Date.now() - 180000), delivered: true },
-    ],
-  },
-  {
+    content: "Olá! Gostaria de saber mais sobre o produto",
+    type: "text",
+    sender: "contact",
+    timestamp: new Date(Date.now() - 300000),
+    delivered: true
+  }, {
     id: "2",
-    contactName: "Maria Santos",
-    channel: "instagram",
-    status: "answered",
-    lastMessage: "Obrigada pelas informações!",
-    unread: 0,
-    tags: ["promoção"],
-    funnelStage: "Qualificado",
-    responsavel: "Ana Costa",
-    produto: "Consultoria Digital",
-    valor: "R$ 2.500,00",
-    messages: [
-      { id: "1", content: "Vi o post sobre promoção", type: "text", sender: "contact", timestamp: new Date(Date.now() - 7200000), delivered: true },
-      { id: "2", content: "Olá Maria! Temos várias opções em promoção. Qual produto te interessa?", type: "text", sender: "user", timestamp: new Date(Date.now() - 7000000), delivered: true },
-      { id: "3", content: "Obrigada pelas informações!", type: "text", sender: "contact", timestamp: new Date(Date.now() - 6800000), delivered: true },
-    ],
-  },
-  {
+    content: "Vocês têm disponibilidade para esta semana?",
+    type: "text",
+    sender: "contact",
+    timestamp: new Date(Date.now() - 180000),
+    delivered: true
+  }]
+}, {
+  id: "2",
+  contactName: "Maria Santos",
+  channel: "instagram",
+  status: "answered",
+  lastMessage: "Obrigada pelas informações!",
+  unread: 0,
+  tags: ["promoção"],
+  funnelStage: "Qualificado",
+  responsavel: "Ana Costa",
+  produto: "Consultoria Digital",
+  valor: "R$ 2.500,00",
+  messages: [{
+    id: "1",
+    content: "Vi o post sobre promoção",
+    type: "text",
+    sender: "contact",
+    timestamp: new Date(Date.now() - 7200000),
+    delivered: true
+  }, {
+    id: "2",
+    content: "Olá Maria! Temos várias opções em promoção. Qual produto te interessa?",
+    type: "text",
+    sender: "user",
+    timestamp: new Date(Date.now() - 7000000),
+    delivered: true
+  }, {
     id: "3",
-    contactName: "Carlos Oliveira",
-    channel: "facebook",
-    status: "resolved",
-    lastMessage: "Fechado! Muito obrigado",
-    unread: 0,
-    tags: ["venda", "fechado"],
-    funnelStage: "Fechado",
-    responsavel: "Pedro Lima",
-    produto: "Plano Enterprise",
-    valor: "R$ 15.000,00",
-    messages: [
-      { id: "1", content: "Quero fazer uma compra", type: "text", sender: "contact", timestamp: new Date(Date.now() - 86400000), delivered: true },
-      { id: "2", content: "Ótimo! Vou te passar os detalhes.", type: "text", sender: "user", timestamp: new Date(Date.now() - 86000000), delivered: true },
-      { id: "3", content: "Fechado! Muito obrigado", type: "text", sender: "contact", timestamp: new Date(Date.now() - 85000000), delivered: true },
-    ],
-  },
-];
-
+    content: "Obrigada pelas informações!",
+    type: "text",
+    sender: "contact",
+    timestamp: new Date(Date.now() - 6800000),
+    delivered: true
+  }]
+}, {
+  id: "3",
+  contactName: "Carlos Oliveira",
+  channel: "facebook",
+  status: "resolved",
+  lastMessage: "Fechado! Muito obrigado",
+  unread: 0,
+  tags: ["venda", "fechado"],
+  funnelStage: "Fechado",
+  responsavel: "Pedro Lima",
+  produto: "Plano Enterprise",
+  valor: "R$ 15.000,00",
+  messages: [{
+    id: "1",
+    content: "Quero fazer uma compra",
+    type: "text",
+    sender: "contact",
+    timestamp: new Date(Date.now() - 86400000),
+    delivered: true
+  }, {
+    id: "2",
+    content: "Ótimo! Vou te passar os detalhes.",
+    type: "text",
+    sender: "user",
+    timestamp: new Date(Date.now() - 86000000),
+    delivered: true
+  }, {
+    id: "3",
+    content: "Fechado! Muito obrigado",
+    type: "text",
+    sender: "contact",
+    timestamp: new Date(Date.now() - 85000000),
+    delivered: true
+  }]
+}];
 function Conversas() {
-  const { isAdmin } = usePermissions();
-  const { allTags, refreshTags } = useTagsManager();
+  const {
+    isAdmin
+  } = usePermissions();
+  const {
+    allTags,
+    refreshTags
+  } = useTagsManager();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null); // Declarar primeiro
-  
+
   // ⚡ CARREGAMENTO INSTANTÂNEO: Hook carrega do cache em 0 segundos
-  const { 
-    conversations: cachedConversations, 
+  const {
+    conversations: cachedConversations,
     isLoading: cacheLoading,
-    isSyncing: cacheSyncing, // ✅ FASE 3: Flag de sincronização
-    lastSync: cacheLastSync, // ✅ FASE 4: Timestamp da última sincronização
+    isSyncing: cacheSyncing,
+    // ✅ FASE 3: Flag de sincronização
+    lastSync: cacheLastSync,
+    // ✅ FASE 4: Timestamp da última sincronização
     syncConversations,
     updateConversation: updateCachedConversation,
     addMessage: addCachedMessage
@@ -242,7 +276,7 @@ function Conversas() {
   // ⚡ DESATIVADO: Carregamento de avatares movido para lazy loading
   // Para evitar loops e melhorar performance
   // Avatares são carregados quando a conversa é aberta
-  
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [filter, setFilter] = useState<"all" | "waiting" | "answered" | "resolved" | "group" | "responsible" | "transferred">("all");
@@ -289,28 +323,36 @@ function Conversas() {
     conversasAtivas: 0,
     mensagensHoje: 0,
     whatsappConnections: 0,
-    whatsappConnected: 0,
+    whatsappConnected: 0
   });
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(false);
-  const [historyStats, setHistoryStats] = useState<Record<string, { total: number; loaded: number }>>({});
+  const [historyStats, setHistoryStats] = useState<Record<string, {
+    total: number;
+    loaded: number;
+  }>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const selectedConvRef = useRef<Conversation | null>(null);
   const userCompanyIdRef = useRef<string | null>(null);
-  
+
   // 🔊 Ref para som de notificação
   const notificationSound = useRef<HTMLAudioElement | null>(null);
-  
   const location = useLocation();
-  
+
   // Estados para modais de visualização
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState<{ url: string; name?: string } | null>(null);
+  const [selectedMedia, setSelectedMedia] = useState<{
+    url: string;
+    name?: string;
+  } | null>(null);
   // MELHORIA: Gerenciar status de transcrição por mensagem
   const [transcriptionStatuses, setTranscriptionStatuses] = useState<Record<string, "pending" | "processing" | "completed" | "error">>({});
-  const transcriptionPollingRefs = useRef<Record<string, { interval?: NodeJS.Timeout; timeout?: NodeJS.Timeout }>>({});
-  
+  const transcriptionPollingRefs = useRef<Record<string, {
+    interval?: NodeJS.Timeout;
+    timeout?: NodeJS.Timeout;
+  }>>({});
+
   // Estados para controle dos modais
   const [tarefasDialogOpen, setTarefasDialogOpen] = useState(false);
   const [tarefasTabValue, setTarefasTabValue] = useState("criar");
@@ -320,18 +362,21 @@ function Conversas() {
   const [cleanHistoryDialogOpen, setCleanHistoryDialogOpen] = useState(false);
   const [cleaningHistory, setCleaningHistory] = useState(false);
   const [cleaningProgress, setCleaningProgress] = useState(0);
-  const [cleaningStats, setCleaningStats] = useState({ deleted: 0, total: 0 });
-  
+  const [cleaningStats, setCleaningStats] = useState({
+    deleted: 0,
+    total: 0
+  });
+
   // CORREÇÃO: Estados para quadro e etapa (igual ao Funil de Vendas) - DEVE VIR ANTES DOS useEffects
   const [taskBoards, setTaskBoards] = useState<any[]>([]);
   const [taskColumns, setTaskColumns] = useState<any[]>([]);
   const [selectedTaskBoardId, setSelectedTaskBoardId] = useState<string>("");
   const [selectedTaskColumnId, setSelectedTaskColumnId] = useState<string>("");
-  
+
   // Estados para sincronização WhatsApp e restauração de conversas
   const [isContactInactive, setIsContactInactive] = useState(false);
   const [restoringConversation, setRestoringConversation] = useState(false);
-  
+
   // MELHORIA: Estados para sincronização realtime - Iniciar como conectado para UX instantânea
   const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting' | 'error'>('connected');
   const [realtimeReconnectAttempts, setRealtimeReconnectAttempts] = useState(0);
@@ -344,25 +389,20 @@ function Conversas() {
   const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // MELHORIA: Função auxiliar para chamar Edge Functions com retry, timeout e fallback
-  const callEdgeFunctionWithRetry = async <T = any>(
-    functionName: string,
-    body: any,
-    options: {
-      maxRetries?: number;
-      timeout?: number;
-      fallback?: () => T | Promise<T>;
-      onError?: (error: any, attempt: number) => void;
-    } = {}
-  ): Promise<T | null> => {
+  const callEdgeFunctionWithRetry = async <T = any,>(functionName: string, body: any, options: {
+    maxRetries?: number;
+    timeout?: number;
+    fallback?: () => T | Promise<T>;
+    onError?: (error: any, attempt: number) => void;
+  } = {}): Promise<T | null> => {
     const {
       maxRetries = 3,
-      timeout = 10000, // 10 segundos
+      timeout = 10000,
+      // 10 segundos
       fallback,
       onError
     } = options;
-
     let lastError: any = null;
-
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`🔄 [EDGE-FUNCTION] Chamando ${functionName} (tentativa ${attempt}/${maxRetries})...`);
@@ -375,7 +415,9 @@ function Conversas() {
         });
 
         // Promise da edge function
-        const functionPromise = supabase.functions.invoke(functionName, { body });
+        const functionPromise = supabase.functions.invoke(functionName, {
+          body
+        });
 
         // Race entre função e timeout
         const result = await Promise.race([functionPromise, timeoutPromise]);
@@ -389,14 +431,11 @@ function Conversas() {
         if (result.error) {
           throw new Error(result.error.message || 'Erro na edge function');
         }
-
         console.log(`✅ [EDGE-FUNCTION] ${functionName} executada com sucesso (tentativa ${attempt})`);
         return result.data as T;
-
       } catch (error: any) {
         lastError = error;
         const errorMessage = error?.message || String(error);
-        
         console.error(`❌ [EDGE-FUNCTION] Erro ao chamar ${functionName} (tentativa ${attempt}/${maxRetries}):`, {
           error: errorMessage,
           attempt,
@@ -420,7 +459,6 @@ function Conversas() {
 
     // Se todas as tentativas falharam, usar fallback se disponível
     console.error(`❌ [EDGE-FUNCTION] Todas as tentativas falharam para ${functionName}. Último erro:`, lastError);
-    
     if (fallback) {
       console.log(`🔄 [EDGE-FUNCTION] Usando fallback para ${functionName}`);
       try {
@@ -429,45 +467,40 @@ function Conversas() {
         console.error(`❌ [EDGE-FUNCTION] Erro no fallback para ${functionName}:`, fallbackError);
       }
     }
-
     return null;
   };
 
   // MELHORIA: Avatar com cache + fallback
   const getProfilePictureWithFallback = async (number: string, companyId: string, contactName: string): Promise<string | undefined> => {
     if (!number) return undefined;
-    
     const isGroup = /@g\.us$/.test(String(number));
     const normalized = isGroup ? number : normalizePhoneForWA(number);
     const cacheKey = `${companyId || 'no-company'}:${normalized}`;
     const cached = avatarCacheRef.current.get(cacheKey);
     if (cached) return cached;
-
     const inflight = inflightAvatarPromisesRef.current.get(cacheKey);
     if (inflight) return await inflight;
-
     const promise = (async () => {
-      const result = await callEdgeFunctionWithRetry<{ profilePictureUrl?: string }>(
-      'get-profile-picture',
-        { number: normalized, company_id: companyId },
-      {
-          maxRetries: 2,
-          timeout: 8000,
+      const result = await callEdgeFunctionWithRetry<{
+        profilePictureUrl?: string;
+      }>('get-profile-picture', {
+        number: normalized,
+        company_id: companyId
+      }, {
+        maxRetries: 2,
+        timeout: 8000,
         fallback: () => {
           // Fallback diferente para grupos e contatos individuais
-          const fallbackUrl = isGroup
-            ? `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName || 'Grupo')}&background=10b981&color=fff`
-            : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName || normalized)}&background=0ea5e9&color=fff`;
-          return Promise.resolve({ profilePictureUrl: fallbackUrl });
+          const fallbackUrl = isGroup ? `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName || 'Grupo')}&background=10b981&color=fff` : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName || normalized)}&background=0ea5e9&color=fff`;
+          return Promise.resolve({
+            profilePictureUrl: fallbackUrl
+          });
         },
-          onError: (error) => {
-            console.error('❌ [PROFILE-PICTURE] In-flight erro:', error);
-          }
+        onError: error => {
+          console.error('❌ [PROFILE-PICTURE] In-flight erro:', error);
         }
-      );
-      const url = result?.profilePictureUrl || (isGroup 
-        ? `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName || 'Grupo')}&background=10b981&color=fff`
-        : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName || normalized)}&background=0ea5e9&color=fff`);
+      });
+      const url = result?.profilePictureUrl || (isGroup ? `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName || 'Grupo')}&background=10b981&color=fff` : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName || normalized)}&background=0ea5e9&color=fff`);
       avatarCacheRef.current.set(cacheKey, url);
       inflightAvatarPromisesRef.current.delete(cacheKey);
       return url;
@@ -477,15 +510,21 @@ function Conversas() {
   };
 
   // MELHORIA: Wrapper enviar-whatsapp com retries e mapeamento de erros → toast
-  const sendWhatsAppWithRetry = async (body: { company_id: string } & Record<string, any>): Promise<{ success: boolean; errorCode?: string; httpStatus?: number; message?: string; details?: any }> => {
+  const sendWhatsAppWithRetry = async (body: {
+    company_id: string;
+  } & Record<string, any>): Promise<{
+    success: boolean;
+    errorCode?: string;
+    httpStatus?: number;
+    message?: string;
+    details?: any;
+  }> => {
     const maxRetries = 3;
-    
     console.log('🔄 [SEND-WHATSAPP-RETRY] Iniciando envio (tentativa 1):', {
       company_id: body.company_id,
       numero: body.numero,
       temMensagem: !!body.mensagem
     });
-    
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`🔄 [SEND-WHATSAPP-RETRY] Tentativa ${attempt}/${maxRetries} - Chamando edge function...`, {
@@ -496,18 +535,17 @@ function Conversas() {
             temMensagem: !!body.mensagem
           }
         });
-        
+
         // ⚡ CORREÇÃO: Adicionar timeout explícito para evitar travamento
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error('Timeout após 30 segundos')), 30000);
         });
-        
-        const functionPromise = supabase.functions.invoke('enviar-whatsapp', { body });
-        
+        const functionPromise = supabase.functions.invoke('enviar-whatsapp', {
+          body
+        });
         console.log(`⏳ [SEND-WHATSAPP-RETRY] Aguardando resposta da edge function...`);
         const res: any = await Promise.race([functionPromise, timeoutPromise]);
         console.log(`📥 [SEND-WHATSAPP-RETRY] Resposta recebida!`);
-        
         console.log(`📥 [SEND-WHATSAPP-RETRY] Resposta da edge function (tentativa ${attempt}):`, {
           hasData: !!res?.data,
           hasError: !!res?.error,
@@ -525,8 +563,20 @@ function Conversas() {
           const status = res?.status || undefined;
           const details = data.details || data;
           showWhatsAppErrorToast(code, status, details);
-          console.debug('❌ [WHATSAPP] Erro detalhado:', { attempt, status, code, msg: data?.error || data?.message, details });
-          return { success: false, errorCode: code, httpStatus: status, message: msg, details };
+          console.debug('❌ [WHATSAPP] Erro detalhado:', {
+            attempt,
+            status,
+            code,
+            msg: data?.error || data?.message,
+            details
+          });
+          return {
+            success: false,
+            errorCode: code,
+            httpStatus: status,
+            message: msg,
+            details
+          };
         }
         if (err) {
           let code: string | undefined;
@@ -537,23 +587,35 @@ function Conversas() {
             const parsed = JSON.parse(raw);
             code = parsed?.code || parsed?.error?.code || parsed?.error;
           } catch {
-            if (/NO_API_KEY/.test(raw)) code = 'NO_API_KEY';
-            else if (/NO_WHATSAPP_CONNECTION/.test(raw)) code = 'NO_WHATSAPP_CONNECTION';
-            else if (/EXTERNAL_API_ERROR/.test(raw)) code = 'EXTERNAL_API_ERROR';
-            else if (/CONFIG_ERROR/.test(raw)) code = 'CONFIG_ERROR';
+            if (/NO_API_KEY/.test(raw)) code = 'NO_API_KEY';else if (/NO_WHATSAPP_CONNECTION/.test(raw)) code = 'NO_WHATSAPP_CONNECTION';else if (/EXTERNAL_API_ERROR/.test(raw)) code = 'EXTERNAL_API_ERROR';else if (/CONFIG_ERROR/.test(raw)) code = 'CONFIG_ERROR';
           }
           showWhatsAppErrorToast(code, httpStatus, raw);
-          console.debug('❌ [WHATSAPP] Erro detalhado:', { attempt, httpStatus, code, raw: (err?.message || '').slice(0, 200) });
-          return { success: false, errorCode: code, httpStatus, message: String(raw).slice(0, 200), details: raw };
+          console.debug('❌ [WHATSAPP] Erro detalhado:', {
+            attempt,
+            httpStatus,
+            code,
+            raw: (err?.message || '').slice(0, 200)
+          });
+          return {
+            success: false,
+            errorCode: code,
+            httpStatus,
+            message: String(raw).slice(0, 200),
+            details: raw
+          };
         }
         if (data?.success) {
           console.log('✅ [SEND-WHATSAPP-RETRY] Mensagem enviada com sucesso!');
-          return { success: true };
+          return {
+            success: true
+          };
         }
         // Falha desconhecida
         console.error('❌ [SEND-WHATSAPP-RETRY] Falha desconhecida. Resposta:', data);
         toast.error('Falha desconhecida ao enviar mensagem.');
-        return { success: false };
+        return {
+          success: false
+        };
       } catch (err: any) {
         const errorMessage = err?.message || String(err);
         console.error(`❌ [SEND-WHATSAPP-RETRY] Exceção na tentativa ${attempt}:`, {
@@ -562,30 +624,36 @@ function Conversas() {
           attempt,
           maxRetries
         });
-        
         if (attempt < maxRetries) {
           const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
           console.log(`⏳ [SEND-WHATSAPP-RETRY] Aguardando ${delay}ms antes de tentar novamente...`);
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
-        
+
         // Se foi timeout, mensagem específica
         if (errorMessage.includes('Timeout')) {
           toast.error('Timeout ao enviar mensagem. A conexão pode estar lenta. Tente novamente.');
         } else {
           toast.error(`Erro de rede ao enviar mensagem: ${errorMessage}`);
         }
-        return { success: false, errorCode: 'NETWORK_ERROR', message: errorMessage };
+        return {
+          success: false,
+          errorCode: 'NETWORK_ERROR',
+          message: errorMessage
+        };
       }
     }
-    return { success: false };
+    return {
+      success: false
+    };
   };
-
   const showWhatsAppErrorToast = (code?: string, httpStatus?: number, details?: any) => {
     const prefix = code ? `[${code}] ` : '';
-    const description = details ? (typeof details === 'string' ? details.slice(0, 240) : JSON.stringify(details).slice(0, 240)) : undefined;
-    const opts = description ? { description } as any : undefined;
+    const description = details ? typeof details === 'string' ? details.slice(0, 240) : JSON.stringify(details).slice(0, 240) : undefined;
+    const opts = description ? {
+      description
+    } as any : undefined;
     if (httpStatus === 401 || httpStatus === 403) {
       toast.error(`${prefix}Sem autorização. Faça login novamente ou verifique permissões.`, opts);
     } else if (httpStatus === 404 || code === 'NO_WHATSAPP_CONNECTION') {
@@ -608,30 +676,35 @@ function Conversas() {
     audioUrl: string;
     audioBase64?: string;
     company_id: string;
-  }): Promise<{ transcription?: string; status: string }> => {
-    return await callEdgeFunctionWithRetry<{ transcription?: string; status: string }>(
-      'transcrever-audio',
-      body,
-      {
-        maxRetries: 3,
-        timeout: 10000,
-        fallback: () => {
-          console.warn('⚠️ [TRANSCRIBE] Transcrição falhou - marcando como pendente');
-          return Promise.resolve({
-            transcription: '[Transcrição pendente - erro ao processar áudio]',
-            status: 'pending'
-          });
-        },
-        onError: (error, attempt) => {
-          console.error(`❌ [TRANSCRIBE] Erro na tentativa ${attempt}:`, {
-            error: error?.message || String(error),
-            audioUrl: body.audioUrl?.substring(0, 100)
-          });
-        }
+  }): Promise<{
+    transcription?: string;
+    status: string;
+  }> => {
+    return (await callEdgeFunctionWithRetry<{
+      transcription?: string;
+      status: string;
+    }>('transcrever-audio', body, {
+      maxRetries: 3,
+      timeout: 10000,
+      fallback: () => {
+        console.warn('⚠️ [TRANSCRIBE] Transcrição falhou - marcando como pendente');
+        return Promise.resolve({
+          transcription: '[Transcrição pendente - erro ao processar áudio]',
+          status: 'pending'
+        });
+      },
+      onError: (error, attempt) => {
+        console.error(`❌ [TRANSCRIBE] Erro na tentativa ${attempt}:`, {
+          error: error?.message || String(error),
+          audioUrl: body.audioUrl?.substring(0, 100)
+        });
       }
-    ) || { transcription: '[Transcrição pendente - erro ao processar áudio]', status: 'pending' };
+    })) || {
+      transcription: '[Transcrição pendente - erro ao processar áudio]',
+      status: 'pending'
+    };
   };
-  
+
   // MELHORIA: Debounce mais agressivo na busca (500ms) - otimização de performance
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -644,25 +717,20 @@ function Conversas() {
   // 🔐 CARREGAR GRUPOS BLOQUEADOS
   useEffect(() => {
     if (!currentUserId || !userCompanyId) return;
-
     const loadBlockedGroups = async () => {
-      const { data, error } = await supabase
-        .from('blocked_groups')
-        .select('group_number')
-        .eq('user_id', currentUserId)
-        .eq('company_id', userCompanyId);
-
+      const {
+        data,
+        error
+      } = await supabase.from('blocked_groups').select('group_number').eq('user_id', currentUserId).eq('company_id', userCompanyId);
       if (error) {
         console.error('❌ Erro ao carregar grupos bloqueados:', error);
         return;
       }
-
       if (data) {
         setBlockedGroups(new Set(data.map(g => g.group_number)));
         console.log('🔐 Grupos bloqueados carregados:', data.length);
       }
     };
-
     loadBlockedGroups();
   }, [currentUserId, userCompanyId]);
 
@@ -672,35 +740,27 @@ function Conversas() {
       toast.error('Erro: usuário ou empresa não identificado');
       return;
     }
-
     try {
       if (block) {
         // Bloquear grupo
-        const { error } = await supabase
-          .from('blocked_groups')
-          .insert({
-            user_id: currentUserId,
-            company_id: userCompanyId,
-            group_number: groupNumber,
-            group_name: groupName
-          });
-
+        const {
+          error
+        } = await supabase.from('blocked_groups').insert({
+          user_id: currentUserId,
+          company_id: userCompanyId,
+          group_number: groupNumber,
+          group_name: groupName
+        });
         if (error) throw error;
-
         setBlockedGroups(prev => new Set([...prev, groupNumber]));
         toast.success(`🔒 Grupo "${groupName}" bloqueado com sucesso`);
         console.log('🔒 Grupo bloqueado:', groupNumber);
       } else {
         // Desbloquear grupo
-        const { error } = await supabase
-          .from('blocked_groups')
-          .delete()
-          .eq('user_id', currentUserId)
-          .eq('company_id', userCompanyId)
-          .eq('group_number', groupNumber);
-
+        const {
+          error
+        } = await supabase.from('blocked_groups').delete().eq('user_id', currentUserId).eq('company_id', userCompanyId).eq('group_number', groupNumber);
         if (error) throw error;
-
         setBlockedGroups(prev => {
           const newSet = new Set(prev);
           newSet.delete(groupNumber);
@@ -718,14 +778,13 @@ function Conversas() {
   // ✅ FASE 1 CORRIGIDA: Contador de conversas aguardando resposta
   // Usa MESMA lógica do filtro real para consistência
   const waitingCount = useMemo(() => {
-    return conversations.filter((conv) => {
+    return conversations.filter(conv => {
       if (conv.isGroup === true) return false; // Excluir grupos
       if (conv.status === 'resolved') return false; // Excluir finalizadas
-      
+
       // ✅ CORRIGIDO: Mesma lógica do filtro "waiting"
       const lastMessage = conv.messages?.[conv.messages.length - 1];
       if (!lastMessage) return false;
-      
       return lastMessage.sender === 'contact';
     }).length;
   }, [conversations]);
@@ -733,13 +792,11 @@ function Conversas() {
   // ✅ FASE 1 CORRIGIDA: Contador de conversas em atendimento
   // Usa MESMA lógica do filtro real para consistência
   const answeredCount = useMemo(() => {
-    return conversations.filter((conv) => {
+    return conversations.filter(conv => {
       if (conv.isGroup === true) return false;
       if (conv.status === 'resolved') return false;
-      
       const lastMessage = conv.messages?.[conv.messages.length - 1];
       if (!lastMessage) return false;
-      
       return lastMessage.sender === 'user';
     }).length;
   }, [conversations]);
@@ -752,27 +809,26 @@ function Conversas() {
       busca: debouncedSearchTerm,
       gruposBloqueados: blockedGroups.size
     });
-    
     let filtered = conversations;
 
     // Aplicar filtro de status conforme especificação
     if (filter === "all") {
       // ✅ Filtro "Todos": Mostrar TODAS as conversas EXCETO grupos bloqueados
-      filtered = filtered.filter((conv) => !conv.isGroup || !blockedGroups.has(conv.phoneNumber || conv.id));
+      filtered = filtered.filter(conv => !conv.isGroup || !blockedGroups.has(conv.phoneNumber || conv.id));
     } else if (filter === "group") {
       // ✅ Filtro "Grupos": Mostrar APENAS grupos (bloqueados e não bloqueados aparecem aqui)
-      filtered = filtered.filter((conv) => conv.isGroup === true);
+      filtered = filtered.filter(conv => conv.isGroup === true);
     } else if (filter === "waiting") {
       // ✅ Filtro "Aguardando": Contatos que enviaram mensagem e ainda não foram respondidos
       // Critérios: última mensagem é do contato (sender === 'contact') + não está finalizada
-      filtered = filtered.filter((conv) => {
+      filtered = filtered.filter(conv => {
         if (conv.isGroup === true) return false; // Excluir grupos
         if (conv.status === 'resolved') return false; // Excluir finalizadas
-        
+
         // Verificar se a última mensagem é do contato (aguardando resposta)
         const lastMessage = conv.messages?.[conv.messages.length - 1];
         if (!lastMessage) return false;
-        
+
         // ✅ Se última mensagem é do contato = aguardando resposta
         return lastMessage.sender === 'contact';
       });
@@ -780,52 +836,45 @@ function Conversas() {
       // ✅ Filtro "Em Atendimento": Conversas ativas onde já houve resposta nossa
       // Critérios: última mensagem é do usuário (sender === 'user') + não está finalizada
       // Quando responder uma conversa que estava em "aguardando", ela vai para "em atendimento"
-      filtered = filtered.filter((conv) => {
+      filtered = filtered.filter(conv => {
         if (conv.isGroup === true) return false; // Excluir grupos
         if (conv.status === 'resolved') return false; // Excluir finalizadas
-        
+
         // Verificar se a última mensagem é do usuário (foi respondida)
         const lastMessage = conv.messages?.[conv.messages.length - 1];
         if (!lastMessage) return false;
-        
+
         // ✅ Se última mensagem é do usuário = foi respondida
         return lastMessage.sender === 'user';
       });
     } else if (filter === "resolved") {
       // ✅ Filtro "Finalizados": Conversas marcadas como finalizadas com o botão "Finalizar atendimento"
-      filtered = filtered.filter((conv) => {
+      filtered = filtered.filter(conv => {
         if (conv.isGroup === true) return false; // Excluir grupos
         return conv.status === 'resolved';
       });
     } else if (filter === "responsible") {
       // ✅ Filtro "Responsável": Conversas onde o usuário atual é responsável pelo contato/lead
-      filtered = filtered.filter((conv) => {
+      filtered = filtered.filter(conv => {
         if (conv.isGroup === true) return false; // Excluir grupos
         // Verificar se o usuário atual é responsável (via responsavel ou assignedUser)
-        return conv.responsavel === currentUserId || 
-               (conv.assignedUser?.id === currentUserId);
+        return conv.responsavel === currentUserId || conv.assignedUser?.id === currentUserId;
       });
     } else if (filter === "transferred") {
       // ✅ Filtro "Transferência": Conversas que foram transferidas para o usuário atual
-      filtered = filtered.filter((conv) => {
+      filtered = filtered.filter(conv => {
         if (conv.isGroup === true) return false; // Excluir grupos
         // Verificar se tem atribuição de usuário (foi transferida)
         return conv.assignedUser?.id === currentUserId;
       });
     }
-
     console.log('📊 [DEBUG] Após filtro de status:', filtered.length);
 
     // Aplicar busca debounced (mais agressivo)
     if (debouncedSearchTerm.trim()) {
       const searchLower = debouncedSearchTerm.toLowerCase();
-      filtered = filtered.filter((conv) =>
-        conv.contactName.toLowerCase().includes(searchLower) ||
-        conv.lastMessage?.toLowerCase().includes(searchLower) ||
-        conv.phoneNumber?.includes(searchLower)
-      );
+      filtered = filtered.filter(conv => conv.contactName.toLowerCase().includes(searchLower) || conv.lastMessage?.toLowerCase().includes(searchLower) || conv.phoneNumber?.includes(searchLower));
     }
-
     console.log('📊 [DEBUG] Após busca:', filtered.length);
 
     // Ordenar por última mensagem (mais recentes primeiro)
@@ -833,12 +882,8 @@ function Conversas() {
       // ⚡ CORREÇÃO: Garantir que timestamp seja Date antes de chamar getTime()
       const aLastMsg = a.messages?.[a.messages.length - 1];
       const bLastMsg = b.messages?.[b.messages.length - 1];
-      const aTimestamp = aLastMsg?.timestamp instanceof Date 
-        ? aLastMsg.timestamp 
-        : (aLastMsg?.timestamp ? new Date(aLastMsg.timestamp) : null);
-      const bTimestamp = bLastMsg?.timestamp instanceof Date 
-        ? bLastMsg.timestamp 
-        : (bLastMsg?.timestamp ? new Date(bLastMsg.timestamp) : null);
+      const aTimestamp = aLastMsg?.timestamp instanceof Date ? aLastMsg.timestamp : aLastMsg?.timestamp ? new Date(aLastMsg.timestamp) : null;
+      const bTimestamp = bLastMsg?.timestamp instanceof Date ? bLastMsg.timestamp : bLastMsg?.timestamp ? new Date(bLastMsg.timestamp) : null;
       const aTime = aTimestamp?.getTime() || 0;
       const bTime = bTimestamp?.getTime() || 0;
       return bTime - aTime;
@@ -862,34 +907,32 @@ function Conversas() {
   // MELHORIA: Função para carregar mais mensagens (lazy loading)
   const loadMoreMessages = useCallback(async () => {
     if (!selectedConv) return;
-    
     const currentLimit = messagesLimit;
     const newLimit = currentLimit + 50; // Carregar mais 50 mensagens
-    
+
     setMessagesLimit(newLimit);
-    
+
     // Se precisar buscar do servidor, fazer aqui
     // Por enquanto, apenas aumentamos o limite do cache
-    
+
     console.log(`📦 [PERFORMANCE] Carregando mais mensagens: ${currentLimit} -> ${newLimit}`);
   }, [selectedConv, messagesLimit]);
 
   // MELHORIA: Função para atualizar cache de conversas abertas - otimização de performance
   const updateConversationCache = useCallback((conversation: Conversation) => {
     conversationsCacheRef.current.set(conversation.id, conversation);
-    
+
     // Salvar mensagens no cache separadamente
     if (conversation.messages && conversation.messages.length > 0) {
       messagesCacheRef.current.set(conversation.id, conversation.messages);
     }
-    
+
     // Limitar tamanho do cache (manter apenas últimas 100 conversas)
     if (conversationsCacheRef.current.size > 100) {
       const firstKey = conversationsCacheRef.current.keys().next().value;
       conversationsCacheRef.current.delete(firstKey);
       messagesCacheRef.current.delete(firstKey);
     }
-    
     console.log(`💾 [PERFORMANCE] Cache atualizado para conversa: ${conversation.id}`);
   }, []);
 
@@ -907,12 +950,13 @@ function Conversas() {
   const loadInitialConversations = useCallback(async () => {
     try {
       // ⚡ CORREÇÃO CRÍTICA: Remover limite - carregar TODAS as conversas do WhatsApp
-      const { data, error } = await supabase
-        .from('conversas')
-        .select('*')
-        .eq('company_id', userCompanyId || '')
-        .order('created_at', { ascending: false })
-        // REMOVIDO: .limit(50) - agora carrega TODAS as conversas
+      const {
+        data,
+        error
+      } = await supabase.from('conversas').select('*').eq('company_id', userCompanyId || '').order('created_at', {
+        ascending: false
+      });
+      // REMOVIDO: .limit(50) - agora carrega TODAS as conversas
 
       if (error) throw error;
 
@@ -955,7 +999,7 @@ function Conversas() {
       }
     }
   }, [selectedTaskBoardId, taskColumns]);
-  
+
   // CORREÇÃO: Carregar reuniões quando o modal de reuniões abrir e tiver lead vinculado
   useEffect(() => {
     if (reunioesDialogOpen && leadVinculado?.id) {
@@ -967,16 +1011,17 @@ function Conversas() {
   useEffect(() => {
     selectedConvRef.current = selectedConv;
   }, [selectedConv]);
-
   useEffect(() => {
     userCompanyIdRef.current = userCompanyId;
   }, [userCompanyId]);
 
   // Sistema de eventos globais para comunicação entre módulos
-  const { emitGlobalEvent } = useGlobalSync({
+  const {
+    emitGlobalEvent
+  } = useGlobalSync({
     callbacks: {
       // Receber eventos de outros módulos
-      onLeadUpdated: (data) => {
+      onLeadUpdated: data => {
         console.log('🌍 [Conversas] Lead atualizado via evento global:', data);
         // Atualizar lead vinculado se for o mesmo
         if (leadVinculado && leadVinculado.id === data.id) {
@@ -993,27 +1038,27 @@ function Conversas() {
               funnelStage: data.stage || conv.funnelStage,
               produto: data.servico || conv.produto,
               valor: data.value ? `R$ ${Number(data.value).toLocaleString('pt-BR')}` : conv.valor,
-              anotacoes: data.notes || conv.anotacoes,
+              anotacoes: data.notes || conv.anotacoes
             };
           }
           return conv;
         }));
       },
-      onTaskCreated: (data) => {
+      onTaskCreated: data => {
         console.log('🌍 [Conversas] Nova tarefa criada, verificar se vinculada ao lead:', data);
         // Se uma tarefa foi criada vinculada ao lead atual, podemos mostrar notificação
         if (leadVinculado && data.lead_id === leadVinculado.id) {
           // Opcional: mostrar indicador de tarefa criada
         }
       },
-      onMeetingScheduled: (data) => {
+      onMeetingScheduled: data => {
         console.log('🌍 [Conversas] Reunião agendada, verificar se vinculada ao lead:', data);
         // Se uma reunião foi agendada vinculada ao lead atual, podemos mostrar notificação
         if (leadVinculado && data.lead_id === leadVinculado.id) {
           // Opcional: mostrar indicador de reunião agendada
         }
       },
-      onFunnelStageChanged: (data) => {
+      onFunnelStageChanged: data => {
         console.log('🌍 [Conversas] Lead movido no funil:', data);
         // Atualizar conversa se o lead mudou de etapa
         setConversations(prev => prev.map(conv => {
@@ -1067,265 +1112,222 @@ function Conversas() {
     // ⚡ CRÍTICO MULTI-USER: Usar channel name único por sessão para evitar conflitos entre usuários
     const uniqueChannelId = `conversas-realtime-${userCompanyId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     console.log('🔴 [REALTIME-MULTIUSER] Iniciando escuta com canal único:', uniqueChannelId);
-    
-    const channel = supabase
-      .channel(uniqueChannelId)
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'conversas',
-          filter: `company_id=eq.${userCompanyId}`
-        },
-        async (payload) => {
-          const newData = payload.new as any;
-          console.log('📨 [REALTIME-MULTIUSER] Evento recebido:', payload.eventType, '- ID:', newData?.id);
-          
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            const novaMensagem = payload.new;
-            
-            // Validar company_id
-            if (novaMensagem.company_id !== userCompanyId) {
-              console.warn('⚠️ [REALTIME-MULTIUSER] Mensagem de outra company ignorada');
-              return;
+    const channel = supabase.channel(uniqueChannelId).on('postgres_changes', {
+      event: '*',
+      // INSERT, UPDATE, DELETE
+      schema: 'public',
+      table: 'conversas',
+      filter: `company_id=eq.${userCompanyId}`
+    }, async payload => {
+      const newData = payload.new as any;
+      console.log('📨 [REALTIME-MULTIUSER] Evento recebido:', payload.eventType, '- ID:', newData?.id);
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+        const novaMensagem = payload.new;
+
+        // Validar company_id
+        if (novaMensagem.company_id !== userCompanyId) {
+          console.warn('⚠️ [REALTIME-MULTIUSER] Mensagem de outra company ignorada');
+          return;
+        }
+        const telefone = (novaMensagem.telefone_formatado || novaMensagem.numero || '').replace(/[^0-9]/g, '');
+        if (telefone.length < 11 || telefone.length > 13) {
+          console.warn('⚠️ [REALTIME-MULTIUSER] Telefone inválido ignorado:', telefone);
+          return;
+        }
+        const isFromMe = novaMensagem.fromme === true || String(novaMensagem.fromme) === 'true';
+
+        // ⚡ MULTI-USER: Buscar sent_by do banco - CRÍTICO para saber qual colega enviou
+        let sentBy = novaMensagem.sent_by || undefined;
+
+        // Se não tem sent_by mas tem owner_id, buscar nome do usuário (pode ser outro colega)
+        if (!sentBy && novaMensagem.owner_id && isFromMe) {
+          const {
+            data: profile
+          } = await supabase.from('profiles').select('full_name').eq('id', novaMensagem.owner_id).single();
+          sentBy = profile?.full_name || 'Colega';
+        }
+        console.log('🔍 [REALTIME-MULTIUSER] Mensagem de:', sentBy || (isFromMe ? 'Usuário' : 'Contato'), '| owner_id:', novaMensagem.owner_id);
+
+        // Mapear tipos de mensagem corretamente
+        const tipoMensagem = novaMensagem.tipo_mensagem === 'texto' ? 'text' : novaMensagem.tipo_mensagem === 'image' ? 'image' : novaMensagem.tipo_mensagem === 'audio' ? 'audio' : novaMensagem.tipo_mensagem === 'video' ? 'video' : novaMensagem.tipo_mensagem === 'document' ? 'pdf' : novaMensagem.tipo_mensagem || 'text';
+
+        // Criar objeto de mensagem
+        const novaMensagemObj: Message = {
+          id: novaMensagem.id,
+          content: novaMensagem.mensagem || '',
+          type: tipoMensagem as any,
+          sender: isFromMe ? 'user' : 'contact',
+          timestamp: new Date(novaMensagem.created_at || Date.now()),
+          delivered: true,
+          read: novaMensagem.status !== 'Recebida',
+          mediaUrl: novaMensagem.midia_url,
+          fileName: novaMensagem.arquivo_nome,
+          mimeType: novaMensagem.tipo_mensagem === 'video' ? 'video/mp4' : novaMensagem.tipo_mensagem === 'audio' ? 'audio/mpeg' : novaMensagem.tipo_mensagem === 'image' ? 'image/jpeg' : novaMensagem.tipo_mensagem === 'document' ? 'application/pdf' : undefined,
+          sentBy: sentBy
+        };
+
+        // ⚡ CRÍTICO MULTI-USER: Atualizar conversa selecionada em tempo real para TODOS
+        setSelectedConv(prevSelected => {
+          if (!prevSelected) return prevSelected;
+
+          // Verificar se a mensagem pertence à conversa selecionada
+          const telSelected = (prevSelected.phoneNumber || prevSelected.id || '').replace(/[^0-9]/g, '');
+          if (telSelected === telefone) {
+            // ⚡ DEDUPLICAÇÃO: Verificar se mensagem já existe por ID
+            const mensagemJaExiste = prevSelected.messages.some(m => m.id === novaMensagem.id);
+            if (mensagemJaExiste) {
+              console.log('⚠️ [REALTIME-MULTIUSER] Mensagem duplicada ignorada:', novaMensagem.id);
+              return prevSelected;
             }
-            
-            const telefone = (novaMensagem.telefone_formatado || novaMensagem.numero || '').replace(/[^0-9]/g, '');
-            if (telefone.length < 11 || telefone.length > 13) {
-              console.warn('⚠️ [REALTIME-MULTIUSER] Telefone inválido ignorado:', telefone);
-              return;
+            console.log('✅ [REALTIME-MULTIUSER] Atualizando conversa selecionada para TODOS os usuários');
+            const novasMensagens = [...prevSelected.messages, novaMensagemObj].sort((a, b) => {
+              const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+              const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+              return timeA - timeB;
+            });
+
+            // ⚡ MULTI-USER: Status correto - QUALQUER colega que responde = Em Atendimento
+            let novoStatus: "waiting" | "answered" | "resolved" = prevSelected.status;
+            if (novaMensagemObj.sender === 'user') {
+              novoStatus = 'answered'; // Qualquer colega respondeu = Em Atendimento
+            } else if (novaMensagemObj.sender === 'contact') {
+              novoStatus = 'waiting'; // Contato enviou = Aguardando
             }
-            
-            const isFromMe = novaMensagem.fromme === true || String(novaMensagem.fromme) === 'true';
-            
-            // ⚡ MULTI-USER: Buscar sent_by do banco - CRÍTICO para saber qual colega enviou
-            let sentBy = novaMensagem.sent_by || undefined;
-            
-            // Se não tem sent_by mas tem owner_id, buscar nome do usuário (pode ser outro colega)
-            if (!sentBy && novaMensagem.owner_id && isFromMe) {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('full_name')
-                .eq('id', novaMensagem.owner_id)
-                .single();
-              sentBy = profile?.full_name || 'Colega';
-            }
-            
-            console.log('🔍 [REALTIME-MULTIUSER] Mensagem de:', sentBy || (isFromMe ? 'Usuário' : 'Contato'), '| owner_id:', novaMensagem.owner_id);
-            
-            // Mapear tipos de mensagem corretamente
-            const tipoMensagem = novaMensagem.tipo_mensagem === 'texto' ? 'text' :
-                                novaMensagem.tipo_mensagem === 'image' ? 'image' :
-                                novaMensagem.tipo_mensagem === 'audio' ? 'audio' :
-                                novaMensagem.tipo_mensagem === 'video' ? 'video' :
-                                novaMensagem.tipo_mensagem === 'document' ? 'pdf' :
-                                novaMensagem.tipo_mensagem || 'text';
-            
-            // Criar objeto de mensagem
-            const novaMensagemObj: Message = {
-              id: novaMensagem.id,
-              content: novaMensagem.mensagem || '',
-              type: tipoMensagem as any,
-              sender: isFromMe ? 'user' : 'contact',
-              timestamp: new Date(novaMensagem.created_at || Date.now()),
-              delivered: true,
-              read: novaMensagem.status !== 'Recebida',
-              mediaUrl: novaMensagem.midia_url,
-              fileName: novaMensagem.arquivo_nome,
-              mimeType: novaMensagem.tipo_mensagem === 'video' ? 'video/mp4' : 
-                       novaMensagem.tipo_mensagem === 'audio' ? 'audio/mpeg' :
-                       novaMensagem.tipo_mensagem === 'image' ? 'image/jpeg' :
-                       novaMensagem.tipo_mensagem === 'document' ? 'application/pdf' : undefined,
-              sentBy: sentBy,
+            return {
+              ...prevSelected,
+              messages: novasMensagens,
+              lastMessage: novaMensagem.mensagem || '',
+              status: novoStatus,
+              unread: novaMensagemObj.sender === 'contact' ? (prevSelected.unread || 0) + 1 : 0
             };
-            
-            // ⚡ CRÍTICO MULTI-USER: Atualizar conversa selecionada em tempo real para TODOS
-            setSelectedConv(prevSelected => {
-              if (!prevSelected) return prevSelected;
-              
-              // Verificar se a mensagem pertence à conversa selecionada
-              const telSelected = (prevSelected.phoneNumber || prevSelected.id || '').replace(/[^0-9]/g, '');
-              if (telSelected === telefone) {
-                // ⚡ DEDUPLICAÇÃO: Verificar se mensagem já existe por ID
-                const mensagemJaExiste = prevSelected.messages.some(m => m.id === novaMensagem.id);
-                if (mensagemJaExiste) {
-                  console.log('⚠️ [REALTIME-MULTIUSER] Mensagem duplicada ignorada:', novaMensagem.id);
-                  return prevSelected;
-                }
-                
-                console.log('✅ [REALTIME-MULTIUSER] Atualizando conversa selecionada para TODOS os usuários');
-                
-                const novasMensagens = [...prevSelected.messages, novaMensagemObj].sort((a, b) => {
+          }
+          return prevSelected;
+        });
+
+        // ⚡ CRÍTICO MULTI-USER: Atualizar lista de conversas para TODOS os usuários da empresa
+        setConversations(prev => {
+          const telefoneKey = telefone;
+          const conversaExistente = prev.find(c => {
+            const tel = (c.phoneNumber || c.id || '').replace(/[^0-9]/g, '');
+            return tel === telefoneKey;
+          });
+          if (conversaExistente) {
+            // ⚡ DEDUPLICAÇÃO: Verificar se mensagem já existe por ID
+            const mensagemJaExiste = conversaExistente.messages.some(m => m.id === novaMensagem.id);
+            if (mensagemJaExiste) {
+              console.log('⚠️ [REALTIME-MULTIUSER] Mensagem duplicada na lista, ignorando:', novaMensagem.id);
+              return prev;
+            }
+            console.log('✅ [REALTIME-MULTIUSER] Adicionando mensagem à conversa para TODOS:', conversaExistente.contactName);
+            return prev.map(conv => {
+              if (conv.id === conversaExistente.id) {
+                const novasMensagens = [...conv.messages, novaMensagemObj].sort((a, b) => {
                   const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
                   const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
                   return timeA - timeB;
                 });
-                
+
                 // ⚡ MULTI-USER: Status correto - QUALQUER colega que responde = Em Atendimento
-                let novoStatus: "waiting" | "answered" | "resolved" = prevSelected.status;
+                let novoStatus: "waiting" | "answered" | "resolved" = conv.status;
                 if (novaMensagemObj.sender === 'user') {
                   novoStatus = 'answered'; // Qualquer colega respondeu = Em Atendimento
                 } else if (novaMensagemObj.sender === 'contact') {
-                  novoStatus = 'waiting'; // Contato enviou = Aguardando
+                  // Verificar conversa ao vivo
+                  const TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000;
+                  const agora = Date.now();
+                  const ultimaMsgUsuario = novasMensagens.filter(m => m.sender === 'user').sort((a, b) => {
+                    const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+                    const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+                    return timeB - timeA;
+                  })[0];
+                  if (ultimaMsgUsuario) {
+                    const tempoUltimaResposta = ultimaMsgUsuario.timestamp instanceof Date ? ultimaMsgUsuario.timestamp.getTime() : new Date(ultimaMsgUsuario.timestamp).getTime();
+                    const usuarioRespondeuRecentemente = agora - tempoUltimaResposta < TEMPO_CONVERSA_AO_VIVO;
+                    novoStatus = usuarioRespondeuRecentemente ? 'answered' : 'waiting';
+                  } else {
+                    novoStatus = 'waiting';
+                  }
                 }
-                
                 return {
-                  ...prevSelected,
+                  ...conv,
                   messages: novasMensagens,
                   lastMessage: novaMensagem.mensagem || '',
                   status: novoStatus,
-                  unread: novaMensagemObj.sender === 'contact' ? (prevSelected.unread || 0) + 1 : 0,
+                  unread: novaMensagemObj.sender === 'contact' ? (conv.unread || 0) + 1 : 0
                 };
               }
-              return prevSelected;
+              return conv;
             });
-            
-            // ⚡ CRÍTICO MULTI-USER: Atualizar lista de conversas para TODOS os usuários da empresa
-            setConversations(prev => {
-              const telefoneKey = telefone;
-              const conversaExistente = prev.find(c => {
-                const tel = (c.phoneNumber || c.id || '').replace(/[^0-9]/g, '');
-                return tel === telefoneKey;
-              });
-              
-              if (conversaExistente) {
-                // ⚡ DEDUPLICAÇÃO: Verificar se mensagem já existe por ID
-                const mensagemJaExiste = conversaExistente.messages.some(m => m.id === novaMensagem.id);
-                
-                if (mensagemJaExiste) {
-                  console.log('⚠️ [REALTIME-MULTIUSER] Mensagem duplicada na lista, ignorando:', novaMensagem.id);
-                  return prev;
-                }
-                
-                console.log('✅ [REALTIME-MULTIUSER] Adicionando mensagem à conversa para TODOS:', conversaExistente.contactName);
-                
-                return prev.map(conv => {
-                  if (conv.id === conversaExistente.id) {
-                    const novasMensagens = [...conv.messages, novaMensagemObj].sort((a, b) => {
-                      const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
-                      const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
-                      return timeA - timeB;
-                    });
-                    
-                    // ⚡ MULTI-USER: Status correto - QUALQUER colega que responde = Em Atendimento
-                    let novoStatus: "waiting" | "answered" | "resolved" = conv.status;
-                    if (novaMensagemObj.sender === 'user') {
-                      novoStatus = 'answered'; // Qualquer colega respondeu = Em Atendimento
-                    } else if (novaMensagemObj.sender === 'contact') {
-                      // Verificar conversa ao vivo
-                      const TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000;
-                      const agora = Date.now();
-                      
-                      const ultimaMsgUsuario = novasMensagens
-                        .filter(m => m.sender === 'user')
-                        .sort((a, b) => {
-                          const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
-                          const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
-                          return timeB - timeA;
-                        })[0];
-                      
-                      if (ultimaMsgUsuario) {
-                        const tempoUltimaResposta = ultimaMsgUsuario.timestamp instanceof Date 
-                          ? ultimaMsgUsuario.timestamp.getTime() 
-                          : new Date(ultimaMsgUsuario.timestamp).getTime();
-                        
-                        const usuarioRespondeuRecentemente = (agora - tempoUltimaResposta) < TEMPO_CONVERSA_AO_VIVO;
-                        novoStatus = usuarioRespondeuRecentemente ? 'answered' : 'waiting';
-                      } else {
-                        novoStatus = 'waiting';
-                      }
-                    }
-                    
-                    return {
-                      ...conv,
-                      messages: novasMensagens,
-                      lastMessage: novaMensagem.mensagem || '',
-                      status: novoStatus,
-                      unread: novaMensagemObj.sender === 'contact' ? (conv.unread || 0) + 1 : 0,
-                    };
-                  }
-                  return conv;
-                });
-              } else {
-                // Criar nova conversa para TODOS os usuários
-                console.log('✅ [REALTIME-MULTIUSER] Criando nova conversa para TODOS:', telefoneKey);
-                
-                const novaConversa: Conversation = {
-                  id: novaMensagem.lead_id || `conv-${telefoneKey}`,
-                  contactName: novaMensagem.nome_contato || telefoneKey,
-                  channel: 'whatsapp' as const,
-                  status: novaMensagemObj.sender === 'user' ? 'answered' : 'waiting',
-                  lastMessage: novaMensagem.mensagem || '',
-                  unread: novaMensagemObj.sender === 'contact' ? 1 : 0,
-                  messages: [novaMensagemObj],
-                  tags: [],
-                  phoneNumber: telefoneKey,
-                  isGroup: novaMensagem.is_group || /@g\.us$/.test(novaMensagem.numero || ''),
-                };
-                
-                return [novaConversa, ...prev];
-              }
-            });
-            
-            // ⚡ CORREÇÃO CRÍTICA: Tocar som de notificação APENAS para mensagens novas recebidas do contato
-            // Verificar: 1) É do contato (fromme === false), 2) É INSERT (não UPDATE), 3) Não foi notificada antes
-            const isFromContact = novaMensagem.fromme === false || String(novaMensagem.fromme) === 'false';
-            const isNewMessage = payload.eventType === 'INSERT';
-            const notAlreadyNotified = !notifiedMessagesRef.current.has(novaMensagem.id);
-            
-            if (isFromContact && isNewMessage && notAlreadyNotified) {
-              // Marcar como notificada
-              notifiedMessagesRef.current.add(novaMensagem.id);
-              
-              // Limpar set se ficar muito grande (manter apenas últimas 100 mensagens)
-              if (notifiedMessagesRef.current.size > 100) {
-                const idsArray = Array.from(notifiedMessagesRef.current);
-                notifiedMessagesRef.current = new Set(idsArray.slice(-100));
-              }
-              
-              console.log('🔔 [REALTIME] Disparando notificação para mensagem nova:', novaMensagem.id);
-              
-              const audio = new Audio('/notification.mp3');
-              audio.play().catch(() => {});
-              
-              toast.info(`Nova mensagem de ${novaMensagem.nome_contato || 'contato'}`, {
-                duration: 3000,
-              });
-            } else {
-              console.log('⚠️ [REALTIME] Notificação ignorada:', {
-                isFromContact,
-                isNewMessage,
-                notAlreadyNotified,
-                messageId: novaMensagem.id
-              });
-            }
+          } else {
+            // Criar nova conversa para TODOS os usuários
+            console.log('✅ [REALTIME-MULTIUSER] Criando nova conversa para TODOS:', telefoneKey);
+            const novaConversa: Conversation = {
+              id: novaMensagem.lead_id || `conv-${telefoneKey}`,
+              contactName: novaMensagem.nome_contato || telefoneKey,
+              channel: 'whatsapp' as const,
+              status: novaMensagemObj.sender === 'user' ? 'answered' : 'waiting',
+              lastMessage: novaMensagem.mensagem || '',
+              unread: novaMensagemObj.sender === 'contact' ? 1 : 0,
+              messages: [novaMensagemObj],
+              tags: [],
+              phoneNumber: telefoneKey,
+              isGroup: novaMensagem.is_group || /@g\.us$/.test(novaMensagem.numero || '')
+            };
+            return [novaConversa, ...prev];
           }
-        }
-      )
-      .subscribe((status) => {
-        console.log('🔴 [REALTIME-MULTIUSER] Status da conexão:', status);
-        if (status === 'SUBSCRIBED') {
-          setRealtimeConnectionStatus('connected');
-          setRealtimeReconnectAttempts(0);
-          console.log('✅ [REALTIME-MULTIUSER] Conectado - sincronização multi-user ativa');
-        } else if (status === 'CHANNEL_ERROR') {
-          setRealtimeConnectionStatus('error');
-        } else if (status === 'CLOSED') {
-          setRealtimeConnectionStatus('disconnected');
-        } else if (status === 'TIMED_OUT') {
-          setRealtimeConnectionStatus('disconnected');
-          if (realtimeReconnectAttempts < 5) {
-            const delay = Math.min(1000 * Math.pow(2, realtimeReconnectAttempts), 30000);
-            console.log(`🔄 [REALTIME-MULTIUSER] Reconectando em ${delay}ms (tentativa ${realtimeReconnectAttempts + 1})`);
-            setRealtimeReconnectAttempts(prev => prev + 1);
-            setTimeout(() => {
-              setRealtimeConnectionStatus('connecting');
-            }, delay);
+        });
+
+        // ⚡ CORREÇÃO CRÍTICA: Tocar som de notificação APENAS para mensagens novas recebidas do contato
+        // Verificar: 1) É do contato (fromme === false), 2) É INSERT (não UPDATE), 3) Não foi notificada antes
+        const isFromContact = novaMensagem.fromme === false || String(novaMensagem.fromme) === 'false';
+        const isNewMessage = payload.eventType === 'INSERT';
+        const notAlreadyNotified = !notifiedMessagesRef.current.has(novaMensagem.id);
+        if (isFromContact && isNewMessage && notAlreadyNotified) {
+          // Marcar como notificada
+          notifiedMessagesRef.current.add(novaMensagem.id);
+
+          // Limpar set se ficar muito grande (manter apenas últimas 100 mensagens)
+          if (notifiedMessagesRef.current.size > 100) {
+            const idsArray = Array.from(notifiedMessagesRef.current);
+            notifiedMessagesRef.current = new Set(idsArray.slice(-100));
           }
+          console.log('🔔 [REALTIME] Disparando notificação para mensagem nova:', novaMensagem.id);
+          const audio = new Audio('/notification.mp3');
+          audio.play().catch(() => {});
+          toast.info(`Nova mensagem de ${novaMensagem.nome_contato || 'contato'}`, {
+            duration: 3000
+          });
+        } else {
+          console.log('⚠️ [REALTIME] Notificação ignorada:', {
+            isFromContact,
+            isNewMessage,
+            notAlreadyNotified,
+            messageId: novaMensagem.id
+          });
         }
-      });
-    
+      }
+    }).subscribe(status => {
+      console.log('🔴 [REALTIME-MULTIUSER] Status da conexão:', status);
+      if (status === 'SUBSCRIBED') {
+        setRealtimeConnectionStatus('connected');
+        setRealtimeReconnectAttempts(0);
+        console.log('✅ [REALTIME-MULTIUSER] Conectado - sincronização multi-user ativa');
+      } else if (status === 'CHANNEL_ERROR') {
+        setRealtimeConnectionStatus('error');
+      } else if (status === 'CLOSED') {
+        setRealtimeConnectionStatus('disconnected');
+      } else if (status === 'TIMED_OUT') {
+        setRealtimeConnectionStatus('disconnected');
+        if (realtimeReconnectAttempts < 5) {
+          const delay = Math.min(1000 * Math.pow(2, realtimeReconnectAttempts), 30000);
+          console.log(`🔄 [REALTIME-MULTIUSER] Reconectando em ${delay}ms (tentativa ${realtimeReconnectAttempts + 1})`);
+          setRealtimeReconnectAttempts(prev => prev + 1);
+          setTimeout(() => {
+            setRealtimeConnectionStatus('connecting');
+          }, delay);
+        }
+      }
+    });
     return () => {
       console.log('🔴 [REALTIME-MULTIUSER] Desconectando canal...');
       setRealtimeConnectionStatus('disconnected');
@@ -1340,11 +1342,9 @@ function Conversas() {
         console.log('🔄 [MULTIUSER-SYNC] Sincronização backup (30s)...');
         loadInitialConversations();
       }, 30000);
-      
       return () => clearInterval(syncTimer);
     }
   }, [userCompanyId, loadingConversations]);
-
 
   // Form states
   const [newQuickTitle, setNewQuickTitle] = useState("");
@@ -1383,10 +1383,26 @@ function Conversas() {
   const [meetingDuracao, setMeetingDuracao] = useState("30");
   const [meetingDescricao, setMeetingDescricao] = useState("");
   const [meetingHorarioComercial, setMeetingHorarioComercial] = useState<any>({
-    manha: { inicio: "08:00", fim: "12:00", ativo: true },
-    tarde: { inicio: "14:00", fim: "18:00", ativo: true },
-    noite: { inicio: "19:00", fim: "23:00", ativo: false },
-    intervalo_almoco: { inicio: "12:00", fim: "14:00", ativo: true }
+    manha: {
+      inicio: "08:00",
+      fim: "12:00",
+      ativo: true
+    },
+    tarde: {
+      inicio: "14:00",
+      fim: "18:00",
+      ativo: true
+    },
+    noite: {
+      inicio: "19:00",
+      fim: "23:00",
+      ativo: false
+    },
+    intervalo_almoco: {
+      inicio: "12:00",
+      fim: "14:00",
+      ativo: true
+    }
   });
   const [meetingCompromissosExistentes, setMeetingCompromissosExistentes] = useState<any[]>([]);
   const [meetingAgendaSelecionada, setMeetingAgendaSelecionada] = useState<any>(null);
@@ -1400,15 +1416,21 @@ function Conversas() {
   const [newProduto, setNewProduto] = useState("");
   const [newValor, setNewValor] = useState("");
   const [newAnotacoes, setNewAnotacoes] = useState("");
-  
+
   // Usuários da empresa (para Transferir Atendimento / Responsáveis)
-  const [companyUsers, setCompanyUsers] = useState<{ id: string; name: string }[]>([]);
+  const [companyUsers, setCompanyUsers] = useState<{
+    id: string;
+    name: string;
+  }[]>([]);
   // Filas de atendimento
   const [queues, setQueues] = useState<any[]>([]);
   // Fila selecionada e seus membros
   const [selectedQueueId, setSelectedQueueId] = useState<string>("");
-  const [queueMembers, setQueueMembers] = useState<{ id: string; name: string }[]>([]);
-  
+  const [queueMembers, setQueueMembers] = useState<{
+    id: string;
+    name: string;
+  }[]>([]);
+
   // Estados para tarefas do lead
   const [leadTasks, setLeadTasks] = useState<any[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -1421,7 +1443,6 @@ function Conversas() {
   const [etapas, setEtapas] = useState<any[]>([]);
   const [selectedFunilId, setSelectedFunilId] = useState("");
   const [etapasFiltradas, setEtapasFiltradas] = useState<any[]>([]);
-
   const funnelStages = ["Novo", "Qualificado", "Em Negociação", "Fechado", "Perdido"];
 
   // Carregar funis e etapas ao montar o componente
@@ -1444,7 +1465,6 @@ function Conversas() {
     if (leadVinculado?.funil_id && funis.length > 0 && etapas.length > 0) {
       const etapaInfo = leadVinculado.etapa_id ? etapas.find(e => e.id === leadVinculado.etapa_id) : null;
       const funilInfo = funis.find(f => f.id === leadVinculado.funil_id);
-      
       console.log('📊 [FUNIL] Verificando exibição do funil:', {
         leadVinculado: !!leadVinculado,
         funil_id: leadVinculado.funil_id,
@@ -1454,7 +1474,6 @@ function Conversas() {
         funisCarregados: funis.length,
         etapasCarregadas: etapas.length
       });
-      
       if (funilInfo && selectedConv) {
         // Atualizar conversa selecionada com informações do funil
         if (etapaInfo) {
@@ -1471,17 +1490,19 @@ function Conversas() {
   useEffect(() => {
     if (!userCompanyId) return; // ⚡ Aguardar company_id estar disponível
     let channel: any;
-
     const loadCompanyUsers = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: {
+            session
+          }
+        } = await supabase.auth.getSession();
         if (!session) return;
 
         // Buscar todos os usuários (ids) da empresa
-        const { data: userRoles } = await supabase
-          .from('user_roles')
-          .select('user_id')
-          .eq('company_id', userCompanyId); // ⚡ Usar userCompanyId diretamente
+        const {
+          data: userRoles
+        } = await supabase.from('user_roles').select('user_id').eq('company_id', userCompanyId); // ⚡ Usar userCompanyId diretamente
 
         const ids = (userRoles || []).map((ur: any) => ur.user_id);
         if (ids.length === 0) {
@@ -1490,31 +1511,27 @@ function Conversas() {
         }
 
         // Buscar perfis para nomes
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', ids);
-
-        const users = (profiles || []).map(p => ({ id: p.id, name: (p.full_name || p.email) as string })).filter(u => !!u.name);
+        const {
+          data: profiles
+        } = await supabase.from('profiles').select('id, full_name, email').in('id', ids);
+        const users = (profiles || []).map(p => ({
+          id: p.id,
+          name: (p.full_name || p.email) as string
+        })).filter(u => !!u.name);
         console.log('👥 [USERS] Usuários da empresa carregados:', users.length, users);
         setCompanyUsers(users);
       } catch (e) {
         console.error('Erro ao carregar usuários da empresa:', e);
       }
     };
-
     loadCompanyUsers();
 
     // Assinatura realtime: alterações em user_roles da empresa → recarregar lista
-    channel = supabase
-      .channel(`company-users-realtime`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'user_roles' },
-        () => loadCompanyUsers()
-      )
-      .subscribe();
-
+    channel = supabase.channel(`company-users-realtime`).on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'user_roles'
+    }, () => loadCompanyUsers()).subscribe();
     return () => {
       if (channel) supabase.removeChannel(channel);
     };
@@ -1523,19 +1540,15 @@ function Conversas() {
   // Assinar compromissos (agenda) em tempo real quando o painel estiver aberto
   useEffect(() => {
     if (!showInfoPanel || !leadVinculado?.id) return;
-
-    const channel = supabase
-      .channel(`compromissos-${leadVinculado.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'compromissos', filter: `lead_id=eq.${leadVinculado.id}` },
-        () => {
-          // Recarregar reuniões do lead
-          loadMeetings();
-        }
-      )
-      .subscribe();
-
+    const channel = supabase.channel(`compromissos-${leadVinculado.id}`).on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'compromissos',
+      filter: `lead_id=eq.${leadVinculado.id}`
+    }, () => {
+      // Recarregar reuniões do lead
+      loadMeetings();
+    }).subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
@@ -1545,38 +1558,34 @@ function Conversas() {
   useEffect(() => {
     if (!showInfoPanel) return;
     let channel: any;
-
     const loadQueues = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: {
+            session
+          }
+        } = await supabase.auth.getSession();
         if (!session) return;
-
-        const { data: userRole } = await supabase
-          .from('user_roles')
-          .select('company_id')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
+        const {
+          data: userRole
+        } = await supabase.from('user_roles').select('company_id').eq('user_id', session.user.id).maybeSingle();
         if (!userRole?.company_id) return;
-
-        const { data } = await supabase
-          .from('support_queues')
-          .select('*')
-          .eq('company_id', userRole.company_id)
-          .eq('is_active', true)
-          .order('name', { ascending: true });
+        const {
+          data
+        } = await supabase.from('support_queues').select('*').eq('company_id', userRole.company_id).eq('is_active', true).order('name', {
+          ascending: true
+        });
         setQueues(data || []);
       } catch (e) {
         console.error('Erro ao carregar filas:', e);
       }
     };
-
     loadQueues();
-
-    channel = supabase
-      .channel('support-queues-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_queues' }, () => loadQueues())
-      .subscribe();
-
+    channel = supabase.channel('support-queues-realtime').on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'support_queues'
+    }, () => loadQueues()).subscribe();
     return () => {
       if (channel) supabase.removeChannel(channel);
     };
@@ -1596,40 +1605,36 @@ function Conversas() {
   useEffect(() => {
     if (!showInfoPanel || !selectedQueueId) return;
     let channel: any;
-
     const loadQueueMembers = async () => {
       try {
         // Buscar membros (user_id) da fila
-        const { data: members } = await supabase
-          .from('support_queue_members')
-          .select('user_id')
-          .eq('queue_id', selectedQueueId);
-
+        const {
+          data: members
+        } = await supabase.from('support_queue_members').select('user_id').eq('queue_id', selectedQueueId);
         const ids = (members || []).map((m: any) => m.user_id);
         if (ids.length === 0) {
           setQueueMembers([]);
           return;
         }
-
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', ids);
-
-        const users = (profiles || []).map(p => ({ id: p.id, name: (p.full_name || p.email) as string })).filter(u => !!u.name);
+        const {
+          data: profiles
+        } = await supabase.from('profiles').select('id, full_name, email').in('id', ids);
+        const users = (profiles || []).map(p => ({
+          id: p.id,
+          name: (p.full_name || p.email) as string
+        })).filter(u => !!u.name);
         setQueueMembers(users);
       } catch (e) {
         console.error('Erro ao carregar membros da fila:', e);
       }
     };
-
     loadQueueMembers();
-
-    channel = supabase
-      .channel(`queue-members-${selectedQueueId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_queue_members', filter: `queue_id=eq.${selectedQueueId}` }, () => loadQueueMembers())
-      .subscribe();
-
+    channel = supabase.channel(`queue-members-${selectedQueueId}`).on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'support_queue_members',
+      filter: `queue_id=eq.${selectedQueueId}`
+    }, () => loadQueueMembers()).subscribe();
     return () => {
       if (channel) supabase.removeChannel(channel);
     };
@@ -1638,89 +1643,95 @@ function Conversas() {
   // Assinar atribuição da conversa atual (responsável/fila) para refletir transferências em tempo real
   useEffect(() => {
     if (!showInfoPanel || !selectedConv || !userCompanyId) return;
-
     const telefone = (selectedConv.phoneNumber || selectedConv.id).replace(/[^0-9]/g, '');
-    const channel = supabase
-      .channel(`conv-assign-${telefone}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'conversation_assignments', filter: `telefone_formatado=eq.${telefone}` },
-        async () => {
-          // Buscar assignment atual
-          const { data } = await supabase
-            .from('conversation_assignments')
-            .select('*')
-            .eq('company_id', userCompanyId)
-            .eq('telefone_formatado', telefone)
-            .maybeSingle();
+    const channel = supabase.channel(`conv-assign-${telefone}`).on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'conversation_assignments',
+      filter: `telefone_formatado=eq.${telefone}`
+    }, async () => {
+      // Buscar assignment atual
+      const {
+        data
+      } = await supabase.from('conversation_assignments').select('*').eq('company_id', userCompanyId).eq('telefone_formatado', telefone).maybeSingle();
+      if (!data) return;
 
-          if (!data) return;
-
-          // Se houver fila, mostrar "Fila: <nome>", se houver usuário, mostrar o nome do usuário
-          if (data.queue_id) {
-            const q = queues.find(q => q.id === data.queue_id);
-            if (q) {
-              setSelectedConv(prev => prev ? { ...prev, responsavel: `Fila: ${q.name}` } : prev);
-            }
-          } else if (data.assigned_user_id) {
-            // Buscar nome do usuário
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('full_name, email')
-              .eq('id', data.assigned_user_id)
-              .maybeSingle();
-            const display = profile?.full_name || profile?.email || 'Agente';
-            setSelectedConv(prev => prev ? { ...prev, responsavel: display } : prev);
-          }
+      // Se houver fila, mostrar "Fila: <nome>", se houver usuário, mostrar o nome do usuário
+      if (data.queue_id) {
+        const q = queues.find(q => q.id === data.queue_id);
+        if (q) {
+          setSelectedConv(prev => prev ? {
+            ...prev,
+            responsavel: `Fila: ${q.name}`
+          } : prev);
         }
-      )
-      .subscribe();
-
+      } else if (data.assigned_user_id) {
+        // Buscar nome do usuário
+        const {
+          data: profile
+        } = await supabase.from('profiles').select('full_name, email').eq('id', data.assigned_user_id).maybeSingle();
+        const display = profile?.full_name || profile?.email || 'Agente';
+        setSelectedConv(prev => prev ? {
+          ...prev,
+          responsavel: display
+        } : prev);
+      }
+    }).subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
   }, [showInfoPanel, selectedConv?.id, userCompanyId, queues]);
-
   const assignConversationToUser = async (userId: string, displayName: string) => {
     if (!selectedConv || !userCompanyId) return;
     const telefone = (selectedConv.phoneNumber || selectedConv.id).replace(/[^0-9]/g, '');
     try {
-      await supabase
-        .from('conversation_assignments')
-        .upsert({
-          company_id: userCompanyId,
-          telefone_formatado: telefone,
-          assigned_user_id: userId,
-          queue_id: null,
-        }, { onConflict: 'company_id,telefone_formatado' });
+      await supabase.from('conversation_assignments').upsert({
+        company_id: userCompanyId,
+        telefone_formatado: telefone,
+        assigned_user_id: userId,
+        queue_id: null
+      }, {
+        onConflict: 'company_id,telefone_formatado'
+      });
 
       // Atualizar localmente
-      setSelectedConv({ ...selectedConv, responsavel: displayName });
-      setConversations(prev => prev.map(c => c.id === selectedConv.id ? { ...c, responsavel: displayName } : c));
+      setSelectedConv({
+        ...selectedConv,
+        responsavel: displayName
+      });
+      setConversations(prev => prev.map(c => c.id === selectedConv.id ? {
+        ...c,
+        responsavel: displayName
+      } : c));
       toast.success(`Atendimento transferido para ${displayName}`);
     } catch (e) {
       console.error('Erro ao atribuir conversa ao usuário:', e);
       toast.error('Erro ao transferir atendimento');
     }
   };
-
   const assignConversationToQueue = async (queueId: string, queueName: string) => {
     if (!selectedConv || !userCompanyId) return;
     const telefone = (selectedConv.phoneNumber || selectedConv.id).replace(/[^0-9]/g, '');
     try {
-      await supabase
-        .from('conversation_assignments')
-        .upsert({
-          company_id: userCompanyId,
-          telefone_formatado: telefone,
-          queue_id: queueId,
-          assigned_user_id: null,
-        }, { onConflict: 'company_id,telefone_formatado' });
+      await supabase.from('conversation_assignments').upsert({
+        company_id: userCompanyId,
+        telefone_formatado: telefone,
+        queue_id: queueId,
+        assigned_user_id: null
+      }, {
+        onConflict: 'company_id,telefone_formatado'
+      });
 
       // Atualizar localmente
       const label = `Fila: ${queueName}`;
-      setSelectedConv({ ...selectedConv, responsavel: label });
-      setConversations(prev => prev.map(c => c.id === selectedConv.id ? { ...c, responsavel: label } : c));
+      setSelectedConv({
+        ...selectedConv,
+        responsavel: label
+      });
+      setConversations(prev => prev.map(c => c.id === selectedConv.id ? {
+        ...c,
+        responsavel: label
+      } : c));
       toast.success(`Atendimento enviado para a fila ${queueName}`);
     } catch (e) {
       console.error('Erro ao atribuir conversa à fila:', e);
@@ -1737,39 +1748,34 @@ function Conversas() {
       setEtapasFiltradas([]);
     }
   }, [selectedFunilId, etapas]);
-
   const carregarFunisEEtapas = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: {
+          session
+        }
+      } = await supabase.auth.getSession();
       if (!session) return;
-
-      const { data: userRole } = await supabase
-        .from("user_roles")
-        .select("company_id")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-
+      const {
+        data: userRole
+      } = await supabase.from("user_roles").select("company_id").eq("user_id", session.user.id).maybeSingle();
       if (!userRole?.company_id) return;
 
       // Carregar funis
-      const { data: funisData, error: funisError } = await supabase
-        .from("funis")
-        .select("*")
-        .eq("company_id", userRole.company_id)
-        .order("criado_em");
-
+      const {
+        data: funisData,
+        error: funisError
+      } = await supabase.from("funis").select("*").eq("company_id", userRole.company_id).order("criado_em");
       if (!funisError && funisData) {
         console.log('📊 Funis carregados:', funisData.length);
         setFunis(funisData);
       }
 
       // Carregar etapas
-      const { data: etapasData, error: etapasError } = await supabase
-        .from("etapas")
-        .select("*")
-        .eq("company_id", userRole.company_id)
-        .order("posicao");
-
+      const {
+        data: etapasData,
+        error: etapasError
+      } = await supabase.from("etapas").select("*").eq("company_id", userRole.company_id).order("posicao");
       if (!etapasError && etapasData) {
         console.log('📍 Etapas carregadas:', etapasData.length);
         setEtapas(etapasData);
@@ -1778,31 +1784,31 @@ function Conversas() {
       console.error('❌ Erro ao carregar funis e etapas:', error);
     }
   };
-
   const carregarTarefasDoLead = async (leadId: string) => {
     if (!leadId) {
       console.warn('⚠️ [TAREFAS] leadId não fornecido');
       setLeadTasks([]);
       return;
     }
-
     try {
       console.log('📋 [TAREFAS] Carregando tarefas para lead:', leadId);
-      
-      const { data: tasks, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('lead_id', leadId)
-        .order('created_at', { ascending: false });
-
+      const {
+        data: tasks,
+        error
+      } = await supabase.from('tasks').select('*').eq('lead_id', leadId).order('created_at', {
+        ascending: false
+      });
       if (error) {
         console.error('❌ Erro ao carregar tarefas:', error);
         toast.error('Erro ao carregar tarefas');
         return;
       }
-
       console.log('✅ [TAREFAS] Tarefas carregadas:', tasks?.length || 0, tasks);
-      console.log('✅ [TAREFAS] Detalhes das tarefas:', tasks?.map(t => ({ id: t.id, title: t.title, lead_id: t.lead_id })));
+      console.log('✅ [TAREFAS] Detalhes das tarefas:', tasks?.map(t => ({
+        id: t.id,
+        title: t.title,
+        lead_id: t.lead_id
+      })));
       setLeadTasks(tasks || []);
       console.log('✅ [TAREFAS] Estado leadTasks atualizado com', tasks?.length || 0, 'tarefas');
     } catch (error) {
@@ -1815,11 +1821,10 @@ function Conversas() {
   const carregarBoardsEColumns = async () => {
     try {
       // Carregar boards
-      const { data: boardsData, error: boardsError } = await supabase
-        .from("task_boards")
-        .select("*")
-        .order("criado_em");
-
+      const {
+        data: boardsData,
+        error: boardsError
+      } = await supabase.from("task_boards").select("*").order("criado_em");
       if (boardsError) throw boardsError;
       setTaskBoards(boardsData || []);
 
@@ -1829,11 +1834,10 @@ function Conversas() {
       }
 
       // Carregar colunas
-      const { data: columnsData, error: columnsError } = await supabase
-        .from("task_columns")
-        .select("*")
-        .order("posicao");
-
+      const {
+        data: columnsData,
+        error: columnsError
+      } = await supabase.from("task_columns").select("*").order("posicao");
       if (columnsError) throw columnsError;
       setTaskColumns(columnsData || []);
     } catch (error) {
@@ -1853,32 +1857,21 @@ function Conversas() {
     carregarTarefasDoLead(leadVinculado.id);
 
     // Configurar subscrição em tempo real
-    const channel = supabase
-      .channel(`tasks-${leadVinculado.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'tasks',
-          filter: `lead_id=eq.${leadVinculado.id}`,
-        },
-        (payload) => {
-          console.log('📡 Atualização de tarefa em tempo real:', payload);
-          
-          if (payload.eventType === 'INSERT') {
-            setLeadTasks(prev => [payload.new as any, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setLeadTasks(prev => prev.map(task => 
-              task.id === payload.new.id ? payload.new as any : task
-            ));
-          } else if (payload.eventType === 'DELETE') {
-            setLeadTasks(prev => prev.filter(task => task.id !== payload.old.id));
-          }
-        }
-      )
-      .subscribe();
-
+    const channel = supabase.channel(`tasks-${leadVinculado.id}`).on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'tasks',
+      filter: `lead_id=eq.${leadVinculado.id}`
+    }, payload => {
+      console.log('📡 Atualização de tarefa em tempo real:', payload);
+      if (payload.eventType === 'INSERT') {
+        setLeadTasks(prev => [payload.new as any, ...prev]);
+      } else if (payload.eventType === 'UPDATE') {
+        setLeadTasks(prev => prev.map(task => task.id === payload.new.id ? payload.new as any : task));
+      } else if (payload.eventType === 'DELETE') {
+        setLeadTasks(prev => prev.filter(task => task.id !== payload.old.id));
+      }
+    }).subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
@@ -1889,70 +1882,55 @@ function Conversas() {
     try {
       const conversa = conversations.find(c => c.id === conversaId);
       if (!conversa) return;
-
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-        .maybeSingle();
-
+      const {
+        data: userRole
+      } = await supabase.from('user_roles').select('company_id').eq('user_id', (await supabase.auth.getUser()).data.user?.id).maybeSingle();
       if (!userRole?.company_id) return;
-
       const phoneToSearch = conversa.phoneNumber || conversa.id;
       const phoneFormatted = safeFormatPhoneNumber(phoneToSearch);
-      
+
       // Buscar lead pelo telefone
-      const { data: leadData, error } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('company_id', userRole.company_id)
-        .or(`phone.eq.${phoneFormatted},telefone.eq.${phoneFormatted}`)
-        .maybeSingle();
-      
+      const {
+        data: leadData,
+        error
+      } = await supabase.from('leads').select('*').eq('company_id', userRole.company_id).or(`phone.eq.${phoneFormatted},telefone.eq.${phoneFormatted}`).maybeSingle();
       if (error || !leadData) {
         console.error('❌ Erro ao buscar lead:', error);
         return;
       }
-      
       console.log('✅ Lead encontrado:', leadData);
-      
+
       // Pegar o telefone do lead (pode estar em 'phone' ou 'telefone')
       const leadPhone = leadData.phone || leadData.telefone;
-      
       if (!leadPhone) {
         return;
       }
-      
+
       // Formatar o telefone removendo caracteres especiais
       const phoneFormatted2 = leadPhone.replace(/\D/g, '');
-      
+
       // Buscar conversa existente no Supabase (ISOLADO POR EMPRESA)
-      const { data: conversasData } = await supabase
-        .from('conversas')
-        .select('*')
-        .eq('company_id', userCompanyId)
-        .eq('telefone_formatado', phoneFormatted2)
-        .order('created_at', { ascending: false });
-      
+      const {
+        data: conversasData
+      } = await supabase.from('conversas').select('*').eq('company_id', userCompanyId).eq('telefone_formatado', phoneFormatted2).order('created_at', {
+        ascending: false
+      });
       if (conversasData && conversasData.length > 0) {
         // Encontrou conversas, carregar todas e selecionar a primeira
         console.log(`📱 ${conversasData.length} conversa(s) encontrada(s) para o lead`);
-        
+
         // Agrupar mensagens por número
         const conversationsMap = new Map<string, Conversation>();
-        
         for (const msg of conversasData) {
           const convId = msg.telefone_formatado || msg.numero;
-          
           if (!conversationsMap.has(convId)) {
             const numeroLimpo = String(msg.numero || '').replace(/\D/g, '');
-            const isRealGroup = Boolean((msg as any)?.is_group) || (numeroLimpo.length >= 17 && /@g\.us$/.test(String(msg.numero || '')));
-            
+            const isRealGroup = Boolean((msg as any)?.is_group) || numeroLimpo.length >= 17 && /@g\.us$/.test(String(msg.numero || ''));
             conversationsMap.set(convId, {
               id: convId,
-              contactName: leadData.name || msg.nome_contato || 'Desconhecido', // PRIORIZAR NOME DO LEAD
-              channel: msg.origem?.toLowerCase() === 'whatsapp' ? 'whatsapp' : 
-                      msg.origem?.toLowerCase() === 'instagram' ? 'instagram' : 'facebook',
+              contactName: leadData.name || msg.nome_contato || 'Desconhecido',
+              // PRIORIZAR NOME DO LEAD
+              channel: msg.origem?.toLowerCase() === 'whatsapp' ? 'whatsapp' : msg.origem?.toLowerCase() === 'instagram' ? 'instagram' : 'facebook',
               status: msg.status === 'Enviada' ? 'answered' : 'waiting',
               lastMessage: msg.mensagem || '',
               unread: 0,
@@ -1963,57 +1941,45 @@ function Conversas() {
               responsavel: 'Sem responsável',
               produto: leadData.servico,
               valor: leadData.value ? `R$ ${Number(leadData.value).toLocaleString('pt-BR')}` : undefined,
-              phoneNumber: convId,
+              phoneNumber: convId
             });
           }
-          
           const conv = conversationsMap.get(convId)!;
-          
+
           // Adicionar mensagem
           const isFromMe = msg.fromme === true;
           let sentBy: string | undefined = undefined;
-          
+
           // ⚡ CORREÇÃO: Buscar nome do usuário que enviou
           if (isFromMe && msg.owner_id) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('full_name, email')
-              .eq('id', msg.owner_id)
-              .single();
-            
+            const {
+              data: profile
+            } = await supabase.from('profiles').select('full_name, email').eq('id', msg.owner_id).single();
             if (profile) {
               sentBy = profile.full_name || profile.email || 'Usuário';
             }
           }
-          
           const message: Message = {
             id: msg.id,
             content: msg.mensagem || '',
-            type: msg.tipo_mensagem === 'image' ? 'image' :
-                  msg.tipo_mensagem === 'audio' ? 'audio' :
-                  msg.tipo_mensagem === 'video' ? 'video' :
-                  msg.tipo_mensagem === 'document' ? 'pdf' : 'text',
+            type: msg.tipo_mensagem === 'image' ? 'image' : msg.tipo_mensagem === 'audio' ? 'audio' : msg.tipo_mensagem === 'video' ? 'video' : msg.tipo_mensagem === 'document' ? 'pdf' : 'text',
             sender: isFromMe ? 'user' : 'contact',
             timestamp: new Date(msg.created_at),
             delivered: msg.status === 'Enviada',
             read: msg.status === 'Lida',
             mediaUrl: msg.midia_url,
             fileName: msg.arquivo_nome,
-            mimeType: msg.tipo_mensagem === 'video' ? 'video/mp4' : 
-                     msg.tipo_mensagem === 'audio' ? 'audio/mpeg' :
-                     msg.tipo_mensagem === 'image' ? 'image/jpeg' :
-                     msg.tipo_mensagem === 'document' ? 'application/pdf' : undefined,
-            sentBy: sentBy,
+            mimeType: msg.tipo_mensagem === 'video' ? 'video/mp4' : msg.tipo_mensagem === 'audio' ? 'audio/mpeg' : msg.tipo_mensagem === 'image' ? 'image/jpeg' : msg.tipo_mensagem === 'document' ? 'application/pdf' : undefined,
+            sentBy: sentBy
           };
-          
           conv.messages.push(message);
-          
+
           // Atualizar última mensagem
           if (new Date(msg.created_at) > new Date(conv.lastMessage)) {
             conv.lastMessage = msg.mensagem || '';
           }
         }
-        
+
         // Converter para array e ordenar mensagens
         const loadedConversations = Array.from(conversationsMap.values()).map(conv => ({
           ...conv,
@@ -2024,7 +1990,7 @@ function Conversas() {
             return aTimestamp.getTime() - bTimestamp.getTime();
           })
         }));
-        
+
         // Adicionar ou atualizar no estado
         setConversations(prev => {
           const updated = [...prev];
@@ -2038,17 +2004,15 @@ function Conversas() {
           }
           return updated;
         });
-        
+
         // Selecionar a primeira conversa
         const conversationToSelect = loadedConversations[0];
         setSelectedConv(conversationToSelect);
         setLeadVinculado(leadData);
-        
         toast.success(`Conversa de ${leadData.name} aberta`);
       } else {
         // Não encontrou conversa, criar uma nova
         console.log('📝 Nenhuma conversa encontrada, criando nova...');
-        
         const newConv: Conversation = {
           id: phoneFormatted2,
           contactName: leadData.name,
@@ -2062,13 +2026,11 @@ function Conversas() {
           responsavel: 'Sem responsável',
           produto: leadData.servico,
           valor: leadData.value ? `R$ ${Number(leadData.value).toLocaleString('pt-BR')}` : undefined,
-          phoneNumber: phoneFormatted2,
+          phoneNumber: phoneFormatted2
         };
-        
         setConversations(prev => [newConv, ...prev]);
         setSelectedConv(newConv);
         setLeadVinculado(leadData);
-        
         toast.success(`Nova conversa com ${leadData.name} iniciada`);
       }
     } catch (error) {
@@ -2082,20 +2044,18 @@ function Conversas() {
     // setTimeout(() => {
     //   handleLeadRedirect();
     // }, 1000);
-    
+
     // Verificar se veio de um lead (query param - manter compatibilidade)
     const urlParams = new URLSearchParams(window.location.search);
     const phoneParam = urlParams.get('phone');
     const nameParam = urlParams.get('name');
-    
     if (phoneParam) {
       // Formatar número com +55
       const formattedPhone = phoneParam.startsWith('55') ? phoneParam : '55' + phoneParam;
-      
+
       // Buscar ou criar conversa com este número
       setTimeout(() => {
         const existingConv = conversations.find(c => c.id === formattedPhone || c.phoneNumber === formattedPhone);
-        
         if (existingConv) {
           setSelectedConv(existingConv);
         } else {
@@ -2109,12 +2069,12 @@ function Conversas() {
             unread: 0,
             messages: [],
             tags: [],
-            phoneNumber: formattedPhone,
+            phoneNumber: formattedPhone
           };
           setConversations(prev => [newConv, ...prev]);
           setSelectedConv(newConv);
         }
-        
+
         // Limpar query params
         window.history.replaceState({}, '', '/conversas');
       }, 500);
@@ -2128,7 +2088,6 @@ function Conversas() {
       try {
         const cachedData = sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
         const cacheTimestamp = sessionStorage.getItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY);
-        
         if (cachedData && cacheTimestamp) {
           const age = Date.now() - parseInt(cacheTimestamp, 10);
           if (age < CACHE_MAX_AGE) {
@@ -2140,7 +2099,6 @@ function Conversas() {
                 timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
               }))
             }));
-            
             console.log(`⚡ [CACHE] ${restoredConversations.length} conversas carregadas do cache`);
             setConversations(restoredConversations);
             setLoadingConversations(false);
@@ -2150,7 +2108,7 @@ function Conversas() {
         console.error('❌ [CACHE] Erro ao carregar cache:', error);
       }
     }
-    
+
     // ⚡ PASSO 2: Carregar do banco quando companyId estiver disponível
     if (!userCompanyId) {
       // ⚡ CORREÇÃO: Se não tem userCompanyId, chamar loadSupabaseConversations para obtê-lo
@@ -2158,20 +2116,19 @@ function Conversas() {
       loadSupabaseConversations().then(() => {
         console.log('✅ [LOAD] Conversas carregadas (obteve userCompanyId)');
         initialLoadRef.current = true;
-      }).catch((err) => {
+      }).catch(err => {
         console.error('❌ [LOAD] Erro ao carregar:', err);
       });
       return;
     }
-    
+
     // ⚡ Carregar do banco se ainda não carregou
     if (!initialLoadRef.current) {
       console.log('⚡ [LOAD] Carregando conversas para company:', userCompanyId);
-      
       loadSupabaseConversations().then(() => {
         console.log('✅ [LOAD] Conversas carregadas');
         initialLoadRef.current = true;
-      }).catch((err) => {
+      }).catch(err => {
         console.error('❌ [LOAD] Erro:', err);
       });
     }
@@ -2181,7 +2138,6 @@ function Conversas() {
   useEffect(() => {
     // ⚡ CORREÇÃO: Só fazer polling se realmente desconectado E se já carregou inicialmente
     if (realtimeConnectionStatus === 'connected' || !initialLoadRef.current) return;
-    
     const schedule = () => {
       const jitter = 15000 + Math.floor(Math.random() * 5000); // 15-20s (aumentado para reduzir carga)
       pollingTimeoutRef.current = setTimeout(async () => {
@@ -2206,13 +2162,13 @@ function Conversas() {
       }
     };
   }, [realtimeConnectionStatus]);
-
   useEffect(() => {
     scrollToBottom();
   }, [selectedConv?.messages]);
-
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth"
+    });
   };
 
   // ⚡ HELPER: Atualizar conversas e cache simultaneamente
@@ -2229,7 +2185,6 @@ function Conversas() {
       return updated;
     });
   }, []);
-
   const loadConversations = () => {
     // Não carregar do localStorage - dados vêm apenas do Supabase
     // Manter conversas iniciais apenas como fallback temporário
@@ -2242,41 +2197,25 @@ function Conversas() {
       toast.error("Número de telefone ou empresa inválidos");
       return;
     }
-
     try {
       setRestoringConversation(true);
-      
       const instanceName = await evolutionAPI.getInstanceName(userCompanyId);
       if (!instanceName) {
         toast.error("Instância WhatsApp não configurada");
         return;
       }
-
       console.log("🔄 Restaurando conversa de:", selectedConv.phoneNumber);
-      
-      const messages = await evolutionAPI.getMessages(
-        instanceName,
-        selectedConv.phoneNumber,
-        15
-      );
-
+      const messages = await evolutionAPI.getMessages(instanceName, selectedConv.phoneNumber, 15);
       if (messages.length === 0) {
         toast.info("Nenhuma mensagem encontrada no WhatsApp");
         return;
       }
-
-      await evolutionAPI.saveMessagesToDatabase(
-        messages,
-        userCompanyId,
-        leadVinculado?.id
-      );
-
+      await evolutionAPI.saveMessagesToDatabase(messages, userCompanyId, leadVinculado?.id);
       toast.success(`${messages.length} mensagens restauradas com sucesso!`);
-      
+
       // Recarregar conversas
       await loadSupabaseConversations();
       setIsContactInactive(false);
-      
     } catch (error) {
       console.error("❌ Erro ao restaurar conversa:", error);
       toast.error("Erro ao restaurar conversa");
@@ -2291,133 +2230,116 @@ function Conversas() {
       setIsContactInactive(false);
       return;
     }
-
     const messages = selectedConv.messages || [];
     if (messages.length === 0) {
       setIsContactInactive(true);
       return;
     }
-
     const lastMessage = messages[messages.length - 1];
     const lastMessageDate = new Date(lastMessage.timestamp);
-    const daysSinceLastMessage = Math.floor(
-      (Date.now() - lastMessageDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
+    const daysSinceLastMessage = Math.floor((Date.now() - lastMessageDate.getTime()) / (1000 * 60 * 60 * 24));
     setIsContactInactive(daysSinceLastMessage >= 30);
   }, [selectedConv]);
-
   const loadSupabaseConversations = async (append: boolean = false) => {
     if (loadingConversations) return;
-    
+
     // ⚡ OTIMIZAÇÃO: Se já temos conversas do cache, não bloquear a exibição
     // Apenas setar loading se não temos conversas ainda
     const hasCachedConversations = conversations.length > 0;
     if (!hasCachedConversations) {
       setLoadingConversations(true);
     }
-    
     try {
       const startTime = performance.now();
-      
+
       // ⚡ OTIMIZAÇÃO: Usar company_id em cache se disponível
       let companyId = userCompanyId || userCompanyIdRef.current;
-      
+
       // ETAPA 1: Buscar user e company_id (apenas se não tiver cache)
       let currentUser: any = null;
       if (!companyId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        
+        const {
+          data: {
+            user
+          }
+        } = await supabase.auth.getUser();
         if (!user) {
           toast.error('Você precisa estar logado');
           setLoadingConversations(false);
           return;
         }
-        
         currentUser = user;
         setCurrentUserId(user.id);
-        
-        const { data: userRole } = await supabase
-          .from('user_roles')
-          .select('company_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
+        const {
+          data: userRole
+        } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).maybeSingle();
         if (!userRole?.company_id) {
           toast.error('Erro: Usuário sem empresa associada');
           setLoadingConversations(false);
           return;
         }
+        companyId = userRole.company_id;
+        setUserCompanyId(companyId);
+        userCompanyIdRef.current = companyId;
 
-      companyId = userRole.company_id;
-      setUserCompanyId(companyId);
-      userCompanyIdRef.current = companyId;
-      
-      // Carregar nome do usuário do perfil
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('full_name, email')
-        .eq('id', user.id)
-        .maybeSingle();
-      
-      if (profileData) {
-        setUserName(profileData.full_name || profileData.email || 'Usuário');
-      }
-    } else {
-      // Se já tem companyId, buscar user para verificar responsável
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        currentUser = user;
-        setCurrentUserId(user.id);
-        
-        // Carregar nome do usuário se ainda não tiver
-        if (!userName) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('full_name, email')
-            .eq('id', user.id)
-            .maybeSingle();
-          
-          if (profileData) {
-            setUserName(profileData.full_name || profileData.email || 'Usuário');
+        // Carregar nome do usuário do perfil
+        const {
+          data: profileData
+        } = await supabase.from('profiles').select('full_name, email').eq('id', user.id).maybeSingle();
+        if (profileData) {
+          setUserName(profileData.full_name || profileData.email || 'Usuário');
+        }
+      } else {
+        // Se já tem companyId, buscar user para verificar responsável
+        const {
+          data: {
+            user
+          }
+        } = await supabase.auth.getUser();
+        if (user) {
+          currentUser = user;
+          setCurrentUserId(user.id);
+
+          // Carregar nome do usuário se ainda não tiver
+          if (!userName) {
+            const {
+              data: profileData
+            } = await supabase.from('profiles').select('full_name, email').eq('id', user.id).maybeSingle();
+            if (profileData) {
+              setUserName(profileData.full_name || profileData.email || 'Usuário');
+            }
           }
         }
       }
-    }
-      
+
       // ⚡ OTIMIZAÇÃO EXTREMA: Carregamento ultra-rápido
       const MESSAGES_PER_CONVERSATION = 5; // Reduzido para 5 (carrega mais depois)
-      
+
       // ⚡ FASE 1 - OTIMIZAÇÃO EXTREMA: Carregar menos mensagens inicialmente
       const MESSAGES_TO_FETCH = append ? 100 : 300; // Reduzido de 500 para 300 (mais rápido)
-      
+
       // ⚡ OTIMIZAÇÃO: Query com campos essenciais (midia_url necessário para exibir mídias)
-      let query = supabase
-        .from('conversas')
-        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, sent_by, owner_id, arquivo_nome, midia_url')
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false });
-      
+      let query = supabase.from('conversas').select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, sent_by, owner_id, arquivo_nome, midia_url').eq('company_id', companyId).order('created_at', {
+        ascending: false
+      });
+
       // ⚡ CORREÇÃO: Para append, buscar mensagens mais antigas usando a data da última mensagem carregada
       if (append && conversations.length > 0) {
         // Encontrar a data da mensagem mais antiga já carregada
         const todasMensagens = conversations.flatMap(c => c.messages);
         if (todasMensagens.length > 0) {
-          const dataMaisAntiga = todasMensagens
-            .map(m => m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp))
-            .sort((a, b) => a.getTime() - b.getTime())[0];
-          
+          const dataMaisAntiga = todasMensagens.map(m => m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp)).sort((a, b) => a.getTime() - b.getTime())[0];
+
           // Buscar mensagens mais antigas que a data mais antiga já carregada
           query = query.lt('created_at', dataMaisAntiga.toISOString());
         }
       }
-      
       query = query.limit(MESSAGES_TO_FETCH);
-      
-      const { data: conversasResult, error: conversasError } = await query;
-
+      const {
+        data: conversasResult,
+        error: conversasError
+      } = await query;
       let conversasData: any[] = [];
-      
       if (conversasError) {
         console.error('❌ [LOAD] Erro ao carregar conversas:', conversasError);
         // ⚡ CORREÇÃO: Não mostrar toast de erro se for apenas um problema temporário
@@ -2429,12 +2351,11 @@ function Conversas() {
       } else {
         conversasData = conversasResult || [];
       }
-      
+
       // ⚡ CORREÇÃO CRÍTICA: Log detalhado para debug
       const mensagensEnviadas = conversasData.filter(c => c.fromme === true || c.fromme === 'true').length;
       const mensagensRecebidas = conversasData.filter(c => c.fromme === false || c.fromme === 'false' || c.fromme === null || c.fromme === undefined).length;
       const mensagensSemFromme = conversasData.filter(c => c.fromme === null || c.fromme === undefined).length;
-      
       console.log(`📊 [LOAD] Carregadas ${conversasData.length} mensagens do banco`, {
         companyId,
         mensagensEnviadas,
@@ -2456,7 +2377,7 @@ function Conversas() {
           mensagem: conversasData.find(c => c.fromme === false || c.fromme === 'false' || !c.fromme)?.mensagem?.substring(0, 50)
         } : null
       });
-      
+
       // ⚡ CORREÇÃO: Verificar se há mais conversas para carregar
       // Se retornou exatamente o limite, provavelmente há mais mensagens no banco
       const hasMoreMessages = conversasData.length === MESSAGES_TO_FETCH;
@@ -2464,7 +2385,7 @@ function Conversas() {
         console.log(`⚠️ [LOAD] Retornou exatamente ${MESSAGES_TO_FETCH} mensagens - pode haver mais no banco`);
         setHasMoreConversations(true); // Garantir que o botão "carregar mais" apareça
       }
-      
+
       // ⚡ CORREÇÃO CRÍTICA: FILTROS RIGOROSOS para prevenir bugs e mensagens de outras instâncias
       const validConversas = conversasData.filter(conv => {
         // VALIDAÇÃO 1: company_id DEVE ser exatamente igual (CRÍTICO para prevenir mensagens de outras instâncias)
@@ -2473,15 +2394,15 @@ function Conversas() {
           console.warn(`🚫 [FILTRO CRÍTICO] Mensagem de outra company bloqueada: ${conv.company_id} (esperado: ${userCompanyIdRef.current})`);
           return false;
         }
-        
+
         // VALIDAÇÃO 2: Número obrigatório
         if (!conv.numero || conv.numero.trim() === '') {
           return false;
         }
-        
+
         // VALIDAÇÃO 3: BLOQUEAR telefones malformados/corrompidos de outras instâncias
         const telefoneNormalizado = conv.telefone_formatado?.replace(/[^0-9]/g, '') || conv.numero?.replace(/[^0-9]/g, '') || '';
-        
+
         // ⚡ CORREÇÃO CRÍTICA: Telefones válidos brasileiros têm 11-13 dígitos APENAS
         // - 11 dígitos: DDD + número (ex: 11987654321)
         // - 12 dígitos: 0 + DDD + número (ex: 011987654321) 
@@ -2493,7 +2414,7 @@ function Conversas() {
             return false;
           }
         }
-        
+
         // ⚡ VALIDAÇÃO 4: Aceitar mensagens mesmo sem texto (pode ser apenas mídia)
         if (!conv.mensagem || conv.mensagem.trim() === '') {
           // Verificar se tem mídia - se tiver, aceitar mesmo sem texto
@@ -2502,10 +2423,8 @@ function Conversas() {
           }
           return false; // Rejeitar apenas se não tem nem mensagem nem mídia
         }
-        
         return true; // Aceitar todas as outras mensagens válidas
       });
-      
       console.log(`📊 [LOAD] ${validConversas.length} mensagens válidas de ${conversasData.length} total`, {
         mensagensRecebidas: validConversas.filter(c => c.fromme === false || !c.fromme).length,
         mensagensEnviadas: validConversas.filter(c => c.fromme === true).length,
@@ -2520,10 +2439,10 @@ function Conversas() {
       // ⚡ CORREÇÃO CRÍTICA: Para grupos, SEMPRE usar o numero (JID do grupo) como chave
       // Nunca usar telefone_formatado para grupos, pois pode conter número do integrante
       const conversasMap = new Map<string, any[]>();
-      
+
       // ⚡ LOG: Debug de agrupamento
       console.log(`📊 [LOAD] Agrupando ${validConversas.length} mensagens válidas...`);
-      
+
       // Função auxiliar para normalizar número de forma consistente
       const normalizePhoneForGrouping = (num: string | null | undefined): string => {
         if (!num) return '';
@@ -2535,12 +2454,11 @@ function Conversas() {
         }
         return digits;
       };
-      
       validConversas.forEach(conv => {
         // ⚡ CORREÇÃO CRÍTICA: Detectar se é grupo de MÚLTIPLAS formas
         // Verificar is_group OU se numero contém @g.us em qualquer posição
         const isGroup = Boolean(conv.is_group) === true || /@g\.us/i.test(String(conv.numero || ''));
-        
+
         // ⚡ CORREÇÃO CRÍTICA: Para grupos, SEMPRE usar numero (JID completo do grupo)
         // Para contatos individuais, normalizar telefone para garantir agrupamento correto
         let key: string;
@@ -2551,18 +2469,14 @@ function Conversas() {
           // Tentar TODAS as variações possíveis para garantir agrupamento
           const telefoneFormatado = conv.telefone_formatado || '';
           const numeroOriginal = conv.numero || '';
-          
+
           // Tentar usar telefone_formatado primeiro, senão normalizar número original
-          let telefoneNormalizado = telefoneFormatado 
-            ? telefoneFormatado.replace(/[^0-9]/g, '')
-            : numeroOriginal.replace(/[^0-9]/g, '');
-          
+          let telefoneNormalizado = telefoneFormatado ? telefoneFormatado.replace(/[^0-9]/g, '') : numeroOriginal.replace(/[^0-9]/g, '');
+
           // ⚡ CORREÇÃO: NUNCA descartar - sempre criar uma chave válida
           if (telefoneNormalizado.length >= 10) {
             // Se não começa com 55, adicionar (padrão brasileiro)
-            key = telefoneNormalizado.startsWith('55') 
-              ? telefoneNormalizado 
-              : `55${telefoneNormalizado}`;
+            key = telefoneNormalizado.startsWith('55') ? telefoneNormalizado : `55${telefoneNormalizado}`;
           } else if (telefoneNormalizado.length > 0) {
             // Mesmo que não tenha 10 dígitos, usar como está (pode ser número incompleto)
             key = telefoneNormalizado;
@@ -2572,7 +2486,7 @@ function Conversas() {
             key = numeroOriginal || telefoneFormatado || 'unknown';
           }
         }
-        
+
         // ⚡ LOG: Debug de cada mensagem sendo agrupada
         // ⚡ CORREÇÃO: Verificar fromme de forma mais robusta (pode ser boolean, string, null, undefined)
         const isReceived = conv.fromme === false || conv.fromme === 'false' || conv.fromme === null || conv.fromme === undefined;
@@ -2589,7 +2503,6 @@ function Conversas() {
             mensagem: conv.mensagem?.substring(0, 30)
           });
         }
-        
         if (!conversasMap.has(key)) {
           conversasMap.set(key, []);
         }
@@ -2599,12 +2512,11 @@ function Conversas() {
         // Apenas ordenar por data (mais recente primeiro)
         mensagens.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       });
-      
+
       // ⚡ CORREÇÃO: Log de agrupamento para debug
       const conversasAgrupadas = Array.from(conversasMap.entries());
       const grupos = conversasAgrupadas.filter(([k]) => /@g\.us$/.test(k));
       const contatos = conversasAgrupadas.filter(([k]) => !/@g\.us$/.test(k));
-      
       console.log(`📊 [LOAD] Agrupadas ${conversasMap.size} conversas únicas de ${validConversas.length} mensagens`, {
         grupos: grupos.length,
         contatos: contatos.length,
@@ -2624,11 +2536,9 @@ function Conversas() {
 
       // ⚡ CORREÇÃO: Buscar leads de TODOS os telefones encontrados (sem limite)
       // Remover slice para garantir que todos os leads sejam encontrados
-      const telefonesUnicos = Array.from(conversasMap.keys())
-        .map(tel => tel.replace(/[^0-9]/g, ''))
-        .filter(tel => tel.length >= 10);
+      const telefonesUnicos = Array.from(conversasMap.keys()).map(tel => tel.replace(/[^0-9]/g, '')).filter(tel => tel.length >= 10);
       // Removido .slice(0, 50) para buscar leads de TODAS as conversas
-      
+
       // Buscar leads de forma otimizada usando queries mais eficientes
       let leadsData: any[] = [];
       if (telefonesUnicos.length > 0) {
@@ -2641,35 +2551,25 @@ function Conversas() {
             phoneConditions.push(`telefone.ilike.%${tel}%`);
           }
         });
-        
         if (phoneConditions.length > 0) {
           // ⚡ CORREÇÃO: Buscar leads em lotes maiores para garantir que todos sejam encontrados
           // Processar em lotes de 100 condições para evitar query muito longa
           const BATCH_SIZE = 100;
           let allLeads: any[] = [];
-          
           for (let i = 0; i < phoneConditions.length; i += BATCH_SIZE) {
             const batch = phoneConditions.slice(i, i + BATCH_SIZE);
             const orCondition = batch.join(',');
-            
-            const leadsResult = await supabase
-              .from('leads')
-              .select('id, phone, name, telefone')
-              .eq('company_id', companyId)
-              .or(orCondition)
-              .limit(500); // Limite maior por lote
-            
+            const leadsResult = await supabase.from('leads').select('id, phone, name, telefone').eq('company_id', companyId).or(orCondition).limit(500); // Limite maior por lote
+
             if (!leadsResult.error && leadsResult.data) {
               allLeads = [...allLeads, ...leadsResult.data];
             }
           }
-          
           leadsData = allLeads;
         }
       }
-      
       console.log(`📊 [LOAD] ${conversasData.length} mensagens processadas, ${conversasMap.size} conversas únicas, ${leadsData.length} leads encontrados`);
-      
+
       // ETAPA 3.5: Buscar nomes dos usuários que enviaram mensagens (para exibir quem respondeu)
       const ownerIds = new Set<string>();
       conversasData.forEach(msg => {
@@ -2677,49 +2577,48 @@ function Conversas() {
           ownerIds.add(msg.owner_id);
         }
       });
-      
       const ownerNamesMap = new Map<string, string>();
-      
+
       // ⚡ CORREÇÃO: Sempre adicionar o usuário atual ao mapa
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user: authUser
+        }
+      } = await supabase.auth.getUser();
       if (authUser) {
-        const { data: currentProfile } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .eq('id', authUser.id)
-          .single();
-        
+        const {
+          data: currentProfile
+        } = await supabase.from('profiles').select('id, full_name, email').eq('id', authUser.id).single();
         if (currentProfile) {
           ownerNamesMap.set(currentProfile.id, currentProfile.full_name || currentProfile.email || 'Você');
           console.log('✅ [LOAD] Usuário atual adicionado ao mapa:', currentProfile.full_name || currentProfile.email);
         }
       }
-      
+
       // Buscar nomes dos outros usuários que enviaram mensagens
       if (ownerIds.size > 0) {
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', Array.from(ownerIds));
-        
+        const {
+          data: profilesData
+        } = await supabase.from('profiles').select('id, full_name, email').in('id', Array.from(ownerIds));
         if (profilesData) {
           profilesData.forEach(profile => {
             ownerNamesMap.set(profile.id, profile.full_name || profile.email || 'Usuário');
           });
         }
-        
         console.log(`👥 [LOAD] ${ownerNamesMap.size} nomes de usuários carregados para mensagens`, {
-          usuários: Array.from(ownerNamesMap.entries()).map(([id, nome]) => ({ id: id.substring(0, 8), nome }))
+          usuários: Array.from(ownerNamesMap.entries()).map(([id, nome]) => ({
+            id: id.substring(0, 8),
+            nome
+          }))
         });
       }
-      
+
       // ⚡ CORREÇÃO CRÍTICA: Deduplicar conversas ANTES de criar leads
       // Estratégia: Agrupar por NOME DE CONTATO primeiro, depois por telefone normalizado
       // Isso garante que mensagens do mesmo contato com números diferentes sejam mescladas
-      
+
       // ETAPA 1: Criar mapa de nome -> telefones para detectar duplicatas por nome
       const nomeParaTelefones = new Map<string, Set<string>>();
-      
       conversasMap.forEach((msgs, key) => {
         // Pegar nome do contato (ignorar nomes genéricos)
         const nomesProibidos = ['jeohvah lima', 'jeohvah i.a', 'jeova costa de lima', 'jeo', key];
@@ -2727,7 +2626,6 @@ function Conversas() {
           const nome = m.nome_contato?.trim().toLowerCase();
           return nome && nome !== key && !nomesProibidos.includes(nome);
         })?.nome_contato?.trim();
-        
         if (nomeContato && nomeContato !== key) {
           if (!nomeParaTelefones.has(nomeContato)) {
             nomeParaTelefones.set(nomeContato, new Set());
@@ -2735,30 +2633,29 @@ function Conversas() {
           nomeParaTelefones.get(nomeContato)!.add(key);
         }
       });
-      
+
       // ETAPA 2: Detectar telefones que devem ser mesclados (mesmo nome)
       const telefoneMergeMap = new Map<string, string>(); // telefone duplicado -> telefone correto
-      
+
       nomeParaTelefones.forEach((telefones, nome) => {
         if (telefones.size > 1) {
           const telefonesArray = Array.from(telefones);
-          
+
           // Priorizar: 1) Telefone sem @lid, 2) Telefone mais curto (sem DDD duplicado)
           const telefoneCorreto = telefonesArray.sort((a, b) => {
             const aLimpo = a.replace(/[^0-9]/g, '');
             const bLimpo = b.replace(/[^0-9]/g, '');
-            
+
             // Se um tem @lid e outro não, priorizar sem @lid
             const aTemLid = conversasMap.get(a)?.some(m => m.numero?.includes('@lid')) || false;
             const bTemLid = conversasMap.get(b)?.some(m => m.numero?.includes('@lid')) || false;
-            
             if (aTemLid && !bTemLid) return 1; // b vem primeiro (sem @lid)
             if (!aTemLid && bTemLid) return -1; // a vem primeiro (sem @lid)
-            
+
             // Se ambos têm ou não têm @lid, priorizar o mais curto (sem DDD duplicado)
             return aLimpo.length - bLimpo.length;
           })[0];
-          
+
           // Mapear todos os outros telefones para o correto
           telefonesArray.forEach(tel => {
             if (tel !== telefoneCorreto) {
@@ -2768,21 +2665,18 @@ function Conversas() {
           });
         }
       });
-      
+
       // ETAPA 3: Mesclar conversas baseado no mapa
       const conversasDeduplicadas = new Map<string, any[]>();
-      
       conversasMap.forEach((msgs, key) => {
         // Se este telefone deve ser mesclado com outro, usar o telefone correto
         const telefoneCorreto = telefoneMergeMap.get(key) || key;
-        
         if (!conversasDeduplicadas.has(telefoneCorreto)) {
           conversasDeduplicadas.set(telefoneCorreto, []);
         }
-        
         conversasDeduplicadas.get(telefoneCorreto)!.push(...msgs);
       });
-      
+
       // ETAPA 4: Substituir conversasMap pelas conversas deduplicadas (OTIMIZADO)
       conversasMap.clear();
       conversasDeduplicadas.forEach((msgs, key) => {
@@ -2791,7 +2685,6 @@ function Conversas() {
         uniqueMsgs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         conversasMap.set(key, uniqueMsgs);
       });
-      
       console.log(`🔄 [DEDUP] Conversas deduplicadas: ${conversasMap.size} conversas finais`, {
         telefonesMesclados: telefoneMergeMap.size,
         detalhes: Array.from(telefoneMergeMap.entries()).map(([dup, correto]) => ({
@@ -2799,13 +2692,15 @@ function Conversas() {
           correto: correto
         }))
       });
-      
+
       // Criar mapa de leads para buscar nomes
-      const leadsMap = new Map<string, { name: string; leadId: string }>();
+      const leadsMap = new Map<string, {
+        name: string;
+        leadId: string;
+      }>();
       leadsData.forEach(lead => {
         const phoneRaw = lead.phone || lead.telefone;
         if (!phoneRaw) return;
-        
         const phoneKey = phoneRaw.replace(/[^0-9]/g, '');
         if (phoneKey) {
           leadsMap.set(phoneKey, {
@@ -2818,50 +2713,40 @@ function Conversas() {
       // ETAPA 3: Buscar assignments (responsáveis) das conversas
       // Buscar assignments para todos os telefones (para mostrar responsável e filtrar se necessário)
       let assignmentsMap = new Map<string, string>(); // telefone -> nome do responsável
-      
+
       // ⚡ CORREÇÃO: Buscar assignments de TODOS os telefones das conversas (sem limite)
-      const telefonesParaBuscar = Array.from(conversasMap.keys())
-        .map(tel => tel.replace(/[^0-9]/g, ''))
-        .filter(tel => tel.length >= 10);
+      const telefonesParaBuscar = Array.from(conversasMap.keys()).map(tel => tel.replace(/[^0-9]/g, '')).filter(tel => tel.length >= 10);
       // Removido .slice(0, 100) para buscar assignments de TODAS as conversas
-      
+
       if (telefonesParaBuscar.length > 0) {
         // ⚡ CORREÇÃO: Buscar assignments em lotes para garantir que todos sejam encontrados
         // Processar em lotes de 100 telefones para evitar limite do Supabase
         const ASSIGNMENT_BATCH_SIZE = 100;
         let allAssignments: any[] = [];
-        
         for (let i = 0; i < telefonesParaBuscar.length; i += ASSIGNMENT_BATCH_SIZE) {
           const batch = telefonesParaBuscar.slice(i, i + ASSIGNMENT_BATCH_SIZE);
-          
-          const { data: assignmentsData } = await supabase
-            .from('conversation_assignments')
-            .select('telefone_formatado, assigned_user_id')
-            .eq('company_id', companyId)
-            .in('telefone_formatado', batch);
-          
+          const {
+            data: assignmentsData
+          } = await supabase.from('conversation_assignments').select('telefone_formatado, assigned_user_id').eq('company_id', companyId).in('telefone_formatado', batch);
           if (assignmentsData) {
             allAssignments = [...allAssignments, ...assignmentsData];
           }
         }
-        
+
         // ⚡ CORREÇÃO: Buscar nomes dos usuários atribuídos
         const assignedUserIds = [...new Set(allAssignments.map(a => a.assigned_user_id).filter(Boolean))];
         const assignedUserNamesMap = new Map<string, string>();
-        
         if (assignedUserIds.length > 0) {
-          const { data: assignedProfiles } = await supabase
-            .from('profiles')
-            .select('id, full_name, email')
-            .in('id', assignedUserIds);
-          
+          const {
+            data: assignedProfiles
+          } = await supabase.from('profiles').select('id, full_name, email').in('id', assignedUserIds);
           if (assignedProfiles) {
             assignedProfiles.forEach(profile => {
               assignedUserNamesMap.set(profile.id, profile.full_name || profile.email || 'Usuário');
             });
           }
         }
-        
+
         // Processar todos os assignments encontrados - agora com NOMES
         allAssignments.forEach((assignment: any) => {
           const telKey = assignment.telefone_formatado?.replace(/[^0-9]/g, '') || '';
@@ -2870,7 +2755,6 @@ function Conversas() {
             assignmentsMap.set(telKey, userName);
           }
         });
-        
         console.log('👥 [LOAD] Responsáveis carregados:', assignmentsMap.size, 'conversas com responsável');
       }
 
@@ -2878,10 +2762,10 @@ function Conversas() {
       // ⚡ CORREÇÃO CRÍTICA: REMOVER TODOS OS FILTROS - exibir TODAS as conversas SEM EXCEÇÃO
       // Todas as conversas do WhatsApp devem aparecer no CRM, independente de responsável ou admin
       const novasConversas: Conversation[] = Array.from(conversasMap.entries())
-        // ⚡ CORREÇÃO CRÍTICA: REMOVIDO filtro de responsável/admin - TODAS as conversas devem aparecer
-        // REMOVIDO: .slice(0, INITIAL_LIMIT) - agora todas as conversas são exibidas
-        // REMOVIDO: .filter() por responsável - todas as conversas devem ser visíveis
-        .map(([telefone, mensagens]) => {
+      // ⚡ CORREÇÃO CRÍTICA: REMOVIDO filtro de responsável/admin - TODAS as conversas devem aparecer
+      // REMOVIDO: .slice(0, INITIAL_LIMIT) - agora todas as conversas são exibidas
+      // REMOVIDO: .filter() por responsável - todas as conversas devem ser visíveis
+      .map(([telefone, mensagens]) => {
         // ⚡ CORREÇÃO CRÍTICA: Detectar se é grupo de MÚLTIPLAS formas para garantir 100% de precisão
         // 1. Verificar is_group no banco
         // 2. Verificar se o número termina com @g.us (padrão WhatsApp)
@@ -2891,7 +2775,7 @@ function Conversas() {
         const telefoneIsGroup = /@g\.us/i.test(String(telefone || ''));
         const numeroMensagemIsGroup = mensagens.some(m => /@g\.us/i.test(String(m.numero || '')));
         const isGroup = hasIsGroupFlag || telefoneIsGroup || numeroMensagemIsGroup;
-        
+
         // Log para debug de grupos
         if (isGroup) {
           console.log('📱 [GRUPO DETECTADO]', {
@@ -2902,34 +2786,26 @@ function Conversas() {
             primeiroNumero: mensagens[0]?.numero
           });
         }
-        
         const leadInfo = leadsMap.get(telefone);
-        
+
         // ⚡ CORREÇÃO: Para GRUPOS, buscar nome real do grupo via API
         let contactName = '';
-        
         if (isGroup) {
           // Para grupos, o campo numero geralmente contém o ID completo do grupo
           // Exemplo: "558787166688-1633483191@g.us"
           // Vamos buscar metadados do grupo para pegar o nome real
-          
+
           // Por enquanto, usar o nome do primeiro contato que enviou mensagem no grupo
           // mas marcar para buscar o nome real depois
-          const mensagensOrdenadas = [...mensagens].sort((a, b) => 
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          );
-          
+          const mensagensOrdenadas = [...mensagens].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
           // Buscar a primeira mensagem que tem nome_contato diferente de telefone
-          const primeiraComNome = mensagensOrdenadas.find(m => 
-            m.nome_contato && 
-            m.nome_contato !== telefone && 
-            !/^\d+$/.test(m.nome_contato)
-          );
-          
+          const primeiraComNome = mensagensOrdenadas.find(m => m.nome_contato && m.nome_contato !== telefone && !/^\d+$/.test(m.nome_contato));
+
           // ⚡ CORREÇÃO: Para grupos, usar nome da mensagem ou fallback "Grupo"
           // Não usar telefone como fallback para grupos
           contactName = primeiraComNome?.nome_contato || 'Grupo';
-          
+
           // ⚡ CORREÇÃO CRÍTICA: Validar se nome parece ser um ID de grupo malformado
           // IDs de grupo têm formato específico com @ e números longos
           // Se detectar isso, forçar "Grupo" como nome
@@ -2939,82 +2815,61 @@ function Conversas() {
         } else {
           // PRIORIDADE 1: Nome do Lead (se existir) - APENAS para contatos individuais
           contactName = leadInfo?.name || '';
-          
+
           // PRIORIDADE 2: Nome da mensagem (para contatos individuais)
-          const nomesProibidos = [
-            'jeohvah lima', 
-            'jeohvah i.a', 
-            'jeova costa de lima',
-            'jeo',
-            telefone
-          ];
-          
+          const nomesProibidos = ['jeohvah lima', 'jeohvah i.a', 'jeova costa de lima', 'jeo', telefone];
           if (!contactName || contactName === telefone) {
             const nomeMensagem = mensagens.find(m => {
               const nomeMsg = m.nome_contato?.trim().toLowerCase();
-              return nomeMsg && 
-                     nomeMsg !== telefone && 
-                     !nomesProibidos.includes(nomeMsg);
+              return nomeMsg && nomeMsg !== telefone && !nomesProibidos.includes(nomeMsg);
             })?.nome_contato;
-            
             if (nomeMensagem) {
               contactName = nomeMensagem;
             }
           }
-          
+
           // ⚡ CORREÇÃO CRÍTICA: FALLBACK para contatos individuais
           // Contatos individuais SEMPRE usam telefone como fallback, NUNCA "Grupo"
           if (!contactName || contactName.trim() === '') {
             contactName = telefone;
           }
         }
-        
+
         // ⚡ CORREÇÃO CRÍTICA: Processar TODAS as mensagens (não limitar) para preservar histórico completo
         // Apenas para exibição inicial na lista, mostrar últimas 3, mas manter todas no estado
         // ⚡ CORREÇÃO: Verificar fromme de forma mais robusta (pode ser boolean, string, null, undefined)
-        const todasMensagensFormatadas: Message[] = mensagens
-          .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-          .map(m => {
-            // ⚡ CORREÇÃO CRÍTICA: Determinar sender baseado em fromme de forma robusta
-            // fromme === true ou 'true' → sender: "user" (mensagem enviada)
-            // fromme === false, 'false', null, undefined → sender: "contact" (mensagem recebida)
-            const isFromMe = m.fromme === true || m.fromme === 'true';
-            const sender: "user" | "contact" = isFromMe ? "user" : "contact";
-            
-            // ⚡ CORREÇÃO DEFINITIVA: Usar sent_by do banco, com fallback pelo owner_id
-            // 1. Primeiro, tenta usar sent_by do banco (já salvo permanentemente)
-            // 2. Se não tiver sent_by, busca pelo owner_id no ownerNamesMap
-            // 3. Se nenhum funcionar e for mensagem enviada (fromme=true), usa "Equipe"
-            let sentBy: string | undefined = m.sent_by || undefined;
-            
-            // ⚡ FALLBACK: Se não tiver sent_by mas tiver owner_id, buscar nome do usuário
-            if (!sentBy && m.owner_id && isFromMe) {
-              sentBy = ownerNamesMap.get(m.owner_id) || "Equipe";
-            }
-            
-            return {
-              id: m.id || `msg-${Date.now()}-${Math.random()}`,
-              content: m.mensagem || '',
-              type: (m.tipo_mensagem === 'texto' ? 'text' : 
-                     m.tipo_mensagem === 'image' ? 'image' :
-                     m.tipo_mensagem === 'audio' ? 'audio' :
-                     m.tipo_mensagem === 'video' ? 'video' :
-                     m.tipo_mensagem === 'document' ? 'pdf' : 
-                     m.tipo_mensagem || 'text') as any,
-              sender: sender,
-              timestamp: new Date(m.created_at || Date.now()),
-              delivered: true,
-              read: m.status !== 'Recebida',
-              mediaUrl: m.midia_url,
-              fileName: m.arquivo_nome,
-              mimeType: m.tipo_mensagem === 'video' ? 'video/mp4' : 
-                       m.tipo_mensagem === 'audio' ? 'audio/mpeg' :
-                       m.tipo_mensagem === 'image' ? 'image/jpeg' :
-                       m.tipo_mensagem === 'document' ? 'application/pdf' : undefined,
-              sentBy: sentBy, // Nome do usuário que enviou
-            };
-          });
-        
+        const todasMensagensFormatadas: Message[] = mensagens.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(m => {
+          // ⚡ CORREÇÃO CRÍTICA: Determinar sender baseado em fromme de forma robusta
+          // fromme === true ou 'true' → sender: "user" (mensagem enviada)
+          // fromme === false, 'false', null, undefined → sender: "contact" (mensagem recebida)
+          const isFromMe = m.fromme === true || m.fromme === 'true';
+          const sender: "user" | "contact" = isFromMe ? "user" : "contact";
+
+          // ⚡ CORREÇÃO DEFINITIVA: Usar sent_by do banco, com fallback pelo owner_id
+          // 1. Primeiro, tenta usar sent_by do banco (já salvo permanentemente)
+          // 2. Se não tiver sent_by, busca pelo owner_id no ownerNamesMap
+          // 3. Se nenhum funcionar e for mensagem enviada (fromme=true), usa "Equipe"
+          let sentBy: string | undefined = m.sent_by || undefined;
+
+          // ⚡ FALLBACK: Se não tiver sent_by mas tiver owner_id, buscar nome do usuário
+          if (!sentBy && m.owner_id && isFromMe) {
+            sentBy = ownerNamesMap.get(m.owner_id) || "Equipe";
+          }
+          return {
+            id: m.id || `msg-${Date.now()}-${Math.random()}`,
+            content: m.mensagem || '',
+            type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem === 'image' ? 'image' : m.tipo_mensagem === 'audio' ? 'audio' : m.tipo_mensagem === 'video' ? 'video' : m.tipo_mensagem === 'document' ? 'pdf' : m.tipo_mensagem || 'text') as any,
+            sender: sender,
+            timestamp: new Date(m.created_at || Date.now()),
+            delivered: true,
+            read: m.status !== 'Recebida',
+            mediaUrl: m.midia_url,
+            fileName: m.arquivo_nome,
+            mimeType: m.tipo_mensagem === 'video' ? 'video/mp4' : m.tipo_mensagem === 'audio' ? 'audio/mpeg' : m.tipo_mensagem === 'image' ? 'image/jpeg' : m.tipo_mensagem === 'document' ? 'application/pdf' : undefined,
+            sentBy: sentBy // Nome do usuário que enviou
+          };
+        });
+
         // ⚡ CORREÇÃO: Para exibição na lista, usar apenas últimas 3 mensagens
         // Mas manter TODAS as mensagens no estado da conversa
         const messagensFormatadas = todasMensagensFormatadas;
@@ -3022,7 +2877,7 @@ function Conversas() {
         // ⚡ CORREÇÃO: Determinar status baseado na última mensagem
         const ultimaMensagem = messagensFormatadas[messagensFormatadas.length - 1];
         let statusConversa: "waiting" | "answered" | "resolved" = "waiting";
-        
+
         // Verificar se há mensagem marcada como resolvida no banco
         const temMensagemResolvida = mensagens.some(m => m.status === 'Resolvida' || m.status === 'Finalizada');
         if (temMensagemResolvida) {
@@ -3036,27 +2891,21 @@ function Conversas() {
             // Se o usuário respondeu recentemente, manter em "Em Atendimento" mesmo com novas mensagens do contato
             const TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000; // 10 minutos em ms (aumentado para dar mais margem)
             const agora = Date.now();
-            
+
             // Buscar última mensagem enviada pelo usuário
-            const ultimaMensagemDoUsuario = [...messagensFormatadas]
-              .reverse()
-              .find(m => m.sender === 'user');
-            
+            const ultimaMensagemDoUsuario = [...messagensFormatadas].reverse().find(m => m.sender === 'user');
             if (ultimaMensagemDoUsuario) {
-              const tempoUltimaMensagemUsuario = ultimaMensagemDoUsuario.timestamp instanceof Date 
-                ? ultimaMensagemDoUsuario.timestamp.getTime() 
-                : new Date(ultimaMensagemDoUsuario.timestamp).getTime();
-              
+              const tempoUltimaMensagemUsuario = ultimaMensagemDoUsuario.timestamp instanceof Date ? ultimaMensagemDoUsuario.timestamp.getTime() : new Date(ultimaMensagemDoUsuario.timestamp).getTime();
+
               // ⚡ CORREÇÃO: Se o usuário respondeu nos últimos 10 minutos, conversa está "ao vivo"
               // Não precisa que o contato também tenha respondido recentemente
-              const usuarioRespondeuRecentemente = (agora - tempoUltimaMensagemUsuario) < TEMPO_CONVERSA_AO_VIVO;
-              
+              const usuarioRespondeuRecentemente = agora - tempoUltimaMensagemUsuario < TEMPO_CONVERSA_AO_VIVO;
               if (usuarioRespondeuRecentemente) {
                 statusConversa = "answered"; // Manter em "Em Atendimento"
                 // Log removido para evitar poluição do console
               } else {
                 // Usuário não respondeu recentemente - contato aguardando resposta
-            statusConversa = "waiting";
+                statusConversa = "waiting";
               }
             } else {
               // Sem mensagem do usuário = aguardando primeira resposta
@@ -3064,11 +2913,11 @@ function Conversas() {
             }
           }
         }
-        
+
         // Buscar responsável da conversa (se houver) - agora retorna NOME, não ID
         const telKey = telefone.replace(/[^0-9]/g, '');
         const assignedUserName = assignmentsMap.get(telKey); // ⚡ CORRIGIDO: Agora é o nome do usuário
-        
+
         const conversaCriada = {
           id: telefone,
           contactName,
@@ -3079,27 +2928,24 @@ function Conversas() {
           messages: messagensFormatadas,
           tags: [],
           phoneNumber: telefone,
-          avatarUrl: isGroup 
-            ? `https://ui-avatars.com/api/?name=${encodeURIComponent('Grupo')}&background=10b981&color=fff`
-            : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName.substring(0, 2))}&background=0ea5e9&color=fff`,
-          isGroup: isGroup, // ⚡ CORREÇÃO CRÍTICA: Definir isGroup corretamente
+          avatarUrl: isGroup ? `https://ui-avatars.com/api/?name=${encodeURIComponent('Grupo')}&background=10b981&color=fff` : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName.substring(0, 2))}&background=0ea5e9&color=fff`,
+          isGroup: isGroup,
+          // ⚡ CORREÇÃO CRÍTICA: Definir isGroup corretamente
           responsavel: assignedUserName || undefined // ⚡ CORRIGIDO: Usar nome do usuário, não ID
         };
-        
+
         // ⚡ LOG: Debug de conversa criada
         // ⚡ CORREÇÃO: Verificar fromme de forma mais robusta
         const temMensagensRecebidas = mensagens.some(m => {
           const isReceived = m.fromme === false || m.fromme === 'false' || m.fromme === null || m.fromme === undefined;
           return isReceived;
         });
-        
         if (temMensagensRecebidas) {
           const mensagensRecebidasCount = mensagens.filter(m => {
             const isReceived = m.fromme === false || m.fromme === 'false' || m.fromme === null || m.fromme === undefined;
             return isReceived;
           }).length;
           const mensagensEnviadasCount = mensagens.filter(m => m.fromme === true || m.fromme === 'true').length;
-          
           console.log('✅ [LOAD] Conversa criada com mensagens RECEBIDAS:', {
             telefone,
             contactName,
@@ -3111,10 +2957,8 @@ function Conversas() {
             mensagensFormatadasEnviadas: messagensFormatadas.filter(m => m.sender === 'user').length
           });
         }
-        
         return conversaCriada;
       });
-
       const loadTime = performance.now() - startTime;
       console.log(`✅ [LOAD] ${novasConversas.length} conversas carregadas em ${loadTime.toFixed(0)}ms`, {
         totalMensagens: conversasData.length,
@@ -3122,7 +2966,7 @@ function Conversas() {
         mensagensEnviadas: novasConversas.reduce((acc, c) => acc + c.messages.filter(m => m.sender === 'user').length, 0),
         mensagensRecebidas: novasConversas.reduce((acc, c) => acc + c.messages.filter(m => m.sender === 'contact').length, 0)
       });
-      
+
       // ⚡ MERGE INTELIGENTE: Preservar conversas em tempo real e evitar duplicatas
       if (append) {
         setConversations(prev => {
@@ -3132,18 +2976,15 @@ function Conversas() {
             const tel = conv.phoneNumber || conv.id;
             return !telefonesExistentes.has(tel);
           });
-          
           if (conversasNovas.length === 0) {
             console.log('⚠️ [APPEND] Nenhuma conversa nova encontrada (todas já estão carregadas)');
             setHasMoreConversations(false); // Não há mais conversas para carregar
             toast.info('Todas as conversas já estão carregadas');
             return prev; // Não adicionar duplicatas
           }
-          
           console.log(`✅ [APPEND] Adicionando ${conversasNovas.length} conversas novas (${novasConversas.length - conversasNovas.length} duplicadas ignoradas)`);
-          
           const merged = [...prev, ...conversasNovas];
-          
+
           // Salvar no cache
           try {
             sessionStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(merged));
@@ -3151,12 +2992,11 @@ function Conversas() {
           } catch (e) {
             console.warn('⚠️ [CACHE] Erro ao salvar cache:', e);
           }
-          
+
           // Se não encontrou conversas novas, não há mais para carregar
           if (conversasNovas.length < novasConversas.length || conversasNovas.length === 0) {
             setHasMoreConversations(false);
           }
-          
           return merged;
         });
         toast.success(`+${novasConversas.filter(conv => {
@@ -3170,7 +3010,7 @@ function Conversas() {
             const tel = c.phoneNumber || c.id;
             return !telefonesDoBanco.has(tel);
           });
-          
+
           // ⚡ CORREÇÃO CRÍTICA: Preservar mensagens existentes quando mesclar conversas
           // Se uma conversa já existe e tem muitas mensagens (histórico completo), preservar todas
           const merged = novasConversas.map(novaConv => {
@@ -3179,21 +3019,20 @@ function Conversas() {
               const tel = c.phoneNumber || c.id;
               return tel === telefoneNova;
             });
-            
+
             // Se conversa existente tem histórico completo (mais de 3 mensagens), preservar todas
             if (conversaExistente && conversaExistente.messages.length > 3) {
               // Mesclar mensagens: adicionar novas do banco que não existem localmente
               const idsExistentes = new Set(conversaExistente.messages.map(m => m.id));
               const novasMensagens = novaConv.messages.filter(m => !idsExistentes.has(m.id));
-              
+
               // Combinar mensagens existentes com novas, ordenadas por timestamp
-              const todasMensagens = [...conversaExistente.messages, ...novasMensagens]
-                .sort((a, b) => {
-                  const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
-                  const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
-                  return timeA - timeB;
-                });
-              
+              const todasMensagens = [...conversaExistente.messages, ...novasMensagens].sort((a, b) => {
+                const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+                const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+                return timeA - timeB;
+              });
+
               // ⚡ CORREÇÃO CRÍTICA: Se conversa estava 'resolved' mas tem nova mensagem do contato,
               // ela deve voltar para 'waiting' para aparecer no filtro correto
               let statusFinal = novaConv.status;
@@ -3209,18 +3048,19 @@ function Conversas() {
                   statusFinal = 'resolved';
                 }
               }
-              
               console.log(`🔄 Preservando ${conversaExistente.messages.length} mensagens existentes + ${novasMensagens.length} novas para ${novaConv.contactName}, status: ${statusFinal}`);
-              
               return {
                 ...novaConv,
-                messages: todasMensagens, // Preservar histórico completo
-                lastMessage: novaConv.lastMessage, // Atualizar última mensagem
-                status: statusFinal, // ⚡ Status atualizado baseado na última mensagem
-                isGroup: conversaExistente.isGroup, // ⚡ PRESERVAR flag de grupo
+                messages: todasMensagens,
+                // Preservar histórico completo
+                lastMessage: novaConv.lastMessage,
+                // Atualizar última mensagem
+                status: statusFinal,
+                // ⚡ Status atualizado baseado na última mensagem
+                isGroup: conversaExistente.isGroup // ⚡ PRESERVAR flag de grupo
               };
             }
-            
+
             // Se não tem histórico completo, verificar se deve reativar conversa finalizada
             let statusFinal = novaConv.status;
             if (conversaExistente?.status === 'resolved') {
@@ -3233,16 +3073,15 @@ function Conversas() {
                 statusFinal = 'resolved';
               }
             }
-            
             return {
               ...novaConv,
-              status: statusFinal, // ⚡ Status atualizado baseado na última mensagem
-              isGroup: conversaExistente?.isGroup ?? novaConv.isGroup, // ⚡ PRESERVAR flag de grupo
+              status: statusFinal,
+              // ⚡ Status atualizado baseado na última mensagem
+              isGroup: conversaExistente?.isGroup ?? novaConv.isGroup // ⚡ PRESERVAR flag de grupo
             };
           });
-          
           const finalMerged = [...conversasRealtime, ...merged];
-          
+
           // ⚡ INSTANTÂNEO: Salvar no cache imediatamente
           try {
             sessionStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(finalMerged));
@@ -3250,34 +3089,29 @@ function Conversas() {
           } catch (e) {
             console.warn('⚠️ [CACHE] Erro ao salvar cache:', e);
           }
-          
           return finalMerged;
         });
         // Não mostrar toast se carregou do cache (já está visível)
       }
-      
+
       // ⚡ OTIMIZAÇÃO: Carregar métricas em paralelo (não bloqueia)
       // FIXME: loadCompanyMetrics não definida
       // loadCompanyMetrics();
-      
+
       // ⚡ OTIMIZAÇÃO: Finalizar loading ANTES de carregar avatares
       setLoadingConversations(false);
 
       // ⚡ LAZY LOADING DE AVATARES: Carregar imediatamente (sem delays)
       const primeiros = novasConversas.slice(0, 3);
-      Promise.all(primeiros.map(async (conv) => {
+      Promise.all(primeiros.map(async conv => {
         if (conv.phoneNumber) {
           try {
-            const profilePicUrl = await getProfilePictureWithFallback(
-              conv.phoneNumber, 
-              companyId, 
-              conv.contactName
-            );
-            
+            const profilePicUrl = await getProfilePictureWithFallback(conv.phoneNumber, companyId, conv.contactName);
             if (profilePicUrl) {
-              setConversations(prev => prev.map(c => 
-                c.id === conv.id ? { ...c, avatarUrl: profilePicUrl } : c
-              ));
+              setConversations(prev => prev.map(c => c.id === conv.id ? {
+                ...c,
+                avatarUrl: profilePicUrl
+              } : c));
             }
           } catch (error) {
             // Silenciar erros de foto
@@ -3288,19 +3122,15 @@ function Conversas() {
       // ⚡ CARREGAR RESTANTES EM BACKGROUND (baixa prioridade)
       const restantes = novasConversas.slice(3);
       if (restantes.length > 0) {
-        restantes.forEach(async (conv) => {
+        restantes.forEach(async conv => {
           if (conv.phoneNumber) {
             try {
-              const profilePicUrl = await getProfilePictureWithFallback(
-                conv.phoneNumber, 
-                companyId, 
-                conv.contactName
-              );
-              
+              const profilePicUrl = await getProfilePictureWithFallback(conv.phoneNumber, companyId, conv.contactName);
               if (profilePicUrl) {
-                setConversations(prev => prev.map(c => 
-                  c.id === conv.id ? { ...c, avatarUrl: profilePicUrl } : c
-                ));
+                setConversations(prev => prev.map(c => c.id === conv.id ? {
+                  ...c,
+                  avatarUrl: profilePicUrl
+                } : c));
               }
             } catch (error) {
               // Silenciar erros de foto
@@ -3314,124 +3144,123 @@ function Conversas() {
       setLoadingConversations(false);
     }
   };
-
   const loadQuickMessages = async () => {
     try {
-      const { data: companyData } = await supabase.rpc('get_my_company_id');
+      const {
+        data: companyData
+      } = await supabase.rpc('get_my_company_id');
       if (!companyData) return;
-
-      const { data, error } = await supabase
-        .from('quick_messages')
-        .select('*')
-        .eq('company_id', companyData)
-        .order('created_at', { ascending: false });
-
+      const {
+        data,
+        error
+      } = await supabase.from('quick_messages').select('*').eq('company_id', companyData).order('created_at', {
+        ascending: false
+      });
       if (error) throw error;
-
       const formatted = data?.map(msg => ({
         id: msg.id,
         title: msg.title,
         content: msg.content,
         category: msg.category_id || '',
         type: msg.message_type as 'text' | 'image' | 'video' | 'audio' | 'document',
-        mediaUrl: msg.media_url || undefined,
+        mediaUrl: msg.media_url || undefined
       })) || [];
-
       setQuickMessages(formatted);
     } catch (error) {
       console.error('Erro ao carregar mensagens rápidas:', error);
     }
   };
-
   const loadQuickCategories = async () => {
     try {
-      const { data: companyData } = await supabase.rpc('get_my_company_id');
+      const {
+        data: companyData
+      } = await supabase.rpc('get_my_company_id');
       if (!companyData) return;
-
-      const { data, error } = await supabase
-        .from('quick_message_categories')
-        .select('*')
-        .eq('company_id', companyData)
-        .order('created_at', { ascending: true });
-
+      const {
+        data,
+        error
+      } = await supabase.from('quick_message_categories').select('*').eq('company_id', companyData).order('created_at', {
+        ascending: true
+      });
       if (error) throw error;
-
       const formatted = data?.map(cat => ({
         id: cat.id,
-        name: cat.name,
+        name: cat.name
       })) || [];
-
       setQuickCategories(formatted);
     } catch (error) {
       console.error('Erro ao carregar categorias:', error);
-      const initialCategories = [
-        { id: "1", name: "Atendimento" },
-        { id: "2", name: "Suporte" },
-        { id: "3", name: "Dúvidas" },
-        { id: "4", name: "Objeções" },
-        { id: "5", name: "Preços" },
-        { id: "6", name: "PIX" },
-      ];
+      const initialCategories = [{
+        id: "1",
+        name: "Atendimento"
+      }, {
+        id: "2",
+        name: "Suporte"
+      }, {
+        id: "3",
+        name: "Dúvidas"
+      }, {
+        id: "4",
+        name: "Objeções"
+      }, {
+        id: "5",
+        name: "Preços"
+      }, {
+        id: "6",
+        name: "PIX"
+      }];
       setQuickCategories(initialCategories);
       localStorage.setItem(QUICK_CATEGORIES_KEY, JSON.stringify(initialCategories));
     }
   };
-
   const loadReminders = async () => {
     if (!leadVinculado?.id) return;
-    
     try {
       // CORREÇÃO: Buscar lembretes através dos compromissos do lead
-      const { data: compromissos, error: compError } = await supabase
-        .from('compromissos')
-        .select('id')
-        .eq('lead_id', leadVinculado.id);
-
+      const {
+        data: compromissos,
+        error: compError
+      } = await supabase.from('compromissos').select('id').eq('lead_id', leadVinculado.id);
       if (compError) throw compError;
-
       if (!compromissos || compromissos.length === 0) {
         setReminders([]);
         return;
       }
-
       const compromissoIds = compromissos.map(c => c.id);
-
-      const { data, error } = await supabase
-        .from('lembretes')
-        .select(`
+      const {
+        data,
+        error
+      } = await supabase.from('lembretes').select(`
           *,
           compromisso:compromissos(
             data_hora_inicio,
             tipo_servico,
             lead_id
           )
-        `)
-        .in('compromisso_id', compromissoIds)
-        .order('created_at', { ascending: false });
-
+        `).in('compromisso_id', compromissoIds).order('created_at', {
+        ascending: false
+      });
       if (error) throw error;
       setReminders(data || []);
     } catch (error) {
       console.error('Erro ao carregar lembretes:', error);
     }
   };
-
   const loadMeetings = async () => {
     if (!leadVinculado?.id) {
       setMeetings([]);
       return;
     }
-    
     try {
-      const { data, error } = await supabase
-        .from('compromissos')
-        .select(`
+      const {
+        data,
+        error
+      } = await supabase.from('compromissos').select(`
           *,
           lead:leads(name, phone)
-        `)
-        .eq('lead_id', leadVinculado.id)
-        .order('data_hora_inicio', { ascending: false });
-
+        `).eq('lead_id', leadVinculado.id).order('data_hora_inicio', {
+        ascending: false
+      });
       if (error) throw error;
       setMeetings(data || []);
     } catch (error) {
@@ -3442,72 +3271,52 @@ function Conversas() {
   // 📜 Carregar TODO o histórico de mensagens de um contato
   const loadFullConversationHistory = async (phoneNumber: string, contactName: string) => {
     if (!userCompanyId) return;
-    
     setLoadingHistory(true);
     console.log(`📜 Carregando histórico completo para ${contactName} (${phoneNumber})...`);
-    
     try {
       // Normalizar número de telefone para buscar em diferentes formatos
       const telefoneNormalizado = normalizePhoneForWA(phoneNumber);
       const telefoneSemFormatacao = telefoneNormalizado.replace(/\D/g, '');
       const telefoneOriginal = phoneNumber.replace(/\D/g, '');
-      
+
       // Criar lista de variações para buscar (remover duplicatas)
-      const variacoes = Array.from(new Set([
-        phoneNumber,
-        telefoneNormalizado,
-        telefoneSemFormatacao,
-        telefoneOriginal,
-        `${telefoneNormalizado}@s.whatsapp.net`,
-        `${telefoneNormalizado}@c.us`
-      ].filter(v => v && v.length > 0)));
-      
+      const variacoes = Array.from(new Set([phoneNumber, telefoneNormalizado, telefoneSemFormatacao, telefoneOriginal, `${telefoneNormalizado}@s.whatsapp.net`, `${telefoneNormalizado}@c.us`].filter(v => v && v.length > 0)));
+
       // Buscar TODAS as mensagens do contato (sem limite) - tentar múltiplos formatos
       // ⚡ CORREÇÃO: Construir query corretamente usando .or() do Supabase
       // O formato correto é: "campo1.eq.valor1,campo2.eq.valor2" (sem espaços)
       const conditions: string[] = [];
-      
+
       // Adicionar condições para telefone_formatado
       variacoes.forEach(v => {
         if (v && v.trim()) {
           conditions.push(`telefone_formatado.eq.${v}`);
         }
       });
-      
+
       // Adicionar condições para numero
       variacoes.forEach(v => {
         if (v && v.trim()) {
           conditions.push(`numero.eq.${v}`);
         }
       });
-      
       let allMessages, error;
-      
       if (conditions.length > 0) {
         // Construir string de condições no formato correto do Supabase
         const orCondition = conditions.join(',');
-        
-        const result = await supabase
-          .from('conversas')
-          .select('*')
-          .eq('company_id', userCompanyId)
-          .or(orCondition)
-          .order('created_at', { ascending: true });
-        
+        const result = await supabase.from('conversas').select('*').eq('company_id', userCompanyId).or(orCondition).order('created_at', {
+          ascending: true
+        });
         allMessages = result.data;
         error = result.error;
-        
+
         // Se não encontrou nada, tentar busca mais ampla
         if ((!allMessages || allMessages.length === 0) && !error) {
           // Tentar buscar apenas pelo número limpo (sem formatação)
           const telefoneLimpo = telefoneSemFormatacao;
-          const result2 = await supabase
-            .from('conversas')
-            .select('*')
-            .eq('company_id', userCompanyId)
-            .or(`telefone_formatado.ilike.%${telefoneLimpo}%,numero.ilike.%${telefoneLimpo}%`)
-            .order('created_at', { ascending: true });
-          
+          const result2 = await supabase.from('conversas').select('*').eq('company_id', userCompanyId).or(`telefone_formatado.ilike.%${telefoneLimpo}%,numero.ilike.%${telefoneLimpo}%`).order('created_at', {
+            ascending: true
+          });
           if (result2.data && result2.data.length > 0) {
             allMessages = result2.data;
             error = result2.error;
@@ -3515,70 +3324,53 @@ function Conversas() {
         }
       } else {
         // Fallback: buscar apenas pelo número original
-        const result = await supabase
-          .from('conversas')
-          .select('*')
-          .eq('company_id', userCompanyId)
-          .eq('telefone_formatado', phoneNumber)
-          .order('created_at', { ascending: true });
-        
+        const result = await supabase.from('conversas').select('*').eq('company_id', userCompanyId).eq('telefone_formatado', phoneNumber).order('created_at', {
+          ascending: true
+        });
         allMessages = result.data;
         error = result.error;
       }
-      
       if (error) {
         console.error('❌ Erro ao buscar histórico:', error);
         throw error;
       }
-      
       if (allMessages && allMessages.length > 0) {
         console.log(`✅ ${allMessages.length} mensagens carregadas do histórico`);
-        
+
         // ⚡ CORREÇÃO: Remover mensagens duplicadas por ID antes de formatar
-        const mensagensUnicas = allMessages.filter((m, index, self) => 
-          index === self.findIndex(msg => msg.id === m.id)
-        );
-        
+        const mensagensUnicas = allMessages.filter((m, index, self) => index === self.findIndex(msg => msg.id === m.id));
         console.log(`📊 ${mensagensUnicas.length} mensagens únicas (${allMessages.length - mensagensUnicas.length} duplicadas removidas)`);
-        
+
         // Formatar todas as mensagens
         // ⚡ CORREÇÃO: Verificar fromme de forma mais robusta
-        const messagensCompletas: Message[] = mensagensUnicas
-          .map(m => {
-            // ⚡ CORREÇÃO CRÍTICA: Determinar sender baseado em fromme de forma robusta
-            const isFromMe = m.fromme === true || m.fromme === 'true';
-            const sender: "user" | "contact" = isFromMe ? "user" : "contact";
-            
-            return {
-              id: m.id || `msg-${Date.now()}-${Math.random()}`,
-              content: m.mensagem || '',
-              type: (m.tipo_mensagem === 'texto' ? 'text' : (m.tipo_mensagem || 'text')) as any,
-              sender: sender,
-              timestamp: new Date(m.created_at || Date.now()),
-              delivered: true,
-              read: m.status !== 'Recebida',
-              mediaUrl: m.midia_url,
-              fileName: m.arquivo_nome,
-            };
-          })
-          // Ordenar por timestamp para garantir ordem cronológica correta
-          .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-        
+        const messagensCompletas: Message[] = mensagensUnicas.map(m => {
+          // ⚡ CORREÇÃO CRÍTICA: Determinar sender baseado em fromme de forma robusta
+          const isFromMe = m.fromme === true || m.fromme === 'true';
+          const sender: "user" | "contact" = isFromMe ? "user" : "contact";
+          return {
+            id: m.id || `msg-${Date.now()}-${Math.random()}`,
+            content: m.mensagem || '',
+            type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
+            sender: sender,
+            timestamp: new Date(m.created_at || Date.now()),
+            delivered: true,
+            read: m.status !== 'Recebida',
+            mediaUrl: m.midia_url,
+            fileName: m.arquivo_nome
+          };
+        })
+        // Ordenar por timestamp para garantir ordem cronológica correta
+        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
         // ⚡ LOG: Debug de mensagens formatadas
         console.log(`📊 [HISTORY] ${messagensCompletas.length} mensagens formatadas:`, {
           recebidas: messagensCompletas.filter(m => m.sender === 'contact').length,
           enviadas: messagensCompletas.filter(m => m.sender === 'user').length
         });
-        
+
         // ⚡ CORREÇÃO: Remover duplicatas finais por ID e timestamp (caso ainda existam)
-        const mensagensFinais = messagensCompletas.filter((m, index, self) => 
-          index === self.findIndex(msg => 
-            msg.id === m.id || 
-            (msg.content === m.content && 
-             Math.abs(msg.timestamp.getTime() - m.timestamp.getTime()) < 1000)
-          )
-        );
-        
+        const mensagensFinais = messagensCompletas.filter((m, index, self) => index === self.findIndex(msg => msg.id === m.id || msg.content === m.content && Math.abs(msg.timestamp.getTime() - m.timestamp.getTime()) < 1000));
+
         // Atualizar a conversa selecionada
         setSelectedConv(prev => {
           if (prev && prev.phoneNumber === phoneNumber) {
@@ -3589,23 +3381,26 @@ function Conversas() {
           }
           return prev;
         });
-        
+
         // Atualizar conversa na lista
-        setConversations(prev => prev.map(conv => 
-          conv.phoneNumber === phoneNumber 
-            ? { ...conv, messages: mensagensFinais }
-            : conv
-        ));
-        
+        setConversations(prev => prev.map(conv => conv.phoneNumber === phoneNumber ? {
+          ...conv,
+          messages: mensagensFinais
+        } : conv));
+
         // Estatísticas
         setHistoryStats(prev => ({
           ...prev,
-          [phoneNumber]: { total: mensagensFinais.length, loaded: mensagensFinais.length }
+          [phoneNumber]: {
+            total: mensagensFinais.length,
+            loaded: mensagensFinais.length
+          }
         }));
-        
+
         // Scroll
-        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-        
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({
+          behavior: 'smooth'
+        }), 100);
         toast.success(`📜 ${mensagensFinais.length} mensagens carregadas`);
       } else {
         toast.info('Nenhum histórico anterior encontrado');
@@ -3617,33 +3412,27 @@ function Conversas() {
       setLoadingHistory(false);
     }
   };
-
   const loadAiMode = () => {
     const saved = localStorage.getItem(AI_MODE_KEY);
     if (saved) setAiMode(JSON.parse(saved));
   };
-
   const saveConversations = (updated: Conversation[]) => {
     // Não salvar no localStorage para evitar QuotaExceededError
     // Os dados são persistidos no Supabase
     setConversations(updated);
   };
-
   const saveQuickMessages = (updated: QuickMessage[]) => {
     // Apenas atualiza estado local - o save real acontece no addQuickMessage
     setQuickMessages(updated);
   };
-
   const saveQuickCategories = (updated: QuickMessageCategory[]) => {
     // Apenas atualiza estado local - o save real acontece no addQuickCategory
     setQuickCategories(updated);
   };
-
   const saveAiMode = (updated: Record<string, boolean>) => {
     localStorage.setItem(AI_MODE_KEY, JSON.stringify(updated));
     setAiMode(updated);
   };
-
   const getChannelIcon = (channel: string) => {
     switch (channel) {
       case "whatsapp":
@@ -3656,9 +3445,11 @@ function Conversas() {
         return <MessageSquare className="h-3.5 w-3.5" />;
     }
   };
-
   const toggleAiMode = (convId: string) => {
-    const updated = { ...aiMode, [convId]: !aiMode[convId] };
+    const updated = {
+      ...aiMode,
+      [convId]: !aiMode[convId]
+    };
     saveAiMode(updated);
     toast.success(updated[convId] ? "IA ativada" : "IA desativada");
   };
@@ -3677,7 +3468,9 @@ function Conversas() {
         while (n--) {
           u8arr[n] = bstr.charCodeAt(n);
         }
-        const blob = new Blob([u8arr], { type: mime });
+        const blob = new Blob([u8arr], {
+          type: mime
+        });
         const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = blobUrl;
@@ -3698,20 +3491,25 @@ function Conversas() {
 
   // MELHORIA: Função auxiliar para atualizar status de transcrição
   const updateTranscriptionStatus = (messageId: string, status: "pending" | "processing" | "completed" | "error", transcription?: string) => {
-    setTranscriptionStatuses(prev => ({ ...prev, [messageId]: status }));
-    
+    setTranscriptionStatuses(prev => ({
+      ...prev,
+      [messageId]: status
+    }));
+
     // Atualizar status na mensagem
     const updateMessage = (msg: Message) => {
       if (msg.id === messageId) {
         return {
           ...msg,
           transcriptionStatus: status,
-          ...(transcription !== undefined && { transcricao: transcription })
+          ...(transcription !== undefined && {
+            transcricao: transcription
+          })
         };
       }
       return msg;
     };
-    
+
     // Atualizar na conversa selecionada
     setSelectedConv(prev => {
       if (!prev) return prev;
@@ -3720,7 +3518,7 @@ function Conversas() {
         messages: prev.messages.map(updateMessage)
       };
     });
-    
+
     // Atualizar na lista de conversas
     setConversations(prevConvs => prevConvs.map(conv => ({
       ...conv,
@@ -3739,18 +3537,10 @@ function Conversas() {
   };
 
   // MELHORIA: Polling para verificar status de transcrição
-  const pollTranscriptionStatus = async (
-    messageId: string,
-    transcriptionId?: string,
-    audioUrl?: string,
-    maxPolls: number = 30,
-    pollInterval: number = 1000
-  ): Promise<void> => {
+  const pollTranscriptionStatus = async (messageId: string, transcriptionId?: string, audioUrl?: string, maxPolls: number = 30, pollInterval: number = 1000): Promise<void> => {
     let pollCount = 0;
-    
     const pollIntervalId = setInterval(async () => {
       pollCount++;
-      
       try {
         // Se tiver transcriptionId, verificar status
         if (transcriptionId) {
@@ -3758,7 +3548,7 @@ function Conversas() {
           // Por enquanto, vamos apenas aguardar e verificar se a transcrição foi concluída
           console.log(`🔄 [TRANSCRIBE] Polling status (${pollCount}/${maxPolls}) para mensagem ${messageId}`);
         }
-        
+
         // Se exceder o número máximo de polls, marcar como erro
         if (pollCount >= maxPolls) {
           clearInterval(pollIntervalId);
@@ -3770,38 +3560,36 @@ function Conversas() {
         console.error(`❌ [TRANSCRIBE] Erro ao verificar status:`, error);
       }
     }, pollInterval);
-    
     transcriptionPollingRefs.current[messageId] = {
       ...transcriptionPollingRefs.current[messageId],
       interval: pollIntervalId
     };
   };
-
   const transcreverAudio = async (messageId: string, audioUrl: string, retry: boolean = false) => {
     try {
       // Limpar polling anterior se existir
       clearTranscriptionPolling(messageId);
-      
+
       // Se não for retry e já tiver status, não fazer nada
       if (!retry && transcriptionStatuses[messageId] === "processing") {
         console.log(`⏸️ [TRANSCRIBE] Transcrição já em processamento para mensagem ${messageId}`);
         return;
       }
-      
+
       // Atualizar status para "processing"
       updateTranscriptionStatus(messageId, "processing");
-      
       console.log(`🎤 [TRANSCRIBE] Iniciando transcrição para mensagem ${messageId}`);
-      toast.info("Transcrevendo áudio...", { duration: 2000 });
-      
+      toast.info("Transcrevendo áudio...", {
+        duration: 2000
+      });
+
       // Baixar o áudio
       const audioResponse = await fetch(audioUrl);
       if (!audioResponse.ok) {
         throw new Error(`Erro ao baixar áudio: ${audioResponse.statusText}`);
       }
-      
       const audioBlob = await audioResponse.blob();
-      
+
       // Converter para base64
       const base64Audio = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -3816,11 +3604,10 @@ function Conversas() {
         reader.onerror = () => reject(new Error("Erro ao ler arquivo de áudio"));
         reader.readAsDataURL(audioBlob);
       });
-      
       if (!userCompanyId) {
         throw new Error("Company ID não encontrado");
       }
-      
+
       // MELHORIA: Usar função com retry e timeout de 30s
       const TRANSCRIPTION_TIMEOUT = 30000; // 30 segundos
       const timeoutId = setTimeout(() => {
@@ -3834,82 +3621,78 @@ function Conversas() {
               clearTranscriptionPolling(messageId);
               toast.error("Timeout: Transcrição demorou mais de 30 segundos. Tente novamente.");
             }, 0);
-            return { ...prev, [messageId]: "error" };
+            return {
+              ...prev,
+              [messageId]: "error"
+            };
           }
           return prev;
         });
       }, TRANSCRIPTION_TIMEOUT);
-      
       transcriptionPollingRefs.current[messageId] = {
         ...transcriptionPollingRefs.current[messageId],
         timeout: timeoutId
       };
-      
+
       // Chamar a Edge Function com retry
       const result = await transcribeAudioWithRetry({
         audioUrl,
         audioBase64: base64Audio,
         company_id: userCompanyId
       });
-      
+
       // Limpar timeout já que recebemos resposta
       clearTimeout(timeoutId);
-      
+
       // Verificar resultado
-      if (result.status === 'error' || (!result.transcription && result.status !== 'pending')) {
+      if (result.status === 'error' || !result.transcription && result.status !== 'pending') {
         // Limpar polling em caso de erro
         clearTranscriptionPolling(messageId);
         updateTranscriptionStatus(messageId, "error");
         toast.error("Erro ao transcrever áudio. Você pode tentar novamente clicando em 'Reenviar Transcrição'.");
         return;
       }
-      
+
       // Se status for "pending", ainda está processando
       if (result.status === 'pending') {
         console.log(`⏳ [TRANSCRIBE] Transcrição pendente, iniciando polling...`);
         updateTranscriptionStatus(messageId, "pending");
         // Iniciar polling - o timeout já foi limpo acima
-        pollTranscriptionStatus(messageId, undefined, audioUrl, 15, 2000).catch((error) => {
+        pollTranscriptionStatus(messageId, undefined, audioUrl, 15, 2000).catch(error => {
           console.error('❌ [TRANSCRIBE] Erro no polling:', error);
           updateTranscriptionStatus(messageId, "error");
         });
         return;
       }
-      
+
       // Limpar polling já que temos resultado
       clearTranscriptionPolling(messageId);
-      
+
       // Se status for "completed" ou tiver transcrição, salvar
       const transcriptionText = result.transcription;
-      
       if (transcriptionText && transcriptionText !== '[Transcrição pendente - erro ao processar áudio]') {
         // Salvar transcrição no banco de dados (se a coluna existir)
         try {
-          await supabase
-            .from('conversas')
-            .update({ transcricao: transcriptionText } as any)
-            .eq('id', messageId);
-          
+          await supabase.from('conversas').update({
+            transcricao: transcriptionText
+          } as any).eq('id', messageId);
           console.log(`✅ [TRANSCRIBE] Transcrição salva no banco de dados`);
         } catch (dbError) {
           console.warn('⚠️ [TRANSCRIBE] Coluna transcricao não encontrada na tabela conversas. Salvando apenas localmente.', dbError);
         }
-        
+
         // Atualizar status e transcrição
         updateTranscriptionStatus(messageId, "completed", transcriptionText);
-        
         toast.success("✅ Áudio transcrito com sucesso!");
         console.log(`✅ [TRANSCRIBE] Transcrição concluída para mensagem ${messageId}`);
       } else {
         updateTranscriptionStatus(messageId, "error");
         toast.error("Transcrição não disponível. Tente novamente.");
       }
-      
     } catch (error: any) {
       console.error('❌ [TRANSCRIBE] Erro ao transcrever áudio:', error);
       updateTranscriptionStatus(messageId, "error");
       clearTranscriptionPolling(messageId);
-      
       const errorMessage = error?.message || "Não foi possível transcrever o áudio";
       toast.error(`Erro ao transcrever: ${errorMessage}. Você pode tentar novamente.`);
     }
@@ -3923,35 +3706,36 @@ function Conversas() {
       toast.success("Digite sua resposta abaixo");
     }
   };
-
   const handleEdit = async (messageId: string, newContent: string) => {
     if (!selectedConv) return;
-    
-    const updated = conversations.map(conv => 
-      conv.id === selectedConv.id ? {
-        ...conv,
-        messages: conv.messages.map(msg => 
-          msg.id === messageId ? { ...msg, content: newContent, edited: true } : msg
-        )
-      } : conv
-    );
+    const updated = conversations.map(conv => conv.id === selectedConv.id ? {
+      ...conv,
+      messages: conv.messages.map(msg => msg.id === messageId ? {
+        ...msg,
+        content: newContent,
+        edited: true
+      } : msg)
+    } : conv);
     saveConversations(updated);
     setSelectedConv({
       ...selectedConv,
-      messages: selectedConv.messages.map(msg => 
-        msg.id === messageId ? { ...msg, content: newContent, edited: true } : msg
-      )
+      messages: selectedConv.messages.map(msg => msg.id === messageId ? {
+        ...msg,
+        content: newContent,
+        edited: true
+      } : msg)
     });
-    
+
     // Enviar mensagem editada via WhatsApp (com retry)
     try {
       const numeroNormalizado = normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
-      const { error } = await enviarWhatsApp({
+      const {
+        error
+      } = await enviarWhatsApp({
         numero: numeroNormalizado,
         mensagem: `✏️ *[Mensagem editada]*\n\n${newContent}`,
         tipo_mensagem: 'text'
       });
-
       if (error) {
         console.error('Erro ao enviar edição para WhatsApp:', error);
         toast.error('Mensagem editada localmente, mas não enviada ao WhatsApp');
@@ -3963,15 +3747,12 @@ function Conversas() {
       toast.error('Mensagem editada localmente');
     }
   };
-
   const handleDelete = (messageId: string, forEveryone: boolean) => {
     if (!selectedConv) return;
-    const updated = conversations.map(conv => 
-      conv.id === selectedConv.id ? {
-        ...conv,
-        messages: conv.messages.filter(msg => msg.id !== messageId)
-      } : conv
-    );
+    const updated = conversations.map(conv => conv.id === selectedConv.id ? {
+      ...conv,
+      messages: conv.messages.filter(msg => msg.id !== messageId)
+    } : conv);
     saveConversations(updated);
     setSelectedConv({
       ...selectedConv,
@@ -3979,87 +3760,89 @@ function Conversas() {
     });
     toast.success(forEveryone ? "Mensagem excluída para todos" : "Mensagem excluída para você");
   };
-
   const handleReact = async (messageId: string, emoji: string) => {
     if (!selectedConv) return;
-    
     console.log('🎭 Reação adicionada:', emoji, 'Mensagem:', messageId);
-    
-    const updated = conversations.map(conv => 
-      conv.id === selectedConv.id ? {
-        ...conv,
-        messages: conv.messages.map(msg => 
-          msg.id === messageId ? { ...msg, reaction: emoji } : msg
-        )
-      } : conv
-    );
-    
+    const updated = conversations.map(conv => conv.id === selectedConv.id ? {
+      ...conv,
+      messages: conv.messages.map(msg => msg.id === messageId ? {
+        ...msg,
+        reaction: emoji
+      } : msg)
+    } : conv);
     setConversations(updated);
     setSelectedConv({
       ...selectedConv,
-      messages: selectedConv.messages.map(msg => 
-        msg.id === messageId ? { ...msg, reaction: emoji } : msg
-      )
+      messages: selectedConv.messages.map(msg => msg.id === messageId ? {
+        ...msg,
+        reaction: emoji
+      } : msg)
     });
-    
+
     // Enviar reação para o cliente com referência à mensagem
     try {
       const targetMsg = selectedConv.messages.find(m => m.id === messageId);
-      const { data, error } = await enviarWhatsApp({
+      const {
+        data,
+        error
+      } = await enviarWhatsApp({
         numero: selectedConv.id,
         tipo_mensagem: 'reaction',
-        reaction: { emoji, messageId },
+        reaction: {
+          emoji,
+          messageId
+        },
         mensagem: `Reagiu com ${emoji} à mensagem: "${targetMsg?.content || ''}"`,
         quoted: targetMsg ? {
-          key: { id: messageId },
-          message: { conversation: targetMsg.content || '' }
-        } : undefined,
+          key: {
+            id: messageId
+          },
+          message: {
+            conversation: targetMsg.content || ''
+          }
+        } : undefined
       });
       if (error) {
         console.error('Erro ao enviar reação:', error);
       } else {
         // Persistir no histórico como texto informativo
-        const { data: userRole } = await supabase
-          .from('user_roles')
-          .select('company_id')
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-          .single();
-        const { data: { user } } = await supabase.auth.getUser();
-        const { data: userProfile } = user ? await supabase
-          .from('profiles')
-          .select('full_name, email')
-          .eq('id', user.id)
-          .single() : { data: null };
-        
+        const {
+          data: userRole
+        } = await supabase.from('user_roles').select('company_id').eq('user_id', (await supabase.auth.getUser()).data.user?.id).single();
+        const {
+          data: {
+            user
+          }
+        } = await supabase.auth.getUser();
+        const {
+          data: userProfile
+        } = user ? await supabase.from('profiles').select('full_name, email').eq('id', user.id).single() : {
+          data: null
+        };
         const isGroup = /@g\.us$/.test(String(selectedConv.id));
         const telefone_formatado = isGroup ? null : normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
         await supabase.from('conversas').insert([{
           numero: selectedConv.id,
           telefone_formatado,
           mensagem: `Reagiu com ${emoji} à mensagem: "${targetMsg?.content || ''}"`,
-          origem: selectedConv.channel === 'whatsapp' ? 'WhatsApp' : 
-                  selectedConv.channel === 'instagram' ? 'Instagram' : 'Facebook',
+          origem: selectedConv.channel === 'whatsapp' ? 'WhatsApp' : selectedConv.channel === 'instagram' ? 'Instagram' : 'Facebook',
           status: 'Enviada',
           tipo_mensagem: 'text',
           nome_contato: selectedConv.contactName,
           company_id: userRole?.company_id,
           owner_id: user?.id,
           sent_by: userProfile?.full_name || userProfile?.email || 'Equipe',
-          fromme: true,
+          fromme: true
         }]);
       }
     } catch (err) {
       console.error('Erro ao processar reação:', err);
     }
-    
     toast.success(`Reação ${emoji} enviada!`);
   };
-
   const handleSendMedia = async (file: File, caption: string, type: string) => {
     if (!selectedConv) return;
-
     setSyncStatus('syncing');
-
     try {
       console.log('🚀 [INICIO] Processo de envio de mídia:', {
         fileName: file.name,
@@ -4076,14 +3859,11 @@ function Conversas() {
       }
 
       // FASE 1: Obter informações do usuário
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-        .single();
-      
+      const {
+        data: userRole
+      } = await supabase.from('user_roles').select('company_id').eq('user_id', (await supabase.auth.getUser()).data.user?.id).single();
       const userId = (await supabase.auth.getUser()).data.user?.id;
-      
+
       // FASE 2: Converter arquivo para base64 PRIMEIRO
       console.log('🔄 [FASE 2] Convertendo arquivo para base64...', {
         nome: file.name,
@@ -4091,28 +3871,24 @@ function Conversas() {
         tamanho: file.size,
         mimeType: file.type
       });
-      
       const base64Data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const result = reader.result as string;
-          
           console.log('📊 [FASE 2] FileReader onloadend:', {
             hasResult: !!result,
             resultType: typeof result,
             resultLength: result?.length || 0,
             inicio: result?.substring(0, 100)
           });
-          
           if (!result) {
             console.error('❌ FileReader retornou resultado vazio');
             reject(new Error('Erro ao ler arquivo'));
             return;
           }
-          
+
           // Extrair base64 (remover prefixo data:...)
           const base64 = result.includes(',') ? result.split(',')[1] : result;
-          
           console.log('📊 [FASE 2] Após extração do base64:', {
             temVirgula: result.includes(','),
             tamanhoAntes: result.length,
@@ -4120,13 +3896,11 @@ function Conversas() {
             inicio: base64.substring(0, 50),
             vazio: !base64 || base64.length === 0
           });
-          
           if (!base64 || base64.length === 0) {
             console.error('❌ Base64 vazio após extração');
             reject(new Error('Erro ao converter arquivo'));
             return;
           }
-          
           console.log('✅ [FASE 2] Conversão concluída:', {
             tamanhoOriginal: file.size,
             tamanhoBase64: base64.length,
@@ -4135,7 +3909,7 @@ function Conversas() {
           });
           resolve(base64);
         };
-        reader.onerror = (error) => {
+        reader.onerror = error => {
           console.error('❌ Erro no FileReader:', error);
           reject(new Error('Erro ao ler arquivo'));
         };
@@ -4146,31 +3920,29 @@ function Conversas() {
       console.log('📤 [FASE 3] Fazendo upload para Storage...');
       const timestamp = Date.now();
       const filePath = `${userRole?.company_id}/${userId}/${timestamp}_${file.name}`;
-      
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('conversation-media')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-      
+      const {
+        data: uploadData,
+        error: uploadError
+      } = await supabase.storage.from('conversation-media').upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
       if (uploadError) {
         console.error('❌ Erro ao fazer upload:', uploadError);
         throw new Error('Erro ao fazer upload da mídia');
       }
-      
       console.log('✅ [FASE 3] Upload concluído:', uploadData.path);
-      
+
       // Gerar URL pública
-      const { data: { publicUrl } } = supabase.storage
-        .from('conversation-media')
-        .getPublicUrl(uploadData.path);
-      
+      const {
+        data: {
+          publicUrl
+        }
+      } = supabase.storage.from('conversation-media').getPublicUrl(uploadData.path);
       console.log('📍 [FASE 3] URL pública:', publicUrl);
 
       // FASE 4: Enviar via WhatsApp usando base64
       const numeroNormalizado = normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
-      
       console.log('📤 [FASE 4] Enviando via WhatsApp...', {
         numero: numeroNormalizado,
         tipo: type,
@@ -4181,18 +3953,21 @@ function Conversas() {
         caption: caption || '[sem legenda]',
         inicio: base64Data.substring(0, 50)
       });
-      
-      const quotedPayload = replyingTo && selectedConv.messages.find(m => m.id === replyingTo)
-        ? {
-            quoted: {
-              key: { id: replyingTo },
-              message: { conversation: selectedConv.messages.find(m => m.id === replyingTo)?.content || '' }
-            },
-            quotedMessageId: replyingTo
+      const quotedPayload = replyingTo && selectedConv.messages.find(m => m.id === replyingTo) ? {
+        quoted: {
+          key: {
+            id: replyingTo
+          },
+          message: {
+            conversation: selectedConv.messages.find(m => m.id === replyingTo)?.content || ''
           }
-        : {};
-
-      const { data, error } = await enviarWhatsApp({
+        },
+        quotedMessageId: replyingTo
+      } : {};
+      const {
+        data,
+        error
+      } = await enviarWhatsApp({
         numero: numeroNormalizado,
         mensagem: caption || '',
         tipo_mensagem: type,
@@ -4201,25 +3976,23 @@ function Conversas() {
         mimeType: file.type,
         caption: caption || '',
         company_id: userRole?.company_id,
-        ...quotedPayload,
+        ...quotedPayload
       });
-
       if (error) {
         console.error('❌ Erro ao enviar:', error);
         toast.error(`Erro ao enviar ${type}: ${error.message || 'Erro desconhecido'}`);
         throw error;
       }
-
       console.log('✅ [FASE 4] Enviado com sucesso');
 
       // FASE 5: Salvar no banco com URL do Storage
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', userId)
-        .single();
-      
-      const { data: inserted, error: dbError } = await supabase.from('conversas').insert({
+      const {
+        data: userProfile
+      } = await supabase.from('profiles').select('full_name').eq('id', userId).single();
+      const {
+        data: inserted,
+        error: dbError
+      } = await supabase.from('conversas').insert({
         numero: numeroNormalizado,
         telefone_formatado: numeroNormalizado,
         mensagem: caption || '[Mídia]',
@@ -4232,7 +4005,7 @@ function Conversas() {
         company_id: userRole?.company_id,
         owner_id: userId,
         sent_by: userProfile?.full_name,
-        fromme: true,
+        fromme: true
       }).select('id, midia_url').single();
 
       // ⚡ Log detalhado para debugging
@@ -4245,7 +4018,6 @@ function Conversas() {
         companyId: userRole?.company_id,
         contactName: selectedConv.contactName
       });
-
       if (dbError) {
         console.error('❌ [MEDIA-SEND] Erro detalhado ao salvar mensagem:', {
           error: dbError,
@@ -4270,10 +4042,11 @@ function Conversas() {
         timestamp: new Date(),
         delivered: true,
         read: false,
-        mediaUrl: publicUrl, // ⚡ FASE 3: Usar URL do Storage
+        mediaUrl: publicUrl,
+        // ⚡ FASE 3: Usar URL do Storage
         fileName: file.name,
         mimeType: file.type,
-        sentBy: userProfile?.full_name || userName || "Equipe",
+        sentBy: userProfile?.full_name || userName || "Equipe"
       };
 
       // ⚡ CORREÇÃO CRÍTICA: Ordenar mensagens por timestamp após adicionar nova mensagem
@@ -4288,35 +4061,28 @@ function Conversas() {
       // ⚡ CORREÇÃO: Calcular status dinamicamente
       const sortedMessagesWithNew = sortMessagesByTimestamp([...selectedConv.messages, newMessage]);
       const newStatus = calculateConversationStatus(sortedMessagesWithNew);
-
-      const updatedConversations = conversations.map((conv) =>
-        conv.id === selectedConv.id
-          ? {
-              ...conv,
-              messages: sortedMessagesWithNew,
-              lastMessage: newMessage.content,
-              status: newStatus,
-              unread: 0,
-            }
-          : conv
-      );
-
+      const updatedConversations = conversations.map(conv => conv.id === selectedConv.id ? {
+        ...conv,
+        messages: sortedMessagesWithNew,
+        lastMessage: newMessage.content,
+        status: newStatus,
+        unread: 0
+      } : conv);
       saveConversations(updatedConversations);
       setSelectedConv({
         ...selectedConv,
         messages: sortedMessagesWithNew,
-        status: newStatus,
+        status: newStatus
       });
 
       // Atualizar status no banco de dados para sincronização em tempo real
       try {
         const telefoneFormatado = selectedConv.phoneNumber?.replace(/[^0-9]/g, '') || selectedConv.id.replace(/[^0-9]/g, '');
-        const { error: updateError } = await supabase
-          .from('conversas')
-          .update({ status: 'Enviada' })
-          .eq('telefone_formatado', telefoneFormatado)
-          .eq('company_id', userCompanyId);
-
+        const {
+          error: updateError
+        } = await supabase.from('conversas').update({
+          status: 'Enviada'
+        }).eq('telefone_formatado', telefoneFormatado).eq('company_id', userCompanyId);
         if (updateError) {
           console.error('❌ Erro ao atualizar status no banco:', updateError);
         } else {
@@ -4330,7 +4096,7 @@ function Conversas() {
 
       setSyncStatus('synced');
       setTimeout(() => setSyncStatus('idle'), 1000);
-      
+
       // Não mostrar notificação ao enviar mídia - apenas logs
       console.log('✅ Mídia enviada com sucesso');
     } catch (error) {
@@ -4340,34 +4106,30 @@ function Conversas() {
       toast.error("Erro ao enviar mídia");
     }
   };
-
   const handleSendAudio = async (audioBlob: Blob) => {
     if (!selectedConv) return;
-
     setSyncStatus('syncing');
-
     try {
       console.log('🎤 Enviando áudio via edge function...');
 
       // 1️⃣ Upload do áudio para o Storage PRIMEIRO
       const fileName = `outgoing/${Date.now()}-audio.ogg`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('conversation-media')
-        .upload(fileName, audioBlob, {
-          contentType: 'audio/ogg; codecs=opus',
-          upsert: false
-        });
-
+      const {
+        data: uploadData,
+        error: uploadError
+      } = await supabase.storage.from('conversation-media').upload(fileName, audioBlob, {
+        contentType: 'audio/ogg; codecs=opus',
+        upsert: false
+      });
       if (uploadError) {
         console.error('❌ Erro ao fazer upload do áudio:', uploadError);
         throw new Error('Falha ao fazer upload do áudio');
       }
 
       // Obter URL pública do Storage
-      const { data: urlData } = supabase.storage
-        .from('conversation-media')
-        .getPublicUrl(fileName);
-      
+      const {
+        data: urlData
+      } = supabase.storage.from('conversation-media').getPublicUrl(fileName);
       const storageUrl = urlData.publicUrl;
       console.log('✅ Áudio salvo no Storage:', storageUrl);
 
@@ -4393,32 +4155,33 @@ function Conversas() {
       });
 
       // 3️⃣ Buscar company_id para envio via WhatsApp
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-        .single();
+      const {
+        data: userRole
+      } = await supabase.from('user_roles').select('company_id').eq('user_id', (await supabase.auth.getUser()).data.user?.id).single();
 
       // Enviar via WhatsApp com company_id
       const numeroNormalizado = normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
-      const quotedPayload = replyingTo && selectedConv.messages.find(m => m.id === replyingTo)
-        ? {
-            quoted: {
-              key: { id: replyingTo },
-              message: { conversation: selectedConv.messages.find(m => m.id === replyingTo)?.content || '' }
-            },
-            quotedMessageId: replyingTo
+      const quotedPayload = replyingTo && selectedConv.messages.find(m => m.id === replyingTo) ? {
+        quoted: {
+          key: {
+            id: replyingTo
+          },
+          message: {
+            conversation: selectedConv.messages.find(m => m.id === replyingTo)?.content || ''
           }
-        : {};
-      
+        },
+        quotedMessageId: replyingTo
+      } : {};
       console.log('🎤 Enviando áudio via WhatsApp:', {
         numeroNormalizado,
         hasBase64: !!base64,
         base64Length: base64.length,
         companyId: userRole?.company_id
       });
-
-      const { data, error } = await enviarWhatsApp({
+      const {
+        data,
+        error
+      } = await enviarWhatsApp({
         numero: numeroNormalizado,
         mensagem: '',
         tipo_mensagem: 'audio',
@@ -4427,26 +4190,30 @@ function Conversas() {
         mimeType: 'audio/ogg; codecs=opus',
         caption: '',
         company_id: userRole?.company_id,
-        ...quotedPayload,
+        ...quotedPayload
       });
-
       if (error) {
         console.error('❌ Erro ao enviar áudio via WhatsApp:', error);
         toast.error('Erro ao enviar áudio. Tente novamente.');
         throw error;
       }
-
       console.log('✅ Áudio enviado com sucesso via WhatsApp');
 
       // 4️⃣ Salvar no banco com URL do Storage
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: userProfile } = user ? await supabase
-        .from('profiles')
-        .select('full_name, email')
-        .eq('id', user.id)
-        .single() : { data: null };
-      
-      const { data: inserted, error: dbError } = await supabase.from('conversas').insert([{
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
+      const {
+        data: userProfile
+      } = user ? await supabase.from('profiles').select('full_name, email').eq('id', user.id).single() : {
+        data: null
+      };
+      const {
+        data: inserted,
+        error: dbError
+      } = await supabase.from('conversas').insert([{
         numero: numeroNormalizado,
         telefone_formatado: numeroNormalizado,
         mensagem: '[Áudio]',
@@ -4455,20 +4222,19 @@ function Conversas() {
         tipo_mensagem: 'audio',
         nome_contato: selectedConv.contactName,
         arquivo_nome: 'audio.ogg',
-        midia_url: storageUrl, // ⚡ CORREÇÃO CRÍTICA: Salvar URL do Storage
+        midia_url: storageUrl,
+        // ⚡ CORREÇÃO CRÍTICA: Salvar URL do Storage
         company_id: userRole?.company_id,
         owner_id: user?.id,
         sent_by: userProfile?.full_name || userProfile?.email || 'Equipe',
-        fromme: true,
+        fromme: true
       }]).select('id, midia_url').single();
-      
       if (dbError) {
         console.error('❌ Erro ao salvar mensagem no banco:', dbError);
         toast.error('Erro ao salvar mensagem no histórico');
       } else {
         console.log('✅ Mensagem de áudio salva no banco com Storage URL:', inserted?.midia_url);
       }
-
       const newMessage: Message = {
         id: (inserted?.id || Date.now()).toString(),
         content: "[Áudio]",
@@ -4477,8 +4243,9 @@ function Conversas() {
         timestamp: new Date(),
         delivered: true,
         read: false,
-        mediaUrl: storageUrl, // ⚡ CORREÇÃO CRÍTICA: Usar URL do Storage
-        sentBy: userName || "Equipe",
+        mediaUrl: storageUrl,
+        // ⚡ CORREÇÃO CRÍTICA: Usar URL do Storage
+        sentBy: userName || "Equipe"
       };
 
       // ⚡ CORREÇÃO CRÍTICA: Ordenar mensagens por timestamp após adicionar nova mensagem
@@ -4493,34 +4260,26 @@ function Conversas() {
       // ⚡ CORREÇÃO: Calcular status dinamicamente
       const sortedMessagesWithNew = sortMessagesByTimestamp([...selectedConv.messages, newMessage]);
       const newStatus = calculateConversationStatus(sortedMessagesWithNew);
-
-      const updatedConversations = conversations.map((conv) =>
-        conv.id === selectedConv.id
-          ? {
-              ...conv,
-              messages: sortedMessagesWithNew,
-              lastMessage: "[Áudio]",
-              status: newStatus,
-              unread: 0,
-            }
-          : conv
-      );
-
+      const updatedConversations = conversations.map(conv => conv.id === selectedConv.id ? {
+        ...conv,
+        messages: sortedMessagesWithNew,
+        lastMessage: "[Áudio]",
+        status: newStatus,
+        unread: 0
+      } : conv);
       saveConversations(updatedConversations);
       setSelectedConv({
         ...selectedConv,
         messages: sortedMessagesWithNew,
-        status: newStatus,
+        status: newStatus
       });
 
       // Atualizar status no banco de dados
       try {
         const telefoneFormatado = selectedConv.phoneNumber?.replace(/[^0-9]/g, '') || selectedConv.id.replace(/[^0-9]/g, '');
-        await supabase
-          .from('conversas')
-          .update({ status: 'Enviada' })
-          .eq('telefone_formatado', telefoneFormatado)
-          .eq('company_id', userCompanyId);
+        await supabase.from('conversas').update({
+          status: 'Enviada'
+        }).eq('telefone_formatado', telefoneFormatado).eq('company_id', userCompanyId);
         console.log('✅ Status atualizado no banco após enviar áudio');
       } catch (error) {
         console.error('❌ Erro ao sincronizar status do áudio:', error);
@@ -4534,10 +4293,9 @@ function Conversas() {
       } catch (e) {
         console.error('❌ Erro ao iniciar transcrição automática:', e);
       }
-
       setSyncStatus('synced');
       setTimeout(() => setSyncStatus('idle'), 1000);
-      
+
       // Não mostrar notificação ao enviar áudio - apenas logs
       console.log('✅ Áudio enviado com sucesso');
     } catch (error) {
@@ -4551,33 +4309,29 @@ function Conversas() {
   // ⚡ FUNÇÃO PARA CALCULAR STATUS BASEADO NA ÚLTIMA MENSAGEM
   const calculateConversationStatus = (messages: Message[]): "waiting" | "answered" | "resolved" => {
     if (!messages || messages.length === 0) return "waiting";
-    
+
     // Ordenar mensagens por timestamp para garantir que pegamos a última
     const sortedMessages = [...messages].sort((a, b) => {
       const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
       const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
       return timeA - timeB;
     });
-    
     const ultimaMensagem = sortedMessages[sortedMessages.length - 1];
-    
+
     // Se a última mensagem foi do contato, está aguardando resposta
     if (ultimaMensagem.sender === "contact") {
       return "waiting";
     }
-    
+
     // Se a última mensagem foi do usuário, foi respondida
     if (ultimaMensagem.sender === "user") {
       return "answered";
     }
-    
     return "waiting";
   };
-
   const handleSendMessage = async (content?: string, type: Message["type"] = "text") => {
     const messageContent = content || messageInput.trim();
     if (!messageContent || !selectedConv) return;
-
     console.log('📤 [ENVIO] Iniciando envio de mensagem:', {
       conteudo: messageContent.substring(0, 50),
       tipo: type,
@@ -4599,68 +4353,64 @@ function Conversas() {
     // ⚡ CORREÇÃO CRÍTICA: NÃO adicionar mensagem localmente (evita duplicação)
     // O realtime vai adicionar automaticamente após salvar no banco
     console.log('📝 [ENVIO] Preparando mensagem para envio (sem update otimista)');
-    
+
     // Limpar input imediatamente para feedback visual
     setMessageInput("");
 
     // Atualizar status no banco de dados para sincronização em tempo real
     try {
       const telefoneFormatado = (selectedConv.phoneNumber || selectedConv.id).replace(/[^0-9]/g, '');
-      await supabase
-        .from('conversas')
-        .update({ status: 'Enviada' })
-        .eq('telefone_formatado', telefoneFormatado)
-        .eq('company_id', userCompanyId);
+      await supabase.from('conversas').update({
+        status: 'Enviada'
+      }).eq('telefone_formatado', telefoneFormatado).eq('company_id', userCompanyId);
       console.log('✅ Status atualizado no banco após enviar mensagem');
     } catch (error) {
       console.error('❌ Erro ao sincronizar status:', error);
     }
-    
+
     // Preparar dados para envio via WhatsApp
-    const mensagemParaEnviar = replyingTo && selectedConv.messages.find(m => m.id === replyingTo)
-      ? {
-          mensagem: messageContent,
-          quoted: {
-            key: {
-              id: replyingTo
-            },
-            message: {
-              conversation: selectedConv.messages.find(m => m.id === replyingTo)?.content || ''
-            }
-          }
+    const mensagemParaEnviar = replyingTo && selectedConv.messages.find(m => m.id === replyingTo) ? {
+      mensagem: messageContent,
+      quoted: {
+        key: {
+          id: replyingTo
+        },
+        message: {
+          conversation: selectedConv.messages.find(m => m.id === replyingTo)?.content || ''
         }
-      : { mensagem: messageContent };
-    
+      }
+    } : {
+      mensagem: messageContent
+    };
+
     // ⚡ CORREÇÃO CRÍTICA: Salvar mensagem no banco PRIMEIRO (antes de enviar)
     // Isso garante que a mensagem apareça no CRM mesmo se o envio falhar
     console.log('💾 [ENVIO] Salvando mensagem no banco PRIMEIRO...');
     const numeroNormalizado = normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
     let mensagemSalva = false;
-    
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (user) {
         // Buscar nome do usuário atual para salvar como sent_by
-        const { data: userProfile } = await supabase
-          .from('profiles')
-          .select('full_name, email')
-          .eq('id', user.id)
-          .single();
-        
+        const {
+          data: userProfile
+        } = await supabase.from('profiles').select('full_name, email').eq('id', user.id).single();
         const sentByName = userProfile?.full_name || userProfile?.email || 'Equipe';
         console.log('👤 [ENVIO] Nome do usuário que envia:', sentByName);
-        
-        const { data: userRole } = await supabase
-          .from('user_roles')
-          .select('company_id')
-          .eq('user_id', user.id)
-          .single();
-        
+        const {
+          data: userRole
+        } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single();
         if (userRole?.company_id) {
           const repliedMessage = replyingTo ? selectedConv.messages.find(m => m.id === replyingTo)?.content : null;
           // ✅ CORREÇÃO: Usar número ORIGINAL do lead (não normalizado) para manter consistência com webhook
           const numeroOriginal = selectedConv.phoneNumber || selectedConv.id;
-          const { error: dbError } = await supabase.from('conversas').insert([{
+          const {
+            error: dbError
+          } = await supabase.from('conversas').insert([{
             numero: numeroOriginal,
             telefone_formatado: numeroNormalizado,
             mensagem: messageContent,
@@ -4669,12 +4419,13 @@ function Conversas() {
             tipo_mensagem: type,
             nome_contato: selectedConv.contactName,
             company_id: userRole.company_id,
-            owner_id: user.id, // Adicionar ID do usuário que enviou
-            sent_by: sentByName, // ⚡ NOVO: Salvar nome do usuário permanentemente
+            owner_id: user.id,
+            // Adicionar ID do usuário que enviou
+            sent_by: sentByName,
+            // ⚡ NOVO: Salvar nome do usuário permanentemente
             fromme: true,
-            replied_to_message: repliedMessage || null,
+            replied_to_message: repliedMessage || null
           }]);
-          
           if (!dbError) {
             mensagemSalva = true;
             console.log('✅ [ENVIO] Mensagem salva no banco com sucesso (antes do envio)');
@@ -4688,7 +4439,7 @@ function Conversas() {
     } catch (saveError) {
       console.error('❌ [ENVIO] Erro ao salvar mensagem no banco:', saveError);
     }
-    
+
     // Enviar mensagem via Evolution API (após salvar no banco)
     try {
       console.log('📤 [ENVIO] Preparando envio via WhatsApp:', {
@@ -4698,28 +4449,32 @@ function Conversas() {
         userCompanyId,
         telefoneOriginal: selectedConv.phoneNumber || selectedConv.id
       });
-      
-      const { data, error } = await enviarWhatsApp({
+      const {
+        data,
+        error
+      } = await enviarWhatsApp({
         numero: numeroNormalizado,
         ...mensagemParaEnviar,
         quotedMessageId: replyingTo || undefined,
-        tipo_mensagem: type,
+        tipo_mensagem: type
       });
-
-      console.log('📥 [ENVIO] Resposta do enviarWhatsApp:', { data, error });
+      console.log('📥 [ENVIO] Resposta do enviarWhatsApp:', {
+        data,
+        error
+      });
       // ⚡ CORREÇÃO: Mensagem já foi salva antes do envio, não salvar novamente aqui
       // Isso evita duplicação de mensagens no banco
 
       if (error) {
         console.error('❌ [ENVIO] Erro ao enviar mensagem via WhatsApp:', error);
-        
+
         // Se a mensagem foi salva, apenas avisar sobre o envio
         if (mensagemSalva) {
           toast.warning('Mensagem salva, mas pode não ter sido enviada. Verifique a conexão WhatsApp.');
         } else {
           toast.error(`Erro ao enviar mensagem: ${error.message || 'Erro desconhecido'}`);
         }
-        
+
         // Recarregar conversas para mostrar a mensagem salva
         if (mensagemSalva) {
           setTimeout(async () => {
@@ -4729,39 +4484,37 @@ function Conversas() {
         }
         return;
       }
-
       console.log('✅ [ENVIO] Resposta Evolution API:', data);
-      
+
       // Não mostrar notificação ao enviar - apenas logs
       console.log('✅ [ENVIO] Mensagem enviada para WhatsApp com sucesso');
-      
+
       // ⚡ CORREÇÃO: Se a mensagem já foi salva antes, não salvar novamente
       if (!mensagemSalva) {
         console.log('⚠️ [ENVIO] Mensagem não foi salva antes, salvando agora...');
         // Se por algum motivo não foi salva antes, salvar agora
         try {
-          const { data: { user } } = await supabase.auth.getUser();
+          const {
+            data: {
+              user
+            }
+          } = await supabase.auth.getUser();
           if (user) {
             // Buscar nome do usuário para salvar no sent_by
-            const { data: userProfile } = await supabase
-              .from('profiles')
-              .select('full_name, email')
-              .eq('id', user.id)
-              .single();
-            
+            const {
+              data: userProfile
+            } = await supabase.from('profiles').select('full_name, email').eq('id', user.id).single();
             const sentByName = userProfile?.full_name || userProfile?.email || 'Equipe';
-            
-            const { data: userRole } = await supabase
-              .from('user_roles')
-              .select('company_id')
-              .eq('user_id', user.id)
-              .single();
-            
+            const {
+              data: userRole
+            } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single();
             if (userRole?.company_id) {
               const repliedMessage = replyingTo ? selectedConv.messages.find(m => m.id === replyingTo)?.content : null;
               // ✅ CORREÇÃO: Usar número ORIGINAL do lead (não normalizado) para manter consistência com webhook
               const numeroOriginal = selectedConv.phoneNumber || selectedConv.id;
-              const { error: dbError } = await supabase.from('conversas').insert([{
+              const {
+                error: dbError
+              } = await supabase.from('conversas').insert([{
                 numero: numeroOriginal,
                 telefone_formatado: numeroNormalizado,
                 mensagem: messageContent,
@@ -4770,12 +4523,13 @@ function Conversas() {
                 tipo_mensagem: type,
                 nome_contato: selectedConv.contactName,
                 company_id: userRole.company_id,
-                owner_id: user.id, // Adicionar ID do usuário que enviou
-                sent_by: sentByName, // ⚡ CORREÇÃO: Salvar nome do usuário permanentemente
+                owner_id: user.id,
+                // Adicionar ID do usuário que enviou
+                sent_by: sentByName,
+                // ⚡ CORREÇÃO: Salvar nome do usuário permanentemente
                 fromme: true,
-                replied_to_message: repliedMessage || null,
+                replied_to_message: repliedMessage || null
               }]);
-              
               if (!dbError) {
                 mensagemSalva = true;
                 console.log('✅ [ENVIO] Mensagem salva no banco após envio bem-sucedido');
@@ -4786,7 +4540,7 @@ function Conversas() {
           console.error('❌ [ENVIO] Erro ao salvar mensagem após envio:', saveError);
         }
       }
-      
+
       // Recarregar conversas para garantir que a mensagem apareça
       if (mensagemSalva) {
         setTimeout(async () => {
@@ -4794,7 +4548,7 @@ function Conversas() {
           await loadSupabaseConversations();
         }, 500);
       }
-      
+
       // CORREÇÃO: Limpar replyingTo após envio bem-sucedido
       if (replyingTo) {
         setReplyingTo(null);
@@ -4804,7 +4558,6 @@ function Conversas() {
       toast.error('Erro ao processar envio');
     }
   };
-
   const handleFileAttach = (type: "image" | "audio" | "pdf") => {
     toast.info(`Anexando ${type}...`);
     setTimeout(() => {
@@ -4824,31 +4577,32 @@ function Conversas() {
       reader.readAsDataURL(file);
     });
   };
-
   const addQuickMessage = async () => {
     if (!newQuickTitle || !newQuickCategory) {
       toast.error("Preencha título e selecione uma categoria");
       return;
     }
-    
+
     // Validar conteúdo baseado no tipo
     if (newQuickMessageType === "text" && !newQuickContent.trim()) {
       toast.error("Digite a mensagem de texto");
       return;
     }
-    
     if ((newQuickMessageType === "image" || newQuickMessageType === "video") && !newQuickMediaFile) {
       toast.error("Selecione um arquivo de mídia");
       return;
     }
-
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado');
-
-      const { data: companyData } = await supabase.rpc('get_my_company_id');
+      const {
+        data: companyData
+      } = await supabase.rpc('get_my_company_id');
       if (!companyData) throw new Error('Company não encontrada');
-
       let mediaUrl = "";
 
       // Converter mídia para base64 se houver
@@ -4860,21 +4614,18 @@ function Conversas() {
           return;
         }
       }
-
-      const { error } = await supabase
-        .from('quick_messages')
-        .insert({
-          company_id: companyData,
-          owner_id: user.id,
-          title: newQuickTitle,
-          content: newQuickContent || (newQuickMessageType === "image" ? "[Imagem]" : newQuickMessageType === "video" ? "[Vídeo]" : ""),
-          category_id: newQuickCategory,
-          message_type: newQuickMessageType,
-          media_url: mediaUrl || null,
-        });
-
+      const {
+        error
+      } = await supabase.from('quick_messages').insert({
+        company_id: companyData,
+        owner_id: user.id,
+        title: newQuickTitle,
+        content: newQuickContent || (newQuickMessageType === "image" ? "[Imagem]" : newQuickMessageType === "video" ? "[Vídeo]" : ""),
+        category_id: newQuickCategory,
+        message_type: newQuickMessageType,
+        media_url: mediaUrl || null
+      });
       if (error) throw error;
-
       await loadQuickMessages();
       setNewQuickTitle("");
       setNewQuickContent("");
@@ -4888,30 +4639,30 @@ function Conversas() {
       toast.error("Erro ao criar mensagem rápida");
     }
   };
-
   const addQuickCategory = async () => {
     if (!newCategoryName.trim()) {
       toast.error("Digite o nome da categoria");
       return;
     }
-    
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado');
-
-      const { data: companyData } = await supabase.rpc('get_my_company_id');
+      const {
+        data: companyData
+      } = await supabase.rpc('get_my_company_id');
       if (!companyData) throw new Error('Company não encontrada');
-
-      const { error } = await supabase
-        .from('quick_message_categories')
-        .insert({
-          company_id: companyData,
-          owner_id: user.id,
-          name: newCategoryName,
-        });
-
+      const {
+        error
+      } = await supabase.from('quick_message_categories').insert({
+        company_id: companyData,
+        owner_id: user.id,
+        name: newCategoryName
+      });
       if (error) throw error;
-
       await loadQuickCategories();
       setNewCategoryName("");
       toast.success("Categoria criada!");
@@ -4920,16 +4671,12 @@ function Conversas() {
       toast.error("Erro ao criar categoria");
     }
   };
-
   const deleteQuickMessage = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('quick_messages')
-        .delete()
-        .eq('id', id);
-
+      const {
+        error
+      } = await supabase.from('quick_messages').delete().eq('id', id);
       if (error) throw error;
-
       await loadQuickMessages();
       toast.success("Mensagem rápida removida!");
     } catch (error) {
@@ -4937,7 +4684,6 @@ function Conversas() {
       toast.error("Erro ao remover mensagem");
     }
   };
-
   const deleteQuickCategory = async (id: string) => {
     // Verificar se há mensagens usando esta categoria
     const messagesInCategory = quickMessages.filter(m => m.category === id);
@@ -4945,15 +4691,11 @@ function Conversas() {
       toast.error("Não é possível excluir categoria com mensagens vinculadas");
       return;
     }
-    
     try {
-      const { error } = await supabase
-        .from('quick_message_categories')
-        .delete()
-        .eq('id', id);
-
+      const {
+        error
+      } = await supabase.from('quick_message_categories').delete().eq('id', id);
       if (error) throw error;
-
       await loadQuickCategories();
       toast.success("Categoria removida!");
     } catch (error) {
@@ -4961,7 +4703,6 @@ function Conversas() {
       toast.error("Erro ao remover categoria");
     }
   };
-
   const sendQuickMessage = async (message: QuickMessage) => {
     if (message.type === "image" || message.type === "video") {
       // Enviar mídia
@@ -4969,12 +4710,10 @@ function Conversas() {
         toast.error("Mídia não encontrada na mensagem rápida");
         return;
       }
-      
       try {
         // Detectar mimeType da data URL (formato: data:image/jpeg;base64,...)
         let mimeType = message.mimeType || 'image/jpeg';
         let base64Data = message.mediaUrl;
-        
         if (message.mediaUrl.includes('data:') && message.mediaUrl.includes(';base64,')) {
           const mimeMatch = message.mediaUrl.match(/data:([^;]+);base64,/);
           if (mimeMatch) {
@@ -4984,12 +4723,11 @@ function Conversas() {
         } else if (message.mediaUrl.includes(',')) {
           base64Data = message.mediaUrl.split(',')[1];
         }
-        
         if (!base64Data) {
           toast.error("Formato de mídia inválido");
           return;
         }
-        
+
         // Criar arquivo temporário a partir do base64
         const byteCharacters = atob(base64Data);
         const byteNumbers = new Array(byteCharacters.length);
@@ -4997,20 +4735,23 @@ function Conversas() {
           byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
         const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: mimeType });
-        
+        const blob = new Blob([byteArray], {
+          type: mimeType
+        });
+
         // Gerar nome de arquivo baseado no tipo
         const extension = mimeType.split('/')[1] || (message.type === 'video' ? 'mp4' : 'jpg');
         const fileName = message.fileName || `quick_media_${Date.now()}.${extension}`;
-        const file = new File([blob], fileName, { type: mimeType });
-        
-        console.log('📤 [QUICK-MESSAGE] Enviando mídia:', { 
-          type: message.type, 
-          mimeType, 
-          fileName, 
-          size: file.size 
+        const file = new File([blob], fileName, {
+          type: mimeType
         });
-        
+        console.log('📤 [QUICK-MESSAGE] Enviando mídia:', {
+          type: message.type,
+          mimeType,
+          fileName,
+          size: file.size
+        });
+
         // Enviar mídia usando handleSendMedia
         await handleSendMedia(file, message.content, message.type);
       } catch (error) {
@@ -5043,18 +4784,16 @@ function Conversas() {
       toast.error("Preencha título e selecione uma categoria");
       return;
     }
-    
+
     // Validar conteúdo baseado no tipo
     if (editMessageType === "text" && !editMessageContent.trim()) {
       toast.error("Digite a mensagem de texto");
       return;
     }
-    
     if ((editMessageType === "image" || editMessageType === "video") && !editMessageMediaFile && !editMessageMediaPreview) {
       toast.error("Selecione um arquivo de mídia ou mantenha o existente");
       return;
     }
-
     try {
       let mediaUrl = editMessageMediaPreview || "";
 
@@ -5067,20 +4806,16 @@ function Conversas() {
           return;
         }
       }
-
-      const { error } = await supabase
-        .from('quick_messages')
-        .update({
-          title: editMessageTitle,
-          content: editMessageContent || (editMessageType === "image" ? "[Imagem]" : editMessageType === "video" ? "[Vídeo]" : ""),
-          category_id: editMessageCategory,
-          message_type: editMessageType,
-          media_url: mediaUrl || null,
-        })
-        .eq('id', editingMessageId);
-
+      const {
+        error
+      } = await supabase.from('quick_messages').update({
+        title: editMessageTitle,
+        content: editMessageContent || (editMessageType === "image" ? "[Imagem]" : editMessageType === "video" ? "[Vídeo]" : ""),
+        category_id: editMessageCategory,
+        message_type: editMessageType,
+        media_url: mediaUrl || null
+      }).eq('id', editingMessageId);
       if (error) throw error;
-
       await loadQuickMessages();
       setEditingMessageId(null);
       setEditMessageTitle("");
@@ -5123,15 +4858,13 @@ function Conversas() {
       toast.error("Digite o nome da categoria");
       return;
     }
-    
     try {
-      const { error } = await supabase
-        .from('quick_message_categories')
-        .update({ name: editCategoryName })
-        .eq('id', editingCategoryId);
-
+      const {
+        error
+      } = await supabase.from('quick_message_categories').update({
+        name: editCategoryName
+      }).eq('id', editingCategoryId);
       if (error) throw error;
-
       await loadQuickCategories();
       setEditingCategoryId(null);
       setEditCategoryName("");
@@ -5153,15 +4886,13 @@ function Conversas() {
     // Obter todas as mensagens da categoria na ordem atual
     const categoryMessages = quickMessages.filter(m => m.category === categoryId);
     const otherMessages = quickMessages.filter(m => m.category !== categoryId);
-    
     const currentIndex = categoryMessages.findIndex(m => m.id === id);
     if (currentIndex <= 0) return; // Já está no topo
-    
+
     // Reordenar mensagens da categoria
     const reordered = [...categoryMessages];
-    [reordered[currentIndex], reordered[currentIndex - 1]] = 
-    [reordered[currentIndex - 1], reordered[currentIndex]];
-    
+    [reordered[currentIndex], reordered[currentIndex - 1]] = [reordered[currentIndex - 1], reordered[currentIndex]];
+
     // Reconstruir array completo mantendo ordem: outras categorias + categoria reordenada
     const updated = [...otherMessages, ...reordered];
     saveQuickMessages(updated);
@@ -5173,15 +4904,13 @@ function Conversas() {
     // Obter todas as mensagens da categoria na ordem atual
     const categoryMessages = quickMessages.filter(m => m.category === categoryId);
     const otherMessages = quickMessages.filter(m => m.category !== categoryId);
-    
     const currentIndex = categoryMessages.findIndex(m => m.id === id);
     if (currentIndex >= categoryMessages.length - 1) return; // Já está no final
-    
+
     // Reordenar mensagens da categoria
     const reordered = [...categoryMessages];
-    [reordered[currentIndex], reordered[currentIndex + 1]] = 
-    [reordered[currentIndex + 1], reordered[currentIndex]];
-    
+    [reordered[currentIndex], reordered[currentIndex + 1]] = [reordered[currentIndex + 1], reordered[currentIndex]];
+
     // Reconstruir array completo mantendo ordem: outras categorias + categoria reordenada
     const updated = [...otherMessages, ...reordered];
     saveQuickMessages(updated);
@@ -5192,11 +4921,9 @@ function Conversas() {
   const moveCategoryUp = (id: string) => {
     const currentIndex = quickCategories.findIndex(c => c.id === id);
     if (currentIndex <= 0) return; // Já está no topo
-    
+
     const updated = [...quickCategories];
-    [updated[currentIndex], updated[currentIndex - 1]] = 
-    [updated[currentIndex - 1], updated[currentIndex]];
-    
+    [updated[currentIndex], updated[currentIndex - 1]] = [updated[currentIndex - 1], updated[currentIndex]];
     saveQuickCategories(updated);
     toast.success("Categoria movida para cima!");
   };
@@ -5205,27 +4932,24 @@ function Conversas() {
   const moveCategoryDown = (id: string) => {
     const currentIndex = quickCategories.findIndex(c => c.id === id);
     if (currentIndex >= quickCategories.length - 1) return; // Já está no final
-    
+
     const updated = [...quickCategories];
-    [updated[currentIndex], updated[currentIndex + 1]] = 
-    [updated[currentIndex + 1], updated[currentIndex]];
-    
+    [updated[currentIndex], updated[currentIndex + 1]] = [updated[currentIndex + 1], updated[currentIndex]];
     saveQuickCategories(updated);
     toast.success("Categoria movida para baixo!");
   };
-
   const addReminder = async () => {
     if (!selectedConv || !reminderTitle.trim() || !reminderDatetime) {
       toast.error("Preencha o título e a data/hora");
       return;
     }
-    
+
     // Se enviar está ativado, precisa ter mensagem
     if (reminderEnviar && !reminderMessage.trim()) {
       toast.error("Por favor, escreva a mensagem que será enviada");
       return;
     }
-    
+
     // ⚠️ IMPORTANTE: Não criar lead automaticamente
     // Lead só será criado quando usuário clicar em "Adicionar ao CRM"
     if (!leadVinculado?.id) {
@@ -5233,9 +4957,12 @@ function Conversas() {
       toast.error("Por favor, adicione o contato ao CRM antes de criar um compromisso");
       return;
     }
-
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
       // Buscar company_id do lead vinculado
@@ -5244,7 +4971,7 @@ function Conversas() {
         toast.error("Lead sem company_id associado");
         return;
       }
-      
+
       // Verificar se a data já passou
       const dataHoraCompromisso = new Date(reminderDatetime);
       const agora = new Date();
@@ -5254,39 +4981,35 @@ function Conversas() {
       }
 
       // Buscar dados do responsável (usuário atual)
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name, phone')
-        .eq('id', user.id)
-        .maybeSingle();
-      
-      // Criar compromisso
-      const { data: compromisso, error: compromissoError } = await supabase
-        .from('compromissos')
-        .insert({
-          lead_id: leadVinculado.id as string,
-          usuario_responsavel_id: user.id,
-          owner_id: user.id,
-          company_id: companyId,
-          data_hora_inicio: dataHoraCompromisso.toISOString(),
-          data_hora_fim: new Date(dataHoraCompromisso.getTime() + 60 * 60 * 1000).toISOString(),
-          tipo_servico: reminderTitle,
-          observacoes: reminderNotes,
-          status: 'agendado',
-        })
-        .select()
-        .single();
+      const {
+        data: profile
+      } = await supabase.from('profiles').select('full_name, phone').eq('id', user.id).maybeSingle();
 
+      // Criar compromisso
+      const {
+        data: compromisso,
+        error: compromissoError
+      } = await supabase.from('compromissos').insert({
+        lead_id: leadVinculado.id as string,
+        usuario_responsavel_id: user.id,
+        owner_id: user.id,
+        company_id: companyId,
+        data_hora_inicio: dataHoraCompromisso.toISOString(),
+        data_hora_fim: new Date(dataHoraCompromisso.getTime() + 60 * 60 * 1000).toISOString(),
+        tipo_servico: reminderTitle,
+        observacoes: reminderNotes,
+        status: 'agendado'
+      }).select().single();
       if (compromissoError) throw compromissoError;
 
       // Se envio de mensagem está ativado, criar o(s) lembrete(s)
       if (reminderEnviar) {
         const dataEnvio = new Date(reminderDatetime);
         const telefoneDestino = leadVinculado.phone || leadVinculado.telefone || null;
-        
+
         // Criar lembretes baseado no destinatário escolhido
         const lembretesCriar = [];
-        
+
         // Lembrete para o Lead
         if (reminderDestinatario === 'lead' || reminderDestinatario === 'ambos') {
           if (telefoneDestino) {
@@ -5303,28 +5026,23 @@ function Conversas() {
               telefone_responsavel: telefoneDestino,
               company_id: companyId,
               recorrencia: reminderRecorrencia || null,
-              ativo: true,
+              ativo: true
             });
           } else {
             toast.warning("Lead sem telefone cadastrado - lembrete para lead não será enviado");
           }
         }
-        
+
         // Lembrete para o Responsável
         if (reminderDestinatario === 'responsavel' || reminderDestinatario === 'ambos') {
           // Buscar telefone do responsável no perfil do profissional
-          const { data: profissional } = await supabase
-            .from('profissionais')
-            .select('telefone')
-            .eq('user_id', user.id)
-            .maybeSingle();
-          
+          const {
+            data: profissional
+          } = await supabase.from('profissionais').select('telefone').eq('user_id', user.id).maybeSingle();
           const telefoneResponsavel = profissional?.telefone || null;
-          
           if (telefoneResponsavel) {
             // Mensagem personalizada para o responsável
             const mensagemResponsavel = `🔔 Lembrete: ${reminderTitle}\n\nCliente: ${leadVinculado.name}\n\n${reminderMessage}`;
-            
             lembretesCriar.push({
               compromisso_id: compromisso.id,
               canal: 'whatsapp',
@@ -5338,19 +5056,18 @@ function Conversas() {
               telefone_responsavel: telefoneResponsavel,
               company_id: companyId,
               recorrencia: reminderRecorrencia || null,
-              ativo: true,
+              ativo: true
             });
           } else {
             toast.warning("Responsável sem telefone cadastrado - lembrete não será enviado para você");
           }
         }
-        
+
         // Inserir lembretes
         if (lembretesCriar.length > 0) {
-          const { error: lembreteError } = await supabase
-            .from('lembretes')
-            .insert(lembretesCriar);
-
+          const {
+            error: lembreteError
+          } = await supabase.from('lembretes').insert(lembretesCriar);
           if (lembreteError) {
             console.error('Erro ao criar lembrete:', lembreteError);
             toast.warning("Compromisso criado, mas houve erro ao criar lembrete de envio");
@@ -5366,10 +5083,7 @@ function Conversas() {
       setReminderDestinatario("lead");
       setReminderEnviar(true);
       setReminderRecorrencia("");
-      
-      const mensagemSucesso = reminderEnviar 
-        ? "Lembrete criado! Mensagem será enviada na data/hora programada."
-        : "Lembrete criado! (sem envio de mensagem)";
+      const mensagemSucesso = reminderEnviar ? "Lembrete criado! Mensagem será enviada na data/hora programada." : "Lembrete criado! (sem envio de mensagem)";
       toast.success(mensagemSucesso);
       loadReminders();
     } catch (error) {
@@ -5377,55 +5091,49 @@ function Conversas() {
       toast.error("Erro ao criar lembrete");
     }
   };
-
   const scheduleMessage = async () => {
     if (!selectedConv || !scheduledContent.trim() || !scheduledDatetime) {
       toast.error("Preencha todos os campos");
       return;
     }
-
     try {
       const scheduledDate = new Date(scheduledDatetime);
       const now = new Date();
-      
+
       // Validar se a data está no futuro (sem restrição mínima de tempo)
       if (scheduledDate <= now) {
         toast.error("A data deve ser no futuro");
         return;
       }
-
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: {
+          session
+        }
+      } = await supabase.auth.getSession();
       if (!session) {
         toast.error("Usuário não autenticado");
         return;
       }
-
-      const { data: userRole } = await supabase
-        .from("user_roles")
-        .select("company_id")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-
+      const {
+        data: userRole
+      } = await supabase.from("user_roles").select("company_id").eq("user_id", session.user.id).maybeSingle();
       if (!userRole?.company_id) {
         toast.error("Empresa não encontrada");
         return;
       }
-
       const phoneNumber = selectedConv.phoneNumber || selectedConv.id;
-
-      const { error } = await supabase
-        .from('scheduled_whatsapp_messages')
-        .insert([{
-          company_id: userRole.company_id,
-          owner_id: session.user.id,
-          conversation_id: selectedConv.id,
-          phone_number: phoneNumber,
-          contact_name: selectedConv.contactName,
-          message_content: scheduledContent,
-          scheduled_datetime: scheduledDate.toISOString(),
-          status: 'pending',
-        }]);
-
+      const {
+        error
+      } = await supabase.from('scheduled_whatsapp_messages').insert([{
+        company_id: userRole.company_id,
+        owner_id: session.user.id,
+        conversation_id: selectedConv.id,
+        phone_number: phoneNumber,
+        contact_name: selectedConv.contactName,
+        message_content: scheduledContent,
+        scheduled_datetime: scheduledDate.toISOString(),
+        status: 'pending'
+      }]);
       if (error) {
         console.error('❌ Erro ao agendar mensagem:', error);
         toast.error('Erro ao agendar mensagem');
@@ -5436,19 +5144,17 @@ function Conversas() {
       const minutosAteEnvio = Math.round((scheduledDate.getTime() - now.getTime()) / (1000 * 60));
       const horasAteEnvio = Math.floor(minutosAteEnvio / 60);
       const minutosRestantes = minutosAteEnvio % 60;
-      
       let tempoMensagem = "";
       if (horasAteEnvio > 0) {
         tempoMensagem = `em ${horasAteEnvio}h${minutosRestantes > 0 ? ` e ${minutosRestantes}min` : ''}`;
       } else {
         tempoMensagem = `em ${minutosRestantes} minuto${minutosRestantes !== 1 ? 's' : ''}`;
       }
-
       console.log('✅ Mensagem agendada com sucesso para:', scheduledDate.toISOString());
       toast.success(`Mensagem agendada para ser enviada ${tempoMensagem}!`);
       setScheduledContent("");
       setScheduledDatetime("");
-      
+
       // Recarregar lista de mensagens agendadas
       await carregarMensagensAgendadas();
     } catch (error) {
@@ -5456,31 +5162,26 @@ function Conversas() {
       toast.error('Erro ao agendar mensagem');
     }
   };
-
   const carregarMensagensAgendadas = async () => {
     if (!selectedConv) return;
-
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: {
+          session
+        }
+      } = await supabase.auth.getSession();
       if (!session) return;
-
-      const { data: userRole } = await supabase
-        .from("user_roles")
-        .select("company_id")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-
+      const {
+        data: userRole
+      } = await supabase.from("user_roles").select("company_id").eq("user_id", session.user.id).maybeSingle();
       if (!userRole?.company_id) return;
-
       const phoneNumber = selectedConv.phoneNumber || selectedConv.id;
-
-      const { data, error } = await supabase
-        .from('scheduled_whatsapp_messages')
-        .select('*')
-        .eq('company_id', userRole.company_id)
-        .eq('phone_number', phoneNumber)
-        .order('scheduled_datetime', { ascending: true });
-
+      const {
+        data,
+        error
+      } = await supabase.from('scheduled_whatsapp_messages').select('*').eq('company_id', userRole.company_id).eq('phone_number', phoneNumber).order('scheduled_datetime', {
+        ascending: true
+      });
       if (!error && data) {
         console.log('📅 Mensagens agendadas:', data.length);
         setScheduledMessages(data);
@@ -5489,20 +5190,16 @@ function Conversas() {
       console.error('❌ Erro ao carregar mensagens agendadas:', error);
     }
   };
-
   const cancelarMensagemAgendada = async (messageId: string) => {
     try {
-      const { error } = await supabase
-        .from('scheduled_whatsapp_messages')
-        .delete()
-        .eq('id', messageId);
-
+      const {
+        error
+      } = await supabase.from('scheduled_whatsapp_messages').delete().eq('id', messageId);
       if (error) {
         console.error('❌ Erro ao cancelar mensagem:', error);
         toast.error('Erro ao cancelar mensagem');
         return;
       }
-
       toast.success('Mensagem cancelada');
       await carregarMensagensAgendadas();
     } catch (error) {
@@ -5514,25 +5211,15 @@ function Conversas() {
   // Sincronizar mensagens agendadas em tempo real
   useEffect(() => {
     if (!selectedConv) return;
-
     carregarMensagensAgendadas();
-
-    const channel = supabase
-      .channel('scheduled-messages-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scheduled_whatsapp_messages',
-        },
-        (payload) => {
-          console.log('📡 Atualização de mensagem agendada:', payload);
-          carregarMensagensAgendadas();
-        }
-      )
-      .subscribe();
-
+    const channel = supabase.channel('scheduled-messages-realtime').on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'scheduled_whatsapp_messages'
+    }, payload => {
+      console.log('📡 Atualização de mensagem agendada:', payload);
+      carregarMensagensAgendadas();
+    }).subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
@@ -5545,26 +5232,24 @@ function Conversas() {
       carregarMeetingCompromissos();
     }
   }, [meetingData, reunioesDialogOpen]);
-
   const carregarMeetingHorarioComercial = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) return;
-
-      const { data: agendas } = await supabase
-        .from("agendas")
-        .select("*")
-        .eq("owner_id", user.id)
-        .eq("tipo", "principal")
-        .single();
-
+      const {
+        data: agendas
+      } = await supabase.from("agendas").select("*").eq("owner_id", user.id).eq("tipo", "principal").single();
       if (agendas && agendas.disponibilidade && typeof agendas.disponibilidade === 'object') {
         setMeetingAgendaSelecionada(agendas);
         const disp = agendas.disponibilidade as any;
-        
+
         // O horário comercial é salvo em disponibilidade.periodos
         const periodos = disp.periodos || disp;
-        
+
         // Verificar se está no formato novo (com períodos manha, tarde, noite)
         if (periodos.manha && periodos.tarde) {
           // Formato novo - usar diretamente
@@ -5572,23 +5257,23 @@ function Conversas() {
             manha: {
               inicio: periodos.manha.inicio || "08:00",
               fim: periodos.manha.fim || "12:00",
-              ativo: periodos.manha.ativo !== false,
+              ativo: periodos.manha.ativo !== false
             },
             tarde: {
               inicio: periodos.tarde.inicio || "14:00",
               fim: periodos.tarde.fim || "18:00",
-              ativo: periodos.tarde.ativo !== false,
+              ativo: periodos.tarde.ativo !== false
             },
             noite: {
               inicio: periodos.noite?.inicio || "19:00",
               fim: periodos.noite?.fim || "23:00",
-              ativo: periodos.noite?.ativo === true,
+              ativo: periodos.noite?.ativo === true
             },
             intervalo_almoco: {
               inicio: periodos.intervalo_almoco?.inicio || "12:00",
               fim: periodos.intervalo_almoco?.fim || "14:00",
-              ativo: periodos.intervalo_almoco?.ativo !== false,
-            },
+              ativo: periodos.intervalo_almoco?.ativo !== false
+            }
           });
         } else {
           // Formato antigo - converter
@@ -5596,23 +5281,23 @@ function Conversas() {
             manha: {
               inicio: disp.horario_inicio || "08:00",
               fim: "12:00",
-              ativo: true,
+              ativo: true
             },
             tarde: {
               inicio: "14:00",
               fim: disp.horario_fim || "18:00",
-              ativo: true,
+              ativo: true
             },
             noite: {
               inicio: "19:00",
               fim: "23:00",
-              ativo: false,
+              ativo: false
             },
             intervalo_almoco: {
               inicio: "12:00",
               fim: "14:00",
-              ativo: true,
-            },
+              ativo: true
+            }
           });
         }
       }
@@ -5620,63 +5305,58 @@ function Conversas() {
       console.error("Erro ao carregar horário comercial:", error);
     }
   };
-
   const carregarMeetingCompromissos = async () => {
     try {
       const dataInicio = new Date(meetingData + "T00:00:00");
       const dataFim = new Date(meetingData + "T23:59:59");
 
       // Buscar apenas compromissos da agenda principal do usuário
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) return;
-
-      const { data: agendaPrincipal } = await supabase
-        .from("agendas")
-        .select("id")
-        .eq("owner_id", user.id)
-        .eq("tipo", "principal")
-        .single();
-
-      let query = supabase
-        .from("compromissos")
-        .select("id, data_hora_inicio, data_hora_fim, agenda_id")
-        .gte("data_hora_inicio", dataInicio.toISOString())
-        .lte("data_hora_inicio", dataFim.toISOString());
+      const {
+        data: agendaPrincipal
+      } = await supabase.from("agendas").select("id").eq("owner_id", user.id).eq("tipo", "principal").single();
+      let query = supabase.from("compromissos").select("id, data_hora_inicio, data_hora_fim, agenda_id").gte("data_hora_inicio", dataInicio.toISOString()).lte("data_hora_inicio", dataFim.toISOString());
 
       // Filtrar pela agenda principal ou compromissos sem agenda
       if (agendaPrincipal) {
         query = query.or(`agenda_id.eq.${agendaPrincipal.id},agenda_id.is.null`);
       }
-
-      const { data: compromissos } = await query;
-      
+      const {
+        data: compromissos
+      } = await query;
       console.log('📅 [Conversas] Compromissos carregados para agenda principal:', compromissos?.length || 0);
       setMeetingCompromissosExistentes(compromissos || []);
     } catch (error) {
       console.error("Erro ao carregar compromissos:", error);
     }
   };
-
   const handleSelecionarMeetingHorario = (horario: string) => {
     setMeetingHoraInicio(horario);
     // Também atualizar meetingDatetime para compatibilidade com código existente
     setMeetingDatetime(`${meetingData}T${horario}`);
   };
-
   const scheduleMeeting = async () => {
     if (!selectedConv || !meetingTipoServico.trim() || !meetingData || !meetingHoraInicio) {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
-    
+
     // ⚠️ IMPORTANTE: Não criar lead automaticamente
     if (!leadVinculado?.id) {
       toast.error("Por favor, adicione o contato ao CRM antes de criar um compromisso");
       return;
     }
-
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
       // Buscar company_id do lead vinculado
@@ -5690,92 +5370,87 @@ function Conversas() {
       const dataHoraInicio = new Date(`${meetingData}T${meetingHoraInicio}`);
       const duracaoMinutos = parseInt(meetingDuracao) || 30;
       const dataHoraFim = new Date(dataHoraInicio.getTime() + duracaoMinutos * 60 * 1000);
-      
-      const { data: compromisso, error } = await supabase
-        .from('compromissos')
-        .insert({
-          lead_id: leadVinculado.id,
-          usuario_responsavel_id: user.id,
-          owner_id: user.id,
-          company_id: companyId,
-          data_hora_inicio: dataHoraInicio.toISOString(),
-          data_hora_fim: dataHoraFim.toISOString(),
-          tipo_servico: meetingTipoServico,
-          observacoes: meetingDescricao || meetingNotes,
-          status: 'agendado',
-          custo_estimado: meetingCustoEstimado ? parseFloat(meetingCustoEstimado) : null,
-        })
-        .select()
-        .single();
-
+      const {
+        data: compromisso,
+        error
+      } = await supabase.from('compromissos').insert({
+        lead_id: leadVinculado.id,
+        usuario_responsavel_id: user.id,
+        owner_id: user.id,
+        company_id: companyId,
+        data_hora_inicio: dataHoraInicio.toISOString(),
+        data_hora_fim: dataHoraFim.toISOString(),
+        tipo_servico: meetingTipoServico,
+        observacoes: meetingDescricao || meetingNotes,
+        status: 'agendado',
+        custo_estimado: meetingCustoEstimado ? parseFloat(meetingCustoEstimado) : null
+      }).select().single();
       if (error) throw error;
-
       console.log('✅ [COMPROMISSO] Compromisso criado com sucesso:', compromisso?.id);
 
       // ⚡ ENVIAR MENSAGEM DE CONFIRMAÇÃO IMEDIATA
       console.log('🔍 [DEBUG-CONFIRMAÇÃO] Estado enviarConfirmacaoReuniao:', enviarConfirmacaoReuniao);
       console.log('🔍 [DEBUG-CONFIRMAÇÃO] Lead vinculado:', leadVinculado);
       console.log('🔍 [DEBUG-CONFIRMAÇÃO] Compromisso criado:', compromisso);
-      
       if (enviarConfirmacaoReuniao && compromisso && leadVinculado) {
         try {
           const telefone = leadVinculado.phone || leadVinculado.telefone;
           console.log('🔍 [DEBUG-CONFIRMAÇÃO] Telefone do lead:', telefone);
-          
           if (telefone) {
             const telefoneNormalizado = normalizePhoneForWA(telefone);
             console.log('🔍 [DEBUG-CONFIRMAÇÃO] Telefone normalizado:', telefoneNormalizado);
-            
             if (telefoneNormalizado) {
               // Mensagem de confirmação formatada e personalizada
-              const tipoServicoFormatado = meetingTipoServico.trim()
-                ? meetingTipoServico.charAt(0).toUpperCase() + meetingTipoServico.slice(1)
-                : 'Compromisso';
-              
+              const tipoServicoFormatado = meetingTipoServico.trim() ? meetingTipoServico.charAt(0).toUpperCase() + meetingTipoServico.slice(1) : 'Compromisso';
               const observacoes = meetingDescricao || meetingNotes;
-              const mensagemConfirmacao = `✅ *Compromisso Confirmado!*\n\n` +
-                `Olá ${leadVinculado.name}! Seu compromisso foi agendado com sucesso.\n\n` +
-                `📅 *Data:* ${format(dataHoraInicio, "dd/MM/yyyy", { locale: ptBR })}\n` +
-                `🕐 *Horário:* ${format(dataHoraInicio, "HH:mm", { locale: ptBR })} às ${format(dataHoraFim, "HH:mm", { locale: ptBR })}\n` +
-                `📋 *Tipo:* ${tipoServicoFormatado}\n` +
-                (observacoes ? `\n💬 *Observações:*\n${observacoes}\n` : '') +
-                `\n✅ *Status:* Agendado\n\n` +
-                `Aguardamos você no dia e horário agendados!\n\n` +
-                `_Esta é uma confirmação automática do seu agendamento._`;
-
+              const mensagemConfirmacao = `✅ *Compromisso Confirmado!*\n\n` + `Olá ${leadVinculado.name}! Seu compromisso foi agendado com sucesso.\n\n` + `📅 *Data:* ${format(dataHoraInicio, "dd/MM/yyyy", {
+                locale: ptBR
+              })}\n` + `🕐 *Horário:* ${format(dataHoraInicio, "HH:mm", {
+                locale: ptBR
+              })} às ${format(dataHoraFim, "HH:mm", {
+                locale: ptBR
+              })}\n` + `📋 *Tipo:* ${tipoServicoFormatado}\n` + (observacoes ? `\n💬 *Observações:*\n${observacoes}\n` : '') + `\n✅ *Status:* Agendado\n\n` + `Aguardamos você no dia e horário agendados!\n\n` + `_Esta é uma confirmação automática do seu agendamento._`;
               console.log('📱 [CONFIRMAÇÃO] Enviando mensagem de confirmação imediata...');
               console.log('📱 [CONFIRMAÇÃO] Dados do envio:', {
                 numero: telefoneNormalizado,
                 company_id: companyId,
                 mensagemLength: mensagemConfirmacao.length
               });
-              
-              const { data: resultConfirmacao, error: confirmacaoError } = await supabase.functions.invoke('enviar-whatsapp', {
+              const {
+                data: resultConfirmacao,
+                error: confirmacaoError
+              } = await supabase.functions.invoke('enviar-whatsapp', {
                 body: {
                   numero: telefoneNormalizado,
                   mensagem: mensagemConfirmacao,
                   company_id: companyId
                 }
               });
-
-              console.log('📱 [CONFIRMAÇÃO] Resposta da edge function:', { data: resultConfirmacao, error: confirmacaoError });
-
+              console.log('📱 [CONFIRMAÇÃO] Resposta da edge function:', {
+                data: resultConfirmacao,
+                error: confirmacaoError
+              });
               if (confirmacaoError) {
                 console.error('❌ [CONFIRMAÇÃO] Erro ao enviar confirmação:', confirmacaoError);
                 toast.warning("Compromisso criado, mas não foi possível enviar a confirmação imediata.");
               } else {
                 console.log('✅ [CONFIRMAÇÃO] Mensagem de confirmação enviada com sucesso!');
-                
+
                 // Salvar mensagem de confirmação na tabela conversas para ficar visível no CRM
                 try {
-                  const { data: { user } } = await supabase.auth.getUser();
-                  const { data: userProfile } = user ? await supabase
-                    .from('profiles')
-                    .select('full_name, email')
-                    .eq('id', user.id)
-                    .single() : { data: null };
-                  
-                  const { error: dbError } = await supabase.from('conversas').insert([{
+                  const {
+                    data: {
+                      user
+                    }
+                  } = await supabase.auth.getUser();
+                  const {
+                    data: userProfile
+                  } = user ? await supabase.from('profiles').select('full_name, email').eq('id', user.id).single() : {
+                    data: null
+                  };
+                  const {
+                    error: dbError
+                  } = await supabase.from('conversas').insert([{
                     numero: telefoneNormalizado,
                     telefone_formatado: telefoneNormalizado,
                     mensagem: mensagemConfirmacao,
@@ -5787,9 +5462,8 @@ function Conversas() {
                     lead_id: leadVinculado.id,
                     owner_id: user?.id,
                     sent_by: userProfile?.full_name || userProfile?.email || 'Equipe',
-                    fromme: true,
+                    fromme: true
                   }]);
-                  
                   if (dbError) {
                     console.error('❌ [CONFIRMAÇÃO] Erro ao salvar mensagem no banco:', dbError);
                   } else {
@@ -5798,7 +5472,6 @@ function Conversas() {
                 } catch (saveError) {
                   console.error('❌ [CONFIRMAÇÃO] Erro ao salvar mensagem no banco:', saveError);
                 }
-                
                 toast.success("Compromisso criado e confirmação enviada ao cliente!");
               }
             } else {
@@ -5825,52 +5498,48 @@ function Conversas() {
       if (enviarLembreteReuniao && compromisso) {
         try {
           console.log('📝 [LEMBRETE] Criando lembrete para compromisso:', compromisso.id);
-
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', user.id)
-            .maybeSingle();
+          const {
+            data: profile
+          } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
 
           // Validar e processar horas de antecedência (converter horas e minutos para decimal)
           const horas = parseInt(horasAntecedenciaReuniaoHoras || "0", 10);
           const minutos = parseInt(horasAntecedenciaReuniaoMinutos || "0", 10);
-          
           if (horas === 0 && minutos === 0) {
             toast.error("Por favor, informe o tempo de antecedência para o lembrete");
             return;
           }
-          
           if (horas < 0 || minutos < 0 || minutos >= 60) {
             toast.error("Valores inválidos para horas ou minutos");
             return;
           }
-          
+
           // Converter horas e minutos para formato decimal (horas + minutos/60)
-          const horasAntecedencia = horas + (minutos / 60);
+          const horasAntecedencia = horas + minutos / 60;
 
           // Calcular data de envio do lembrete
           const dataEnvio = new Date(dataHoraInicio);
           dataEnvio.setHours(dataEnvio.getHours() - horasAntecedencia);
-
           const lembreteData = {
             compromisso_id: compromisso.id,
             canal: 'whatsapp',
             horas_antecedencia: horasAntecedencia,
-            mensagem: `Olá ${leadVinculado.name}! Lembramos do seu compromisso agendado para ${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`,
+            mensagem: `Olá ${leadVinculado.name}! Lembramos do seu compromisso agendado para ${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", {
+              locale: ptBR
+            })}.`,
             status_envio: 'pendente',
             data_envio: dataEnvio.toISOString(),
             destinatario: 'lead',
             telefone_responsavel: profile?.full_name || user.email,
-            company_id: companyId,
+            company_id: companyId
           };
-
-          console.log('📝 [LEMBRETE] Dados do lembrete:', { ...lembreteData, mensagem: '[oculta]' });
-
-          const { error: lembreteError } = await supabase
-            .from('lembretes')
-            .insert(lembreteData);
-
+          console.log('📝 [LEMBRETE] Dados do lembrete:', {
+            ...lembreteData,
+            mensagem: '[oculta]'
+          });
+          const {
+            error: lembreteError
+          } = await supabase.from('lembretes').insert(lembreteData);
           if (lembreteError) {
             console.error('❌ [LEMBRETE] Erro ao criar lembrete:', lembreteError);
             toast.warning("Compromisso criado, mas houve erro ao criar o lembrete.");
@@ -5881,7 +5550,6 @@ function Conversas() {
           console.error('❌ [LEMBRETE] Erro ao criar lembrete:', error);
         }
       }
-
       setMeetingTitle("");
       setMeetingDatetime("");
       setMeetingNotes("");
@@ -5889,11 +5557,11 @@ function Conversas() {
       setEnviarLembreteReuniao(true); // Reset para padrão
       setHorasAntecedenciaReuniaoHoras("0"); // Reset para padrão
       setHorasAntecedenciaReuniaoMinutos("0"); // Reset para padrão
-      
+
       if (!enviarConfirmacaoReuniao) {
         toast.success("Reunião agendada e sincronizada com Agenda!");
       }
-      
+
       // Recarregar reuniões após criar
       await loadMeetings();
     } catch (error) {
@@ -5901,33 +5569,30 @@ function Conversas() {
       toast.error("Erro ao agendar reunião");
     }
   };
-
   const addTag = async () => {
     if (!selectedConv || !newTag.trim()) {
       toast.error("Digite uma tag");
       return;
     }
-    
+
     // Verificar se a tag já existe
     if (selectedConv.tags?.includes(newTag.trim())) {
       toast.error("Esta tag já foi adicionada");
       return;
     }
-    
     try {
       setSyncStatus('syncing');
-      
+
       // Buscar lead existente (não criar automaticamente)
       const leadData = await findLead(selectedConv);
-      
       if (leadData) {
         // Atualizar tags no Supabase
         const updatedTags = [...(leadData.tags || []), newTag.trim()];
-        const { error } = await supabase
-          .from('leads')
-          .update({ tags: updatedTags })
-          .eq('id', leadData.id);
-        
+        const {
+          error
+        } = await supabase.from('leads').update({
+          tags: updatedTags
+        }).eq('id', leadData.id);
         if (error) {
           console.error('Erro ao atualizar tags no Supabase:', error);
           setSyncStatus('error');
@@ -5935,20 +5600,21 @@ function Conversas() {
           setTimeout(() => setSyncStatus('idle'), 2000);
           return;
         }
-        
         console.log('✅ Tag adicionada no Supabase');
         setSyncStatus('synced');
         setTimeout(() => setSyncStatus('idle'), 1000);
       }
-      
+
       // Atualizar localmente (será sincronizado via realtime)
-      const updatedConversations = conversations.map((conv) =>
-        conv.id === selectedConv.id
-          ? { ...conv, tags: [...(conv.tags || []), newTag.trim()] }
-          : conv
-      );
+      const updatedConversations = conversations.map(conv => conv.id === selectedConv.id ? {
+        ...conv,
+        tags: [...(conv.tags || []), newTag.trim()]
+      } : conv);
       saveConversations(updatedConversations);
-      setSelectedConv({ ...selectedConv, tags: [...(selectedConv.tags || []), newTag.trim()] });
+      setSelectedConv({
+        ...selectedConv,
+        tags: [...(selectedConv.tags || []), newTag.trim()]
+      });
       setNewTag("");
       await refreshTags(); // Atualizar lista de tags disponíveis
       toast.success("Tag adicionada!");
@@ -5959,29 +5625,26 @@ function Conversas() {
       setTimeout(() => setSyncStatus('idle'), 2000);
     }
   };
-
   const addExistingTag = async (tag: string) => {
     if (!selectedConv) return;
-    
+
     // Verificar se a tag já existe
     if (selectedConv.tags?.includes(tag)) {
       return;
     }
-    
     try {
       setSyncStatus('syncing');
-      
+
       // Buscar lead existente (não criar automaticamente)
       const leadData = await findLead(selectedConv);
-      
       if (leadData) {
         // Atualizar tags no Supabase
         const updatedTags = [...(leadData.tags || []), tag];
-        const { error } = await supabase
-          .from('leads')
-          .update({ tags: updatedTags })
-          .eq('id', leadData.id);
-        
+        const {
+          error
+        } = await supabase.from('leads').update({
+          tags: updatedTags
+        }).eq('id', leadData.id);
         if (error) {
           console.error('Erro ao atualizar tags no Supabase:', error);
           setSyncStatus('error');
@@ -5989,26 +5652,29 @@ function Conversas() {
           setTimeout(() => setSyncStatus('idle'), 2000);
           return;
         }
-        
         console.log('✅ Tag adicionada no Supabase');
         setSyncStatus('synced');
         setTimeout(() => setSyncStatus('idle'), 1000);
       }
-      
+
       // Atualizar localmente
-      const updatedConversations = conversations.map((conv) =>
-        conv.id === selectedConv.id
-          ? { ...conv, tags: [...(conv.tags || []), tag] }
-          : conv
-      );
+      const updatedConversations = conversations.map(conv => conv.id === selectedConv.id ? {
+        ...conv,
+        tags: [...(conv.tags || []), tag]
+      } : conv);
       saveConversations(updatedConversations);
-      setSelectedConv({ ...selectedConv, tags: [...(selectedConv.tags || []), tag] });
-      
+      setSelectedConv({
+        ...selectedConv,
+        tags: [...(selectedConv.tags || []), tag]
+      });
+
       // Atualizar lead vinculado se existir
       if (leadVinculado) {
-        setLeadVinculado({ ...leadVinculado, tags: updatedConversations.find(c => c.id === selectedConv.id)?.tags || [] });
+        setLeadVinculado({
+          ...leadVinculado,
+          tags: updatedConversations.find(c => c.id === selectedConv.id)?.tags || []
+        });
       }
-      
       toast.success("Tag adicionada!");
     } catch (error) {
       console.error('Erro ao adicionar tag:', error);
@@ -6017,24 +5683,21 @@ function Conversas() {
       setTimeout(() => setSyncStatus('idle'), 2000);
     }
   };
-
   const removeTag = async (tag: string) => {
     if (!selectedConv) return;
-    
     try {
       setSyncStatus('syncing');
-      
+
       // Buscar lead existente
       const leadData = await findLead(selectedConv);
-      
       if (leadData) {
         // Remover tag do array
         const updatedTags = (leadData.tags || []).filter(t => t !== tag);
-        const { error } = await supabase
-          .from('leads')
-          .update({ tags: updatedTags })
-          .eq('id', leadData.id);
-        
+        const {
+          error
+        } = await supabase.from('leads').update({
+          tags: updatedTags
+        }).eq('id', leadData.id);
         if (error) {
           console.error('Erro ao remover tag no Supabase:', error);
           setSyncStatus('error');
@@ -6042,27 +5705,30 @@ function Conversas() {
           setTimeout(() => setSyncStatus('idle'), 2000);
           return;
         }
-        
         console.log('✅ Tag removida no Supabase');
         setSyncStatus('synced');
         setTimeout(() => setSyncStatus('idle'), 1000);
       }
-      
+
       // Atualizar localmente
       const updatedTags = (selectedConv.tags || []).filter(t => t !== tag);
-      const updatedConversations = conversations.map((conv) =>
-        conv.id === selectedConv.id
-          ? { ...conv, tags: updatedTags }
-          : conv
-      );
+      const updatedConversations = conversations.map(conv => conv.id === selectedConv.id ? {
+        ...conv,
+        tags: updatedTags
+      } : conv);
       saveConversations(updatedConversations);
-      setSelectedConv({ ...selectedConv, tags: updatedTags });
-      
+      setSelectedConv({
+        ...selectedConv,
+        tags: updatedTags
+      });
+
       // Atualizar lead vinculado se existir
       if (leadVinculado) {
-        setLeadVinculado({ ...leadVinculado, tags: updatedTags });
+        setLeadVinculado({
+          ...leadVinculado,
+          tags: updatedTags
+        });
       }
-      
       toast.success("Tag removida!");
     } catch (error) {
       console.error('Erro ao remover tag:', error);
@@ -6071,29 +5737,24 @@ function Conversas() {
       setTimeout(() => setSyncStatus('idle'), 2000);
     }
   };
-
   const addToFunnel = async () => {
     if (!selectedConv || !selectedFunilId || !selectedFunnel) {
       toast.error("Selecione o funil e a etapa");
       return;
     }
-    
     try {
       setSyncStatus('syncing');
-      
+
       // Buscar lead existente (não criar automaticamente)
       const leadData = await findLead(selectedConv);
-      
       if (leadData) {
         // Atualizar funil e etapa no Supabase
-        const { error } = await supabase
-          .from('leads')
-          .update({ 
-            funil_id: selectedFunilId,
-            etapa_id: selectedFunnel,
-          })
-          .eq('id', leadData.id);
-        
+        const {
+          error
+        } = await supabase.from('leads').update({
+          funil_id: selectedFunilId,
+          etapa_id: selectedFunnel
+        }).eq('id', leadData.id);
         if (error) {
           console.error('Erro ao atualizar funil no Supabase:', error);
           setSyncStatus('error');
@@ -6101,30 +5762,30 @@ function Conversas() {
           setTimeout(() => setSyncStatus('idle'), 2000);
           return;
         }
-        
         console.log('✅ Lead adicionado ao funil no Supabase');
         setSyncStatus('synced');
         setTimeout(() => setSyncStatus('idle'), 1000);
       }
-      
+
       // Buscar nome da etapa para exibição local
       const etapaSelecionada = etapas.find(e => e.id === selectedFunnel);
       const nomeEtapa = etapaSelecionada?.nome || "Adicionado";
-      
+
       // Atualizar localmente (será sincronizado via realtime)
-      const updatedConversations = conversations.map((conv) =>
-        conv.id === selectedConv.id
-          ? { ...conv, funnelStage: nomeEtapa }
-          : conv
-      );
+      const updatedConversations = conversations.map(conv => conv.id === selectedConv.id ? {
+        ...conv,
+        funnelStage: nomeEtapa
+      } : conv);
       saveConversations(updatedConversations);
-      setSelectedConv({ ...selectedConv, funnelStage: nomeEtapa });
+      setSelectedConv({
+        ...selectedConv,
+        funnelStage: nomeEtapa
+      });
       setSelectedFunilId("");
       setSelectedFunnel("");
-      
+
       // Recarregar dados do lead vinculado
       await recarregarLeadVinculado(selectedConv.id);
-      
       toast.success(`Lead adicionado ao funil!`);
     } catch (error) {
       console.error('Erro ao adicionar ao funil:', error);
@@ -6133,29 +5794,24 @@ function Conversas() {
       setTimeout(() => setSyncStatus('idle'), 2000);
     }
   };
-
   const updateResponsavel = async () => {
     if (!selectedConv || !newResponsavel) {
       toast.error("Selecione um responsável");
       return;
     }
-    
     try {
       setSyncStatus('syncing');
-      
+
       // Buscar lead existente (não criar automaticamente)
       const leadData = await findLead(selectedConv);
-      
       if (leadData) {
         // Por enquanto, salvamos o nome do responsável em notes ou company
         // Em produção, você pode ter uma tabela de usuários e usar responsavel_id
-        const { error } = await supabase
-          .from('leads')
-          .update({ 
-            notes: `Responsável: ${newResponsavel}${leadData.notes ? '\n' + leadData.notes : ''}`
-          })
-          .eq('id', leadData.id);
-        
+        const {
+          error
+        } = await supabase.from('leads').update({
+          notes: `Responsável: ${newResponsavel}${leadData.notes ? '\n' + leadData.notes : ''}`
+        }).eq('id', leadData.id);
         if (error) {
           console.error('Erro ao atualizar responsável no Supabase:', error);
           setSyncStatus('error');
@@ -6163,20 +5819,21 @@ function Conversas() {
           setTimeout(() => setSyncStatus('idle'), 2000);
           return;
         }
-        
         console.log('✅ Responsável atualizado no Supabase');
         setSyncStatus('synced');
         setTimeout(() => setSyncStatus('idle'), 1000);
       }
-      
+
       // Atualizar localmente
-      const updatedConversations = conversations.map((conv) =>
-        conv.id === selectedConv.id
-          ? { ...conv, responsavel: newResponsavel }
-          : conv
-      );
+      const updatedConversations = conversations.map(conv => conv.id === selectedConv.id ? {
+        ...conv,
+        responsavel: newResponsavel
+      } : conv);
       saveConversations(updatedConversations);
-      setSelectedConv({ ...selectedConv, responsavel: newResponsavel });
+      setSelectedConv({
+        ...selectedConv,
+        responsavel: newResponsavel
+      });
       setNewResponsavel("");
       toast.success("Responsável atualizado!");
     } catch (error) {
@@ -6200,20 +5857,19 @@ function Conversas() {
       toast.error("Por favor, adicione o contato ao CRM antes de criar uma tarefa");
       return;
     }
-
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: {
+          session
+        }
+      } = await supabase.auth.getSession();
       if (!session) {
         toast.error("Usuário não autenticado");
         return;
       }
-
-      const { data: userRole } = await supabase
-        .from("user_roles")
-        .select("company_id")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-
+      const {
+        data: userRole
+      } = await supabase.from("user_roles").select("company_id").eq("user_id", session.user.id).maybeSingle();
       if (!userRole?.company_id) {
         toast.error("Empresa não encontrada");
         return;
@@ -6226,9 +5882,7 @@ function Conversas() {
         toast.error("Erro: Lead não encontrado");
         return;
       }
-      
       console.log('📋 [TAREFAS] Criando tarefa com lead_id:', leadIdParaTarefa);
-      
       const taskData: any = {
         title: newTaskTitle,
         description: newTaskDescription || null,
@@ -6240,29 +5894,23 @@ function Conversas() {
         owner_id: session.user.id,
         // Incluir board_id e column_id apenas se fornecidos
         board_id: selectedTaskBoardId && selectedTaskBoardId.trim() ? selectedTaskBoardId : null,
-        column_id: selectedTaskColumnId && selectedTaskColumnId.trim() ? selectedTaskColumnId : null,
+        column_id: selectedTaskColumnId && selectedTaskColumnId.trim() ? selectedTaskColumnId : null
       };
 
       // Inserir tarefa e obter o resultado
       let createdTask = null;
       let insertError = null;
-      
       try {
-        const result = await supabase
-          .from('tasks')
-          .insert([taskData])
-          .select()
-          .single(); // Usar .single() para obter a tarefa criada
-        
+        const result = await supabase.from('tasks').insert([taskData]).select().single(); // Usar .single() para obter a tarefa criada
+
         insertError = result.error;
         createdTask = result.data;
       } catch (insertException: any) {
         // Capturar qualquer exceção que possa ser lançada durante o insert
         console.error('❌ Exceção ao inserir tarefa:', insertException);
-        
+
         // Verificar se é um erro de Edge Function
-        if (insertException?.message?.includes('Edge Function') || 
-            insertException?.message?.includes('non-2xx')) {
+        if (insertException?.message?.includes('Edge Function') || insertException?.message?.includes('non-2xx')) {
           // Erro de Edge Function - provavelmente da busca de foto
           // Ignorar e continuar, pois a tarefa pode ter sido criada mesmo assim
           console.warn('⚠️ Erro de Edge Function detectado (provavelmente da busca de foto) - ignorando');
@@ -6271,7 +5919,6 @@ function Conversas() {
           throw insertException;
         }
       }
-
       if (insertError) {
         console.error('❌ Erro ao criar tarefa:', insertError);
         console.error('❌ Detalhes do erro:', {
@@ -6283,20 +5930,18 @@ function Conversas() {
         toast.error(`Erro ao criar tarefa: ${insertError.message || 'Erro desconhecido'}`);
         return;
       }
-
       console.log('✅ Tarefa criada com sucesso:', createdTask);
       console.log('📋 [TAREFAS] Lead vinculado:', leadVinculado?.id);
       console.log('📋 [TAREFAS] Lead_id da tarefa:', createdTask?.lead_id);
       console.log('📋 [TAREFAS] LeadIdFinal:', leadIdFinal);
       toast.success('Tarefa criada!');
-      
+
       // CORREÇÃO DEFINITIVA: SEMPRE adicionar tarefa à lista imediatamente
       if (createdTask) {
         const leadIdTarefa = createdTask.lead_id;
         const leadIdParaBuscar = leadIdTarefa || leadIdFinal || leadVinculado?.id;
-        
         console.log('📋 [TAREFAS] Adicionando tarefa à lista. Lead_id tarefa:', leadIdTarefa, 'Lead_id buscar:', leadIdParaBuscar);
-        
+
         // SEMPRE adicionar à lista imediatamente (otimista)
         setLeadTasks(prev => {
           const existe = prev.find(t => t.id === createdTask.id);
@@ -6306,13 +5951,17 @@ function Conversas() {
           }
           console.log('📋 [TAREFAS] Adicionando nova tarefa. Total antes:', prev.length);
           const novaLista = [createdTask, ...prev];
-          console.log('📋 [TAREFAS] Total depois:', novaLista.length, 'Tarefas:', novaLista.map(t => ({ id: t.id, title: t.title, lead_id: t.lead_id })));
+          console.log('📋 [TAREFAS] Total depois:', novaLista.length, 'Tarefas:', novaLista.map(t => ({
+            id: t.id,
+            title: t.title,
+            lead_id: t.lead_id
+          })));
           return novaLista;
         });
-        
+
         // Mudar para aba "Histórico" imediatamente
         setTarefasTabValue("historico");
-        
+
         // Recarregar lista em background para garantir sincronização
         if (leadIdParaBuscar) {
           console.log('📋 [TAREFAS] Recarregando lista em background para sincronização');
@@ -6330,7 +5979,7 @@ function Conversas() {
           setTarefasTabValue("historico");
         }
       }
-      
+
       // Limpar campos
       setNewTaskTitle("");
       setNewTaskDescription("");
@@ -6345,62 +5994,51 @@ function Conversas() {
       toast.error(`Erro ao criar tarefa: ${errorMessage}`);
     }
   };
-
   const deletarTarefa = async (taskId: string) => {
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
-
+      const {
+        error
+      } = await supabase.from('tasks').delete().eq('id', taskId);
       if (error) {
         console.error('❌ Erro ao deletar tarefa:', error);
         toast.error('Erro ao deletar tarefa');
         return;
       }
-
       console.log('✅ Tarefa deletada');
     } catch (error) {
       console.error('❌ Erro ao deletar tarefa:', error);
       toast.error('Erro ao deletar tarefa');
     }
   };
-
   const toggleTaskStatus = async (taskId: string, currentStatus: string) => {
     try {
       const newStatus = currentStatus === 'concluida' ? 'pendente' : 'concluida';
-      
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: newStatus })
-        .eq('id', taskId);
-
+      const {
+        error
+      } = await supabase.from('tasks').update({
+        status: newStatus
+      }).eq('id', taskId);
       if (error) {
         console.error('❌ Erro ao atualizar status:', error);
         toast.error('Erro ao atualizar status');
         return;
       }
-
       console.log('✅ Status atualizado');
     } catch (error) {
       console.error('❌ Erro ao atualizar status:', error);
       toast.error('Erro ao atualizar status');
     }
   };
-
   const updateLeadInfo = async () => {
     if (!selectedConv) return;
-    
     try {
       setSyncStatus('syncing');
-      
+
       // Buscar lead existente (não criar automaticamente)
       const leadData = await findLead(selectedConv);
-      
       if (leadData) {
         // Preparar dados para atualização
         const updateData: any = {};
-        
         if (newProduto) updateData.servico = newProduto;
         if (newValor) {
           // Extrair valor numérico
@@ -6412,13 +6050,11 @@ function Conversas() {
         if (newAnotacoes !== undefined && newAnotacoes !== '') {
           updateData.notes = newAnotacoes;
         }
-        
+
         // Atualizar no Supabase
-        const { error } = await supabase
-          .from('leads')
-          .update(updateData)
-          .eq('id', leadData.id);
-        
+        const {
+          error
+        } = await supabase.from('leads').update(updateData).eq('id', leadData.id);
         if (error) {
           console.error('Erro ao atualizar informações no Supabase:', error);
           setSyncStatus('error');
@@ -6426,26 +6062,21 @@ function Conversas() {
           setTimeout(() => setSyncStatus('idle'), 2000);
           return;
         }
-        
         console.log('✅ Informações atualizadas no Supabase');
         setSyncStatus('synced');
         setTimeout(() => setSyncStatus('idle'), 1000);
       }
-      
+
       // Atualizar localmente (será sincronizado via realtime)
-      const updatedConversations = conversations.map((conv) =>
-        conv.id === selectedConv.id
-          ? { 
-              ...conv, 
-              produto: newProduto || conv.produto,
-              valor: newValor || conv.valor,
-              anotacoes: newAnotacoes !== undefined ? newAnotacoes : conv.anotacoes
-            }
-          : conv
-      );
+      const updatedConversations = conversations.map(conv => conv.id === selectedConv.id ? {
+        ...conv,
+        produto: newProduto || conv.produto,
+        valor: newValor || conv.valor,
+        anotacoes: newAnotacoes !== undefined ? newAnotacoes : conv.anotacoes
+      } : conv);
       saveConversations(updatedConversations);
-      setSelectedConv({ 
-        ...selectedConv, 
+      setSelectedConv({
+        ...selectedConv,
         produto: newProduto || selectedConv.produto,
         valor: newValor || selectedConv.valor,
         anotacoes: newAnotacoes !== undefined ? newAnotacoes : selectedConv.anotacoes
@@ -6464,34 +6095,48 @@ function Conversas() {
 
   // Função auxiliar para buscar ou criar lead no Supabase
   // MELHORIA: Função auxiliar para validar e normalizar número de telefone
-  const validateAndNormalizePhone = (phone: string): { normalized: string; isValid: boolean; variations: string[] } => {
+  const validateAndNormalizePhone = (phone: string): {
+    normalized: string;
+    isValid: boolean;
+    variations: string[];
+  } => {
     if (!phone || typeof phone !== 'string') {
       console.warn('⚠️ [LEAD] Telefone inválido: não é uma string', phone);
-      return { normalized: '', isValid: false, variations: [] };
+      return {
+        normalized: '',
+        isValid: false,
+        variations: []
+      };
     }
 
     // Normalizar: remover todos os caracteres não numéricos
     const normalized = phone.replace(/[^0-9]/g, '');
-    
+
     // Validar se é um número brasileiro válido (12 ou 13 dígitos)
     const isValid = normalized.length >= 12 && normalized.length <= 13;
-    
     if (!isValid) {
       console.warn('⚠️ [LEAD] Telefone inválido: tamanho incorreto', {
         original: phone,
         normalized,
         length: normalized.length
       });
-      return { normalized, isValid: false, variations: [] };
+      return {
+        normalized,
+        isValid: false,
+        variations: []
+      };
     }
 
     // Gerar variações do número para busca
-    const variations = [
-      normalized, // Número limpo
-      phone, // Número original
-      safeFormatPhoneNumber(phone), // Número formatado (se disponível)
-      phone.replace(/\s+/g, ''), // Sem espaços
-      phone.replace(/[()]/g, ''), // Sem parênteses
+    const variations = [normalized,
+    // Número limpo
+    phone,
+    // Número original
+    safeFormatPhoneNumber(phone),
+    // Número formatado (se disponível)
+    phone.replace(/\s+/g, ''),
+    // Sem espaços
+    phone.replace(/[()]/g, '') // Sem parênteses
     ].filter((v, i, arr) => v && arr.indexOf(v) === i); // Remover duplicatas
 
     console.log('✅ [LEAD] Telefone validado e normalizado:', {
@@ -6500,8 +6145,11 @@ function Conversas() {
       isValid,
       variations: variations.length
     });
-
-    return { normalized, isValid, variations };
+    return {
+      normalized,
+      isValid,
+      variations
+    };
   };
 
   // 🎯 APENAS buscar lead existente - NÃO criar automaticamente
@@ -6512,52 +6160,49 @@ function Conversas() {
         phoneNumber: conversation.phoneNumber,
         conversationId: conversation.id
       });
-      
+
       // Validar número de telefone antes de buscar lead
       const phoneRaw = conversation.phoneNumber || conversation.id;
-      const { normalized: phoneNormalized, isValid, variations } = validateAndNormalizePhone(phoneRaw);
-
+      const {
+        normalized: phoneNormalized,
+        isValid,
+        variations
+      } = validateAndNormalizePhone(phoneRaw);
       if (!isValid || !phoneNormalized) {
         console.warn('⚠️ [LEAD] Telefone inválido - não é possível buscar lead:', phoneRaw);
         return null;
       }
 
       // Buscar user_id do usuário autenticado
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) {
         console.warn('⚠️ [LEAD] Usuário não autenticado');
         return null;
       }
 
       // Buscar company_id do usuário
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
+      const {
+        data: userRole
+      } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).maybeSingle();
       if (!userRole?.company_id) {
         console.warn('⚠️ [LEAD] Usuário sem company_id');
         return null;
       }
-
       console.log('📞 [LEAD] Buscando lead com variações de telefone:', {
         variations,
         companyId: userRole.company_id
       });
 
       // Buscar lead por telefone exato e variações
-      const phoneConditions = variations
-        .map(v => `phone.eq.${v},telefone.eq.${v}`)
-        .join(',');
-      
-      const { data: existingLead, error: searchError } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('company_id', userRole.company_id)
-        .or(phoneConditions)
-        .maybeSingle();
-
+      const phoneConditions = variations.map(v => `phone.eq.${v},telefone.eq.${v}`).join(',');
+      const {
+        data: existingLead,
+        error: searchError
+      } = await supabase.from('leads').select('*').eq('company_id', userRole.company_id).or(phoneConditions).maybeSingle();
       if (searchError && searchError.code !== 'PGRST116') {
         console.error('❌ [LEAD] Erro ao buscar lead:', {
           error: searchError,
@@ -6580,7 +6225,9 @@ function Conversas() {
         const phoneKey = conversation.phoneNumber || conversation.id;
         const formatted = safeFormatPhoneNumber(phoneKey);
         setLeadsVinculados(prev => {
-          const newMap = { ...prev };
+          const newMap = {
+            ...prev
+          };
           // Adicionar todas as variações ao mapeamento
           variations.forEach(v => {
             newMap[v] = existingLead.id;
@@ -6591,7 +6238,6 @@ function Conversas() {
           }
           return newMap;
         });
-
         console.log('✅ [LEAD] Conversa vinculada ao lead existente');
         return existingLead;
       }
@@ -6615,27 +6261,31 @@ function Conversas() {
 
       // Validar número de telefone
       const phoneRaw = conversation.phoneNumber || conversation.id;
-      const { normalized: phoneNormalized, isValid, variations } = validateAndNormalizePhone(phoneRaw);
-
+      const {
+        normalized: phoneNormalized,
+        isValid,
+        variations
+      } = validateAndNormalizePhone(phoneRaw);
       if (!isValid || !phoneNormalized) {
         toast.error('Número de telefone inválido. Não é possível criar lead.');
         return null;
       }
 
       // Buscar user_id do usuário autenticado
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Usuário não autenticado');
         return null;
       }
 
       // Buscar company_id do usuário
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
+      const {
+        data: userRole
+      } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).maybeSingle();
       if (!userRole?.company_id) {
         toast.error('Erro: Configuração de empresa não encontrada');
         return null;
@@ -6654,23 +6304,18 @@ function Conversas() {
         tags: conversation.tags || [],
         notes: conversation.anotacoes || null,
         servico: conversation.produto || null,
-        source: `Conversa ${conversation.channel}`,
+        source: `Conversa ${conversation.channel}`
       };
-
       console.log('📦 [LEAD] Dados do novo lead:', newLeadData);
-
-      const { data: newLead, error: createError } = await supabase
-        .from('leads')
-        .insert(newLeadData)
-        .select()
-        .single();
-
+      const {
+        data: newLead,
+        error: createError
+      } = await supabase.from('leads').insert(newLeadData).select().single();
       if (createError) {
         console.error('❌ [LEAD] Erro ao criar lead:', createError);
         toast.error(`Erro ao criar lead: ${createError.message}`);
         return null;
       }
-
       console.log('✅ [LEAD] Novo lead criado manualmente:', {
         leadId: newLead.id,
         leadName: newLead.name,
@@ -6681,7 +6326,9 @@ function Conversas() {
       const phoneKey = conversation.phoneNumber || conversation.id;
       const formatted = safeFormatPhoneNumber(phoneKey);
       setLeadsVinculados(prev => {
-        const newMap = { ...prev };
+        const newMap = {
+          ...prev
+        };
         variations.forEach(v => {
           newMap[v] = newLead.id;
         });
@@ -6691,7 +6338,6 @@ function Conversas() {
         }
         return newMap;
       });
-
       toast.success(`Lead "${conversation.contactName}" adicionado ao CRM com sucesso!`);
       return newLead;
     } catch (error) {
@@ -6713,25 +6359,23 @@ function Conversas() {
   const verificarLeadVinculado = async (conversation: Conversation) => {
     try {
       setMostrarBotaoCriarLead(false);
-      
       console.log('🔍 [LEAD] Verificando lead vinculado para conversa:', {
         contactName: conversation.contactName,
         phoneNumber: conversation.phoneNumber,
         conversationId: conversation.id
       });
-
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) {
         console.warn('⚠️ [LEAD] Usuário não autenticado - não é possível verificar lead');
         return;
       }
-      
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
+      const {
+        data: userRole
+      } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).maybeSingle();
       if (!userRole?.company_id) {
         console.warn('⚠️ [LEAD] Usuário sem company_id - não é possível verificar lead');
         return;
@@ -6739,31 +6383,28 @@ function Conversas() {
 
       // MELHORIA 1 e 2: Validar e normalizar número de telefone
       const phoneRaw = conversation.phoneNumber || conversation.id;
-      const { normalized: phoneNormalized, isValid, variations } = validateAndNormalizePhone(phoneRaw);
-
+      const {
+        normalized: phoneNormalized,
+        isValid,
+        variations
+      } = validateAndNormalizePhone(phoneRaw);
       if (!isValid || !phoneNormalized) {
         console.warn('⚠️ [LEAD] Telefone inválido - não é possível verificar lead:', phoneRaw);
         setLeadVinculado(null);
         setMostrarBotaoCriarLead(true);
         return;
       }
-      
       console.log('📞 [LEAD] Buscando lead com variações de telefone:', {
         variations,
         companyId: userRole.company_id
       });
 
       // MELHORIA 3: Buscar lead por telefone exato e variações
-      const phoneConditions = variations
-        .map(v => `phone.eq.${v},telefone.eq.${v}`)
-        .join(',');
-      
-      const { data: existingLead, error } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('company_id', userRole.company_id)
-        .or(phoneConditions)
-        .maybeSingle();
+      const phoneConditions = variations.map(v => `phone.eq.${v},telefone.eq.${v}`).join(',');
+      const {
+        data: existingLead,
+        error
+      } = await supabase.from('leads').select('*').eq('company_id', userRole.company_id).or(phoneConditions).maybeSingle();
 
       // MELHORIA 6: Logs detalhados para debug
       if (error && error.code !== 'PGRST116') {
@@ -6774,7 +6415,6 @@ function Conversas() {
           companyId: userRole.company_id
         });
       }
-
       if (existingLead) {
         console.log('✅ [LEAD] Lead vinculado encontrado:', {
           leadId: existingLead.id,
@@ -6784,15 +6424,16 @@ function Conversas() {
           funil_id: existingLead.funil_id,
           etapa_id: existingLead.etapa_id
         });
-
         setLeadVinculado(existingLead);
         setMostrarBotaoCriarLead(false);
-        
+
         // MELHORIA 5: Atualizar mapeamento de leads vinculados com todas as variações
         const phoneKey = conversation.phoneNumber || conversation.id;
         const formatted = safeFormatPhoneNumber(phoneKey);
         setLeadsVinculados(prev => {
-          const newMap = { ...prev };
+          const newMap = {
+            ...prev
+          };
           // Adicionar todas as variações ao mapeamento
           variations.forEach(v => {
             newMap[v] = existingLead.id;
@@ -6803,20 +6444,16 @@ function Conversas() {
           }
           return newMap;
         });
-        
+
         // ⚡ SINCRONIZAÇÃO: Atualizar informações do funil na conversa
         // Atualizar conversa com informações do lead (tags, valor, etc)
-        setConversations(prev => prev.map(conv => 
-          conv.id === conversation.id 
-            ? { 
-                ...conv, 
-                tags: existingLead.tags || conv.tags,
-                responsavel: (existingLead as any).responsavel?.full_name || conv.responsavel,
-                valor: existingLead.value ? `R$ ${Number(existingLead.value).toLocaleString('pt-BR')}` : conv.valor
-              }
-            : conv
-        ));
-        
+        setConversations(prev => prev.map(conv => conv.id === conversation.id ? {
+          ...conv,
+          tags: existingLead.tags || conv.tags,
+          responsavel: (existingLead as any).responsavel?.full_name || conv.responsavel,
+          valor: existingLead.value ? `R$ ${Number(existingLead.value).toLocaleString('pt-BR')}` : conv.valor
+        } : conv));
+
         // Atualizar conversa selecionada se for a mesma
         if (selectedConv?.id === conversation.id) {
           setSelectedConv(prev => prev ? {
@@ -6825,7 +6462,7 @@ function Conversas() {
             valor: existingLead.value ? `R$ ${Number(existingLead.value).toLocaleString('pt-BR')}` : prev.valor
           } : null);
         }
-        
+
         // Se o lead tem funil, buscar informações do funil e etapa
         if (existingLead.funil_id && existingLead.etapa_id) {
           // Aguardar um pouco para garantir que funis/etapas foram carregados
@@ -6834,7 +6471,6 @@ function Conversas() {
             const funilInfo = funis.find(f => f.id === existingLead.funil_id);
             const nomeEtapa = etapaInfo?.nome || "Etapa não definida";
             const nomeFunil = funilInfo?.nome || "Funil";
-            
             console.log('📊 [FUNIL] Atualizando informações do funil:', {
               funil_id: existingLead.funil_id,
               etapa_id: existingLead.etapa_id,
@@ -6843,14 +6479,13 @@ function Conversas() {
               funisCarregados: funis.length,
               etapasCarregadas: etapas.length
             });
-            
+
             // Atualizar conversa com informações do funil
-            setConversations(prev => prev.map(conv => 
-              conv.id === conversation.id 
-                ? { ...conv, funnelStage: nomeEtapa }
-                : conv
-            ));
-            
+            setConversations(prev => prev.map(conv => conv.id === conversation.id ? {
+              ...conv,
+              funnelStage: nomeEtapa
+            } : conv));
+
             // Atualizar conversa selecionada se for a mesma
             if (selectedConv?.id === conversation.id) {
               setSelectedConv(prev => prev ? {
@@ -6860,7 +6495,6 @@ function Conversas() {
             }
           }, 100);
         }
-        
         console.log('✅ [LEAD] Mapeamento de leads vinculados atualizado');
       } else {
         console.log('ℹ️ [LEAD] Nenhum lead vinculado encontrado para este contato:', {
@@ -6888,41 +6522,39 @@ function Conversas() {
   // Função para criar lead manualmente
   const criarLeadManualmente = async () => {
     if (!selectedConv) return;
-    
     try {
       setSyncStatus('syncing');
-      
+
       // Primeiro tentar encontrar lead existente
       let lead = await findLead(selectedConv);
-      
+
       // Se não encontrou, criar novo lead
       if (!lead) {
         console.log('📝 [LEAD] Lead não encontrado - criando novo lead...');
         lead = await createLeadManually(selectedConv);
-        
         if (!lead) {
           toast.error('Erro ao criar lead no CRM');
           setSyncStatus('error');
           setTimeout(() => setSyncStatus('idle'), 2000);
           return;
         }
-        
         toast.success('Lead criado com sucesso!');
       }
-      
+
       // Vincular lead à conversa
       setLeadVinculado(lead);
       setMostrarBotaoCriarLead(false);
-      
+
       // Atualizar mapeamento de leads vinculados
       const phoneKey = selectedConv.phoneNumber || selectedConv.id;
       const formatted = safeFormatPhoneNumber(phoneKey);
       setLeadsVinculados(prev => ({
         ...prev,
         [phoneKey]: lead.id,
-        ...(formatted ? { [formatted]: lead.id } : {})
+        ...(formatted ? {
+          [formatted]: lead.id
+        } : {})
       }));
-      
       setSyncStatus('synced');
       setTimeout(() => setSyncStatus('idle'), 1000);
     } catch (error) {
@@ -6932,37 +6564,32 @@ function Conversas() {
       toast.error('Erro ao processar lead');
     }
   };
-
   const handleEditName = async (conversationId: string) => {
     const conv = conversations.find(c => c.id === conversationId);
     if (!conv) return;
-
     const novoNome = prompt("Digite o novo nome do contato:", conv.contactName);
     if (!novoNome || novoNome.trim() === "") return;
-
     try {
       // Atualizar no Supabase (contatos: por telefone_formatado; grupos: por numero JID)
       const isGroup = /@g\.us$/.test(String(conv.id));
       const numeroNormalizado = isGroup ? null : normalizePhoneForWA(conv.phoneNumber || conv.id);
-      const query = supabase
-        .from('conversas')
-        .update({ nome_contato: novoNome.trim() })
-        .eq('company_id', userCompanyId);
-      const { error } = await (isGroup
-        ? query.eq('numero', conv.id)
-        : query.eq('telefone_formatado', numeroNormalizado!));
-
+      const query = supabase.from('conversas').update({
+        nome_contato: novoNome.trim()
+      }).eq('company_id', userCompanyId);
+      const {
+        error
+      } = await (isGroup ? query.eq('numero', conv.id) : query.eq('telefone_formatado', numeroNormalizado!));
       if (error) throw error;
 
       // ⚡ CORREÇÃO: Atualizar também o lead se existir um vinculado
       const leadId = leadsVinculados[conversationId] || leadsVinculados[safeFormatPhoneNumber(conversationId)];
       if (leadId) {
         console.log('🔄 Atualizando nome do lead vinculado:', leadId);
-        const { error: leadError } = await supabase
-          .from('leads')
-          .update({ name: novoNome.trim() })
-          .eq('id', leadId);
-
+        const {
+          error: leadError
+        } = await supabase.from('leads').update({
+          name: novoNome.trim()
+        }).eq('id', leadId);
         if (leadError) {
           console.error('❌ Erro ao atualizar nome do lead:', leadError);
           toast.error("Nome da conversa atualizado, mas erro ao atualizar o lead");
@@ -6972,47 +6599,48 @@ function Conversas() {
       }
 
       // Atualizar localmente
-      const updated = conversations.map(c =>
-        c.id === conversationId ? { ...c, contactName: novoNome.trim() } : c
-      );
+      const updated = conversations.map(c => c.id === conversationId ? {
+        ...c,
+        contactName: novoNome.trim()
+      } : c);
       setConversations(updated);
       if (selectedConv?.id === conversationId) {
-        setSelectedConv({ ...selectedConv, contactName: novoNome.trim() });
+        setSelectedConv({
+          ...selectedConv,
+          contactName: novoNome.trim()
+        });
       }
       saveConversations(updated);
-
       toast.success("Nome atualizado com sucesso!");
     } catch (error) {
       console.error('Erro ao editar nome:', error);
       toast.error("Erro ao atualizar nome");
     }
   };
-
   const handleCreateLead = async (conversationId: string) => {
     const conv = conversations.find(c => c.id === conversationId);
     if (!conv) return;
-
     try {
       setSyncStatus('syncing');
-      
+
       // Selecionar a conversa antes de criar o lead
       setSelectedConv(conv);
-      
+
       // Aguardar um pouco para o state atualizar
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       // 🎯 USAR FUNÇÃO MANUAL para criar lead (não buscar automaticamente)
       const lead = await createLeadManually(conv);
-      
       if (lead) {
         // Atualizar o mapeamento de leads vinculados
         const formatted = safeFormatPhoneNumber(conv.id);
         setLeadsVinculados(prev => ({
           ...prev,
           [conv.id]: lead.id,
-          ...(formatted ? { [formatted]: lead.id } : {})
+          ...(formatted ? {
+            [formatted]: lead.id
+          } : {})
         }));
-        
         setLeadVinculado(lead);
         setSyncStatus('synced');
         setTimeout(() => setSyncStatus('idle'), 1000);
@@ -7027,35 +6655,30 @@ function Conversas() {
       toast.error("Erro ao criar lead");
     }
   };
-
   const handleDeleteConversation = async (conversationId: string) => {
     const conv = conversations.find(c => c.id === conversationId);
     if (!conv) return;
-
     const confirmar = window.confirm(`Tem certeza que deseja excluir a conversa com ${conv.contactName}?`);
     if (!confirmar) return;
-
     try {
       // Deletar no Supabase (contatos: por telefone_formatado; grupos: por numero JID)
       const isGroup = /@g\.us$/.test(String(conv.id));
       const numeroNormalizado = isGroup ? null : normalizePhoneForWA(conv.phoneNumber || conv.id);
-      const base = supabase
-        .from('conversas')
-        .delete()
-        .eq('company_id', userCompanyId);
-      const { error } = await (isGroup
-        ? base.eq('numero', conv.id)
-        : base.eq('telefone_formatado', numeroNormalizado!));
-
+      const base = supabase.from('conversas').delete().eq('company_id', userCompanyId);
+      const {
+        error
+      } = await (isGroup ? base.eq('numero', conv.id) : base.eq('telefone_formatado', numeroNormalizado!));
       if (error) throw error;
 
       // Remover localmente
       const updated = conversations.filter(c => c.id !== conversationId);
       setConversations(updated);
-      
+
       // Remover do mapeamento de leads vinculados
       setLeadsVinculados(prev => {
-        const newMap = { ...prev };
+        const newMap = {
+          ...prev
+        };
         delete newMap[conv.id];
         const formatted = safeFormatPhoneNumber(conv.id);
         if (formatted) {
@@ -7063,13 +6686,11 @@ function Conversas() {
         }
         return newMap;
       });
-      
       if (selectedConv?.id === conversationId) {
         setSelectedConv(null);
         setLeadVinculado(null);
       }
       saveConversations(updated);
-
       toast.success("Conversa excluída com sucesso!");
     } catch (error) {
       console.error('Erro ao excluir conversa:', error);
@@ -7096,7 +6717,7 @@ function Conversas() {
       unread: 0,
       messages: [],
       tags: [],
-      phoneNumber: normalized || phone,
+      phoneNumber: normalized || phone
     };
     const updated = [novaConversa, ...conversations];
     setConversations(updated);
@@ -7108,52 +6729,58 @@ function Conversas() {
   // Utilitário: garantir company_id e enviar via Edge Function
   const getCompanyId = async (): Promise<string | null> => {
     if (userCompanyId) return userCompanyId;
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: {
+        session
+      }
+    } = await supabase.auth.getSession();
     if (!session) return null;
-    const { data: userRole } = await supabase
-      .from('user_roles')
-      .select('company_id')
-      .eq('user_id', session.user.id)
-      .maybeSingle();
+    const {
+      data: userRole
+    } = await supabase.from('user_roles').select('company_id').eq('user_id', session.user.id).maybeSingle();
     if (userRole?.company_id) setUserCompanyId(userRole.company_id);
     return userRole?.company_id || null;
   };
-
   const enviarWhatsApp = async (body: any) => {
     console.log('📞 [ENVIAR-WHATSAPP] Iniciando envio:', {
       numero: body.numero,
       tipo: body.tipo_mensagem,
       temMensagem: !!body.mensagem
     });
-    
     const companyId = await getCompanyId();
-    
     if (!companyId) {
       console.error('❌ [ENVIAR-WHATSAPP] Company ID não encontrado!');
-      return { 
-        data: null, 
-        error: { message: 'Company ID não encontrado. Faça login novamente.' } 
+      return {
+        data: null,
+        error: {
+          message: 'Company ID não encontrado. Faça login novamente.'
+        }
       } as const;
     }
-    
     console.log('📞 [ENVIAR-WHATSAPP] Company ID obtido:', companyId);
-    
+
     // Usar wrapper com retry/timeout e retornar no formato compatível (data/error)
     const result = await sendWhatsAppWithRetry({
       company_id: companyId,
-      ...body,
+      ...body
     });
-    
     console.log('📞 [ENVIAR-WHATSAPP] Resultado do sendWhatsAppWithRetry:', {
       success: result?.success,
       errorCode: result?.errorCode,
       message: result?.message
     });
-    
     if (result && result.success) {
-      return { data: result, error: null } as const;
+      return {
+        data: result,
+        error: null
+      } as const;
     }
-    return { data: result, error: { message: result?.message || 'Falha ao enviar mensagem' } } as const;
+    return {
+      data: result,
+      error: {
+        message: result?.message || 'Falha ao enviar mensagem'
+      }
+    } as const;
   };
 
   // Normaliza destino: preserva JID de grupo (@g.us). Para contatos, mantém apenas dígitos com prefixo 55.
@@ -7169,17 +6796,18 @@ function Conversas() {
   const handleCleanHistory = async () => {
     setCleaningHistory(true);
     setCleaningProgress(0);
-    setCleaningStats({ deleted: 0, total: 0 });
-    
+    setCleaningStats({
+      deleted: 0,
+      total: 0
+    });
     try {
-      const result = await cleanAllConversationsHistory(
-        userCompanyId || undefined,
-        (progress, deleted, total) => {
-          setCleaningProgress(progress);
-          setCleaningStats({ deleted, total });
-        }
-      );
-      
+      const result = await cleanAllConversationsHistory(userCompanyId || undefined, (progress, deleted, total) => {
+        setCleaningProgress(progress);
+        setCleaningStats({
+          deleted,
+          total
+        });
+      });
       if (result.success) {
         // ⚡ CORREÇÃO: Limpar APENAS o histórico de conversas, sem afetar outras funcionalidades
         // Não chamar loadSupabaseConversations() para evitar reinicialização desnecessária
@@ -7187,19 +6815,15 @@ function Conversas() {
         setSelectedConv(null);
         setLeadVinculado(null);
         setLeadsVinculados({});
-        
+
         // Limpar cache do hook de conversas também
         if (syncConversations) {
           await syncConversations(true); // Force refresh do cache
         }
-        
-        toast.success(
-          `✅ Histórico limpo! ${result.supabaseResult?.deletedCount || 0} mensagens removidas. Todas as outras configurações foram preservadas.`,
-          { duration: 5000 }
-        );
-        
+        toast.success(`✅ Histórico limpo! ${result.supabaseResult?.deletedCount || 0} mensagens removidas. Todas as outras configurações foram preservadas.`, {
+          duration: 5000
+        });
         setCleanHistoryDialogOpen(false);
-        
         console.log('✅ [CLEAN] Histórico limpo sem afetar funcionalidades:', {
           leadsPreservados: result.diagnosis?.leads.count,
           tarefasPreservadas: result.diagnosis?.tasks.count,
@@ -7216,19 +6840,24 @@ function Conversas() {
     } finally {
       setCleaningHistory(false);
       setCleaningProgress(0);
-      setCleaningStats({ deleted: 0, total: 0 });
+      setCleaningStats({
+        deleted: 0,
+        total: 0
+      });
     }
   };
-
   const finalizarAtendimento = async (mensagem: string) => {
     if (!selectedConv) return;
     try {
       // Enviar mensagem de finalização
       const numeroNormalizado = normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
-      const { data, error } = await enviarWhatsApp({
+      const {
+        data,
+        error
+      } = await enviarWhatsApp({
         numero: numeroNormalizado,
         mensagem,
-        tipo_mensagem: 'text',
+        tipo_mensagem: 'text'
       });
       if (error || !data?.success) {
         // Wrapper já exibiu o toast de erro específico
@@ -7236,20 +6865,21 @@ function Conversas() {
       }
 
       // Persistir no histórico
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-        .single();
+      const {
+        data: userRole
+      } = await supabase.from('user_roles').select('company_id').eq('user_id', (await supabase.auth.getUser()).data.user?.id).single();
 
       // CORREÇÃO: Inserir mensagem de finalização com status Resolvida e fromme: true
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: userProfile } = user ? await supabase
-        .from('profiles')
-        .select('full_name, email')
-        .eq('id', user.id)
-        .single() : { data: null };
-      
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
+      const {
+        data: userProfile
+      } = user ? await supabase.from('profiles').select('full_name, email').eq('id', user.id).single() : {
+        data: null
+      };
       await supabase.from('conversas').insert([{
         numero: numeroNormalizado,
         telefone_formatado: numeroNormalizado,
@@ -7261,22 +6891,23 @@ function Conversas() {
         company_id: userRole?.company_id,
         owner_id: user?.id,
         sent_by: userProfile?.full_name || userProfile?.email || 'Equipe',
-        fromme: true, // ⚡ CRÍTICO: Marcar como mensagem enviada para aparecer no lado direito
+        fromme: true // ⚡ CRÍTICO: Marcar como mensagem enviada para aparecer no lado direito
       }]);
 
       // CORREÇÃO: Atualizar TODAS as mensagens anteriores desta conversa para status Resolvida
       const telefoneFormatado = numeroNormalizado.replace(/[^0-9]/g, '');
-      await supabase
-        .from('conversas')
-        .update({ status: 'Resolvida' })
-        .eq('telefone_formatado', telefoneFormatado)
-        .eq('company_id', userRole?.company_id)
-        .neq('status', 'Resolvida'); // Só atualizar as que ainda não estão resolvidas
+      await supabase.from('conversas').update({
+        status: 'Resolvida'
+      }).eq('telefone_formatado', telefoneFormatado).eq('company_id', userRole?.company_id).neq('status', 'Resolvida'); // Só atualizar as que ainda não estão resolvidas
 
       console.log('✅ Conversa marcada como resolvida no banco');
 
       // Atualizar estados localmente
-      const updatedConv: Conversation = { ...selectedConv, status: 'resolved', lastMessage: mensagem };
+      const updatedConv: Conversation = {
+        ...selectedConv,
+        status: 'resolved',
+        lastMessage: mensagem
+      };
       const updatedList = conversations.map(c => c.id === selectedConv.id ? updatedConv : c);
       saveConversations(updatedList);
       setConversations(updatedList);
@@ -7287,9 +6918,7 @@ function Conversas() {
       toast.error('Erro ao finalizar atendimento');
     }
   };
-
-  return (
-    <div className="flex h-screen w-full bg-background overflow-hidden">
+  return <div className="flex h-screen w-full bg-background overflow-hidden">
       {/* Sidebar esquerda - tema cinza claro */}
       <div className="w-[380px] flex-shrink-0 bg-muted/30 border-r border-border flex flex-col">
         {/* Header */}
@@ -7297,118 +6926,98 @@ function Conversas() {
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-semibold text-foreground">Conversas</h1>
             <div className="flex gap-2 items-center">
-              <NovaConversaDialog
-                onNovaConversa={async (nome, numero) => {
-                  try {
-                    // Normalizar número para comparação (garante formato 55DDDXXXXXXXX)
-                    const numeroNormalizado = normalizePhoneForComparison(numero);
-                    
-                    console.log('📱 [NovaConversa] Verificando existência:', {
-                      numeroRecebido: numero,
-                      numeroNormalizado
-                    });
-                    
-                    // Verificar se já existe conversa com esse número (comparação normalizada)
-                    const existente = conversations.find(c => {
-                      const idNorm = normalizePhoneForComparison(c.id);
-                      const phoneNorm = normalizePhoneForComparison(c.phoneNumber);
-                      return idNorm === numeroNormalizado || phoneNorm === numeroNormalizado;
-                    });
-                    
-                    if (existente) {
-                      setSelectedConv(existente);
-                      toast.info("Conversa já existe!");
-                      return;
-                    }
-                    
-                    // Salvar conversa no banco de dados primeiro
-                    const { data: { user } } = await supabase.auth.getUser();
-                    if (!user) {
-                      toast.error('Usuário não autenticado');
-                      return;
-                    }
+              <NovaConversaDialog onNovaConversa={async (nome, numero) => {
+              try {
+                // Normalizar número para comparação (garante formato 55DDDXXXXXXXX)
+                const numeroNormalizado = normalizePhoneForComparison(numero);
+                console.log('📱 [NovaConversa] Verificando existência:', {
+                  numeroRecebido: numero,
+                  numeroNormalizado
+                });
 
-                    const { data: userRole } = await supabase
-                      .from('user_roles')
-                      .select('company_id')
-                      .eq('user_id', user.id)
-                      .maybeSingle();
+                // Verificar se já existe conversa com esse número (comparação normalizada)
+                const existente = conversations.find(c => {
+                  const idNorm = normalizePhoneForComparison(c.id);
+                  const phoneNorm = normalizePhoneForComparison(c.phoneNumber);
+                  return idNorm === numeroNormalizado || phoneNorm === numeroNormalizado;
+                });
+                if (existente) {
+                  setSelectedConv(existente);
+                  toast.info("Conversa já existe!");
+                  return;
+                }
 
-                    if (!userRole?.company_id) {
-                      toast.error('Configuração de empresa não encontrada');
-                      return;
-                    }
-
-                    // Inserir conversa no banco com número normalizado
-                    const { error: insertError } = await supabase
-                      .from('conversas')
-                      .insert({
-                        numero: numeroNormalizado,
-                        nome_contato: nome,
-                        mensagem: 'Nova conversa criada',
-                        telefone_formatado: numeroNormalizado,
-                        company_id: userRole.company_id,
-                        owner_id: user.id,
-                        fromme: true,
-                        status: 'Enviada',
-                        origem: 'WhatsApp',
-                      });
-
-                    if (insertError) {
-                      console.error('Erro ao salvar conversa:', insertError);
-                      toast.error('Erro ao salvar contato no banco de dados');
-                      return;
-                    }
-                    
-                    console.log('✅ [NovaConversa] Conversa salva com número:', numeroNormalizado);
-                    
-                    // Criar conversa local com número normalizado
-                    const novaConversa: Conversation = {
-                      id: numeroNormalizado,
-                      contactName: nome,
-                      channel: "whatsapp",
-                      status: "waiting",
-                      lastMessage: "Nova conversa",
-                      unread: 0,
-                      messages: [],
-                      tags: [],
-                      phoneNumber: numeroNormalizado,
-                    };
-                    
-                    const updated = [novaConversa, ...conversations];
-                    setConversations(updated);
-                    setSelectedConv(novaConversa);
-                    saveConversations(updated);
-                    
-                    toast.success(`Contato ${nome} salvo com sucesso!`);
-                  } catch (error) {
-                    console.error('Erro ao criar contato:', error);
-                    toast.error('Erro ao criar contato');
+                // Salvar conversa no banco de dados primeiro
+                const {
+                  data: {
+                    user
                   }
-                }}
-              />
-              <Button 
-                size="icon" 
-                variant="outline"
-                onClick={() => {
-                  console.log('🔄 Botão Recarregar clicado');
-                  loadSupabaseConversations();
-                  toast.success('Recarregando conversas...');
-                }}
-                className="gap-0"
-                aria-label="Recarregar"
-              >
+                } = await supabase.auth.getUser();
+                if (!user) {
+                  toast.error('Usuário não autenticado');
+                  return;
+                }
+                const {
+                  data: userRole
+                } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).maybeSingle();
+                if (!userRole?.company_id) {
+                  toast.error('Configuração de empresa não encontrada');
+                  return;
+                }
+
+                // Inserir conversa no banco com número normalizado
+                const {
+                  error: insertError
+                } = await supabase.from('conversas').insert({
+                  numero: numeroNormalizado,
+                  nome_contato: nome,
+                  mensagem: 'Nova conversa criada',
+                  telefone_formatado: numeroNormalizado,
+                  company_id: userRole.company_id,
+                  owner_id: user.id,
+                  fromme: true,
+                  status: 'Enviada',
+                  origem: 'WhatsApp'
+                });
+                if (insertError) {
+                  console.error('Erro ao salvar conversa:', insertError);
+                  toast.error('Erro ao salvar contato no banco de dados');
+                  return;
+                }
+                console.log('✅ [NovaConversa] Conversa salva com número:', numeroNormalizado);
+
+                // Criar conversa local com número normalizado
+                const novaConversa: Conversation = {
+                  id: numeroNormalizado,
+                  contactName: nome,
+                  channel: "whatsapp",
+                  status: "waiting",
+                  lastMessage: "Nova conversa",
+                  unread: 0,
+                  messages: [],
+                  tags: [],
+                  phoneNumber: numeroNormalizado
+                };
+                const updated = [novaConversa, ...conversations];
+                setConversations(updated);
+                setSelectedConv(novaConversa);
+                saveConversations(updated);
+                toast.success(`Contato ${nome} salvo com sucesso!`);
+              } catch (error) {
+                console.error('Erro ao criar contato:', error);
+                toast.error('Erro ao criar contato');
+              }
+            }} />
+              <Button size="icon" variant="outline" onClick={() => {
+              console.log('🔄 Botão Recarregar clicado');
+              loadSupabaseConversations();
+              toast.success('Recarregando conversas...');
+            }} className="gap-0" aria-label="Recarregar">
                 <RefreshCw className="h-4 w-4" />
               </Button>
               <Dialog open={cleanHistoryDialogOpen} onOpenChange={setCleanHistoryDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button 
-                    size="icon" 
-                    variant="outline"
-                    className="gap-0 text-destructive hover:text-destructive"
-                    aria-label="Limpar histórico"
-                    title="Limpar histórico de conversas"
-                  >
+                  <Button size="icon" variant="outline" className="gap-0 text-destructive hover:text-destructive" aria-label="Limpar histórico" title="Limpar histórico de conversas">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </DialogTrigger>
@@ -7444,30 +7053,18 @@ function Conversas() {
                     </div>
                   </div>
                   <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setCleanHistoryDialogOpen(false)}
-                      disabled={cleaningHistory}
-                    >
+                    <Button variant="outline" onClick={() => setCleanHistoryDialogOpen(false)} disabled={cleaningHistory}>
                       Cancelar
                     </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={handleCleanHistory}
-                      disabled={cleaningHistory}
-                    >
-                      {cleaningHistory ? (
-                        <div className="flex items-center gap-2">
+                    <Button variant="destructive" onClick={handleCleanHistory} disabled={cleaningHistory}>
+                      {cleaningHistory ? <div className="flex items-center gap-2">
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           <span>Limpando... {cleaningProgress}%</span>
                           <span className="text-xs opacity-70">({cleaningStats.deleted}/{cleaningStats.total})</span>
-                        </div>
-                      ) : (
-                        <>
+                        </div> : <>
                           <Trash2 className="mr-2 h-4 w-4" />
                           Limpar Histórico
-                        </>
-                      )}
+                        </>}
                     </Button>
                   </div>
                 </DialogContent>
@@ -7478,468 +7075,285 @@ function Conversas() {
           {/* Search */}
           <div className="relative mb-4">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="🔍 Buscar conversa..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-background"
-            />
+            <Input placeholder="🔍 Buscar conversa..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 bg-background" />
           </div>
 
           {/* ✅ FASE 4: Indicadores de Sincronização */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               {/* Status de conexão realtime */}
-              <div className={`flex items-center gap-1 text-xs ${
-                realtimeConnectionStatus === 'connected' ? 'text-green-500' : 
-                realtimeConnectionStatus === 'connecting' ? 'text-yellow-500' : 
-                'text-red-500'
-              }`}>
-                <div className={`w-2 h-2 rounded-full ${
-                  realtimeConnectionStatus === 'connected' ? 'bg-green-500' : 
-                  realtimeConnectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 
-                  'bg-red-500'
-                }`} />
+              <div className={`flex items-center gap-1 text-xs ${realtimeConnectionStatus === 'connected' ? 'text-green-500' : realtimeConnectionStatus === 'connecting' ? 'text-yellow-500' : 'text-red-500'}`}>
+                <div className={`w-2 h-2 rounded-full ${realtimeConnectionStatus === 'connected' ? 'bg-green-500' : realtimeConnectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} />
                 <span className="hidden sm:inline">
-                  {realtimeConnectionStatus === 'connected' ? 'Conectado' : 
-                   realtimeConnectionStatus === 'connecting' ? 'Conectando...' : 
-                   'Desconectado'}
+                  {realtimeConnectionStatus === 'connected' ? 'Conectado' : realtimeConnectionStatus === 'connecting' ? 'Conectando...' : 'Desconectado'}
                 </span>
               </div>
               
               {/* Indicador de sincronização */}
-              {cacheSyncing && (
-                <div className="flex items-center gap-1 text-xs text-blue-500">
+              {cacheSyncing && <div className="flex items-center gap-1 text-xs text-blue-500">
                   <RefreshCw className="h-3 w-3 animate-spin" />
                   <span className="hidden sm:inline">Sincronizando...</span>
-                </div>
-              )}
+                </div>}
             </div>
             
             {/* Última sincronização */}
-            {cacheLastSync > 0 && (
-              <span className="text-xs text-muted-foreground hidden md:inline">
-                Atualizado: {format(new Date(cacheLastSync), "HH:mm:ss", { locale: ptBR })}
-              </span>
-            )}
+            {cacheLastSync > 0 && <span className="text-xs text-muted-foreground hidden md:inline">
+                Atualizado: {format(new Date(cacheLastSync), "HH:mm:ss", {
+              locale: ptBR
+            })}
+              </span>}
           </div>
           
           {/* Filters */}
           <div className="flex gap-2 flex-wrap">
-            <Button
-              variant={filter === "all" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setFilter("all")}
-              className="relative flex flex-col items-center gap-0.5 h-auto py-1.5"
-            >
-              {conversations.length > 0 && (
-                <Badge 
-                  variant="secondary" 
-                  className="min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs"
-                >
+            <Button variant={filter === "all" ? "default" : "ghost"} size="sm" onClick={() => setFilter("all")} className="relative flex flex-col items-center gap-0.5 h-auto py-1.5">
+              {conversations.length > 0 && <Badge variant="secondary" className="min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
                   {conversations.filter(c => !c.isGroup || !blockedGroups.has(c.phoneNumber || c.id)).length}
-                </Badge>
-              )}
+                </Badge>}
               <span>Todos</span>
             </Button>
-            <Button
-              variant={filter === "waiting" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setFilter("waiting")}
-              className="relative flex flex-col items-center gap-0.5 h-auto py-1.5"
-            >
-              {waitingCount > 0 && (
-                <Badge 
-                  variant="destructive" 
-                  className="bg-red-500 hover:bg-red-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs"
-                >
+            <Button variant={filter === "waiting" ? "default" : "ghost"} size="sm" onClick={() => setFilter("waiting")} className="relative flex flex-col items-center gap-0.5 h-auto py-1.5">
+              {waitingCount > 0 && <Badge variant="destructive" className="bg-red-500 hover:bg-red-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
                   {waitingCount}
-                </Badge>
-              )}
+                </Badge>}
               <span>Esperando</span>
             </Button>
-            <Button
-              variant={filter === "answered" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setFilter("answered")}
-              className="relative flex flex-col items-center gap-0.5 h-auto py-1.5"
-            >
-              {answeredCount > 0 && (
-                <Badge 
-                  variant="default" 
-                  className="bg-blue-500 hover:bg-blue-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs"
-                >
+            <Button variant={filter === "answered" ? "default" : "ghost"} size="sm" onClick={() => setFilter("answered")} className="relative flex flex-col items-center gap-0.5 h-auto py-1.5">
+              {answeredCount > 0 && <Badge variant="default" className="bg-blue-500 hover:bg-blue-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
                   {answeredCount}
-                </Badge>
-              )}
+                </Badge>}
               <span>Em Atendimento</span>
             </Button>
-            <Button
-              variant={filter === "resolved" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setFilter("resolved")}
-              className="relative flex flex-col items-center gap-0.5 h-auto py-1.5"
-            >
-              {conversations.filter(c => !c.isGroup && c.status === 'resolved').length > 0 && (
-                <Badge 
-                  variant="secondary" 
-                  className="min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs"
-                >
+            <Button variant={filter === "resolved" ? "default" : "ghost"} size="sm" onClick={() => setFilter("resolved")} className="relative flex flex-col items-center gap-0.5 h-auto py-1.5">
+              {conversations.filter(c => !c.isGroup && c.status === 'resolved').length > 0 && <Badge variant="secondary" className="min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
                   {conversations.filter(c => !c.isGroup && c.status === 'resolved').length}
-                </Badge>
-              )}
+                </Badge>}
               <span>Resolvidos</span>
             </Button>
-            <Button
-              variant={filter === "group" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setFilter("group")}
-              className="relative flex flex-col items-center gap-0.5 h-auto py-1.5"
-            >
-              {conversations.filter(c => c.isGroup === true).length > 0 && (
-                <Badge 
-                  variant="secondary" 
-                  className="min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs"
-                >
+            <Button variant={filter === "group" ? "default" : "ghost"} size="sm" onClick={() => setFilter("group")} className="relative flex flex-col items-center gap-0.5 h-auto py-1.5">
+              {conversations.filter(c => c.isGroup === true).length > 0 && <Badge variant="secondary" className="min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
                   {conversations.filter(c => c.isGroup === true).length}
-                </Badge>
-              )}
+                </Badge>}
               <span>Grupos</span>
             </Button>
-            <Button
-              variant={filter === "responsible" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setFilter("responsible")}
-              className="relative flex flex-col items-center gap-0.5 h-auto py-1.5"
-            >
-              {conversations.filter(c => !c.isGroup && (c.responsavel === currentUserId || c.assignedUser?.id === currentUserId)).length > 0 && (
-                <Badge 
-                  variant="secondary" 
-                  className="bg-green-500 hover:bg-green-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs"
-                >
+            <Button variant={filter === "responsible" ? "default" : "ghost"} size="sm" onClick={() => setFilter("responsible")} className="relative flex flex-col items-center gap-0.5 h-auto py-1.5">
+              {conversations.filter(c => !c.isGroup && (c.responsavel === currentUserId || c.assignedUser?.id === currentUserId)).length > 0 && <Badge variant="secondary" className="bg-green-500 hover:bg-green-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
                   {conversations.filter(c => !c.isGroup && (c.responsavel === currentUserId || c.assignedUser?.id === currentUserId)).length}
-                </Badge>
-              )}
+                </Badge>}
               <span>Responsável</span>
             </Button>
-            <Button
-              variant={filter === "transferred" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setFilter("transferred")}
-              className="relative flex flex-col items-center gap-0.5 h-auto py-1.5"
-            >
-              {conversations.filter(c => !c.isGroup && c.assignedUser?.id === currentUserId).length > 0 && (
-                <Badge 
-                  variant="secondary" 
-                  className="bg-purple-500 hover:bg-purple-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs"
-                >
+            <Button variant={filter === "transferred" ? "default" : "ghost"} size="sm" onClick={() => setFilter("transferred")} className="relative flex flex-col items-center gap-0.5 h-auto py-1.5">
+              {conversations.filter(c => !c.isGroup && c.assignedUser?.id === currentUserId).length > 0 && <Badge variant="secondary" className="bg-purple-500 hover:bg-purple-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
                   {conversations.filter(c => !c.isGroup && c.assignedUser?.id === currentUserId).length}
-                </Badge>
-              )}
-              <span>Transferência</span>
+                </Badge>}
+              <span>Transferidos</span>
             </Button>
           </div>
         </div>
 
         {/* Conversations List */}
         <ScrollArea className="flex-1">
-          {loadingConversations && conversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 gap-3">
+          {loadingConversations && conversations.length === 0 ? <div className="flex flex-col items-center justify-center h-64 gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">Carregando conversas...</p>
-            </div>
-          ) : filteredConversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 gap-3">
+            </div> : filteredConversations.length === 0 ? <div className="flex flex-col items-center justify-center h-64 gap-3">
               <MessageSquare className="h-12 w-12 text-muted-foreground/50" />
               <p className="text-sm text-muted-foreground">Nenhuma conversa encontrada</p>
-            </div>
-          ) : (
-            filteredConversations.map((conv) => (
-              <ConversationListItem
-              key={conv.id}
-              contactName={conv.contactName}
-              channel={conv.channel}
-              lastMessage={conv.lastMessage}
-              timestamp={new Date(conv.messages[conv.messages.length - 1]?.timestamp)}
-              unread={conv.unread}
-              isSelected={selectedConv?.id === conv.id}
-              avatarUrl={conv.avatarUrl}
-              tags={conv.tags}
-              responsavel={conv.responsavel}
-              funnelStage={conv.funnelStage}
-              valor={conv.valor}
-              conversationId={conv.id}
-              leadId={leadsVinculados[conv.id] || leadsVinculados[safeFormatPhoneNumber(conv.id)]}
-              isGroup={conv.isGroup}
-              isBlocked={blockedGroups.has(conv.phoneNumber || conv.id)}
-              assignedUser={conv.assignedUser}
-              status={conv.status}
-              lastRespondedBy={(() => {
-                // ⚡ Buscar última mensagem enviada pelo usuário para mostrar quem respondeu
-                const userMessages = conv.messages.filter(m => m.sender === "user");
-                if (userMessages.length > 0) {
-                  const lastUserMsg = userMessages[userMessages.length - 1];
-                  // Se tem sentBy, usar o nome do usuário
-                  // Se não tem sentBy mas é mensagem enviada (fromme=true), significa que veio do WhatsApp celular
-                  if (lastUserMsg.sentBy) {
-                    return lastUserMsg.sentBy;
-                  }
-                  // Mensagem enviada sem sentBy = enviada pelo WhatsApp do celular
-                  return "WhatsApp";
-                }
-                return undefined;
-              })()}
-              onToggleBlock={conv.isGroup ? () => {
-                const groupId = conv.phoneNumber || conv.id;
-                const isBlocked = blockedGroups.has(groupId);
-                toggleBlockGroup(groupId, conv.contactName, !isBlocked);
-              } : () => {
-                console.log('⚠️ Tentativa de bloquear contato individual - operação não suportada');
-              }}
-              onEditName={() => handleEditName(conv.id)}
-              onCreateLead={() => handleCreateLead(conv.id)}
-              onDeleteConversation={() => handleDeleteConversation(conv.id)}
-              onClick={async () => {
-                console.log('🔍 Conversa selecionada:', conv.id, 'Mensagens:', conv.messages.length);
-                
-                // CORREÇÃO: Garantir que userCompanyId está disponível antes de usar
-                if (!userCompanyId) {
-                  const { data: userRole } = await supabase
-                    .from('user_roles')
-                    .select('company_id')
-                    .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-                    .maybeSingle();
-                  
-                  if (userRole?.company_id) {
-                    setUserCompanyId(userRole.company_id);
-                  }
-                }
-                
-                // ⚡ CORREÇÃO CRÍTICA: Ordenar mensagens por timestamp antes de selecionar
-                const sortMessagesByTimestamp = (messages: Message[]): Message[] => {
-                  return [...messages].sort((a, b) => {
-                    const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
-                    const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
-                    return timeA - timeB;
-                  });
-                };
+            </div> : filteredConversations.map(conv => <ConversationListItem key={conv.id} contactName={conv.contactName} channel={conv.channel} lastMessage={conv.lastMessage} timestamp={new Date(conv.messages[conv.messages.length - 1]?.timestamp)} unread={conv.unread} isSelected={selectedConv?.id === conv.id} avatarUrl={conv.avatarUrl} tags={conv.tags} responsavel={conv.responsavel} funnelStage={conv.funnelStage} valor={conv.valor} conversationId={conv.id} leadId={leadsVinculados[conv.id] || leadsVinculados[safeFormatPhoneNumber(conv.id)]} isGroup={conv.isGroup} isBlocked={blockedGroups.has(conv.phoneNumber || conv.id)} assignedUser={conv.assignedUser} status={conv.status} lastRespondedBy={(() => {
+          // ⚡ Buscar última mensagem enviada pelo usuário para mostrar quem respondeu
+          const userMessages = conv.messages.filter(m => m.sender === "user");
+          if (userMessages.length > 0) {
+            const lastUserMsg = userMessages[userMessages.length - 1];
+            // Se tem sentBy, usar o nome do usuário
+            // Se não tem sentBy mas é mensagem enviada (fromme=true), significa que veio do WhatsApp celular
+            if (lastUserMsg.sentBy) {
+              return lastUserMsg.sentBy;
+            }
+            // Mensagem enviada sem sentBy = enviada pelo WhatsApp do celular
+            return "WhatsApp";
+          }
+          return undefined;
+        })()} onToggleBlock={conv.isGroup ? () => {
+          const groupId = conv.phoneNumber || conv.id;
+          const isBlocked = blockedGroups.has(groupId);
+          toggleBlockGroup(groupId, conv.contactName, !isBlocked);
+        } : () => {
+          console.log('⚠️ Tentativa de bloquear contato individual - operação não suportada');
+        }} onEditName={() => handleEditName(conv.id)} onCreateLead={() => handleCreateLead(conv.id)} onDeleteConversation={() => handleDeleteConversation(conv.id)} onClick={async () => {
+          console.log('🔍 Conversa selecionada:', conv.id, 'Mensagens:', conv.messages.length);
 
-                // Marcar mensagens como lidas e visualizadas
-                // CRÍTICO: Preservar avatarUrl ao atualizar e ordenar mensagens por timestamp
-                const sortedMessages = sortMessagesByTimestamp(conv.messages);
-                const updatedConv = {
-                  ...conv,
-                  unread: 0,
-                  avatarUrl: conv.avatarUrl, // Garantir que avatar não seja perdido
-                  messages: sortedMessages.map(msg => ({
-                    ...msg,
-                    read: true
-                  }))
-                };
-                
-                console.log('📸 [AVATAR-DEBUG] Selecionando conversa:', {
-                  id: conv.id,
-                  name: conv.contactName,
-                  avatarUrl: conv.avatarUrl?.substring(0, 50)
-                });
-                
-                setSelectedConv(updatedConv);
-                
-                // 📜 Carregar histórico completo automaticamente
-                if (conv.phoneNumber && userCompanyId) {
-                  const stats = historyStats[conv.phoneNumber];
-                  // Se não tem stats ou tem poucas mensagens carregadas, buscar histórico
-                  if (!stats || conv.messages.length < 20) {
-                    loadFullConversationHistory(conv.phoneNumber, conv.contactName);
-                  }
-                }
-                
-                // Verificar se existe lead vinculado
-                verificarLeadVinculado(conv);
-                
-                // Atualizar estado e localStorage - CRÍTICO: Preservar avatars
-                const updated = conversations.map(c => 
-                  c.id === conv.id ? updatedConv : { ...c, avatarUrl: c.avatarUrl }
-                );
-                setConversations(updated); // Atualizar estado React
-                saveConversations(updated); // Salvar no localStorage
-                
-                console.log('📸 [AVATAR-DEBUG] Conversas atualizadas, avatars preservados:', {
-                  total: updated.length,
-                  comAvatar: updated.filter(c => c.avatarUrl).length
-                });
-                
-                // Persistir no Supabase: marcar mensagens recebidas como 'Lida'
-                try {
-                  const isGroup = /@g\.us$/.test(String(conv.id));
-                  const numeroNormalizado = isGroup ? null : normalizePhoneForWA(conv.phoneNumber || conv.id);
-                  // CORREÇÃO: Buscar company_id corretamente
-                  let companyIdToUse = userCompanyId;
-                  
-                  if (!companyIdToUse) {
-                    const { data: userRole } = await supabase
-                      .from('user_roles')
-                      .select('company_id')
-                      .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-                      .maybeSingle();
-                    companyIdToUse = userRole?.company_id || null;
-                    
-                    if (companyIdToUse) {
-                      setUserCompanyId(companyIdToUse);
-                    }
-                  }
-                  
-                  if (companyIdToUse) {
-                    const base = supabase
-                      .from('conversas')
-                      .update({ status: 'Lida' })
-                      .eq('company_id', companyIdToUse)
-                      .eq('status', 'Recebida');
-                    await (isGroup 
-                      ? base.eq('numero', conv.id)
-                      : base.eq('telefone_formatado', numeroNormalizado!));
-                  }
-                } catch (err) {
-                  console.error('Erro ao marcar mensagens como lidas no Supabase:', err);
-                }
-                
-                // Mostrar toast de visualizado
-                if (conv.unread > 0) {
-                  toast.success('✔️ Mensagens visualizadas');
-                }
-              }}
-            />
-          ))
-          )}
+          // CORREÇÃO: Garantir que userCompanyId está disponível antes de usar
+          if (!userCompanyId) {
+            const {
+              data: userRole
+            } = await supabase.from('user_roles').select('company_id').eq('user_id', (await supabase.auth.getUser()).data.user?.id).maybeSingle();
+            if (userRole?.company_id) {
+              setUserCompanyId(userRole.company_id);
+            }
+          }
+
+          // ⚡ CORREÇÃO CRÍTICA: Ordenar mensagens por timestamp antes de selecionar
+          const sortMessagesByTimestamp = (messages: Message[]): Message[] => {
+            return [...messages].sort((a, b) => {
+              const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+              const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+              return timeA - timeB;
+            });
+          };
+
+          // Marcar mensagens como lidas e visualizadas
+          // CRÍTICO: Preservar avatarUrl ao atualizar e ordenar mensagens por timestamp
+          const sortedMessages = sortMessagesByTimestamp(conv.messages);
+          const updatedConv = {
+            ...conv,
+            unread: 0,
+            avatarUrl: conv.avatarUrl,
+            // Garantir que avatar não seja perdido
+            messages: sortedMessages.map(msg => ({
+              ...msg,
+              read: true
+            }))
+          };
+          console.log('📸 [AVATAR-DEBUG] Selecionando conversa:', {
+            id: conv.id,
+            name: conv.contactName,
+            avatarUrl: conv.avatarUrl?.substring(0, 50)
+          });
+          setSelectedConv(updatedConv);
+
+          // 📜 Carregar histórico completo automaticamente
+          if (conv.phoneNumber && userCompanyId) {
+            const stats = historyStats[conv.phoneNumber];
+            // Se não tem stats ou tem poucas mensagens carregadas, buscar histórico
+            if (!stats || conv.messages.length < 20) {
+              loadFullConversationHistory(conv.phoneNumber, conv.contactName);
+            }
+          }
+
+          // Verificar se existe lead vinculado
+          verificarLeadVinculado(conv);
+
+          // Atualizar estado e localStorage - CRÍTICO: Preservar avatars
+          const updated = conversations.map(c => c.id === conv.id ? updatedConv : {
+            ...c,
+            avatarUrl: c.avatarUrl
+          });
+          setConversations(updated); // Atualizar estado React
+          saveConversations(updated); // Salvar no localStorage
+
+          console.log('📸 [AVATAR-DEBUG] Conversas atualizadas, avatars preservados:', {
+            total: updated.length,
+            comAvatar: updated.filter(c => c.avatarUrl).length
+          });
+
+          // Persistir no Supabase: marcar mensagens recebidas como 'Lida'
+          try {
+            const isGroup = /@g\.us$/.test(String(conv.id));
+            const numeroNormalizado = isGroup ? null : normalizePhoneForWA(conv.phoneNumber || conv.id);
+            // CORREÇÃO: Buscar company_id corretamente
+            let companyIdToUse = userCompanyId;
+            if (!companyIdToUse) {
+              const {
+                data: userRole
+              } = await supabase.from('user_roles').select('company_id').eq('user_id', (await supabase.auth.getUser()).data.user?.id).maybeSingle();
+              companyIdToUse = userRole?.company_id || null;
+              if (companyIdToUse) {
+                setUserCompanyId(companyIdToUse);
+              }
+            }
+            if (companyIdToUse) {
+              const base = supabase.from('conversas').update({
+                status: 'Lida'
+              }).eq('company_id', companyIdToUse).eq('status', 'Recebida');
+              await (isGroup ? base.eq('numero', conv.id) : base.eq('telefone_formatado', numeroNormalizado!));
+            }
+          } catch (err) {
+            console.error('Erro ao marcar mensagens como lidas no Supabase:', err);
+          }
+
+          // Mostrar toast de visualizado
+          if (conv.unread > 0) {
+            toast.success('✔️ Mensagens visualizadas');
+          }
+        }} />)}
           
           {/* ⚡ Botão Carregar Mais Conversas */}
-          {!loadingConversations && filteredConversations.length > 0 && hasMoreConversations && (
-            <div className="p-4 flex justify-center">
-              <Button
-                variant="outline"
-                onClick={async () => {
-                  setLoadingMore(true);
-                  await loadSupabaseConversations(true); // Append mode
-                  setLoadingMore(false);
-                }}
-                disabled={loadingMore}
-                className="w-full"
-              >
-                {loadingMore ? (
-                  <>
+          {!loadingConversations && filteredConversations.length > 0 && hasMoreConversations && <div className="p-4 flex justify-center">
+              <Button variant="outline" onClick={async () => {
+            setLoadingMore(true);
+            await loadSupabaseConversations(true); // Append mode
+            setLoadingMore(false);
+          }} disabled={loadingMore} className="w-full">
+                {loadingMore ? <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Carregando mais...
-                  </>
-                ) : (
-                  <>
+                  </> : <>
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Carregar Mais Conversas ({conversationsLimit} por vez)
-                  </>
-                )}
+                  </>}
               </Button>
-            </div>
-          )}
+            </div>}
         </ScrollArea>
       </div>
 
       {/* Chat Area - Estrutura fixa sem movimento vertical */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' } as React.CSSProperties}>
-        {selectedConv ? (
-          <>
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 scrollbar-hide" style={{
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none'
+    } as React.CSSProperties}>
+        {selectedConv ? <>
             {/* Header - ABSOLUTAMENTE FIXO */}
             <div className="flex-shrink-0 bg-background border-b">
-              <ConversationHeader
-              contactName={selectedConv.contactName}
-              channel={selectedConv.channel}
-              avatarUrl={selectedConv.avatarUrl}
-              produto={selectedConv.produto}
-              valor={selectedConv.valor}
-              responsavel={selectedConv.responsavel}
-              tags={selectedConv.tags}
-              funnelStage={selectedConv.funnelStage}
-              showInfoPanel={showInfoPanel}
-              onToggleInfoPanel={() => setShowInfoPanel(!showInfoPanel)}
-              syncStatus={syncStatus}
-              leadVinculado={leadVinculado}
-              mostrarBotaoCriarLead={mostrarBotaoCriarLead}
-              onCriarLead={criarLeadManualmente}
-              onFinalizeAtendimento={finalizarAtendimento}
-              onlineStatus={onlineStatus[selectedConv.id] || 'unknown'}
-              isContactInactive={isContactInactive}
-              onRestoreConversation={handleRestoreConversation}
-              restoringConversation={restoringConversation}
-              />
+              <ConversationHeader contactName={selectedConv.contactName} channel={selectedConv.channel} avatarUrl={selectedConv.avatarUrl} produto={selectedConv.produto} valor={selectedConv.valor} responsavel={selectedConv.responsavel} tags={selectedConv.tags} funnelStage={selectedConv.funnelStage} showInfoPanel={showInfoPanel} onToggleInfoPanel={() => setShowInfoPanel(!showInfoPanel)} syncStatus={syncStatus} leadVinculado={leadVinculado} mostrarBotaoCriarLead={mostrarBotaoCriarLead} onCriarLead={criarLeadManualmente} onFinalizeAtendimento={finalizarAtendimento} onlineStatus={onlineStatus[selectedConv.id] || 'unknown'} isContactInactive={isContactInactive} onRestoreConversation={handleRestoreConversation} restoringConversation={restoringConversation} />
             </div>
 
             <div className="flex flex-1 overflow-hidden scrollbar-hide">
               {/* Messages Area */}
-              <div className="flex-1 flex flex-col overflow-hidden scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' } as React.CSSProperties}>
+              <div className="flex-1 flex flex-col overflow-hidden scrollbar-hide" style={{
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none'
+          } as React.CSSProperties}>
                 {/* Messages - ÚNICA ÁREA COM SCROLL */}
-                <div 
-                  id="messages-scroll-container"
-                  className="flex-1 overflow-y-auto p-6 bg-[#e5ddd5] messages-scroll-area scrollbar-hide" 
-                  style={{ 
-                    backgroundImage: "url('data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d9d9d9' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')",
-                    scrollbarWidth: 'none',
-                    msOverflowStyle: 'none',
-                    WebkitOverflowScrolling: 'touch'
-                  } as React.CSSProperties}
-                >
+                <div id="messages-scroll-container" className="flex-1 overflow-y-auto p-6 bg-[#e5ddd5] messages-scroll-area scrollbar-hide" style={{
+              backgroundImage: "url('data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d9d9d9' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')",
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+              WebkitOverflowScrolling: 'touch'
+            } as React.CSSProperties}>
                   {/* Indicador de histórico */}
-                  {selectedConv.phoneNumber && historyStats[selectedConv.phoneNumber] && (
-                    <div className="flex justify-center mb-4">
+                  {selectedConv.phoneNumber && historyStats[selectedConv.phoneNumber] && <div className="flex justify-center mb-4">
                       <Badge variant="secondary" className="gap-2">
                         📜 {historyStats[selectedConv.phoneNumber].loaded} mensagens do histórico
                       </Badge>
-                    </div>
-                  )}
-                  {loadingHistory && (
-                    <div className="flex justify-center items-center gap-2 mb-4 text-muted-foreground">
+                    </div>}
+                  {loadingHistory && <div className="flex justify-center items-center gap-2 mb-4 text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       <span className="text-sm">Carregando histórico completo...</span>
-                    </div>
-                  )}
+                    </div>}
                   
                   <div className="space-y-2 min-h-[200px]">
-                     {selectedConv.messages.length === 0 ? (
-                      <div className="text-center text-muted-foreground py-8">
+                     {selectedConv.messages.length === 0 ? <div className="text-center text-muted-foreground py-8">
                         Nenhuma mensagem ainda
-                      </div>
-                     ) : (
-                      selectedConv.messages.map((msg) => (
-                        <MessageItem
-                          key={msg.id}
-                          message={msg as any}
-                          allMessages={selectedConv.messages as any}
-                          onDownload={downloadMedia}
-                          onTranscribe={transcreverAudio}
-                          onImageClick={(url, name) => {
-                            setSelectedMedia({ url, name });
-                            setImageModalOpen(true);
-                          }}
-                          onPdfClick={(url, name) => {
-                            setSelectedMedia({ url, name });
-                            setPdfModalOpen(true);
-                          }}
-                          isTranscribing={transcriptionStatuses[msg.id] === "processing"}
-                          transcriptionStatus={msg.transcriptionStatus}
-                          onRetryTranscribe={msg.transcriptionStatus === "error" ? () => transcreverAudio(msg.id, msg.mediaUrl!, true) : undefined}
-                          onReply={handleReply}
-                          onEdit={handleEdit}
-                          onDelete={handleDelete}
-                          onReact={handleReact}
-                          onOpenContactConversation={openConversationWithContact}
-                        />
-                      ))
-                    )}
+                      </div> : selectedConv.messages.map(msg => <MessageItem key={msg.id} message={msg as any} allMessages={selectedConv.messages as any} onDownload={downloadMedia} onTranscribe={transcreverAudio} onImageClick={(url, name) => {
+                  setSelectedMedia({
+                    url,
+                    name
+                  });
+                  setImageModalOpen(true);
+                }} onPdfClick={(url, name) => {
+                  setSelectedMedia({
+                    url,
+                    name
+                  });
+                  setPdfModalOpen(true);
+                }} isTranscribing={transcriptionStatuses[msg.id] === "processing"} transcriptionStatus={msg.transcriptionStatus} onRetryTranscribe={msg.transcriptionStatus === "error" ? () => transcreverAudio(msg.id, msg.mediaUrl!, true) : undefined} onReply={handleReply} onEdit={handleEdit} onDelete={handleDelete} onReact={handleReact} onOpenContactConversation={openConversationWithContact} />)}
                     <div ref={messagesEndRef} />
                   </div>
                 </div>
 
                 {/* Input Area - ABSOLUTAMENTE FIXO NO BOTTOM */}
                 <div className="bg-background border-t border-border p-4 flex-shrink-0">
-                  {replyingTo && (
-                    <div className="mb-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                  {replyingTo && <div className="mb-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
                       <div className="flex items-center justify-between">
                         <div className="flex items-start gap-2 flex-1 min-w-0">
                           <Reply className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
@@ -7952,64 +7366,43 @@ function Conversas() {
                             </p>
                           </div>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setReplyingTo(null)}
-                          className="flex-shrink-0 h-7 w-7 p-0"
-                        >
+                        <Button size="sm" variant="ghost" onClick={() => setReplyingTo(null)} className="flex-shrink-0 h-7 w-7 p-0">
                           ✕
                         </Button>
                       </div>
-                    </div>
-                  )}
+                    </div>}
                   <div className="flex items-end gap-2">
                     <MediaUpload onFileSelected={handleSendMedia} />
-                    <Textarea
-                      ref={messageTextareaRef}
-                      placeholder="Escreva sua mensagem..."
-                      value={messageInput}
-                      onChange={(e) => {
-                        setMessageInput(e.target.value);
-                        // Auto-resize
-                        e.target.style.height = 'auto';
-                        e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
-                      }}
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage();
-                        }
-                      }}
-                      onPaste={async (e) => {
-                        const items = e.clipboardData?.items;
-                        if (!items) return;
-
-                        for (let i = 0; i < items.length; i++) {
-                          if (items[i].type.indexOf('image') !== -1) {
-                            e.preventDefault();
-                            const blob = items[i].getAsFile();
-                            if (blob) {
-                              await handleSendMedia(blob, '', 'image');
-                            }
-                            break;
-                          }
-                        }
-                      }}
-                      className="flex-1 min-h-[40px] max-h-[200px] resize-none overflow-y-auto"
-                      rows={1}
-                    />
+                    <Textarea ref={messageTextareaRef} placeholder="Escreva sua mensagem..." value={messageInput} onChange={e => {
+                  setMessageInput(e.target.value);
+                  // Auto-resize
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
+                }} onKeyPress={e => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }} onPaste={async e => {
+                  const items = e.clipboardData?.items;
+                  if (!items) return;
+                  for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                      e.preventDefault();
+                      const blob = items[i].getAsFile();
+                      if (blob) {
+                        await handleSendMedia(blob, '', 'image');
+                      }
+                      break;
+                    }
+                  }
+                }} className="flex-1 min-h-[40px] max-h-[200px] resize-none overflow-y-auto" rows={1} />
                     <AudioRecorder onSendAudio={handleSendAudio} />
                     
                     {/* Botão de Respostas Rápidas */}
                     <Dialog open={showQuickRepliesPopup} onOpenChange={setShowQuickRepliesPopup}>
                       <DialogTrigger asChild>
-                        <Button 
-                          variant="outline" 
-                          size="icon"
-                          className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-300"
-                          title="Respostas Rápidas"
-                        >
+                        <Button variant="outline" size="icon" className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-300" title="Respostas Rápidas">
                           <Zap className="h-5 w-5" />
                         </Button>
                       </DialogTrigger>
@@ -8024,24 +7417,18 @@ function Conversas() {
                         {/* Mensagens por Categoria */}
                         <div className="space-y-4">
                           <h4 className="text-sm font-medium">Mensagens por Categoria:</h4>
-                          {quickCategories.length === 0 ? (
-                            <div className="text-center py-8 text-muted-foreground border rounded-lg">
+                          {quickCategories.length === 0 ? <div className="text-center py-8 text-muted-foreground border rounded-lg">
                               <Zap className="h-12 w-12 mx-auto mb-3 opacity-30" />
                               <p>Nenhuma categoria criada</p>
                               <p className="text-sm">Use o botão "Mensagens Rápidas" no painel lateral para criar</p>
-                            </div>
-                          ) : (
-                            <Accordion type="single" collapsible className="w-full">
-                              {quickCategories.map((category) => {
-                                const categoryMessages = quickMessages
-                                  .filter((msg) => msg.category === category.id)
-                                  .sort((a, b) => {
-                                    const indexA = quickMessages.findIndex(m => m.id === a.id);
-                                    const indexB = quickMessages.findIndex(m => m.id === b.id);
-                                    return indexA - indexB;
-                                  });
-                                return (
-                                  <AccordionItem key={category.id} value={category.id}>
+                            </div> : <Accordion type="single" collapsible className="w-full">
+                              {quickCategories.map(category => {
+                          const categoryMessages = quickMessages.filter(msg => msg.category === category.id).sort((a, b) => {
+                            const indexA = quickMessages.findIndex(m => m.id === a.id);
+                            const indexB = quickMessages.findIndex(m => m.id === b.id);
+                            return indexA - indexB;
+                          });
+                          return <AccordionItem key={category.id} value={category.id}>
                                     <AccordionTrigger className="hover:no-underline">
                                       <div className="flex items-center justify-between w-full pr-4">
                                         <span className="font-medium">{category.name}</span>
@@ -8049,81 +7436,47 @@ function Conversas() {
                                       </div>
                                     </AccordionTrigger>
                                     <AccordionContent>
-                                      {categoryMessages.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground py-2 px-4">
+                                      {categoryMessages.length === 0 ? <p className="text-sm text-muted-foreground py-2 px-4">
                                           Nenhuma mensagem nesta categoria
-                                        </p>
-                                      ) : (
-                                        <div className="space-y-2">
-                                          {categoryMessages.map((qm) => (
-                                            <div
-                                              key={qm.id}
-                                              className="flex items-start justify-between p-3 bg-background rounded border"
-                                            >
+                                        </p> : <div className="space-y-2">
+                                          {categoryMessages.map(qm => <div key={qm.id} className="flex items-start justify-between p-3 bg-background rounded border">
                                               <div className="flex-1 min-w-0 mr-3">
                                                 <p className="font-medium text-sm mb-1">{qm.title}</p>
-                                                {qm.type === "text" ? (
-                                                  <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                                                {qm.type === "text" ? <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
                                                     {qm.content}
-                                                  </p>
-                                                ) : (
-                                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                    {qm.type === "image" ? (
-                                                      <>
+                                                  </p> : <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                    {qm.type === "image" ? <>
                                                         <ImageIcon className="h-4 w-4" />
                                                         <span>[Imagem]</span>
-                                                        {qm.mediaUrl && (
-                                                          <img 
-                                                            src={qm.mediaUrl} 
-                                                            alt="Preview" 
-                                                            className="h-12 w-12 object-cover rounded border"
-                                                          />
-                                                        )}
-                                                      </>
-                                                    ) : (
-                                                      <>
+                                                        {qm.mediaUrl && <img src={qm.mediaUrl} alt="Preview" className="h-12 w-12 object-cover rounded border" />}
+                                                      </> : <>
                                                         <Video className="h-4 w-4" />
                                                         <span>[Vídeo]</span>
-                                                      </>
-                                                    )}
-                                                  </div>
-                                                )}
+                                                      </>}
+                                                  </div>}
                                               </div>
                                               <div className="flex items-center gap-1 flex-shrink-0">
-                                                <Button
-                                                  size="sm"
-                                                  onClick={() => {
-                                                    sendQuickMessage(qm);
-                                                    setShowQuickRepliesPopup(false);
-                                                  }}
-                                                  className="bg-primary hover:bg-primary/90"
-                                                >
+                                                <Button size="sm" onClick={() => {
+                                      sendQuickMessage(qm);
+                                      setShowQuickRepliesPopup(false);
+                                    }} className="bg-primary hover:bg-primary/90">
                                                   Enviar
                                                 </Button>
                                               </div>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
+                                            </div>)}
+                                        </div>}
                                     </AccordionContent>
-                                  </AccordionItem>
-                                );
-                              })}
-                            </Accordion>
-                          )}
+                                  </AccordionItem>;
+                        })}
+                            </Accordion>}
                         </div>
                       </DialogContent>
                     </Dialog>
                     
-                    <Button 
-                      onClick={() => {
-                        handleSendMessage();
-                        setReplyingTo(null);
-                      }} 
-                      size="icon"
-                      className="bg-[#25D366] hover:bg-[#128C7E] text-white"
-                      disabled={!messageInput.trim()}
-                    >
+                    <Button onClick={() => {
+                  handleSendMessage();
+                  setReplyingTo(null);
+                }} size="icon" className="bg-[#25D366] hover:bg-[#128C7E] text-white" disabled={!messageInput.trim()}>
                       <Send className="h-5 w-5" />
                     </Button>
                   </div>
@@ -8131,8 +7484,7 @@ function Conversas() {
               </div>
 
               {/* Info Panel */}
-              {showInfoPanel && (
-                <div className="w-[340px] bg-background border-l border-border flex flex-col overflow-hidden">
+              {showInfoPanel && <div className="w-[340px] bg-background border-l border-border flex flex-col overflow-hidden">
                   <div className="p-6 space-y-6 flex-1 overflow-y-auto">
                     {/* Contact Info */}
                     <div className="text-center">
@@ -8151,113 +7503,87 @@ function Conversas() {
                       
                       {/* Status de vinculação com Lead */}
                       <div className="mb-3 space-y-2">
-                        {leadVinculado ? (
-                          <>
+                        {leadVinculado ? <>
                             <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-green-500/10 text-green-600 border-green-500/20">
                               <CheckCircle2 className="h-3 w-3" />
                               <span className="text-xs font-medium">Lead vinculado no CRM</span>
                             </Badge>
                             {/* Botão para editar informações do lead - usando o mesmo componente completo do menu Leads */}
-                            <EditarLeadDialog
-                              lead={{
-                                id: leadVinculado.id,
-                                nome: leadVinculado.name || selectedConv.contactName,
-                                telefone: leadVinculado.phone || leadVinculado.telefone || selectedConv.phoneNumber || selectedConv.id,
-                                email: leadVinculado.email || "",
-                                cpf: leadVinculado.cpf || "",
-                                value: leadVinculado.value || 0,
-                                company: leadVinculado.company || "",
-                                company_id: leadVinculado.company_id,
-                                source: leadVinculado.source || "",
-                                notes: leadVinculado.notes || "",
-                                tags: leadVinculado.tags || [],
-                                funil_id: leadVinculado.funil_id || undefined,
-                                etapa_id: leadVinculado.etapa_id || undefined,
-                              }}
-                              onLeadUpdated={async () => {
-                                // Recarregar informações do lead após atualização
-                                if (selectedConv.phoneNumber || selectedConv.id) {
-                                  const telefoneFormatado = safeFormatPhoneNumber(selectedConv.phoneNumber || selectedConv.id);
-                                  const { data: leadAtualizado } = await supabase
-                                    .from('leads')
-                                    .select('*')
-                                    .or(`phone.eq.${telefoneFormatado},telefone.eq.${telefoneFormatado}`)
-                                    .maybeSingle();
-                                  
-                                   if (leadAtualizado) {
-                                    setLeadVinculado(leadAtualizado);
-                                    setLeadsVinculados(prev => ({
-                                      ...prev,
-                                      [selectedConv.id]: leadAtualizado.id,
-                                      [safeFormatPhoneNumber(selectedConv.id)]: leadAtualizado.id
-                                    }));
-                                    
-                                    // Atualizar conversa com nome do responsável
-                                    setSelectedConv(prev => prev ? {
-                                      ...prev,
-                                      responsavel: (leadAtualizado as any).responsavel?.full_name || 'Sem responsável',
-                                      tags: leadAtualizado.tags || prev.tags,
-                                      valor: leadAtualizado.value ? `R$ ${Number(leadAtualizado.value).toLocaleString('pt-BR')}` : prev.valor
-                                    } : null);
-                                  }
-                                }
-                              }}
-                              triggerButton={
-                                <Button size="sm" variant="outline" className="w-full">
+                            <EditarLeadDialog lead={{
+                      id: leadVinculado.id,
+                      nome: leadVinculado.name || selectedConv.contactName,
+                      telefone: leadVinculado.phone || leadVinculado.telefone || selectedConv.phoneNumber || selectedConv.id,
+                      email: leadVinculado.email || "",
+                      cpf: leadVinculado.cpf || "",
+                      value: leadVinculado.value || 0,
+                      company: leadVinculado.company || "",
+                      company_id: leadVinculado.company_id,
+                      source: leadVinculado.source || "",
+                      notes: leadVinculado.notes || "",
+                      tags: leadVinculado.tags || [],
+                      funil_id: leadVinculado.funil_id || undefined,
+                      etapa_id: leadVinculado.etapa_id || undefined
+                    }} onLeadUpdated={async () => {
+                      // Recarregar informações do lead após atualização
+                      if (selectedConv.phoneNumber || selectedConv.id) {
+                        const telefoneFormatado = safeFormatPhoneNumber(selectedConv.phoneNumber || selectedConv.id);
+                        const {
+                          data: leadAtualizado
+                        } = await supabase.from('leads').select('*').or(`phone.eq.${telefoneFormatado},telefone.eq.${telefoneFormatado}`).maybeSingle();
+                        if (leadAtualizado) {
+                          setLeadVinculado(leadAtualizado);
+                          setLeadsVinculados(prev => ({
+                            ...prev,
+                            [selectedConv.id]: leadAtualizado.id,
+                            [safeFormatPhoneNumber(selectedConv.id)]: leadAtualizado.id
+                          }));
+
+                          // Atualizar conversa com nome do responsável
+                          setSelectedConv(prev => prev ? {
+                            ...prev,
+                            responsavel: (leadAtualizado as any).responsavel?.full_name || 'Sem responsável',
+                            tags: leadAtualizado.tags || prev.tags,
+                            valor: leadAtualizado.value ? `R$ ${Number(leadAtualizado.value).toLocaleString('pt-BR')}` : prev.valor
+                          } : null);
+                        }
+                      }
+                    }} triggerButton={<Button size="sm" variant="outline" className="w-full">
                                   <FileText className="h-3 w-3 mr-2" /> Editar Informações
-                                </Button>
-                              }
-                            />
-                          </>
-                        ) : (
-                          <div className="space-y-2">
+                                </Button>} />
+                          </> : <div className="space-y-2">
                             <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-amber-500/10 text-amber-600 border-amber-500/20">
                               <AlertCircle className="h-3 w-3" />
                               <span className="text-xs font-medium">Lead não cadastrado</span>
                             </Badge>
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              className="w-full border-primary/50 hover:bg-primary/10"
-                              onClick={criarLeadManualmente}
-                            >
+                            <Button size="sm" variant="outline" className="w-full border-primary/50 hover:bg-primary/10" onClick={criarLeadManualmente}>
                               <User className="h-3 w-3 mr-2" />
                               Criar Lead no CRM
                             </Button>
-                          </div>
-                        )}
+                          </div>}
                       </div>
-                      {selectedConv.produto && (
-                        <p className="text-sm text-muted-foreground mb-1">
+                      {selectedConv.produto && <p className="text-sm text-muted-foreground mb-1">
                           <strong>Produto:</strong> {selectedConv.produto}
-                        </p>
-                      )}
-                      {selectedConv.valor && (
-                        <p className="text-sm text-success font-medium mb-1">
+                        </p>}
+                      {selectedConv.valor && <p className="text-sm text-success font-medium mb-1">
                           <strong>Valor:</strong> {selectedConv.valor}
-                        </p>
-                      )}
-                      {selectedConv.anotacoes && (
-                        <div className="mt-2 p-2 bg-muted rounded text-sm">
+                        </p>}
+                      {selectedConv.anotacoes && <div className="mt-2 p-2 bg-muted rounded text-sm">
                           <strong>Anotações:</strong> {selectedConv.anotacoes}
-                        </div>
-                      )}
+                        </div>}
                     </div>
 
                     {/* Responsáveis */}
-                    <ResponsaveisManager 
-                      leadId={leadsVinculados[selectedConv.id] || leadsVinculados[safeFormatPhoneNumber(selectedConv.id)] || null}
-                      responsaveisAtuais={selectedConv.responsavel ? [selectedConv.responsavel] : []}
-                      onResponsaveisUpdated={(responsaveis) => {
-                        console.log('👥 Responsáveis atualizados:', responsaveis);
-                        setConversations(prev => prev.map(conv => 
-                          conv.id === selectedConv.id 
-                            ? { ...conv, responsavel: responsaveis.join(', ') }
-                            : conv
-                        ));
-                        setSelectedConv(prev => prev ? { ...prev, responsavel: responsaveis.join(', ') } : null);
-                      }}
-                    />
+                    <ResponsaveisManager leadId={leadsVinculados[selectedConv.id] || leadsVinculados[safeFormatPhoneNumber(selectedConv.id)] || null} responsaveisAtuais={selectedConv.responsavel ? [selectedConv.responsavel] : []} onResponsaveisUpdated={responsaveis => {
+                console.log('👥 Responsáveis atualizados:', responsaveis);
+                setConversations(prev => prev.map(conv => conv.id === selectedConv.id ? {
+                  ...conv,
+                  responsavel: responsaveis.join(', ')
+                } : conv));
+                setSelectedConv(prev => prev ? {
+                  ...prev,
+                  responsavel: responsaveis.join(', ')
+                } : null);
+              }} />
 
                     {/* Tags */}
                     <div>
@@ -8265,20 +7591,16 @@ function Conversas() {
                         <Tag className="h-4 w-4" /> Tags
                       </h4>
                       <div className="flex flex-wrap gap-2 mb-2">
-                        {selectedConv.tags?.map((tag, idx) => (
-                          <Badge key={idx} variant="secondary">
+                        {selectedConv.tags?.map((tag, idx) => <Badge key={idx} variant="secondary">
                             {tag}
-                          </Badge>
-                        ))}
-                        {(!selectedConv.tags || selectedConv.tags.length === 0) && (
-                          <p className="text-sm text-muted-foreground">Nenhuma tag adicionada</p>
-                        )}
+                          </Badge>)}
+                        {(!selectedConv.tags || selectedConv.tags.length === 0) && <p className="text-sm text-muted-foreground">Nenhuma tag adicionada</p>}
                       </div>
-                      <Dialog onOpenChange={(open) => {
-                        if (open) {
-                          refreshTags(); // Atualizar tags quando abrir o dialog
-                        }
-                      }}>
+                      <Dialog onOpenChange={open => {
+                  if (open) {
+                    refreshTags(); // Atualizar tags quando abrir o dialog
+                  }
+                }}>
                         <DialogTrigger asChild>
                           <Button size="sm" variant="outline" className="w-full">
                             <Tag className="h-3 w-3 mr-2" /> Adicionar Tag
@@ -8293,17 +7615,12 @@ function Conversas() {
                             <div className="space-y-2">
                               <Label>Criar Nova Tag</Label>
                               <div className="flex gap-2">
-                                <Input
-                                  placeholder="Nome da tag"
-                                  value={newTag}
-                                  onChange={(e) => setNewTag(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" && newTag.trim()) {
-                                      e.preventDefault();
-                                      addTag();
-                                    }
-                                  }}
-                                />
+                                <Input placeholder="Nome da tag" value={newTag} onChange={e => setNewTag(e.target.value)} onKeyDown={e => {
+                            if (e.key === "Enter" && newTag.trim()) {
+                              e.preventDefault();
+                              addTag();
+                            }
+                          }} />
                                 <Button onClick={addTag} disabled={!newTag.trim()}>
                                   Adicionar
                                 </Button>
@@ -8311,43 +7628,32 @@ function Conversas() {
                             </div>
                             
                             {/* Lista de tags disponíveis para seleção */}
-                            {allTags.length > 0 && (
-                              <div className="space-y-2">
+                            {allTags.length > 0 && <div className="space-y-2">
                                 <Label>Tags Disponíveis</Label>
                                 <ScrollArea className="h-[200px] border rounded-md p-2">
                                   <div className="flex flex-wrap gap-2">
-                                    {allTags.map((tag) => {
-                                      const isSelected = selectedConv.tags?.includes(tag) || false;
-                                      return (
-                                        <Badge
-                                          key={tag}
-                                          variant={isSelected ? "default" : "outline"}
-                                          className="cursor-pointer hover:bg-primary/80"
-                                          onClick={() => {
-                                            if (isSelected) {
-                                              // Remover tag
-                                              removeTag(tag);
-                                            } else {
-                                              // Adicionar tag
-                                              addExistingTag(tag);
-                                            }
-                                          }}
-                                        >
+                                    {allTags.map(tag => {
+                              const isSelected = selectedConv.tags?.includes(tag) || false;
+                              return <Badge key={tag} variant={isSelected ? "default" : "outline"} className="cursor-pointer hover:bg-primary/80" onClick={() => {
+                                if (isSelected) {
+                                  // Remover tag
+                                  removeTag(tag);
+                                } else {
+                                  // Adicionar tag
+                                  addExistingTag(tag);
+                                }
+                              }}>
                                           {tag}
                                           {isSelected && <X className="h-3 w-3 ml-1" />}
-                                        </Badge>
-                                      );
-                                    })}
+                                        </Badge>;
+                            })}
                                   </div>
                                 </ScrollArea>
-                              </div>
-                            )}
+                              </div>}
                             
-                            {allTags.length === 0 && (
-                              <p className="text-sm text-muted-foreground text-center py-4">
+                            {allTags.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">
                                 Nenhuma tag disponível. Crie uma nova tag acima.
-                              </p>
-                            )}
+                              </p>}
                           </div>
                         </DialogContent>
                       </Dialog>
@@ -8359,8 +7665,7 @@ function Conversas() {
                         <TrendingUp className="h-4 w-4" /> Funil de Vendas
                       </h4>
                       {/* ⚡ CORREÇÃO: Verificar se lead está vinculado e tem funil_id */}
-                      {leadVinculado?.funil_id ? (
-                        <div className="mb-2 p-3 bg-primary/5 rounded-md border border-primary/20">
+                      {leadVinculado?.funil_id ? <div className="mb-2 p-3 bg-primary/5 rounded-md border border-primary/20">
                           <div className="space-y-2">
                             <div>
                               <p className="text-xs text-muted-foreground mb-1">Funil de Vendas:</p>
@@ -8368,32 +7673,22 @@ function Conversas() {
                                 {funis.find(f => f.id === leadVinculado.funil_id)?.nome || "Carregando..."}
                               </p>
                             </div>
-                            {leadVinculado.etapa_id && (
-                              <div>
+                            {leadVinculado.etapa_id && <div>
                                 <p className="text-xs text-muted-foreground mb-1">Etapa Atual:</p>
                                 <div className="flex items-center gap-2">
-                                  <div 
-                                    className="w-3 h-3 rounded-full flex-shrink-0" 
-                                    style={{ 
-                                      backgroundColor: etapas.find(e => e.id === leadVinculado.etapa_id)?.cor || '#3b82f6' 
-                                    }}
-                                  />
+                                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{
+                          backgroundColor: etapas.find(e => e.id === leadVinculado.etapa_id)?.cor || '#3b82f6'
+                        }} />
                                   <p className="text-sm font-medium text-foreground">
                                     {etapas.find(e => e.id === leadVinculado.etapa_id)?.nome || "Carregando..."}
                                   </p>
                                 </div>
-                              </div>
-                            )}
-                            {!leadVinculado.etapa_id && (
-                              <p className="text-xs text-amber-600">Etapa não definida</p>
-                            )}
+                              </div>}
+                            {!leadVinculado.etapa_id && <p className="text-xs text-amber-600">Etapa não definida</p>}
                           </div>
-                        </div>
-                      ) : (
-                        <div className="mb-2">
+                        </div> : <div className="mb-2">
                           <p className="text-sm text-muted-foreground">Não está em nenhum funil</p>
-                        </div>
-                      )}
+                        </div>}
                       <Dialog>
                         <DialogTrigger asChild>
                           <Button size="sm" variant="outline" className="w-full">
@@ -8412,8 +7707,7 @@ function Conversas() {
                           </DialogHeader>
                           
                           {/* Informação do funil atual */}
-                          {leadVinculado && leadVinculado.funil_id && (
-                            <div className="p-3 bg-primary/10 border border-primary/30 rounded-lg space-y-2">
+                          {leadVinculado && leadVinculado.funil_id && <div className="p-3 bg-primary/10 border border-primary/30 rounded-lg space-y-2">
                               <div className="flex items-center gap-2">
                                 <AlertCircle className="h-4 w-4 text-primary" />
                                 <p className="text-sm font-semibold text-primary">Posição Atual do Lead</p>
@@ -8428,12 +7722,9 @@ function Conversas() {
                                 <div>
                                   <p className="text-xs text-muted-foreground">Etapa:</p>
                                   <div className="flex items-center gap-2">
-                                    <div 
-                                      className="w-2.5 h-2.5 rounded-full" 
-                                      style={{ 
-                                        backgroundColor: etapas.find(e => e.id === leadVinculado.etapa_id)?.cor || '#3b82f6' 
-                                      }}
-                                    />
+                                    <div className="w-2.5 h-2.5 rounded-full" style={{
+                              backgroundColor: etapas.find(e => e.id === leadVinculado.etapa_id)?.cor || '#3b82f6'
+                            }} />
                                     <p className="text-sm font-medium text-foreground">
                                       {etapas.find(e => e.id === leadVinculado.etapa_id)?.nome || "Etapa não definida"}
                                     </p>
@@ -8443,96 +7734,60 @@ function Conversas() {
                               <p className="text-xs text-muted-foreground pl-6 pt-1">
                                 💡 Selecione um novo funil/etapa abaixo para mover o lead
                               </p>
-                            </div>
-                          )}
+                            </div>}
                           
                           <div className="space-y-4">
                             <div>
                               <Label htmlFor="funil-select">Funil de Vendas *</Label>
                               <Select value={selectedFunilId} onValueChange={setSelectedFunilId}>
                                 <SelectTrigger id="funil-select">
-                                  <SelectValue placeholder={
-                                    funis.length === 0 
-                                      ? "Nenhum funil disponível" 
-                                      : "Escolha um funil"
-                                  } />
+                                  <SelectValue placeholder={funis.length === 0 ? "Nenhum funil disponível" : "Escolha um funil"} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {funis.length === 0 ? (
-                                    <div className="p-2 text-sm text-muted-foreground text-center">
+                                  {funis.length === 0 ? <div className="p-2 text-sm text-muted-foreground text-center">
                                       <p>Nenhum funil criado</p>
                                       <p className="text-xs mt-1">Crie um no menu Kanban</p>
-                                    </div>
-                                  ) : (
-                                    funis.map((funil) => (
-                                      <SelectItem key={funil.id} value={funil.id}>
+                                    </div> : funis.map(funil => <SelectItem key={funil.id} value={funil.id}>
                                         📊 {funil.nome}
-                                        {funil.descricao && (
-                                          <span className="text-xs text-muted-foreground ml-2">
+                                        {funil.descricao && <span className="text-xs text-muted-foreground ml-2">
                                             - {funil.descricao}
-                                          </span>
-                                        )}
-                                        {leadVinculado?.funil_id === funil.id && (
-                                          <span className="text-xs text-primary ml-2 font-medium">
+                                          </span>}
+                                        {leadVinculado?.funil_id === funil.id && <span className="text-xs text-primary ml-2 font-medium">
                                             (Atual)
-                                          </span>
-                                        )}
-                                      </SelectItem>
-                                    ))
-                                  )}
+                                          </span>}
+                                      </SelectItem>)}
                                 </SelectContent>
                               </Select>
-                              {funis.length === 0 && (
-                                <p className="text-xs text-destructive mt-1">
+                              {funis.length === 0 && <p className="text-xs text-destructive mt-1">
                                   ⚠️ Crie um funil no menu Kanban
-                                </p>
-                              )}
+                                </p>}
                             </div>
 
                             <div>
                               <Label htmlFor="etapa-select">Etapa *</Label>
-                              <Select 
-                                value={selectedFunnel} 
-                                onValueChange={setSelectedFunnel}
-                                disabled={!selectedFunilId}
-                              >
+                              <Select value={selectedFunnel} onValueChange={setSelectedFunnel} disabled={!selectedFunilId}>
                                 <SelectTrigger id="etapa-select">
-                                  <SelectValue placeholder={
-                                    !selectedFunilId 
-                                      ? "Selecione um funil primeiro" 
-                                      : "Escolha a etapa"
-                                  } />
+                                  <SelectValue placeholder={!selectedFunilId ? "Selecione um funil primeiro" : "Escolha a etapa"} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {etapasFiltradas.length === 0 ? (
-                                    <div className="p-2 text-sm text-muted-foreground">
+                                  {etapasFiltradas.length === 0 ? <div className="p-2 text-sm text-muted-foreground">
                                       Nenhuma etapa disponível neste funil
-                                    </div>
-                                  ) : (
-                                    etapasFiltradas.map((etapa) => (
-                                      <SelectItem key={etapa.id} value={etapa.id}>
+                                    </div> : etapasFiltradas.map(etapa => <SelectItem key={etapa.id} value={etapa.id}>
                                         <div className="flex items-center gap-2">
-                                          <div 
-                                            className="w-3 h-3 rounded-full" 
-                                            style={{ backgroundColor: etapa.cor || '#3b82f6' }}
-                                          />
+                                          <div className="w-3 h-3 rounded-full" style={{
+                                  backgroundColor: etapa.cor || '#3b82f6'
+                                }} />
                                           {etapa.nome}
-                                          {leadVinculado?.etapa_id === etapa.id && (
-                                            <span className="text-xs text-primary ml-2 font-medium">
+                                          {leadVinculado?.etapa_id === etapa.id && <span className="text-xs text-primary ml-2 font-medium">
                                               (Atual)
-                                            </span>
-                                          )}
+                                            </span>}
                                         </div>
-                                      </SelectItem>
-                                    ))
-                                  )}
+                                      </SelectItem>)}
                                 </SelectContent>
                               </Select>
-                              {!selectedFunilId && (
-                                <p className="text-xs text-muted-foreground mt-1">
+                              {!selectedFunilId && <p className="text-xs text-muted-foreground mt-1">
                                   💡 Selecione um funil para ver as etapas
-                                </p>
-                              )}
+                                </p>}
                             </div>
                           </div>
                           <Button onClick={addToFunnel}>
@@ -8547,11 +7802,7 @@ function Conversas() {
                       <h4 className="text-foreground font-medium mb-3">Ações Rápidas</h4>
                       <div className="space-y-2">
                         {/* AI Toggle */}
-                        <Button
-                          onClick={() => toggleAiMode(selectedConv.id)}
-                          variant={aiMode[selectedConv.id] ? "default" : "outline"}
-                          className="w-full justify-start"
-                        >
+                        <Button onClick={() => toggleAiMode(selectedConv.id)} variant={aiMode[selectedConv.id] ? "default" : "outline"} className="w-full justify-start">
                           <Bot className="h-4 w-4 mr-2" />
                           {aiMode[selectedConv.id] ? "Desativar IA" : "Ativar IA"}
                         </Button>
@@ -8595,21 +7846,19 @@ function Conversas() {
                                             <SelectValue placeholder="Selecione a categoria" />
                                           </SelectTrigger>
                                           <SelectContent>
-                                            {quickCategories.map((cat) => (
-                                              <SelectItem key={cat.id} value={cat.id}>
+                                            {quickCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>
                                                 {cat.name}
-                                              </SelectItem>
-                                            ))}
+                                              </SelectItem>)}
                                           </SelectContent>
                                         </Select>
                                       </div>
                                       <div className="space-y-2">
                                         <Label>Tipo de Mensagem *</Label>
                                         <Select value={newQuickMessageType} onValueChange={(value: "text" | "image" | "video") => {
-                                          setNewQuickMessageType(value);
-                                          setNewQuickMediaFile(null);
-                                          setNewQuickMediaPreview(null);
-                                        }}>
+                                    setNewQuickMessageType(value);
+                                    setNewQuickMediaFile(null);
+                                    setNewQuickMediaPreview(null);
+                                  }}>
                                           <SelectTrigger>
                                             <SelectValue />
                                           </SelectTrigger>
@@ -8622,63 +7871,39 @@ function Conversas() {
                                       </div>
                                       <div className="space-y-2">
                                         <Label>Título *</Label>
-                                        <Input
-                                          value={newQuickTitle}
-                                          onChange={(e) => setNewQuickTitle(e.target.value)}
-                                          placeholder="Ex: Saudação"
-                                        />
+                                        <Input value={newQuickTitle} onChange={e => setNewQuickTitle(e.target.value)} placeholder="Ex: Saudação" />
                                       </div>
-                                      {newQuickMessageType === "text" ? (
-                                        <div className="space-y-2">
+                                      {newQuickMessageType === "text" ? <div className="space-y-2">
                                           <Label>Mensagem *</Label>
-                                          <Textarea
-                                            value={newQuickContent}
-                                            onChange={(e) => setNewQuickContent(e.target.value)}
-                                            placeholder="Digite a mensagem..."
-                                            rows={3}
-                                          />
-                                        </div>
-                                      ) : (
-                                        <>
+                                          <Textarea value={newQuickContent} onChange={e => setNewQuickContent(e.target.value)} placeholder="Digite a mensagem..." rows={3} />
+                                        </div> : <>
                                           <div className="space-y-2">
                                             <Label>Arquivo de {newQuickMessageType === "image" ? "Imagem" : "Vídeo"} *</Label>
-                                            <Input
-                                              type="file"
-                                              accept={newQuickMessageType === "image" ? "image/*" : "video/*"}
-                                              onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) {
-                                                  setNewQuickMediaFile(file);
-                                                  const reader = new FileReader();
-                                                  reader.onloadend = () => {
-                                                    setNewQuickMediaPreview(reader.result as string);
-                                                  };
-                                                  reader.readAsDataURL(file);
-                                                }
-                                              }}
-                                            />
+                                            <Input type="file" accept={newQuickMessageType === "image" ? "image/*" : "video/*"} onChange={e => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        setNewQuickMediaFile(file);
+                                        const reader = new FileReader();
+                                        reader.onloadend = () => {
+                                          setNewQuickMediaPreview(reader.result as string);
+                                        };
+                                        reader.readAsDataURL(file);
+                                      }
+                                    }} />
                                           </div>
-                                          {newQuickMediaPreview && (
-                                            <div className="space-y-2">
+                                          {newQuickMediaPreview && <div className="space-y-2">
                                               <Label>Preview:</Label>
-                                              {newQuickMessageType === "image" ? (
-                                                <img src={newQuickMediaPreview} alt="Preview" className="max-w-full h-auto rounded border" style={{ maxHeight: '200px' }} />
-                                              ) : (
-                                                <video src={newQuickMediaPreview} controls className="max-w-full rounded border" style={{ maxHeight: '200px' }} />
-                                              )}
-                                            </div>
-                                          )}
+                                              {newQuickMessageType === "image" ? <img src={newQuickMediaPreview} alt="Preview" className="max-w-full h-auto rounded border" style={{
+                                      maxHeight: '200px'
+                                    }} /> : <video src={newQuickMediaPreview} controls className="max-w-full rounded border" style={{
+                                      maxHeight: '200px'
+                                    }} />}
+                                            </div>}
                                           <div className="space-y-2">
                                             <Label>Legenda (opcional)</Label>
-                                            <Textarea
-                                              value={newQuickContent}
-                                              onChange={(e) => setNewQuickContent(e.target.value)}
-                                              placeholder="Digite a legenda da mídia..."
-                                              rows={2}
-                                            />
+                                            <Textarea value={newQuickContent} onChange={e => setNewQuickContent(e.target.value)} placeholder="Digite a legenda da mídia..." rows={2} />
                                           </div>
-                                        </>
-                                      )}
+                                        </>}
                                       <Button onClick={addQuickMessage} className="w-full">
                                         Criar Mensagem Rápida
                                       </Button>
@@ -8689,24 +7914,18 @@ function Conversas() {
                                 {/* Mensagens organizadas por categoria */}
                                 <div className="border-t pt-4">
                                   <h4 className="text-sm font-medium mb-3">Mensagens por Categoria:</h4>
-                                  {quickCategories.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground text-center py-4">
+                                  {quickCategories.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">
                                       Crie categorias na aba "Categorias"
-                                    </p>
-                                  ) : (
-                                    <Accordion type="single" collapsible className="w-full">
-                                      {quickCategories.map((category) => {
-                                        // ⚡ CORREÇÃO: Manter ordem original das mensagens ao filtrar por categoria
-                                        const categoryMessages = quickMessages
-                                          .filter((msg) => msg.category === category.id)
-                                          .sort((a, b) => {
-                                            // Manter ordem original baseada na posição no array completo
-                                            const indexA = quickMessages.findIndex(m => m.id === a.id);
-                                            const indexB = quickMessages.findIndex(m => m.id === b.id);
-                                            return indexA - indexB;
-                                          });
-                                        return (
-                                          <AccordionItem key={category.id} value={category.id}>
+                                    </p> : <Accordion type="single" collapsible className="w-full">
+                                      {quickCategories.map(category => {
+                                // ⚡ CORREÇÃO: Manter ordem original das mensagens ao filtrar por categoria
+                                const categoryMessages = quickMessages.filter(msg => msg.category === category.id).sort((a, b) => {
+                                  // Manter ordem original baseada na posição no array completo
+                                  const indexA = quickMessages.findIndex(m => m.id === a.id);
+                                  const indexB = quickMessages.findIndex(m => m.id === b.id);
+                                  return indexA - indexB;
+                                });
+                                return <AccordionItem key={category.id} value={category.id}>
                                             <AccordionTrigger className="hover:no-underline">
                                               <div className="flex items-center justify-between w-full pr-4">
                                                 <span className="font-medium">{category.name}</span>
@@ -8714,29 +7933,22 @@ function Conversas() {
                                               </div>
                                             </AccordionTrigger>
                                             <AccordionContent>
-                                              {categoryMessages.length === 0 ? (
-                                                <p className="text-sm text-muted-foreground py-2 px-4">
+                                              {categoryMessages.length === 0 ? <p className="text-sm text-muted-foreground py-2 px-4">
                                                   Nenhuma mensagem nesta categoria
-                                                </p>
-                                              ) : (
-                                                <div className="space-y-2">
-                                                  {categoryMessages.map((qm, msgIndex) => (
-                                                    <div
-                                                      key={qm.id}
-                                                      className="flex items-start justify-between p-3 bg-background rounded border"
-                                                    >
-                                                      {editingMessageId === qm.id ? (
-                                                        // Modo de edição
-                                                        <div className="flex-1 space-y-2">
+                                                </p> : <div className="space-y-2">
+                                                  {categoryMessages.map((qm, msgIndex) => <div key={qm.id} className="flex items-start justify-between p-3 bg-background rounded border">
+                                                      {editingMessageId === qm.id ?
+                                        // Modo de edição
+                                        <div className="flex-1 space-y-2">
                                                           <div className="space-y-2">
                                                             <Label>Tipo de Mensagem *</Label>
                                                             <Select value={editMessageType} onValueChange={(value: "text" | "image" | "video") => {
-                                                              setEditMessageType(value);
-                                                              if (value === "text") {
-                                                                setEditMessageMediaFile(null);
-                                                                setEditMessageMediaPreview(null);
-                                                              }
-                                                            }}>
+                                              setEditMessageType(value);
+                                              if (value === "text") {
+                                                setEditMessageMediaFile(null);
+                                                setEditMessageMediaPreview(null);
+                                              }
+                                            }}>
                                                               <SelectTrigger>
                                                                 <SelectValue />
                                                               </SelectTrigger>
@@ -8749,66 +7961,42 @@ function Conversas() {
                                                           </div>
                                                           <div className="space-y-2">
                                                             <Label>Título *</Label>
-                                                            <Input
-                                                              value={editMessageTitle}
-                                                              onChange={(e) => setEditMessageTitle(e.target.value)}
-                                                              placeholder="Título da mensagem"
-                                                            />
+                                                            <Input value={editMessageTitle} onChange={e => setEditMessageTitle(e.target.value)} placeholder="Título da mensagem" />
                                                           </div>
-                                                          {editMessageType === "text" ? (
-                                                            <div className="space-y-2">
+                                                          {editMessageType === "text" ? <div className="space-y-2">
                                                               <Label>Mensagem *</Label>
-                                                              <Textarea
-                                                                value={editMessageContent}
-                                                                onChange={(e) => setEditMessageContent(e.target.value)}
-                                                                placeholder="Conteúdo da mensagem"
-                                                                rows={3}
-                                                              />
-                                                            </div>
-                                                          ) : (
-                                                            <>
+                                                              <Textarea value={editMessageContent} onChange={e => setEditMessageContent(e.target.value)} placeholder="Conteúdo da mensagem" rows={3} />
+                                                            </div> : <>
                                                               <div className="space-y-2">
                                                                 <Label>Arquivo de {editMessageType === "image" ? "Imagem" : "Vídeo"} *</Label>
-                                                                <Input
-                                                                  type="file"
-                                                                  accept={editMessageType === "image" ? "image/*" : "video/*"}
-                                                                  onChange={(e) => {
-                                                                    const file = e.target.files?.[0];
-                                                                    if (file) {
-                                                                      setEditMessageMediaFile(file);
-                                                                      const reader = new FileReader();
-                                                                      reader.onloadend = () => {
-                                                                        setEditMessageMediaPreview(reader.result as string);
-                                                                      };
-                                                                      reader.readAsDataURL(file);
-                                                                    }
-                                                                  }}
-                                                                />
+                                                                <Input type="file" accept={editMessageType === "image" ? "image/*" : "video/*"} onChange={e => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                  setEditMessageMediaFile(file);
+                                                  const reader = new FileReader();
+                                                  reader.onloadend = () => {
+                                                    setEditMessageMediaPreview(reader.result as string);
+                                                  };
+                                                  reader.readAsDataURL(file);
+                                                }
+                                              }} />
                                                                 <p className="text-xs text-muted-foreground">
                                                                   Deixe em branco para manter o arquivo atual
                                                                 </p>
                                                               </div>
-                                                              {editMessageMediaPreview && (
-                                                                <div className="space-y-2">
+                                                              {editMessageMediaPreview && <div className="space-y-2">
                                                                   <Label>Preview:</Label>
-                                                                  {editMessageType === "image" ? (
-                                                                    <img src={editMessageMediaPreview} alt="Preview" className="max-w-full h-auto rounded border" style={{ maxHeight: '150px' }} />
-                                                                  ) : (
-                                                                    <video src={editMessageMediaPreview} controls className="max-w-full rounded border" style={{ maxHeight: '150px' }} />
-                                                                  )}
-                                                                </div>
-                                                              )}
+                                                                  {editMessageType === "image" ? <img src={editMessageMediaPreview} alt="Preview" className="max-w-full h-auto rounded border" style={{
+                                                maxHeight: '150px'
+                                              }} /> : <video src={editMessageMediaPreview} controls className="max-w-full rounded border" style={{
+                                                maxHeight: '150px'
+                                              }} />}
+                                                                </div>}
                                                               <div className="space-y-2">
                                                                 <Label>Legenda (opcional)</Label>
-                                                                <Textarea
-                                                                  value={editMessageContent}
-                                                                  onChange={(e) => setEditMessageContent(e.target.value)}
-                                                                  placeholder="Digite a legenda da mídia..."
-                                                                  rows={2}
-                                                                />
+                                                                <Textarea value={editMessageContent} onChange={e => setEditMessageContent(e.target.value)} placeholder="Digite a legenda da mídia..." rows={2} />
                                                               </div>
-                                                            </>
-                                                          )}
+                                                            </>}
                                                           <div className="space-y-2">
                                                             <Label>Categoria *</Label>
                                                             <Select value={editMessageCategory} onValueChange={setEditMessageCategory}>
@@ -8816,11 +8004,9 @@ function Conversas() {
                                                                 <SelectValue placeholder="Selecione a categoria" />
                                                               </SelectTrigger>
                                                               <SelectContent>
-                                                                {quickCategories.map((cat) => (
-                                                                  <SelectItem key={cat.id} value={cat.id}>
+                                                                {quickCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>
                                                                     {cat.name}
-                                                                  </SelectItem>
-                                                                ))}
+                                                                  </SelectItem>)}
                                                               </SelectContent>
                                                             </Select>
                                                           </div>
@@ -8832,90 +8018,49 @@ function Conversas() {
                                                               Cancelar
                                                             </Button>
                                                           </div>
-                                                        </div>
-                                                      ) : (
-                                                        // Modo de visualização
-                                                        <>
+                                                        </div> :
+                                        // Modo de visualização
+                                        <>
                                                           <div className="flex-1 min-w-0">
                                                             <p className="text-sm font-medium">{qm.title}</p>
-                                                            {qm.type === "image" && qm.mediaUrl && (
-                                                              <div className="mt-2 mb-2">
-                                                                <img 
-                                                                  src={qm.mediaUrl} 
-                                                                  alt={qm.title} 
-                                                                  className="max-w-full h-auto rounded border" 
-                                                                  style={{ maxHeight: '150px' }} 
-                                                                />
-                                                              </div>
-                                                            )}
-                                                            {qm.type === "video" && qm.mediaUrl && (
-                                                              <div className="mt-2 mb-2">
-                                                                <video 
-                                                                  src={qm.mediaUrl} 
-                                                                  controls 
-                                                                  className="max-w-full rounded border" 
-                                                                  style={{ maxHeight: '150px' }} 
-                                                                />
-                                                              </div>
-                                                            )}
+                                                            {qm.type === "image" && qm.mediaUrl && <div className="mt-2 mb-2">
+                                                                <img src={qm.mediaUrl} alt={qm.title} className="max-w-full h-auto rounded border" style={{
+                                                maxHeight: '150px'
+                                              }} />
+                                                              </div>}
+                                                            {qm.type === "video" && qm.mediaUrl && <div className="mt-2 mb-2">
+                                                                <video src={qm.mediaUrl} controls className="max-w-full rounded border" style={{
+                                                maxHeight: '150px'
+                                              }} />
+                                                              </div>}
                                                             <p className="text-xs text-muted-foreground mt-1 break-words">
                                                               {qm.content}
                                                             </p>
                                                           </div>
                                                           <div className="flex gap-1 ml-2">
-                                                            <Button
-                                                              size="sm"
-                                                              variant="outline"
-                                                              onClick={() => moveMessageUp(qm.id, category.id)}
-                                                              disabled={msgIndex === 0}
-                                                              title="Mover para cima"
-                                                            >
+                                                            <Button size="sm" variant="outline" onClick={() => moveMessageUp(qm.id, category.id)} disabled={msgIndex === 0} title="Mover para cima">
                                                               ↑
                                                             </Button>
-                                                            <Button
-                                                              size="sm"
-                                                              variant="outline"
-                                                              onClick={() => moveMessageDown(qm.id, category.id)}
-                                                              disabled={msgIndex === categoryMessages.length - 1}
-                                                              title="Mover para baixo"
-                                                            >
+                                                            <Button size="sm" variant="outline" onClick={() => moveMessageDown(qm.id, category.id)} disabled={msgIndex === categoryMessages.length - 1} title="Mover para baixo">
                                                               ↓
                                                             </Button>
-                                                            <Button
-                                                              size="sm"
-                                                              variant="outline"
-                                                              onClick={() => editQuickMessage(qm.id)}
-                                                              title="Editar mensagem"
-                                                            >
+                                                            <Button size="sm" variant="outline" onClick={() => editQuickMessage(qm.id)} title="Editar mensagem">
                                                               ✏️
                                                             </Button>
-                                                            <Button
-                                                              size="sm"
-                                                              onClick={() => sendQuickMessage(qm)}
-                                                            >
+                                                            <Button size="sm" onClick={() => sendQuickMessage(qm)}>
                                                               Enviar
                                                             </Button>
-                                                            <Button
-                                                              size="sm"
-                                                              variant="destructive"
-                                                              onClick={() => deleteQuickMessage(qm.id)}
-                                                              title="Excluir mensagem"
-                                                            >
+                                                            <Button size="sm" variant="destructive" onClick={() => deleteQuickMessage(qm.id)} title="Excluir mensagem">
                                                               ×
                                                             </Button>
                                                           </div>
-                                                        </>
-                                                      )}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              )}
+                                                        </>}
+                                                    </div>)}
+                                                </div>}
                                             </AccordionContent>
-                                          </AccordionItem>
-                                        );
-                                      })}
-                                    </Accordion>
-                                  )}
+                                          </AccordionItem>;
+                              })}
+                                    </Accordion>}
                                 </div>
                               </TabsContent>
                               
@@ -8924,17 +8069,12 @@ function Conversas() {
                                 <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
                                   <h4 className="text-sm font-semibold">Criar Nova Categoria</h4>
                                   <div className="flex gap-2">
-                                    <Input
-                                      value={newCategoryName}
-                                      onChange={(e) => setNewCategoryName(e.target.value)}
-                                      placeholder="Nome da categoria"
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          e.preventDefault();
-                                          addQuickCategory();
-                                        }
-                                      }}
-                                    />
+                                    <Input value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="Nome da categoria" onKeyDown={e => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  addQuickCategory();
+                                }
+                              }} />
                                     <Button onClick={addQuickCategory}>
                                       Criar
                                     </Button>
@@ -8946,39 +8086,26 @@ function Conversas() {
                                   <h4 className="text-sm font-medium mb-3">Categorias Criadas:</h4>
                                   <div className="space-y-2">
                                     {quickCategories.map((cat, catIndex) => {
-                                      const messageCount = quickMessages.filter(
-                                        (msg) => msg.category === cat.id
-                                      ).length;
-                                      return (
-                                        <div
-                                          key={cat.id}
-                                          className="flex items-center justify-between p-3 bg-muted rounded border"
-                                        >
-                                          {editingCategoryId === cat.id ? (
-                                            // Modo de edição
-                                            <div className="flex-1 flex gap-2 items-center">
-                                              <Input
-                                                value={editCategoryName}
-                                                onChange={(e) => setEditCategoryName(e.target.value)}
-                                                placeholder="Nome da categoria"
-                                                className="flex-1"
-                                                onKeyDown={(e) => {
-                                                  if (e.key === "Enter") {
-                                                    e.preventDefault();
-                                                    saveEditedCategory();
-                                                  }
-                                                }}
-                                              />
+                                const messageCount = quickMessages.filter(msg => msg.category === cat.id).length;
+                                return <div key={cat.id} className="flex items-center justify-between p-3 bg-muted rounded border">
+                                          {editingCategoryId === cat.id ?
+                                  // Modo de edição
+                                  <div className="flex-1 flex gap-2 items-center">
+                                              <Input value={editCategoryName} onChange={e => setEditCategoryName(e.target.value)} placeholder="Nome da categoria" className="flex-1" onKeyDown={e => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        saveEditedCategory();
+                                      }
+                                    }} />
                                               <Button size="sm" onClick={saveEditedCategory}>
                                                 Salvar
                                               </Button>
                                               <Button size="sm" variant="outline" onClick={cancelEditCategory}>
                                                 Cancelar
                                               </Button>
-                                            </div>
-                                          ) : (
-                                            // Modo de visualização
-                                            <>
+                                            </div> :
+                                  // Modo de visualização
+                                  <>
                                               <div className="flex items-center gap-3 flex-1">
                                                 <span className="font-medium">{cat.name}</span>
                                                 <Badge variant="secondary">
@@ -8986,47 +8113,22 @@ function Conversas() {
                                                 </Badge>
                                               </div>
                                               <div className="flex gap-1">
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  onClick={() => moveCategoryUp(cat.id)}
-                                                  disabled={catIndex === 0}
-                                                  title="Mover para cima"
-                                                >
+                                                <Button size="sm" variant="outline" onClick={() => moveCategoryUp(cat.id)} disabled={catIndex === 0} title="Mover para cima">
                                                   ↑
                                                 </Button>
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  onClick={() => moveCategoryDown(cat.id)}
-                                                  disabled={catIndex === quickCategories.length - 1}
-                                                  title="Mover para baixo"
-                                                >
+                                                <Button size="sm" variant="outline" onClick={() => moveCategoryDown(cat.id)} disabled={catIndex === quickCategories.length - 1} title="Mover para baixo">
                                                   ↓
                                                 </Button>
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  onClick={() => editQuickCategory(cat.id)}
-                                                  title="Editar categoria"
-                                                >
+                                                <Button size="sm" variant="outline" onClick={() => editQuickCategory(cat.id)} title="Editar categoria">
                                                   ✏️
                                                 </Button>
-                                                <Button
-                                                  size="sm"
-                                                  variant="destructive"
-                                                  onClick={() => deleteQuickCategory(cat.id)}
-                                                  disabled={messageCount > 0}
-                                                  title="Excluir categoria"
-                                                >
+                                                <Button size="sm" variant="destructive" onClick={() => deleteQuickCategory(cat.id)} disabled={messageCount > 0} title="Excluir categoria">
                                                   Excluir
                                                 </Button>
                                               </div>
-                                            </>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
+                                            </>}
+                                        </div>;
+                              })}
                                   </div>
                                 </div>
                               </TabsContent>
@@ -9039,11 +8141,9 @@ function Conversas() {
                           <DialogTrigger asChild>
                             <Button variant="outline" className="w-full justify-start">
                               <Clock className="h-4 w-4 mr-2" /> Agendar Mensagem
-                              {scheduledMessages.filter(m => m.status === 'pending').length > 0 && (
-                                <Badge variant="secondary" className="ml-auto">
+                              {scheduledMessages.filter(m => m.status === 'pending').length > 0 && <Badge variant="secondary" className="ml-auto">
                                   {scheduledMessages.filter(m => m.status === 'pending').length}
-                                </Badge>
-                              )}
+                                </Badge>}
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -9067,20 +8167,11 @@ function Conversas() {
                                 <div className="space-y-3">
                                   <div className="space-y-2">
                                     <Label>Mensagem *</Label>
-                                    <Textarea
-                                      value={scheduledContent}
-                                      onChange={(e) => setScheduledContent(e.target.value)}
-                                      placeholder="Digite a mensagem que será enviada..."
-                                      rows={4}
-                                    />
+                                    <Textarea value={scheduledContent} onChange={e => setScheduledContent(e.target.value)} placeholder="Digite a mensagem que será enviada..." rows={4} />
                                   </div>
                                   <div className="space-y-2">
                                     <Label>Data e Hora *</Label>
-                                    <Input
-                                      type="datetime-local"
-                                      value={scheduledDatetime}
-                                      onChange={(e) => setScheduledDatetime(e.target.value)}
-                                    />
+                                    <Input type="datetime-local" value={scheduledDatetime} onChange={e => setScheduledDatetime(e.target.value)} />
                                     <p className="text-xs text-muted-foreground">
                                       ⚡ Agende para qualquer momento futuro - sem limite de tempo!
                                     </p>
@@ -9096,43 +8187,26 @@ function Conversas() {
                               </TabsContent>
 
                               <TabsContent value="historico" className="space-y-4">
-                                {scheduledMessages.length === 0 ? (
-                                  <div className="text-center py-12 text-muted-foreground">
+                                {scheduledMessages.length === 0 ? <div className="text-center py-12 text-muted-foreground">
                                     <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
                                     <p>Nenhuma mensagem agendada</p>
                                     <p className="text-xs mt-1">
                                       Agende mensagens na aba "Agendar Nova"
                                     </p>
-                                  </div>
-                                ) : (
-                                  <div className="space-y-2">
-                                    {scheduledMessages.map((msg) => (
-                                      <div
-                                        key={msg.id}
-                                        className={`p-3 border rounded-lg ${
-                                          msg.status === 'sent' ? 'bg-green-50 border-green-200' :
-                                          msg.status === 'failed' ? 'bg-red-50 border-red-200' :
-                                          'bg-background'
-                                        }`}
-                                      >
+                                  </div> : <div className="space-y-2">
+                                    {scheduledMessages.map(msg => <div key={msg.id} className={`p-3 border rounded-lg ${msg.status === 'sent' ? 'bg-green-50 border-green-200' : msg.status === 'failed' ? 'bg-red-50 border-red-200' : 'bg-background'}`}>
                                         <div className="flex items-start justify-between gap-3">
                                           <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1">
-                                              {msg.status === 'pending' && (
-                                                <Badge variant="outline" className="text-xs">
+                                              {msg.status === 'pending' && <Badge variant="outline" className="text-xs">
                                                   ⏳ Aguardando
-                                                </Badge>
-                                              )}
-                                              {msg.status === 'sent' && (
-                                                <Badge variant="default" className="text-xs bg-green-600">
+                                                </Badge>}
+                                              {msg.status === 'sent' && <Badge variant="default" className="text-xs bg-green-600">
                                                   ✓ Enviada
-                                                </Badge>
-                                              )}
-                                              {msg.status === 'failed' && (
-                                                <Badge variant="destructive" className="text-xs">
+                                                </Badge>}
+                                              {msg.status === 'failed' && <Badge variant="destructive" className="text-xs">
                                                   ✗ Falha
-                                                </Badge>
-                                              )}
+                                                </Badge>}
                                             </div>
                                             <p className="text-sm font-medium break-words">
                                               {msg.message_content}
@@ -9141,37 +8215,23 @@ function Conversas() {
                                               <span>
                                                 📅 {new Date(msg.scheduled_datetime).toLocaleString('pt-BR')}
                                               </span>
-                                              {msg.status === 'pending' && (
-                                                <span className="text-primary font-medium">
+                                              {msg.status === 'pending' && <span className="text-primary font-medium">
                                                   <CountdownTimer targetDate={msg.scheduled_datetime} />
-                                                </span>
-                                              )}
-                                              {msg.status === 'sent' && msg.sent_at && (
-                                                <span className="text-green-600">
+                                                </span>}
+                                              {msg.status === 'sent' && msg.sent_at && <span className="text-green-600">
                                                   Enviado em {new Date(msg.sent_at).toLocaleString('pt-BR')}
-                                                </span>
-                                              )}
+                                                </span>}
                                             </div>
-                                            {msg.error_message && (
-                                              <p className="text-xs text-destructive mt-1">
+                                            {msg.error_message && <p className="text-xs text-destructive mt-1">
                                                 Erro: {msg.error_message}
-                                              </p>
-                                            )}
+                                              </p>}
                                           </div>
-                                          {msg.status === 'pending' && (
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              onClick={() => cancelarMensagemAgendada(msg.id)}
-                                            >
+                                          {msg.status === 'pending' && <Button size="sm" variant="ghost" onClick={() => cancelarMensagemAgendada(msg.id)}>
                                               <X className="h-4 w-4" />
-                                            </Button>
-                                          )}
+                                            </Button>}
                                         </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
+                                      </div>)}
+                                  </div>}
                               </TabsContent>
                             </Tabs>
                           </DialogContent>
@@ -9200,27 +8260,16 @@ function Conversas() {
                               <TabsContent value="criar" className="space-y-4">
                                 <div>
                                   <Label>Título do Lembrete <span className="text-xs text-muted-foreground">(para identificação)</span></Label>
-                                  <Input
-                                    value={reminderTitle}
-                                    onChange={(e) => setReminderTitle(e.target.value)}
-                                    placeholder="Ex: Ligar para cliente, Retornar proposta..."
-                                  />
+                                  <Input value={reminderTitle} onChange={e => setReminderTitle(e.target.value)} placeholder="Ex: Ligar para cliente, Retornar proposta..." />
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                   <div>
                                     <Label>Data e Hora</Label>
-                                    <Input
-                                      type="datetime-local"
-                                      value={reminderDatetime}
-                                      onChange={(e) => setReminderDatetime(e.target.value)}
-                                    />
+                                    <Input type="datetime-local" value={reminderDatetime} onChange={e => setReminderDatetime(e.target.value)} />
                                   </div>
                                   <div>
                                     <Label>Recorrência</Label>
-                                    <Select 
-                                      value={reminderRecorrencia} 
-                                      onValueChange={(value: "" | "semanal" | "quinzenal" | "mensal") => setReminderRecorrencia(value)}
-                                    >
+                                    <Select value={reminderRecorrencia} onValueChange={(value: "" | "semanal" | "quinzenal" | "mensal") => setReminderRecorrencia(value)}>
                                       <SelectTrigger>
                                         <SelectValue placeholder="Sem recorrência" />
                                       </SelectTrigger>
@@ -9240,12 +8289,7 @@ function Conversas() {
                                 </div>
                                 <div>
                                   <Label>Observações Internas <span className="text-xs text-muted-foreground">(não será enviado)</span></Label>
-                                  <Textarea
-                                    value={reminderNotes}
-                                    onChange={(e) => setReminderNotes(e.target.value)}
-                                    placeholder="Notas adicionais para você..."
-                                    rows={2}
-                                  />
+                                  <Textarea value={reminderNotes} onChange={e => setReminderNotes(e.target.value)} placeholder="Notas adicionais para você..." rows={2} />
                                 </div>
                                 
                                 {/* Opção de enviar mensagem */}
@@ -9257,20 +8301,13 @@ function Conversas() {
                                         Enviar mensagem via WhatsApp na data/hora programada
                                       </p>
                                     </div>
-                                    <Switch
-                                      checked={reminderEnviar}
-                                      onCheckedChange={setReminderEnviar}
-                                    />
+                                    <Switch checked={reminderEnviar} onCheckedChange={setReminderEnviar} />
                                   </div>
                                   
-                                  {reminderEnviar && (
-                                    <>
+                                  {reminderEnviar && <>
                                       <div>
                                         <Label>Enviar para</Label>
-                                        <Select 
-                                          value={reminderDestinatario} 
-                                          onValueChange={(value: "lead" | "responsavel" | "ambos") => setReminderDestinatario(value)}
-                                        >
+                                        <Select value={reminderDestinatario} onValueChange={(value: "lead" | "responsavel" | "ambos") => setReminderDestinatario(value)}>
                                           <SelectTrigger>
                                             <SelectValue />
                                           </SelectTrigger>
@@ -9299,71 +8336,50 @@ function Conversas() {
                                       
                                       <div>
                                         <Label>Mensagem a ser enviada <span className="text-destructive">*</span></Label>
-                                        <Textarea
-                                          value={reminderMessage}
-                                          onChange={(e) => setReminderMessage(e.target.value)}
-                                          placeholder={
-                                            reminderDestinatario === 'responsavel' 
-                                              ? "Ex: Lembrar de retornar a proposta do cliente..." 
-                                              : "Ex: Olá! Passando para lembrar do nosso compromisso..."
-                                          }
-                                          rows={3}
-                                          className="resize-none"
-                                        />
+                                        <Textarea value={reminderMessage} onChange={e => setReminderMessage(e.target.value)} placeholder={reminderDestinatario === 'responsavel' ? "Ex: Lembrar de retornar a proposta do cliente..." : "Ex: Olá! Passando para lembrar do nosso compromisso..."} rows={3} className="resize-none" />
                                         <p className="text-xs text-muted-foreground mt-1">
                                           {reminderDestinatario === 'lead' && "Esta mensagem será enviada para o cliente"}
                                           {reminderDestinatario === 'responsavel' && "Esta mensagem será enviada para você"}
                                           {reminderDestinatario === 'ambos' && "Esta mensagem será enviada para o cliente e para você"}
                                         </p>
                                       </div>
-                                    </>
-                                  )}
+                                    </>}
                                 </div>
                                 
-                                <Button 
-                                  onClick={async () => {
-                                    // CORREÇÃO: Garantir lead antes de criar lembrete
-                                    if (!leadVinculado?.id && selectedConv) {
-                                      setSyncStatus('syncing');
-                                      const lead = await findLead(selectedConv);
-                                      if (lead) {
-                                        setLeadVinculado(lead);
-                                        setMostrarBotaoCriarLead(false);
-                                        const phoneKey = selectedConv.phoneNumber || selectedConv.id;
-                                        const formatted = safeFormatPhoneNumber(phoneKey);
-                                        setLeadsVinculados(prev => ({
-                                          ...prev,
-                                          [phoneKey]: lead.id,
-                                          ...(formatted ? { [formatted]: lead.id } : {})
-                                        }));
-                                        toast.success('Lead vinculado automaticamente!');
-                                      }
-                                      setSyncStatus('idle');
-                                    }
-                                    await addReminder();
-                                  }} 
-                                  className="w-full"
-                                  disabled={!reminderTitle.trim() || !reminderDatetime || (reminderEnviar && !reminderMessage.trim())}
-                                >
+                                <Button onClick={async () => {
+                            // CORREÇÃO: Garantir lead antes de criar lembrete
+                            if (!leadVinculado?.id && selectedConv) {
+                              setSyncStatus('syncing');
+                              const lead = await findLead(selectedConv);
+                              if (lead) {
+                                setLeadVinculado(lead);
+                                setMostrarBotaoCriarLead(false);
+                                const phoneKey = selectedConv.phoneNumber || selectedConv.id;
+                                const formatted = safeFormatPhoneNumber(phoneKey);
+                                setLeadsVinculados(prev => ({
+                                  ...prev,
+                                  [phoneKey]: lead.id,
+                                  ...(formatted ? {
+                                    [formatted]: lead.id
+                                  } : {})
+                                }));
+                                toast.success('Lead vinculado automaticamente!');
+                              }
+                              setSyncStatus('idle');
+                            }
+                            await addReminder();
+                          }} className="w-full" disabled={!reminderTitle.trim() || !reminderDatetime || reminderEnviar && !reminderMessage.trim()}>
                                   {reminderEnviar ? 'Criar Lembrete e Agendar Envio' : 'Criar Lembrete'}
                                 </Button>
                               </TabsContent>
 
                               <TabsContent value="historico" className="space-y-4">
                                 <ScrollArea className="h-[400px]">
-                                  {reminders.length === 0 ? (
-                                    <div className="text-center py-12 text-muted-foreground">
+                                  {reminders.length === 0 ? <div className="text-center py-12 text-muted-foreground">
                                       <Bell className="h-12 w-12 mx-auto mb-2 opacity-50" />
                                       <p>Nenhum lembrete criado</p>
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-3">
-                                      {reminders.map((lembrete) => (
-                                        <Card key={lembrete.id} className={`border-l-4 ${
-                                          lembrete.status_envio === 'enviado' ? 'border-l-green-500' :
-                                          lembrete.status_envio === 'pendente' ? 'border-l-yellow-500' :
-                                          'border-l-red-500'
-                                        }`}>
+                                    </div> : <div className="space-y-3">
+                                      {reminders.map(lembrete => <Card key={lembrete.id} className={`border-l-4 ${lembrete.status_envio === 'enviado' ? 'border-l-green-500' : lembrete.status_envio === 'pendente' ? 'border-l-yellow-500' : 'border-l-red-500'}`}>
                                           <CardContent className="pt-4">
                                             <div className="space-y-2">
                                               <div className="flex justify-between items-start">
@@ -9372,68 +8388,44 @@ function Conversas() {
                                                     <span className="font-medium">
                                                       {lembrete.compromisso?.tipo_servico || 'Lembrete'}
                                                     </span>
-                                                    <Badge variant={
-                                                      lembrete.status_envio === 'enviado' ? 'default' :
-                                                      lembrete.status_envio === 'pendente' ? 'secondary' :
-                                                      'destructive'
-                                                    }>
-                                                      {lembrete.status_envio === 'enviado' ? '✓ Enviado' :
-                                                       lembrete.status_envio === 'pendente' ? '⏳ Pendente' :
-                                                       '✗ Erro'}
+                                                    <Badge variant={lembrete.status_envio === 'enviado' ? 'default' : lembrete.status_envio === 'pendente' ? 'secondary' : 'destructive'}>
+                                                      {lembrete.status_envio === 'enviado' ? '✓ Enviado' : lembrete.status_envio === 'pendente' ? '⏳ Pendente' : '✗ Erro'}
                                                     </Badge>
                                                   </div>
                                                   <p className="text-sm text-muted-foreground flex items-center gap-1">
                                                     <Clock className="h-3 w-3" />
-                                                    {lembrete.compromisso?.data_hora_inicio && 
-                                                      format(parseISO(lembrete.compromisso.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                                                    }
+                                                    {lembrete.compromisso?.data_hora_inicio && format(parseISO(lembrete.compromisso.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", {
+                                            locale: ptBR
+                                          })}
                                                   </p>
                                                   <p className="text-sm text-muted-foreground">
-                                                    <strong>Destinatário:</strong> {
-                                                      lembrete.destinatario === 'lead' 
-                                                        ? `${leadVinculado?.name || 'Lead'} ${lembrete.telefone_responsavel ? `(${lembrete.telefone_responsavel})` : ''}`
-                                                        : lembrete.destinatario === 'responsavel' 
-                                                        ? `Responsável ${lembrete.telefone_responsavel ? `(${lembrete.telefone_responsavel})` : ''}`
-                                                        : lembrete.destinatario === 'ambos' 
-                                                        ? 'Lead e Responsável' 
-                                                        : 'Lead'
-                                                    }
+                                                    <strong>Destinatário:</strong> {lembrete.destinatario === 'lead' ? `${leadVinculado?.name || 'Lead'} ${lembrete.telefone_responsavel ? `(${lembrete.telefone_responsavel})` : ''}` : lembrete.destinatario === 'responsavel' ? `Responsável ${lembrete.telefone_responsavel ? `(${lembrete.telefone_responsavel})` : ''}` : lembrete.destinatario === 'ambos' ? 'Lead e Responsável' : 'Lead'}
                                                   </p>
                                                   <p className="text-sm text-muted-foreground">
                                                     <strong>Canal:</strong> {lembrete.canal.toUpperCase()} | 
                                                     <strong> Antecedência:</strong> {lembrete.horas_antecedencia}h
-                                                    {(lembrete as any).recorrencia && (
-                                                      <> | <strong>Recorrência:</strong> {
-                                                        (lembrete as any).recorrencia === 'semanal' ? 'Semanal' :
-                                                        (lembrete as any).recorrencia === 'quinzenal' ? 'Quinzenal' :
-                                                        (lembrete as any).recorrencia === 'mensal' ? 'Mensal' : 'N/A'
-                                                      }</>
-                                                    )}
+                                                    {(lembrete as any).recorrencia && <> | <strong>Recorrência:</strong> {(lembrete as any).recorrencia === 'semanal' ? 'Semanal' : (lembrete as any).recorrencia === 'quinzenal' ? 'Quinzenal' : (lembrete as any).recorrencia === 'mensal' ? 'Mensal' : 'N/A'}</>}
                                                   </p>
-                                                  {(lembrete as any).proxima_data_envio && (lembrete as any).recorrencia && lembrete.status_envio === 'enviado' && (
-                                                    <p className="text-xs text-primary">
-                                                      <strong>Próximo envio:</strong> {format(parseISO((lembrete as any).proxima_data_envio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                                                    </p>
-                                                  )}
-                                                  {lembrete.data_envio && (
-                                                    <p className="text-xs text-muted-foreground">
+                                                  {(lembrete as any).proxima_data_envio && (lembrete as any).recorrencia && lembrete.status_envio === 'enviado' && <p className="text-xs text-primary">
+                                                      <strong>Próximo envio:</strong> {format(parseISO((lembrete as any).proxima_data_envio), "dd/MM/yyyy 'às' HH:mm", {
+                                            locale: ptBR
+                                          })}
+                                                    </p>}
+                                                  {lembrete.data_envio && <p className="text-xs text-muted-foreground">
                                                       {lembrete.status_envio === 'enviado' ? 'Enviado em: ' : 'Última tentativa: '}
-                                                      {format(parseISO(lembrete.data_envio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                                                    </p>
-                                                  )}
-                                                  {lembrete.mensagem && (
-                                                    <p className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
+                                                      {format(parseISO(lembrete.data_envio), "dd/MM/yyyy 'às' HH:mm", {
+                                            locale: ptBR
+                                          })}
+                                                    </p>}
+                                                  {lembrete.mensagem && <p className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
                                                       {lembrete.mensagem}
-                                                    </p>
-                                                  )}
+                                                    </p>}
                                                 </div>
                                               </div>
                                             </div>
                                           </CardContent>
-                                        </Card>
-                                      ))}
-                                    </div>
-                                  )}
+                                        </Card>)}
+                                    </div>}
                                 </ScrollArea>
                               </TabsContent>
                             </Tabs>
@@ -9443,31 +8435,29 @@ function Conversas() {
                         {/* Compromissos e Reuniões */}
                         <Dialog open={reunioesDialogOpen} onOpenChange={setReunioesDialogOpen}>
                           <DialogTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              className="w-full justify-start"
-                              onClick={async () => {
-                                // CORREÇÃO: Criar lead automaticamente ao abrir o modal
-                                if (!leadVinculado?.id && selectedConv) {
-                                  setSyncStatus('syncing');
-                                  const lead = await findLead(selectedConv);
-                                  if (lead) {
-                                    setLeadVinculado(lead);
-                                    setMostrarBotaoCriarLead(false);
-                                    const phoneKey = selectedConv.phoneNumber || selectedConv.id;
-                                    const formatted = safeFormatPhoneNumber(phoneKey);
-                                    setLeadsVinculados(prev => ({
-                                      ...prev,
-                                      [phoneKey]: lead.id,
-                                      ...(formatted ? { [formatted]: lead.id } : {})
-                                    }));
-                                    toast.success('Lead vinculado automaticamente!');
-                                  }
-                                  setSyncStatus('idle');
-                                }
-                                setReunioesDialogOpen(true);
-                              }}
-                            >
+                            <Button variant="outline" className="w-full justify-start" onClick={async () => {
+                        // CORREÇÃO: Criar lead automaticamente ao abrir o modal
+                        if (!leadVinculado?.id && selectedConv) {
+                          setSyncStatus('syncing');
+                          const lead = await findLead(selectedConv);
+                          if (lead) {
+                            setLeadVinculado(lead);
+                            setMostrarBotaoCriarLead(false);
+                            const phoneKey = selectedConv.phoneNumber || selectedConv.id;
+                            const formatted = safeFormatPhoneNumber(phoneKey);
+                            setLeadsVinculados(prev => ({
+                              ...prev,
+                              [phoneKey]: lead.id,
+                              ...(formatted ? {
+                                [formatted]: lead.id
+                              } : {})
+                            }));
+                            toast.success('Lead vinculado automaticamente!');
+                          }
+                          setSyncStatus('idle');
+                        }
+                        setReunioesDialogOpen(true);
+                      }}>
                               <Calendar className="h-4 w-4 mr-2" /> Compromissos
                             </Button>
                           </DialogTrigger>
@@ -9488,10 +8478,7 @@ function Conversas() {
                                 <div className="grid grid-cols-2 gap-3">
                                   <div>
                                     <Label htmlFor="tipo_servico">Tipo de Serviço *</Label>
-                                    <Select
-                                      value={meetingTipoServico}
-                                      onValueChange={setMeetingTipoServico}
-                                    >
+                                    <Select value={meetingTipoServico} onValueChange={setMeetingTipoServico}>
                                       <SelectTrigger className="h-9">
                                         <SelectValue placeholder="Selecione" />
                                       </SelectTrigger>
@@ -9505,46 +8492,23 @@ function Conversas() {
                                   </div>
                                   <div>
                                     <Label htmlFor="custo_estimado">Custo Estimado (R$)</Label>
-                                    <Input
-                                      id="custo_estimado"
-                                      type="number"
-                                      step="0.01"
-                                      value={meetingCustoEstimado}
-                                      onChange={(e) => setMeetingCustoEstimado(e.target.value)}
-                                      placeholder="0.00"
-                                      className="h-9"
-                                    />
+                                    <Input id="custo_estimado" type="number" step="0.01" value={meetingCustoEstimado} onChange={e => setMeetingCustoEstimado(e.target.value)} placeholder="0.00" className="h-9" />
                                   </div>
                                 </div>
                                 
                                 <div>
                                   <Label htmlFor="descricao">Descrição</Label>
-                                  <Input
-                                    id="descricao"
-                                    value={meetingDescricao}
-                                    onChange={(e) => setMeetingDescricao(e.target.value)}
-                                    placeholder="Ex: Apresentação do produto para cliente"
-                                    className="h-9"
-                                  />
+                                  <Input id="descricao" value={meetingDescricao} onChange={e => setMeetingDescricao(e.target.value)} placeholder="Ex: Apresentação do produto para cliente" className="h-9" />
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3">
                                   <div>
                                     <Label htmlFor="data">Data do Compromisso *</Label>
-                                    <Input
-                                      id="data"
-                                      type="date"
-                                      value={meetingData}
-                                      onChange={(e) => setMeetingData(e.target.value)}
-                                      className="h-9"
-                                    />
+                                    <Input id="data" type="date" value={meetingData} onChange={e => setMeetingData(e.target.value)} className="h-9" />
                                   </div>
                                   <div>
                                     <Label htmlFor="duracao">Duração (min)</Label>
-                                    <Select
-                                      value={meetingDuracao}
-                                      onValueChange={setMeetingDuracao}
-                                    >
+                                    <Select value={meetingDuracao} onValueChange={setMeetingDuracao}>
                                       <SelectTrigger className="h-9">
                                         <SelectValue />
                                       </SelectTrigger>
@@ -9563,27 +8527,12 @@ function Conversas() {
                                 {/* Seletor de Horários Disponíveis */}
                                 <div>
                                   <Label className="text-sm mb-2 block">Selecione o Horário *</Label>
-                                  <HorarioSeletor
-                                    data={meetingData}
-                                    horarioComercial={meetingHorarioComercial}
-                                    compromissosExistentes={meetingCompromissosExistentes}
-                                    horarioSelecionado={meetingHoraInicio}
-                                    duracaoMinutos={parseInt(meetingDuracao) || 30}
-                                    permitirSimultaneo={meetingAgendaSelecionada?.permite_simultaneo || false}
-                                    onSelecionarHorario={handleSelecionarMeetingHorario}
-                                  />
+                                  <HorarioSeletor data={meetingData} horarioComercial={meetingHorarioComercial} compromissosExistentes={meetingCompromissosExistentes} horarioSelecionado={meetingHoraInicio} duracaoMinutos={parseInt(meetingDuracao) || 30} permitirSimultaneo={meetingAgendaSelecionada?.permite_simultaneo || false} onSelecionarHorario={handleSelecionarMeetingHorario} />
                                 </div>
                                 
                                 <div>
                                   <Label htmlFor="observacoes">Observações</Label>
-                                  <Textarea
-                                    id="observacoes"
-                                    value={meetingNotes}
-                                    onChange={(e) => setMeetingNotes(e.target.value)}
-                                    placeholder="Pauta, participantes, etc..."
-                                    rows={2}
-                                    className="resize-none"
-                                  />
+                                  <Textarea id="observacoes" value={meetingNotes} onChange={e => setMeetingNotes(e.target.value)} placeholder="Pauta, participantes, etc..." rows={2} className="resize-none" />
                                 </div>
                                 
                                 {/* ⚡ OPÇÃO DE ENVIAR CONFIRMAÇÃO IMEDIATA */}
@@ -9594,10 +8543,7 @@ function Conversas() {
                                       Envia automaticamente a confirmação do agendamento
                                     </p>
                                   </div>
-                                  <Switch
-                                    checked={enviarConfirmacaoReuniao}
-                                    onCheckedChange={setEnviarConfirmacaoReuniao}
-                                  />
+                                  <Switch checked={enviarConfirmacaoReuniao} onCheckedChange={setEnviarConfirmacaoReuniao} />
                                 </div>
 
                                 {/* ⚡ OPÇÃO DE CRIAR LEMBRETE AUTOMÁTICO */}
@@ -9609,102 +8555,79 @@ function Conversas() {
                                         Envia lembrete antes do compromisso
                                       </p>
                                     </div>
-                                    <Switch
-                                      checked={enviarLembreteReuniao}
-                                      onCheckedChange={setEnviarLembreteReuniao}
-                                    />
+                                    <Switch checked={enviarLembreteReuniao} onCheckedChange={setEnviarLembreteReuniao} />
                                   </div>
                                   
-                                  {enviarLembreteReuniao && (
-                                    <div className="space-y-2">
+                                  {enviarLembreteReuniao && <div className="space-y-2">
                                       <Label className="text-xs">Enviar com antecedência de</Label>
                                        <div className="flex items-center gap-2">
                                          <div className="flex-1">
                                            <Label className="text-xs text-muted-foreground mb-1 block">Horas</Label>
-                                           <Select
-                                             value={horasAntecedenciaReuniaoHoras}
-                                             onValueChange={(value) => {
-                                               setHorasAntecedenciaReuniaoHoras(value);
-                                             }}
-                                           >
+                                           <Select value={horasAntecedenciaReuniaoHoras} onValueChange={value => {
+                                    setHorasAntecedenciaReuniaoHoras(value);
+                                  }}>
                                              <SelectTrigger className="h-9">
                                                <SelectValue />
                                              </SelectTrigger>
                                              <SelectContent>
-                                               {Array.from({ length: 25 }, (_, i) => (
-                                                 <SelectItem key={i} value={i.toString()}>
+                                               {Array.from({
+                                        length: 25
+                                      }, (_, i) => <SelectItem key={i} value={i.toString()}>
                                                    {i} {i === 1 ? 'hora' : 'horas'}
-                                                 </SelectItem>
-                                               ))}
+                                                 </SelectItem>)}
                                              </SelectContent>
                                            </Select>
                                          </div>
                                          <div className="flex-1">
                                            <Label className="text-xs text-muted-foreground mb-1 block">Minutos</Label>
-                                           <Select
-                                             value={horasAntecedenciaReuniaoMinutos}
-                                             onValueChange={setHorasAntecedenciaReuniaoMinutos}
-                                           >
+                                           <Select value={horasAntecedenciaReuniaoMinutos} onValueChange={setHorasAntecedenciaReuniaoMinutos}>
                                              <SelectTrigger className="h-9">
                                                <SelectValue />
                                              </SelectTrigger>
                                              <SelectContent>
-                                               {[0, 5, 10, 15, 20, 30, 45].map((min) => (
-                                                 <SelectItem key={min} value={min.toString()}>
+                                               {[0, 5, 10, 15, 20, 30, 45].map(min => <SelectItem key={min} value={min.toString()}>
                                                    {min} {min === 1 ? 'minuto' : 'minutos'}
-                                                 </SelectItem>
-                                               ))}
+                                                 </SelectItem>)}
                                              </SelectContent>
                                            </Select>
                                          </div>
                                        </div>
-                                    </div>
-                                  )}
+                                    </div>}
                                 </div>
-                                <Button 
-                                  onClick={async () => {
-                                    // CORREÇÃO: Garantir lead antes de agendar
-                                    if (!leadVinculado?.id && selectedConv) {
-                                      setSyncStatus('syncing');
-                                      const lead = await findLead(selectedConv);
-                                      if (lead) {
-                                        setLeadVinculado(lead);
-                                        setMostrarBotaoCriarLead(false);
-                                        const phoneKey = selectedConv.phoneNumber || selectedConv.id;
-                                        const formatted = safeFormatPhoneNumber(phoneKey);
-                                        setLeadsVinculados(prev => ({
-                                          ...prev,
-                                          [phoneKey]: lead.id,
-                                          ...(formatted ? { [formatted]: lead.id } : {})
-                                        }));
-                                        toast.success('Lead vinculado automaticamente!');
-                                      }
-                                      setSyncStatus('idle');
-                                    }
-                                    await scheduleMeeting();
-                                  }} 
-                                  className="w-full"
-                                  disabled={!meetingTipoServico.trim() || !meetingData || !meetingHoraInicio}
-                                >
+                                <Button onClick={async () => {
+                            // CORREÇÃO: Garantir lead antes de agendar
+                            if (!leadVinculado?.id && selectedConv) {
+                              setSyncStatus('syncing');
+                              const lead = await findLead(selectedConv);
+                              if (lead) {
+                                setLeadVinculado(lead);
+                                setMostrarBotaoCriarLead(false);
+                                const phoneKey = selectedConv.phoneNumber || selectedConv.id;
+                                const formatted = safeFormatPhoneNumber(phoneKey);
+                                setLeadsVinculados(prev => ({
+                                  ...prev,
+                                  [phoneKey]: lead.id,
+                                  ...(formatted ? {
+                                    [formatted]: lead.id
+                                  } : {})
+                                }));
+                                toast.success('Lead vinculado automaticamente!');
+                              }
+                              setSyncStatus('idle');
+                            }
+                            await scheduleMeeting();
+                          }} className="w-full" disabled={!meetingTipoServico.trim() || !meetingData || !meetingHoraInicio}>
                                   Agendar Compromisso
                                 </Button>
                               </TabsContent>
 
                               <TabsContent value="historico" className="space-y-4">
                                 <ScrollArea className="h-[400px]">
-                                  {meetings.length === 0 ? (
-                                    <div className="text-center py-12 text-muted-foreground">
+                                  {meetings.length === 0 ? <div className="text-center py-12 text-muted-foreground">
                                       <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
                                       <p>Nenhuma reunião agendada</p>
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-3">
-                                      {meetings.map((meeting) => (
-                                        <Card key={meeting.id} className={`border-l-4 ${
-                                          meeting.status === 'concluido' ? 'border-l-green-500' :
-                                          meeting.status === 'agendado' ? 'border-l-blue-500' :
-                                          'border-l-red-500'
-                                        }`}>
+                                    </div> : <div className="space-y-3">
+                                      {meetings.map(meeting => <Card key={meeting.id} className={`border-l-4 ${meeting.status === 'concluido' ? 'border-l-green-500' : meeting.status === 'agendado' ? 'border-l-blue-500' : 'border-l-red-500'}`}>
                                           <CardContent className="pt-4">
                                             <div className="space-y-2">
                                               <div className="flex justify-between items-start">
@@ -9713,46 +8636,36 @@ function Conversas() {
                                                     <span className="font-medium">
                                                       {meeting.tipo_servico}
                                                     </span>
-                                                    <Badge variant={
-                                                      meeting.status === 'concluido' ? 'default' :
-                                                      meeting.status === 'agendado' ? 'secondary' :
-                                                      'destructive'
-                                                    }>
-                                                      {meeting.status === 'concluido' ? '✓ Concluído' :
-                                                       meeting.status === 'agendado' ? '📅 Agendado' :
-                                                       '✗ Cancelado'}
+                                                    <Badge variant={meeting.status === 'concluido' ? 'default' : meeting.status === 'agendado' ? 'secondary' : 'destructive'}>
+                                                      {meeting.status === 'concluido' ? '✓ Concluído' : meeting.status === 'agendado' ? '📅 Agendado' : '✗ Cancelado'}
                                                     </Badge>
                                                   </div>
                                                   <p className="text-sm text-muted-foreground flex items-center gap-1">
                                                     <Clock className="h-3 w-3" />
-                                                    {format(parseISO(meeting.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                                    {format(parseISO(meeting.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", {
+                                            locale: ptBR
+                                          })}
                                                     {' - '}
-                                                    {format(parseISO(meeting.data_hora_fim), "HH:mm", { locale: ptBR })}
+                                                    {format(parseISO(meeting.data_hora_fim), "HH:mm", {
+                                            locale: ptBR
+                                          })}
                                                   </p>
-                                                  {meeting.lead && (
-                                                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                                  {meeting.lead && <p className="text-sm text-muted-foreground flex items-center gap-1">
                                                       <User className="h-3 w-3" />
                                                       {meeting.lead.name}
-                                                    </p>
-                                                  )}
-                                                  {meeting.custo_estimado && (
-                                                    <p className="text-sm text-muted-foreground">
+                                                    </p>}
+                                                  {meeting.custo_estimado && <p className="text-sm text-muted-foreground">
                                                       <strong>Valor:</strong> R$ {meeting.custo_estimado.toFixed(2)}
-                                                    </p>
-                                                  )}
-                                                  {meeting.observacoes && (
-                                                    <p className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
+                                                    </p>}
+                                                  {meeting.observacoes && <p className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
                                                       {meeting.observacoes}
-                                                    </p>
-                                                  )}
+                                                    </p>}
                                                 </div>
                                               </div>
                                             </div>
                                           </CardContent>
-                                        </Card>
-                                      ))}
-                                    </div>
-                                  )}
+                                        </Card>)}
+                                    </div>}
                                 </ScrollArea>
                               </TabsContent>
                             </Tabs>
@@ -9762,38 +8675,33 @@ function Conversas() {
                         {/* Tarefas do Lead */}
                         <Dialog open={tarefasDialogOpen} onOpenChange={setTarefasDialogOpen}>
                           <DialogTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              className="w-full justify-start"
-                              onClick={async () => {
-                                // CORREÇÃO: Criar lead automaticamente ao abrir o modal
-                                if (!leadVinculado?.id && selectedConv) {
-                                  setSyncStatus('syncing');
-                                  const lead = await findLead(selectedConv);
-                                  if (lead) {
-                                    setLeadVinculado(lead);
-                                    setMostrarBotaoCriarLead(false);
-                                    const phoneKey = selectedConv.phoneNumber || selectedConv.id;
-                                    const formatted = safeFormatPhoneNumber(phoneKey);
-                                    setLeadsVinculados(prev => ({
-                                      ...prev,
-                                      [phoneKey]: lead.id,
-                                      ...(formatted ? { [formatted]: lead.id } : {})
-                                    }));
-                                    toast.success('Lead vinculado automaticamente!');
-                                  }
-                                  setSyncStatus('idle');
-                                }
-                                setTarefasDialogOpen(true);
-                              }}
-                              type="button"
-                            >
+                            <Button variant="outline" className="w-full justify-start" onClick={async () => {
+                        // CORREÇÃO: Criar lead automaticamente ao abrir o modal
+                        if (!leadVinculado?.id && selectedConv) {
+                          setSyncStatus('syncing');
+                          const lead = await findLead(selectedConv);
+                          if (lead) {
+                            setLeadVinculado(lead);
+                            setMostrarBotaoCriarLead(false);
+                            const phoneKey = selectedConv.phoneNumber || selectedConv.id;
+                            const formatted = safeFormatPhoneNumber(phoneKey);
+                            setLeadsVinculados(prev => ({
+                              ...prev,
+                              [phoneKey]: lead.id,
+                              ...(formatted ? {
+                                [formatted]: lead.id
+                              } : {})
+                            }));
+                            toast.success('Lead vinculado automaticamente!');
+                          }
+                          setSyncStatus('idle');
+                        }
+                        setTarefasDialogOpen(true);
+                      }} type="button">
                               <CheckSquare className="h-4 w-4 mr-2" /> Tarefas
-                              {leadTasks.length > 0 && (
-                                <Badge variant="secondary" className="ml-auto">
+                              {leadTasks.length > 0 && <Badge variant="secondary" className="ml-auto">
                                   {leadTasks.filter(t => t.status !== 'concluida').length}
-                                </Badge>
-                              )}
+                                </Badge>}
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -9810,101 +8718,72 @@ function Conversas() {
                               </TabsList>
 
                               <TabsContent value="criar" className="space-y-4">
-                                {!leadVinculado?.id ? (
-                                  <div className="text-center py-8 text-muted-foreground">
+                                {!leadVinculado?.id ? <div className="text-center py-8 text-muted-foreground">
                                     <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
                                     <p className="mb-4">O lead será criado automaticamente ao abrir este modal.</p>
-                                    <Button 
-                                      onClick={async () => {
-                                        if (selectedConv) {
-                                          setSyncStatus('syncing');
-                                          const lead = await findLead(selectedConv);
-                                          if (lead) {
-                                            setLeadVinculado(lead);
-                                            setMostrarBotaoCriarLead(false);
-                                            const phoneKey = selectedConv.phoneNumber || selectedConv.id;
-                                            const formatted = safeFormatPhoneNumber(phoneKey);
-                                            setLeadsVinculados(prev => ({
-                                              ...prev,
-                                              [phoneKey]: lead.id,
-                                              ...(formatted ? { [formatted]: lead.id } : {})
-                                            }));
-                                            toast.success('Lead criado! Você pode criar tarefas agora.');
-                                            await carregarTarefasDoLead(lead.id);
-                                          }
-                                          setSyncStatus('idle');
-                                        }
-                                      }}
-                                      variant="default"
-                                    >
+                                    <Button onClick={async () => {
+                              if (selectedConv) {
+                                setSyncStatus('syncing');
+                                const lead = await findLead(selectedConv);
+                                if (lead) {
+                                  setLeadVinculado(lead);
+                                  setMostrarBotaoCriarLead(false);
+                                  const phoneKey = selectedConv.phoneNumber || selectedConv.id;
+                                  const formatted = safeFormatPhoneNumber(phoneKey);
+                                  setLeadsVinculados(prev => ({
+                                    ...prev,
+                                    [phoneKey]: lead.id,
+                                    ...(formatted ? {
+                                      [formatted]: lead.id
+                                    } : {})
+                                  }));
+                                  toast.success('Lead criado! Você pode criar tarefas agora.');
+                                  await carregarTarefasDoLead(lead.id);
+                                }
+                                setSyncStatus('idle');
+                              }
+                            }} variant="default">
                                       Criar Lead Agora
                                     </Button>
-                                  </div>
-                                ) : (
-                                  <>
-                                    {taskBoards.length > 0 && (
-                                      <div>
+                                  </div> : <>
+                                    {taskBoards.length > 0 && <div>
                                         <Label>Quadro</Label>
-                                        <Select
-                                          value={selectedTaskBoardId}
-                                          onValueChange={(value) => {
-                                            setSelectedTaskBoardId(value);
-                                            setSelectedTaskColumnId("");
-                                          }}
-                                        >
+                                        <Select value={selectedTaskBoardId} onValueChange={value => {
+                                setSelectedTaskBoardId(value);
+                                setSelectedTaskColumnId("");
+                              }}>
                                           <SelectTrigger>
                                             <SelectValue placeholder="Selecione o quadro" />
                                           </SelectTrigger>
                                           <SelectContent>
-                                            {taskBoards.map((board) => (
-                                              <SelectItem key={board.id} value={board.id}>
+                                            {taskBoards.map(board => <SelectItem key={board.id} value={board.id}>
                                                 {board.nome}
-                                              </SelectItem>
-                                            ))}
+                                              </SelectItem>)}
                                           </SelectContent>
                                         </Select>
-                                      </div>
-                                    )}
+                                      </div>}
 
-                                    {selectedTaskBoardId && taskColumns.filter(c => c.board_id === selectedTaskBoardId).length > 0 && (
-                                      <div>
+                                    {selectedTaskBoardId && taskColumns.filter(c => c.board_id === selectedTaskBoardId).length > 0 && <div>
                                         <Label>Etapa</Label>
-                                        <Select
-                                          value={selectedTaskColumnId}
-                                          onValueChange={setSelectedTaskColumnId}
-                                        >
+                                        <Select value={selectedTaskColumnId} onValueChange={setSelectedTaskColumnId}>
                                           <SelectTrigger>
                                             <SelectValue placeholder="Selecione a etapa" />
                                           </SelectTrigger>
                                           <SelectContent>
-                                            {taskColumns
-                                              .filter(c => c.board_id === selectedTaskBoardId)
-                                              .map((column) => (
-                                                <SelectItem key={column.id} value={column.id}>
+                                            {taskColumns.filter(c => c.board_id === selectedTaskBoardId).map(column => <SelectItem key={column.id} value={column.id}>
                                                   {column.nome}
-                                                </SelectItem>
-                                              ))}
+                                                </SelectItem>)}
                                           </SelectContent>
                                         </Select>
-                                      </div>
-                                    )}
+                                      </div>}
 
                                     <div>
                                       <Label>Título *</Label>
-                                      <Input
-                                        value={newTaskTitle}
-                                        onChange={(e) => setNewTaskTitle(e.target.value)}
-                                        placeholder="Ex: Enviar proposta comercial"
-                                      />
+                                      <Input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Ex: Enviar proposta comercial" />
                                     </div>
                                     <div>
                                       <Label>Descrição</Label>
-                                      <Textarea
-                                        value={newTaskDescription}
-                                        onChange={(e) => setNewTaskDescription(e.target.value)}
-                                        placeholder="Detalhes da tarefa..."
-                                        rows={2}
-                                      />
+                                      <Textarea value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} placeholder="Detalhes da tarefa..." rows={2} />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                       <div>
@@ -9922,133 +8801,89 @@ function Conversas() {
                                       </div>
                                       <div>
                                         <Label>Data de Vencimento</Label>
-                                        <Input
-                                          type="date"
-                                          value={newTaskDueDate}
-                                          onChange={(e) => setNewTaskDueDate(e.target.value)}
-                                        />
+                                        <Input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)} />
                                       </div>
                                     </div>
-                                    <Button 
-                                      type="button"
-                                      onClick={async (e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        
-                                        if (!leadVinculado?.id && selectedConv) {
-                                          setSyncStatus('syncing');
-                                          const lead = await findLead(selectedConv);
-                                          if (lead) {
-                                            setLeadVinculado(lead);
-                                            setMostrarBotaoCriarLead(false);
-                                            const phoneKey = selectedConv.phoneNumber || selectedConv.id;
-                                            const formatted = safeFormatPhoneNumber(phoneKey);
-                                            setLeadsVinculados(prev => ({
-                                              ...prev,
-                                              [phoneKey]: lead.id,
-                                              ...(formatted ? { [formatted]: lead.id } : {})
-                                            }));
-                                            toast.success('Lead vinculado automaticamente!');
-                                          }
-                                          setSyncStatus('idle');
-                                        }
-                                        await criarTarefaDoLead();
-                                      }} 
-                                      className="w-full"
-                                      disabled={!newTaskTitle.trim()}
-                                    >
+                                    <Button type="button" onClick={async e => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (!leadVinculado?.id && selectedConv) {
+                                setSyncStatus('syncing');
+                                const lead = await findLead(selectedConv);
+                                if (lead) {
+                                  setLeadVinculado(lead);
+                                  setMostrarBotaoCriarLead(false);
+                                  const phoneKey = selectedConv.phoneNumber || selectedConv.id;
+                                  const formatted = safeFormatPhoneNumber(phoneKey);
+                                  setLeadsVinculados(prev => ({
+                                    ...prev,
+                                    [phoneKey]: lead.id,
+                                    ...(formatted ? {
+                                      [formatted]: lead.id
+                                    } : {})
+                                  }));
+                                  toast.success('Lead vinculado automaticamente!');
+                                }
+                                setSyncStatus('idle');
+                              }
+                              await criarTarefaDoLead();
+                            }} className="w-full" disabled={!newTaskTitle.trim()}>
                                       Criar Tarefa
                                     </Button>
-                                  </>
-                                )}
+                                  </>}
                               </TabsContent>
 
                               <TabsContent value="historico" className="space-y-4">
                                 <ScrollArea className="h-[400px]">
                                   {(() => {
-                                    console.log('📋 [TAREFAS] Renderizando histórico. Total de tarefas:', leadTasks.length, 'Tarefas:', leadTasks.map(t => ({ id: t.id, title: t.title, lead_id: t.lead_id })));
-                                    return null;
-                                  })()}
-                                  {leadTasks.length === 0 ? (
-                                    <div className="text-center py-12 text-muted-foreground">
+                              console.log('📋 [TAREFAS] Renderizando histórico. Total de tarefas:', leadTasks.length, 'Tarefas:', leadTasks.map(t => ({
+                                id: t.id,
+                                title: t.title,
+                                lead_id: t.lead_id
+                              })));
+                              return null;
+                            })()}
+                                  {leadTasks.length === 0 ? <div className="text-center py-12 text-muted-foreground">
                                       <CheckSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
                                       <p>Nenhuma tarefa criada</p>
                                       <p className="text-xs mt-2">Lead ID: {leadVinculado?.id || 'N/A'}</p>
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-2">
-                                      {leadTasks.map((task) => {
-                                        console.log('📋 [TAREFAS] Renderizando tarefa:', task.id, task.title, 'Lead_id:', task.lead_id);
-                                        return (
-                                        <div
-                                          key={task.id}
-                                          className={`p-3 border rounded-lg ${
-                                            task.status === 'concluida' 
-                                              ? 'bg-muted/50 opacity-60' 
-                                              : 'bg-background'
-                                          }`}
-                                        >
+                                    </div> : <div className="space-y-2">
+                                      {leadTasks.map(task => {
+                                console.log('📋 [TAREFAS] Renderizando tarefa:', task.id, task.title, 'Lead_id:', task.lead_id);
+                                return <div key={task.id} className={`p-3 border rounded-lg ${task.status === 'concluida' ? 'bg-muted/50 opacity-60' : 'bg-background'}`}>
                                           <div className="flex items-start gap-3">
-                                            <Button
-                                              size="icon"
-                                              variant="ghost"
-                                              className="h-6 w-6 mt-0.5"
-                                              onClick={() => toggleTaskStatus(task.id, task.status)}
-                                            >
-                                              {task.status === 'concluida' ? (
-                                                <CheckCircle2 className="h-5 w-5 text-green-500" />
-                                              ) : (
-                                                <div className="h-5 w-5 border-2 rounded-full" />
-                                              )}
+                                            <Button size="icon" variant="ghost" className="h-6 w-6 mt-0.5" onClick={() => toggleTaskStatus(task.id, task.status)}>
+                                              {task.status === 'concluida' ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <div className="h-5 w-5 border-2 rounded-full" />}
                                             </Button>
                                             <div className="flex-1 min-w-0">
-                                              <p className={`text-sm font-medium ${
-                                                task.status === 'concluida' ? 'line-through' : ''
-                                              }`}>
+                                              <p className={`text-sm font-medium ${task.status === 'concluida' ? 'line-through' : ''}`}>
                                                 {task.title}
                                               </p>
-                                              {task.description && (
-                                                <p className="text-xs text-muted-foreground mt-1">
+                                              {task.description && <p className="text-xs text-muted-foreground mt-1">
                                                   {task.description}
-                                                </p>
-                                              )}
+                                                </p>}
                                               <div className="flex items-center gap-2 mt-2">
-                                                {task.priority === 'alta' && (
-                                                  <Badge variant="destructive" className="text-xs">
+                                                {task.priority === 'alta' && <Badge variant="destructive" className="text-xs">
                                                     🔴 Alta
-                                                  </Badge>
-                                                )}
-                                                {task.priority === 'media' && (
-                                                  <Badge variant="secondary" className="text-xs">
+                                                  </Badge>}
+                                                {task.priority === 'media' && <Badge variant="secondary" className="text-xs">
                                                     🟡 Média
-                                                  </Badge>
-                                                )}
-                                                {task.priority === 'baixa' && (
-                                                  <Badge variant="outline" className="text-xs">
+                                                  </Badge>}
+                                                {task.priority === 'baixa' && <Badge variant="outline" className="text-xs">
                                                     🟢 Baixa
-                                                  </Badge>
-                                                )}
-                                                {task.due_date && (
-                                                  <span className="text-xs text-muted-foreground">
+                                                  </Badge>}
+                                                {task.due_date && <span className="text-xs text-muted-foreground">
                                                     📅 {new Date(task.due_date).toLocaleDateString('pt-BR')}
-                                                  </span>
-                                                )}
+                                                  </span>}
                                               </div>
                                             </div>
-                                            <Button
-                                              size="icon"
-                                              variant="ghost"
-                                              className="h-8 w-8"
-                                              onClick={() => deletarTarefa(task.id)}
-                                            >
+                                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => deletarTarefa(task.id)}>
                                               <X className="h-4 w-4" />
                                             </Button>
                                           </div>
-                                        </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
+                                        </div>;
+                              })}
+                                    </div>}
                                 </ScrollArea>
                               </TabsContent>
                             </Tabs>
@@ -10068,19 +8903,11 @@ function Conversas() {
                             </DialogHeader>
                             <div className="space-y-3">
                               {/* Filas */}
-                              {queues.length > 0 && (
-                                <div className="space-y-2">
+                              {queues.length > 0 && <div className="space-y-2">
                                   <h4 className="text-sm font-medium">Filas</h4>
-                                  {queues.map((q) => (
-                                    <Button
-                                      key={q.id}
-                                      variant="outline"
-                                      className="w-full justify-start"
-                                      onClick={() => assignConversationToQueue(q.id, q.name)}
-                                    >
+                                  {queues.map(q => <Button key={q.id} variant="outline" className="w-full justify-start" onClick={() => assignConversationToQueue(q.id, q.name)}>
                                       📥 {q.name}
-                                    </Button>
-                                  ))}
+                                    </Button>)}
                                   {/* Selecionar fila para ver membros */}
                                   <div className="flex items-center gap-2">
                                     <span className="text-xs text-muted-foreground">Ver membros da fila:</span>
@@ -10089,89 +8916,49 @@ function Conversas() {
                                         <SelectValue placeholder="Selecione uma fila" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {queues.map((q) => (
-                                          <SelectItem key={`sel-${q.id}`} value={q.id}>{q.name}</SelectItem>
-                                        ))}
+                                        {queues.map(q => <SelectItem key={`sel-${q.id}`} value={q.id}>{q.name}</SelectItem>)}
                                       </SelectContent>
                                     </Select>
                                   </div>
-                                </div>
-                              )}
+                                </div>}
 
                               {/* Agentes */}
                               <div className="space-y-2">
                                 <h4 className="text-sm font-medium">Agentes</h4>
-                                {companyUsers.length === 0 ? (
-                                  <p className="text-xs text-muted-foreground">Carregando usuários...</p>
-                                ) : (
-                                  companyUsers.map((user) => (
-                                    <Button 
-                                      key={user.id}
-                                      variant="outline" 
-                                      className="w-full justify-start"
-                                      onClick={() => assignConversationToUser(user.id, user.name)}
-                                    >
+                                {companyUsers.length === 0 ? <p className="text-xs text-muted-foreground">Carregando usuários...</p> : companyUsers.map(user => <Button key={user.id} variant="outline" className="w-full justify-start" onClick={() => assignConversationToUser(user.id, user.name)}>
                                       👤 {user.name}
-                                    </Button>
-                                  ))
-                                )}
+                                    </Button>)}
                               </div>
 
                               {/* Membros da fila selecionada */}
-                              {selectedQueueId && (
-                                <div className="space-y-2">
+                              {selectedQueueId && <div className="space-y-2">
                                   <h4 className="text-sm font-medium">Membros da Fila</h4>
-                                  {queueMembers.length === 0 ? (
-                                    <p className="text-xs text-muted-foreground">Nenhum membro na fila selecionada.</p>
-                                  ) : (
-                                    queueMembers.map((m) => (
-                                      <Button
-                                        key={`m-${m.id}`}
-                                        variant="outline"
-                                        className="w-full justify-start"
-                                        onClick={() => assignConversationToUser(m.id, m.name)}
-                                      >
+                                  {queueMembers.length === 0 ? <p className="text-xs text-muted-foreground">Nenhum membro na fila selecionada.</p> : queueMembers.map(m => <Button key={`m-${m.id}`} variant="outline" className="w-full justify-start" onClick={() => assignConversationToUser(m.id, m.name)}>
                                         👤 {m.name}
-                                      </Button>
-                                    ))
-                                  )}
-                                </div>
-                              )}
+                                      </Button>)}
+                                </div>}
                             </div>
                           </DialogContent>
                         </Dialog>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                </div>}
             </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center bg-muted/30">
+          </> : <div className="flex-1 flex items-center justify-center bg-muted/30">
             <div className="text-center">
               <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground text-lg">Selecione uma conversa para começar</p>
             </div>
-          </div>
-        )}
+          </div>}
       </div>
       
       {/* Modal de Visualização de Imagem */}
       <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0">
           <div className="relative h-full">
-            <img 
-              src={selectedMedia?.url} 
-              alt={selectedMedia?.name || "Imagem"}
-              className="w-full h-full object-contain rounded-lg"
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              className="absolute bottom-4 right-4"
-              onClick={() => selectedMedia && downloadMedia(selectedMedia.url, `${selectedMedia.name}.jpg`)}
-            >
+            <img src={selectedMedia?.url} alt={selectedMedia?.name || "Imagem"} className="w-full h-full object-contain rounded-lg" />
+            <Button variant="secondary" size="sm" className="absolute bottom-4 right-4" onClick={() => selectedMedia && downloadMedia(selectedMedia.url, `${selectedMedia.name}.jpg`)}>
               <Download className="h-4 w-4 mr-2" />
               Baixar
             </Button>
@@ -10186,18 +8973,10 @@ function Conversas() {
             <DialogTitle>{selectedMedia?.name || 'Documento PDF'}</DialogTitle>
           </DialogHeader>
           <div className="h-[75vh] w-full">
-            <iframe 
-              src={selectedMedia?.url} 
-              className="w-full h-full border-0 rounded"
-              title="PDF Viewer"
-            />
+            <iframe src={selectedMedia?.url} className="w-full h-full border-0 rounded" title="PDF Viewer" />
           </div>
           <div className="px-4 pb-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => selectedMedia && downloadMedia(selectedMedia.url, selectedMedia.name || 'documento.pdf')}
-            >
+            <Button variant="secondary" size="sm" onClick={() => selectedMedia && downloadMedia(selectedMedia.url, selectedMedia.name || 'documento.pdf')}>
               <Download className="h-4 w-4 mr-2" />
               Baixar PDF
             </Button>
@@ -10206,42 +8985,28 @@ function Conversas() {
       </Dialog>
 
       {/* Modais de Agenda e Tarefa com lead pré-selecionado */}
-      {leadVinculado && selectedConv && (
-        <>
-          <AgendaModal
-            open={agendaModalOpen}
-            onOpenChange={setAgendaModalOpen}
-            lead={{
-              id: leadVinculado.id,
-              nome: leadVinculado.name || selectedConv.contactName,
-              telefone: leadVinculado.phone || leadVinculado.telefone || selectedConv.phoneNumber,
-            }}
-            onAgendamentoCriado={() => {
-              setAgendaModalOpen(false);
-              loadMeetings();
-              toast.success('Compromisso criado e vinculado ao lead!');
-            }}
-          />
+      {leadVinculado && selectedConv && <>
+          <AgendaModal open={agendaModalOpen} onOpenChange={setAgendaModalOpen} lead={{
+        id: leadVinculado.id,
+        nome: leadVinculado.name || selectedConv.contactName,
+        telefone: leadVinculado.phone || leadVinculado.telefone || selectedConv.phoneNumber
+      }} onAgendamentoCriado={() => {
+        setAgendaModalOpen(false);
+        loadMeetings();
+        toast.success('Compromisso criado e vinculado ao lead!');
+      }} />
 
-          <TarefaModal
-            open={tarefaModalOpen}
-            onOpenChange={setTarefaModalOpen}
-            lead={{
-              id: leadVinculado.id,
-              nome: leadVinculado.name || selectedConv.contactName,
-            }}
-            onTarefaCriada={() => {
-              setTarefaModalOpen(false);
-              if (leadVinculado?.id) {
-                carregarTarefasDoLead(leadVinculado.id);
-              }
-              toast.success('Tarefa criada e vinculada ao lead!');
-            }}
-          />
-        </>
-      )}
-    </div>
-  );
+          <TarefaModal open={tarefaModalOpen} onOpenChange={setTarefaModalOpen} lead={{
+        id: leadVinculado.id,
+        nome: leadVinculado.name || selectedConv.contactName
+      }} onTarefaCriada={() => {
+        setTarefaModalOpen(false);
+        if (leadVinculado?.id) {
+          carregarTarefasDoLead(leadVinculado.id);
+        }
+        toast.success('Tarefa criada e vinculada ao lead!');
+      }} />
+        </>}
+    </div>;
 }
-
 export default Conversas;
