@@ -246,7 +246,7 @@ export const ShareItemDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh]">
+      <DialogContent className="sm:max-w-md w-[95vw] max-h-[85vh]">
         <DialogHeader>
           <DialogTitle className="text-lg">Compartilhar Item</DialogTitle>
         </DialogHeader>
@@ -288,38 +288,38 @@ export const ShareItemDialog = ({
                 </div>
               ) : (
                 <ScrollArea className="h-[320px]">
-                  <div className="space-y-1">
+                  <div className="space-y-1 pr-2">
                     {getFilteredLeads().map(lead => (
                       <div
                         key={lead.id}
-                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors border border-transparent hover:border-border"
+                        className="flex items-center gap-2 p-2 rounded-lg hover:bg-accent/50 transition-colors border border-transparent hover:border-border"
                       >
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                          <Users className="h-5 w-5" />
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                          <Users className="h-4 w-4" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{lead.name}</p>
-                          <p className="text-sm text-muted-foreground truncate">
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <p className="font-medium text-sm truncate max-w-[150px]">{lead.name}</p>
+                          <p className="text-xs text-muted-foreground truncate max-w-[150px]">
                             {lead.email || lead.telefone || lead.phone || 'Sem contato'}
                           </p>
                         </div>
-                        <div className="flex gap-1 shrink-0">
+                        <div className="flex gap-1 shrink-0 ml-auto">
                           {(lead.telefone || lead.phone) && (
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleOpenConversation(lead)}
-                              className="h-8 w-8 p-0"
+                              className="h-7 w-7 p-0"
                               title="Abrir conversa"
                             >
-                              <MessageCircle className="h-4 w-4" />
+                              <MessageCircle className="h-3.5 w-3.5" />
                             </Button>
                           )}
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleShareLead(lead)}
-                            className="h-8 px-3"
+                            className="h-7 px-2 text-xs"
                           >
                             Enviar
                           </Button>
