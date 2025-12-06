@@ -7,7 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { 
   Send, MessageSquare, Info, User, DollarSign, Tag, 
-  TrendingUp, Zap, Clock, MoreVertical, Edit, Trash2, Save
+  TrendingUp, Zap, Clock, MoreVertical, Edit, Trash2, Save,
+  Bot, Bell, Calendar, CheckCircle, ArrowRightLeft
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -1101,7 +1102,7 @@ export function ConversaPopup({
           </div>
         </DialogHeader>
 
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(90vh - 80px)' }}>
           {/* Messages Area */}
           <div className="flex-1 flex flex-col">
             {/* Messages */}
@@ -1214,205 +1215,282 @@ export function ConversaPopup({
           </div>
 
           {showInfoPanel && (
-            <aside 
-              className="w-[340px] bg-background border-l border-border flex-shrink-0"
-              style={{ 
-                height: 'calc(90vh - 80px)',
-                overflowY: 'auto',
-                overflowX: 'hidden'
-              }}
+            <div 
+              className="w-[340px] bg-background border-l border-border flex-shrink-0 flex flex-col"
+              style={{ height: '100%' }}
             >
-              <div className="p-6 space-y-6 pb-24">
-                {/* Contact Info */}
-                <div className="text-center">
-                  <Avatar className="w-20 h-20 mx-auto mb-3">
-                    <AvatarImage src={leadVinculado?.avatar_url} />
-                    <AvatarFallback>
-                      <User className="h-10 w-10 text-muted-foreground" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <h3 className="text-foreground font-medium text-lg">{leadName}</h3>
-                  <p className="text-muted-foreground text-sm">WhatsApp</p>
-                </div>
+              <div 
+                className="flex-1 overflow-y-auto overflow-x-hidden"
+                style={{ 
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: 'hsl(var(--border)) transparent'
+                }}
+              >
+                <div className="p-6 space-y-6 pb-32">
+                  {/* Contact Info */}
+                  <div className="text-center">
+                    <Avatar className="w-20 h-20 mx-auto mb-3">
+                      <AvatarImage src={leadVinculado?.avatar_url} />
+                      <AvatarFallback>
+                        <User className="h-10 w-10 text-muted-foreground" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <h3 className="text-foreground font-medium text-lg">{leadName}</h3>
+                    <p className="text-muted-foreground text-sm">WhatsApp</p>
+                  </div>
 
-                {/* Informações do Lead */}
-                <div>
-                  <h4 className="text-foreground font-medium mb-3 flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" /> Informações do Lead
-                  </h4>
-                  
-                  {leadVinculado ? (
-                    <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-green-500/10 text-green-600 border-green-500/20 mb-3">
-                      <span className="text-xs font-medium">Lead vinculado no CRM</span>
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-amber-500/10 text-amber-600 border-amber-500/20 mb-3">
-                      <span className="text-xs font-medium">Lead não cadastrado</span>
-                    </Badge>
-                  )}
-                  
-                  <EditarInformacoesLeadDialog
-                    leadId={leadId}
-                    telefone={leadPhone || ""}
-                    nomeContato={leadName}
-                    onLeadUpdated={() => {
-                      carregarLead();
-                      carregarMensagens();
-                    }}
-                  />
-                  
-                  {leadVinculado && (
-                    <>
-                      {leadVinculado.value && (
-                        <p className="text-sm text-success font-medium mt-2">
-                          <strong>Valor:</strong> R$ {Number(leadVinculado.value).toLocaleString("pt-BR")}
-                        </p>
-                      )}
-                      {leadVinculado.company && (
-                        <p className="text-sm text-muted-foreground mt-2">
-                          <strong>Empresa:</strong> {leadVinculado.company}
-                        </p>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Responsáveis */}
-                <ResponsaveisManager
-                  leadId={leadId}
-                  responsaveisAtuais={leadVinculado?.responsavel_id ? [leadVinculado.responsavel_id] : []}
-                  onResponsaveisUpdated={() => {
-                    carregarLead();
-                  }}
-                />
-
-                {/* Tags - Sincronizado com Gerenciador de Tags */}
-                <div>
-                  <h4 className="text-foreground font-medium mb-2 flex items-center gap-2">
-                    <Tag className="h-4 w-4" /> Tags
-                  </h4>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {leadVinculado?.tags?.map((tag: string, idx: number) => (
-                      <Badge key={idx} variant="secondary" className="flex items-center gap-1 pr-1">
-                        {tag}
-                        <button 
-                          onClick={() => handleRemoveTag(tag)}
-                          className="ml-1 hover:text-destructive rounded-full"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
+                  {/* Informações do Lead */}
+                  <div>
+                    <h4 className="text-foreground font-medium mb-3 flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" /> Informações do Lead
+                    </h4>
+                    
+                    {leadVinculado ? (
+                      <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-green-500/10 text-green-600 border-green-500/20 mb-3">
+                        <span className="text-xs font-medium">Lead vinculado no CRM</span>
                       </Badge>
-                    ))}
-                    {(!leadVinculado?.tags || leadVinculado.tags.length === 0) && (
-                      <span className="text-xs text-muted-foreground">Nenhuma tag</span>
+                    ) : (
+                      <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-amber-500/10 text-amber-600 border-amber-500/20 mb-3">
+                        <span className="text-xs font-medium">Lead não cadastrado</span>
+                      </Badge>
+                    )}
+                    
+                    <EditarInformacoesLeadDialog
+                      leadId={leadId}
+                      telefone={leadPhone || ""}
+                      nomeContato={leadName}
+                      onLeadUpdated={() => {
+                        carregarLead();
+                        carregarMensagens();
+                      }}
+                    />
+                    
+                    {leadVinculado && (
+                      <>
+                        {leadVinculado.value && (
+                          <p className="text-sm text-success font-medium mt-2">
+                            <strong>Valor:</strong> R$ {Number(leadVinculado.value).toLocaleString("pt-BR")}
+                          </p>
+                        )}
+                        {leadVinculado.company && (
+                          <p className="text-sm text-muted-foreground mt-2">
+                            <strong>Empresa:</strong> {leadVinculado.company}
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
-                  {/* Adicionar Tag */}
-                  <Popover open={tagsPopoverOpen} onOpenChange={setTagsPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="w-full gap-2">
-                        <Plus className="h-3 w-3" />
-                        Adicionar Tag
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[250px] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Buscar tag..." />
-                        <CommandList>
-                          <CommandEmpty>Nenhuma tag encontrada.</CommandEmpty>
-                          <CommandGroup>
-                            {tagsExistentes
-                              .filter(tag => !(leadVinculado?.tags || []).includes(tag))
-                              .map((tag) => (
-                                <CommandItem
-                                  key={tag}
-                                  value={tag}
-                                  onSelect={() => handleAddTag(tag)}
-                                >
-                                  <Tag className="h-3 w-3 mr-2" />
-                                  {tag}
-                                </CommandItem>
-                              ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
 
-                {/* Funil de Vendas - Com seleção de funil/etapa */}
-                <div>
-                  <h4 className="text-foreground font-medium mb-2 flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" /> Funil de Vendas
-                  </h4>
-                  {leadVinculado?.funil_id ? (
-                    <div className="space-y-2">
-                      <Badge variant="outline" className="w-full justify-center py-2 bg-green-500/10 text-green-600 border-green-500/20">
-                        {funis.find(f => f.id === leadVinculado.funil_id)?.nome || 'No funil'}
-                        {leadVinculado.etapa_id && (
-                          <span className="ml-1">
-                            → {funis.find(f => f.id === leadVinculado.funil_id)?.etapas.find(e => e.id === leadVinculado.etapa_id)?.nome || ''}
-                          </span>
-                        )}
-                      </Badge>
-                      {/* Mover para outra etapa */}
-                      <Select 
-                        value={leadVinculado.etapa_id || ''} 
-                        onValueChange={(etapaId) => handleMoverParaFunil(leadVinculado.funil_id, etapaId)}
-                      >
-                        <SelectTrigger className="w-full text-xs">
-                          <SelectValue placeholder="Mover para etapa..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {funis.find(f => f.id === leadVinculado.funil_id)?.etapas.map((etapa) => (
-                            <SelectItem key={etapa.id} value={etapa.id}>
-                              {etapa.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Não está em nenhum funil
-                      </p>
-                      {/* Adicionar a um funil */}
-                      {leadVinculado ? (
-                        funis.length > 0 ? (
-                          <Select onValueChange={(value) => {
-                            const [funilId, etapaId] = value.split('|');
-                            handleMoverParaFunil(funilId, etapaId);
-                          }}>
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Selecionar funil..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {funis.map((funil) => (
-                                <SelectItem 
-                                  key={funil.id} 
-                                  value={`${funil.id}|${funil.etapas[0]?.id || ''}`}
-                                >
-                                  {funil.nome}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            {loadingFunis ? "Carregando funis..." : "Nenhum funil disponível"}
-                          </p>
-                        )
-                      ) : (
-                        <p className="text-xs text-amber-600">
-                          Salve o lead para adicionar a um funil
-                        </p>
+                  {/* Responsáveis */}
+                  <ResponsaveisManager
+                    leadId={leadId}
+                    responsaveisAtuais={leadVinculado?.responsavel_id ? [leadVinculado.responsavel_id] : []}
+                    onResponsaveisUpdated={() => {
+                      carregarLead();
+                    }}
+                  />
+
+                  {/* Tags */}
+                  <div>
+                    <h4 className="text-foreground font-medium mb-2 flex items-center gap-2">
+                      <Tag className="h-4 w-4" /> Tags
+                    </h4>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {leadVinculado?.tags?.map((tag: string, idx: number) => (
+                        <Badge key={idx} variant="secondary" className="flex items-center gap-1 pr-1">
+                          {tag}
+                          <button 
+                            onClick={() => handleRemoveTag(tag)}
+                            className="ml-1 hover:text-destructive rounded-full"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                      {(!leadVinculado?.tags || leadVinculado.tags.length === 0) && (
+                        <span className="text-xs text-muted-foreground">Nenhuma tag adicionada</span>
                       )}
                     </div>
-                  )}
+                    <Popover open={tagsPopoverOpen} onOpenChange={setTagsPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="w-full gap-2">
+                          <Plus className="h-3 w-3" />
+                          Adicionar Tag
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[250px] p-0 z-[9999]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar tag..." />
+                          <CommandList>
+                            <CommandEmpty>Nenhuma tag encontrada.</CommandEmpty>
+                            <CommandGroup>
+                              {tagsExistentes
+                                .filter(tag => !(leadVinculado?.tags || []).includes(tag))
+                                .map((tag) => (
+                                  <CommandItem
+                                    key={tag}
+                                    value={tag}
+                                    onSelect={() => handleAddTag(tag)}
+                                  >
+                                    <Tag className="h-3 w-3 mr-2" />
+                                    {tag}
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* Funil de Vendas */}
+                  <div>
+                    <h4 className="text-foreground font-medium mb-2 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" /> Funil de Vendas
+                    </h4>
+                    {leadVinculado?.funil_id ? (
+                      <div className="space-y-2">
+                        <Badge variant="outline" className="w-full justify-center py-2 bg-green-500/10 text-green-600 border-green-500/20">
+                          {funis.find(f => f.id === leadVinculado.funil_id)?.nome || 'No funil'}
+                          {leadVinculado.etapa_id && (
+                            <span className="ml-1">
+                              → {funis.find(f => f.id === leadVinculado.funil_id)?.etapas.find(e => e.id === leadVinculado.etapa_id)?.nome || ''}
+                            </span>
+                          )}
+                        </Badge>
+                        <Select 
+                          value={leadVinculado.etapa_id || ''} 
+                          onValueChange={(etapaId) => handleMoverParaFunil(leadVinculado.funil_id, etapaId)}
+                        >
+                          <SelectTrigger className="w-full text-xs">
+                            <SelectValue placeholder="Mover para etapa..." />
+                          </SelectTrigger>
+                          <SelectContent className="z-[9999]">
+                            {funis.find(f => f.id === leadVinculado.funil_id)?.etapas.map((etapa) => (
+                              <SelectItem key={etapa.id} value={etapa.id}>
+                                {etapa.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                          Não está em nenhum funil
+                        </p>
+                        {leadVinculado ? (
+                          funis.length > 0 ? (
+                            <Select onValueChange={(value) => {
+                              const [funilId, etapaId] = value.split('|');
+                              handleMoverParaFunil(funilId, etapaId);
+                            }}>
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Adicionar ao Funil" />
+                              </SelectTrigger>
+                              <SelectContent className="z-[9999]">
+                                {funis.map((funil) => (
+                                  <SelectItem 
+                                    key={funil.id} 
+                                    value={`${funil.id}|${funil.etapas[0]?.id || ''}`}
+                                  >
+                                    {funil.nome}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              {loadingFunis ? "Carregando funis..." : "Nenhum funil disponível"}
+                            </p>
+                          )
+                        ) : (
+                          <p className="text-xs text-amber-600">
+                            Salve o lead para adicionar a um funil
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Ações Rápidas */}
+                  <div>
+                    <h4 className="text-foreground font-medium mb-3">Ações Rápidas</h4>
+                    <div className="space-y-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full justify-start gap-2"
+                        onClick={() => toast.info("Funcionalidade de IA em desenvolvimento")}
+                      >
+                        <Bot className="h-4 w-4 text-purple-500" />
+                        Ativar IA
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full justify-start gap-2"
+                        onClick={() => setQuickOpen(true)}
+                      >
+                        <Zap className="h-4 w-4 text-yellow-500" />
+                        Mensagens Rápidas
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full justify-start gap-2"
+                        onClick={() => setScheduledOpen(true)}
+                      >
+                        <Clock className="h-4 w-4 text-blue-500" />
+                        Agendar Mensagem
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full justify-start gap-2"
+                        onClick={() => toast.info("Funcionalidade de lembretes em desenvolvimento")}
+                      >
+                        <Bell className="h-4 w-4 text-orange-500" />
+                        Gerenciar Lembretes
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full justify-start gap-2"
+                        onClick={() => setAgendaOpen(true)}
+                      >
+                        <Calendar className="h-4 w-4 text-green-500" />
+                        Compromissos
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full justify-start gap-2"
+                        onClick={() => setTarefaOpen(true)}
+                      >
+                        <CheckCircle className="h-4 w-4 text-blue-600" />
+                        Tarefas
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full justify-start gap-2"
+                        onClick={() => toast.info("Funcionalidade de transferência em desenvolvimento")}
+                      >
+                        <ArrowRightLeft className="h-4 w-4 text-indigo-500" />
+                        Transferir Atendimento
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </aside>
+            </div>
           )}
         </div>
       {/* Dialog: Mensagens Rápidas - CÓPIA EXATA do menu Conversas */}
