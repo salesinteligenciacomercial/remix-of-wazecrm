@@ -1028,7 +1028,7 @@ export function ConversaPopup({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl h-[90vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="max-w-7xl h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -1216,13 +1216,13 @@ export function ConversaPopup({
 
           {showInfoPanel && (
             <div 
-              className="conversa-popup-info-panel w-[340px] bg-background border-l border-border flex-shrink-0"
+              className="w-[340px] bg-background border-l border-border flex-shrink-0 overflow-y-auto overflow-x-hidden"
               style={{ 
                 height: 'calc(90vh - 80px)',
-                maxHeight: 'calc(90vh - 80px)'
+                overflowY: 'scroll'
               }}
             >
-              <div className="p-6 space-y-6 pb-64">
+              <div className="p-6 space-y-6" style={{ paddingBottom: '150px' }}>
                   {/* Contact Info */}
                   <div className="text-center">
                     <Avatar className="w-20 h-20 mx-auto mb-3">
