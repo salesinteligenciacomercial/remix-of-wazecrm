@@ -1046,6 +1046,28 @@ export function ConversaPopup({
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Botão Criar Tarefa */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTarefaOpen(true)}
+                className="gap-1"
+              >
+                <CheckCircle className="h-4 w-4 text-blue-600" />
+                Tarefa
+              </Button>
+              
+              {/* Botão Transferir Atendimento */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toast.info("Funcionalidade de transferência em desenvolvimento")}
+                className="gap-1"
+              >
+                <ArrowRightLeft className="h-4 w-4 text-indigo-500" />
+                Transferir
+              </Button>
+              
               {/* Menu de ações do lead */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1467,25 +1489,6 @@ export function ConversaPopup({
                         Compromissos
                       </Button>
                       
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="w-full justify-start gap-2"
-                        onClick={() => setTarefaOpen(true)}
-                      >
-                        <CheckCircle className="h-4 w-4 text-blue-600" />
-                        Tarefas
-                      </Button>
-                      
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="w-full justify-start gap-2"
-                        onClick={() => toast.info("Funcionalidade de transferência em desenvolvimento")}
-                      >
-                        <ArrowRightLeft className="h-4 w-4 text-indigo-500" />
-                        Transferir Atendimento
-                      </Button>
                     </div>
                   </div>
                 </div>
