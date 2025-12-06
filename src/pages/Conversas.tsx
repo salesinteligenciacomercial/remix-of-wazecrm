@@ -2924,7 +2924,7 @@ function Conversas() {
           channel: "whatsapp" as const,
           status: statusConversa,
           lastMessage: messagensFormatadas[messagensFormatadas.length - 1]?.content || '',
-          unread: mensagens.filter(m => m.fromme !== true).length,
+          unread: (messagensFormatadas.length > 0 && messagensFormatadas[messagensFormatadas.length - 1]?.sender === 'contact') ? 1 : 0,
           messages: messagensFormatadas,
           tags: [],
           phoneNumber: telefone,
