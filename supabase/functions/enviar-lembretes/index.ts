@@ -62,6 +62,7 @@ serve(async (req) => {
     // Buscar lembretes pendentes com data_envio <= agora OU em retry com proxima_tentativa <= agora
     // Máximo 3 tentativas (0, 1, 2 = 3 tentativas)
     // Apenas lembretes ativos (ativo = true ou null para compatibilidade)
+    // CORREÇÃO: Excluir lembretes com status 'processando' para evitar duplicação
     const { data: lembretesPendentes, error: pendentesError } = await supabase
       .from('lembretes')
       .select(`
@@ -255,6 +256,23 @@ serve(async (req) => {
       for (const lembrete of lembretesEmpresa as Lembrete[]) {
         try {
           console.log(`📤 Processando lembrete ${lembrete.id}`);
+
+          // CORREÇÃO: Marcar como 'processando' IMEDIATAMENTE para evitar duplicação
+          // Usar update condicional para garantir atomicidade
+          const { data: updateResult, error: lockError } = await supabase
+            .from('lembretes')
+            .update({ status_envio: 'processando' })
+            .eq('id', lembrete.id)
+            .in('status_envio', ['pendente', 'retry'])
+            .select('id')
+            .single();
+
+          if (lockError || !updateResult) {
+            console.log(`⚠️ Lembrete ${lembrete.id} já está sendo processado por outra instância - pulando`);
+            continue;
+          }
+
+          console.log(`🔒 Lembrete ${lembrete.id} marcado como 'processando'`);
 
           // Validar dados do compromisso
           if (!lembrete.compromisso) {

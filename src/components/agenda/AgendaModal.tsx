@@ -264,7 +264,7 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
         throw new Error(`Erro ao criar compromisso: ${compromissoError.message}`);
       }
 
-      // Criar lembrete se solicitado
+      // Criar lembrete(s) se solicitado
       if (formData.enviar_lembrete) {
         const horasAntecedenciaTotal =
           parseInt(formData.horas_antecedencia_horas || "0") +
@@ -282,25 +282,66 @@ export function AgendaModal({ open, onOpenChange, lead, onAgendamentoCriado }: A
             (formData.descricao || formData.observacoes ? `\\\\n💬 *Detalhes:*\\\\n${formData.descricao || ''}${formData.descricao && formData.observacoes ? '\\\\n' : ''}${formData.observacoes || ''}\\\\n` : '') +
             `\\\\nPor favor, confirme sua presença!`;
 
-          const { error: lembreteError } = await supabase
-            .from("lembretes")
-            .insert([
-              {
-                company_id: companyId,
-                compromisso_id: compromisso.id,
-                canal: "whatsapp",
-                data_envio: dataLembreteISO,
-                destinatario: formData.destinatario_lembrete,
-                mensagem: mensagemLembrete,
-                status_envio: "pendente",
-                horas_antecedencia: horasAntecedenciaTotal,
-                telefone_responsavel: lead.telefone ? normalizePhoneBR(lead.telefone) : null,
-              },
-            ]);
+          // CORREÇÃO: Criar lembretes separados para evitar duplicação
+          // Se destinatario = 'ambos', criar dois lembretes separados
+          const destinatariosParaCriar: Array<{ tipo: string; telefone: string | null }> = [];
+          
+          if (formData.destinatario_lembrete === 'ambos') {
+            // Criar lembrete para o lead
+            if (lead.telefone) {
+              destinatariosParaCriar.push({
+                tipo: 'lead',
+                telefone: normalizePhoneBR(lead.telefone)
+              });
+            }
+            // Criar lembrete para o responsável (buscar telefone do profissional)
+            // Por enquanto usar o telefone do lead como fallback
+            destinatariosParaCriar.push({
+              tipo: 'responsavel',
+              telefone: lead.telefone ? normalizePhoneBR(lead.telefone) : null
+            });
+          } else {
+            // Criar apenas um lembrete com o destinatário selecionado
+            destinatariosParaCriar.push({
+              tipo: formData.destinatario_lembrete,
+              telefone: lead.telefone ? normalizePhoneBR(lead.telefone) : null
+            });
+          }
 
-          if (lembreteError) {
-            console.error("Erro ao criar lembrete:", lembreteError);
-            toast.warning("Compromisso criado, mas houve um erro ao agendar o lembrete.");
+          // Inserir cada lembrete separadamente
+          let lembreteErro = false;
+          for (const dest of destinatariosParaCriar) {
+            if (!dest.telefone) {
+              console.warn(`⚠️ Telefone não disponível para destinatário ${dest.tipo}`);
+              continue;
+            }
+            
+            const { error: lembreteError } = await supabase
+              .from("lembretes")
+              .insert([
+                {
+                  company_id: companyId,
+                  compromisso_id: compromisso.id,
+                  canal: "whatsapp",
+                  data_envio: dataLembreteISO,
+                  destinatario: dest.tipo,
+                  mensagem: mensagemLembrete,
+                  status_envio: "pendente",
+                  horas_antecedencia: horasAntecedenciaTotal,
+                  telefone_responsavel: dest.telefone,
+                },
+              ]);
+
+            if (lembreteError) {
+              console.error(`Erro ao criar lembrete para ${dest.tipo}:`, lembreteError);
+              lembreteErro = true;
+            } else {
+              console.log(`✅ Lembrete criado para ${dest.tipo} - telefone: ${dest.telefone}`);
+            }
+          }
+
+          if (lembreteErro) {
+            toast.warning("Compromisso criado, mas houve um erro ao agendar alguns lembretes.");
           }
         } else {
           toast.warning("Não foi possível agendar o lembrete, pois a data é retroativa.");
