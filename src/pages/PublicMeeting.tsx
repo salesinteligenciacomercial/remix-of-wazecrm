@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,42 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+// ICE Servers with TURN fallback
+const ICE_SERVERS: RTCConfiguration = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+  ],
+  iceCandidatePoolSize: 10,
+};
+
+// Find supported mime type for recording
+const getSupportedMimeType = () => {
+  const mimeTypes = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4',
+  ];
+  return mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
+};
 
 const PublicMeeting = () => {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -42,6 +78,10 @@ const PublicMeeting = () => {
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const callIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const iceCandidateQueueRef = useRef<RTCIceCandidate[]>([]);
+  const hasRemoteDescriptionRef = useRef(false);
+  const originalVideoTrackRef = useRef<MediaStreamTrack | null>(null);
+  
   const guestIdRef = useRef<string>(`guest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
 
   // Check if meeting exists and if current user is host
@@ -83,12 +123,33 @@ const PublicMeeting = () => {
     checkMeeting();
   }, [meetingId]);
 
+  // Process queued ICE candidates
+  const processIceCandidateQueue = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    if (!pc || !hasRemoteDescriptionRef.current) return;
+
+    while (iceCandidateQueueRef.current.length > 0) {
+      const candidate = iceCandidateQueueRef.current.shift();
+      if (candidate) {
+        try {
+          await pc.addIceCandidate(candidate);
+          console.log('Added queued ICE candidate');
+        } catch (e) {
+          console.error('Error adding queued ICE candidate:', e);
+        }
+      }
+    }
+  }, []);
+
+  // Initialize WebRTC as Host (waits for guest's offer)
   const initializeWebRTCAsHost = async () => {
     try {
-      // Get local media
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
       });
       setLocalStream(stream);
       
@@ -96,23 +157,17 @@ const PublicMeeting = () => {
         localVideoRef.current.srcObject = stream;
       }
 
-      // Create peer connection
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      });
-
+      const pc = new RTCPeerConnection(ICE_SERVERS);
       peerConnectionRef.current = pc;
+      hasRemoteDescriptionRef.current = false;
+      iceCandidateQueueRef.current = [];
 
-      // Add local tracks
       stream.getTracks().forEach(track => {
         pc.addTrack(track, stream);
       });
 
-      // Handle remote stream
       pc.ontrack = (event) => {
+        console.log('Host received remote track');
         setRemoteStream(event.streams[0]);
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = event.streams[0];
@@ -121,32 +176,37 @@ const PublicMeeting = () => {
         setWaitingForGuests(false);
       };
 
-      // Handle ICE candidates
       pc.onicecandidate = async (event) => {
         if (event.candidate) {
+          console.log('Host ICE candidate');
           await supabase.from('meeting_signals').insert([{
             meeting_id: meetingId!,
             from_user: 'host',
             to_user: 'guest',
             signal_type: 'ice-candidate',
-            signal_data: JSON.parse(JSON.stringify({ candidate: event.candidate.toJSON() })),
+            signal_data: { candidate: event.candidate.toJSON() },
           }]);
         }
       };
 
       pc.onconnectionstatechange = () => {
+        console.log('Host connection state:', pc.connectionState);
         if (pc.connectionState === 'connected') {
           setIsConnecting(false);
           setWaitingForGuests(false);
-          callIntervalRef.current = setInterval(() => {
-            setCallDuration(prev => prev + 1);
-          }, 1000);
+          if (!callIntervalRef.current) {
+            callIntervalRef.current = setInterval(() => {
+              setCallDuration(prev => prev + 1);
+            }, 1000);
+          }
+        } else if (pc.connectionState === 'failed') {
+          pc.restartIce();
         }
       };
 
       // Subscribe to signals from guests
       const channel = supabase
-        .channel(`public-meeting-host-${meetingId}`)
+        .channel(`public-meeting-host-${meetingId}-${Date.now()}`)
         .on(
           'postgres_changes',
           {
@@ -157,14 +217,16 @@ const PublicMeeting = () => {
           },
           async (payload) => {
             const signal = payload.new as any;
-            
-            if (signal.from_user === 'host') return; // Ignore our own signals
+            if (signal.from_user === 'host') return;
             
             console.log('Host received signal:', signal.signal_type);
 
             if (signal.signal_type === 'offer') {
-              // Guest sent an offer, respond with answer
+              // Guest sent offer, respond with answer
               await pc.setRemoteDescription(new RTCSessionDescription(signal.signal_data.sdp));
+              hasRemoteDescriptionRef.current = true;
+              await processIceCandidateQueue();
+              
               const answer = await pc.createAnswer();
               await pc.setLocalDescription(answer);
               
@@ -173,19 +235,30 @@ const PublicMeeting = () => {
                 from_user: 'host',
                 to_user: signal.from_user,
                 signal_type: 'answer',
-                signal_data: JSON.parse(JSON.stringify({ sdp: answer })),
+                signal_data: { sdp: answer },
               }]);
             } else if (signal.signal_type === 'answer') {
-              await pc.setRemoteDescription(new RTCSessionDescription(signal.signal_data.sdp));
+              if (pc.signalingState === 'have-local-offer') {
+                await pc.setRemoteDescription(new RTCSessionDescription(signal.signal_data.sdp));
+                hasRemoteDescriptionRef.current = true;
+                await processIceCandidateQueue();
+              }
             } else if (signal.signal_type === 'ice-candidate') {
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(signal.signal_data.candidate));
-              } catch (e) {
-                console.error('Error adding ICE candidate:', e);
+              const candidate = new RTCIceCandidate(signal.signal_data.candidate);
+              if (hasRemoteDescriptionRef.current) {
+                try {
+                  await pc.addIceCandidate(candidate);
+                } catch (e) {
+                  console.error('Error adding ICE candidate:', e);
+                }
+              } else {
+                iceCandidateQueueRef.current.push(candidate);
               }
             } else if (signal.signal_type === 'guest-joined') {
               toast.success(`${signal.signal_data.guestName} entrou na reunião`);
               setWaitingForGuests(false);
+            } else if (signal.signal_type === 'call-end') {
+              handleEndCall();
             }
           }
         )
@@ -202,12 +275,15 @@ const PublicMeeting = () => {
     }
   };
 
+  // Initialize WebRTC as Guest (creates offer)
   const initializeWebRTCAsGuest = async () => {
     try {
-      // Get local media
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
       });
       setLocalStream(stream);
       
@@ -215,23 +291,17 @@ const PublicMeeting = () => {
         localVideoRef.current.srcObject = stream;
       }
 
-      // Create peer connection
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      });
-
+      const pc = new RTCPeerConnection(ICE_SERVERS);
       peerConnectionRef.current = pc;
+      hasRemoteDescriptionRef.current = false;
+      iceCandidateQueueRef.current = [];
 
-      // Add local tracks
       stream.getTracks().forEach(track => {
         pc.addTrack(track, stream);
       });
 
-      // Handle remote stream
       pc.ontrack = (event) => {
+        console.log('Guest received remote track');
         setRemoteStream(event.streams[0]);
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = event.streams[0];
@@ -239,31 +309,36 @@ const PublicMeeting = () => {
         setIsConnecting(false);
       };
 
-      // Handle ICE candidates
       pc.onicecandidate = async (event) => {
         if (event.candidate) {
+          console.log('Guest ICE candidate');
           await supabase.from('meeting_signals').insert([{
             meeting_id: meetingId!,
             from_user: guestIdRef.current,
             to_user: 'host',
             signal_type: 'ice-candidate',
-            signal_data: JSON.parse(JSON.stringify({ candidate: event.candidate.toJSON() })),
+            signal_data: { candidate: event.candidate.toJSON() },
           }]);
         }
       };
 
       pc.onconnectionstatechange = () => {
+        console.log('Guest connection state:', pc.connectionState);
         if (pc.connectionState === 'connected') {
           setIsConnecting(false);
-          callIntervalRef.current = setInterval(() => {
-            setCallDuration(prev => prev + 1);
-          }, 1000);
+          if (!callIntervalRef.current) {
+            callIntervalRef.current = setInterval(() => {
+              setCallDuration(prev => prev + 1);
+            }, 1000);
+          }
+        } else if (pc.connectionState === 'failed') {
+          pc.restartIce();
         }
       };
 
       // Subscribe to signals
       const channel = supabase
-        .channel(`public-meeting-${meetingId}-${guestIdRef.current}`)
+        .channel(`public-meeting-${meetingId}-${guestIdRef.current}-${Date.now()}`)
         .on(
           'postgres_changes',
           {
@@ -274,16 +349,26 @@ const PublicMeeting = () => {
           },
           async (payload) => {
             const signal = payload.new as any;
-            
             if (signal.to_user !== guestIdRef.current && signal.to_user !== 'guest') return;
 
+            console.log('Guest received signal:', signal.signal_type);
+
             if (signal.signal_type === 'answer') {
-              await pc.setRemoteDescription(new RTCSessionDescription(signal.signal_data.sdp));
+              if (pc.signalingState === 'have-local-offer') {
+                await pc.setRemoteDescription(new RTCSessionDescription(signal.signal_data.sdp));
+                hasRemoteDescriptionRef.current = true;
+                await processIceCandidateQueue();
+              }
             } else if (signal.signal_type === 'ice-candidate' && signal.from_user !== guestIdRef.current) {
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(signal.signal_data.candidate));
-              } catch (e) {
-                console.error('Error adding ICE candidate:', e);
+              const candidate = new RTCIceCandidate(signal.signal_data.candidate);
+              if (hasRemoteDescriptionRef.current) {
+                try {
+                  await pc.addIceCandidate(candidate);
+                } catch (e) {
+                  console.error('Error adding ICE candidate:', e);
+                }
+              } else {
+                iceCandidateQueueRef.current.push(candidate);
               }
             } else if (signal.signal_type === 'call-end') {
               handleEndCall();
@@ -304,7 +389,10 @@ const PublicMeeting = () => {
       }]);
 
       // Create and send offer
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
       await pc.setLocalDescription(offer);
       
       await supabase.from('meeting_signals').insert([{
@@ -312,8 +400,10 @@ const PublicMeeting = () => {
         from_user: guestIdRef.current,
         to_user: 'host',
         signal_type: 'offer',
-        signal_data: JSON.parse(JSON.stringify({ sdp: offer })),
+        signal_data: { sdp: offer },
       }]);
+
+      console.log('Guest offer sent');
 
     } catch (error) {
       console.error('Error initializing WebRTC as guest:', error);
@@ -327,7 +417,6 @@ const PublicMeeting = () => {
       return;
     }
 
-    // Update meeting with guest info
     await supabase
       .from('meetings')
       .update({
@@ -371,7 +460,8 @@ const PublicMeeting = () => {
   };
 
   const toggleScreenShare = async () => {
-    if (!peerConnectionRef.current) return;
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
 
     try {
       if (isScreenSharing) {
@@ -379,22 +469,33 @@ const PublicMeeting = () => {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         const videoTrack = stream.getVideoTracks()[0];
         
-        const sender = peerConnectionRef.current.getSenders().find(s => s.track?.kind === 'video');
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
         if (sender) {
-          sender.replaceTrack(videoTrack);
+          await sender.replaceTrack(videoTrack);
         }
         
-        localStream?.getVideoTracks()[0]?.stop();
-        setLocalStream(new MediaStream([...localStream?.getAudioTracks() || [], videoTrack]));
+        if (originalVideoTrackRef.current) {
+          originalVideoTrackRef.current.stop();
+        }
+        
+        // Update local stream
+        const audioTracks = localStream?.getAudioTracks() || [];
+        setLocalStream(new MediaStream([...audioTracks, videoTrack]));
+        
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = new MediaStream([...audioTracks, videoTrack]);
+        }
+        
         setIsScreenSharing(false);
       } else {
         // Start screen share
         const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         const screenTrack = screenStream.getVideoTracks()[0];
         
-        const sender = peerConnectionRef.current.getSenders().find(s => s.track?.kind === 'video');
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
         if (sender) {
-          sender.replaceTrack(screenTrack);
+          originalVideoTrackRef.current = localStream?.getVideoTracks()[0] || null;
+          await sender.replaceTrack(screenTrack);
         }
         
         screenTrack.onended = () => {
@@ -423,8 +524,10 @@ const PublicMeeting = () => {
       const destination = audioContext.createMediaStreamDestination();
 
       streams.forEach(stream => {
-        const source = audioContext.createMediaStreamSource(stream);
-        source.connect(destination);
+        if (stream.getAudioTracks().length > 0) {
+          const source = audioContext.createMediaStreamSource(stream);
+          source.connect(destination);
+        }
       });
 
       const videoTrack = localStream?.getVideoTracks()[0] || remoteStream?.getVideoTracks()[0];
@@ -433,9 +536,8 @@ const PublicMeeting = () => {
         ...(videoTrack ? [videoTrack] : []),
       ]);
 
-      const mediaRecorder = new MediaRecorder(combinedStream, {
-        mimeType: 'video/webm;codecs=vp9,opus',
-      });
+      const mimeType = getSupportedMimeType();
+      const mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
 
       mediaRecorderRef.current = mediaRecorder;
       recordedChunksRef.current = [];
@@ -447,7 +549,7 @@ const PublicMeeting = () => {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -484,7 +586,7 @@ const PublicMeeting = () => {
     }
   };
 
-  const handleEndCall = () => {
+  const handleEndCall = async () => {
     if (isRecording) stopRecording();
     if (callIntervalRef.current) clearInterval(callIntervalRef.current);
     
@@ -494,6 +596,34 @@ const PublicMeeting = () => {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
     }
+
+    // Signal call end to other participant
+    if (isHost) {
+      await supabase.from('meeting_signals').insert([{
+        meeting_id: meetingId!,
+        from_user: 'host',
+        to_user: 'guest',
+        signal_type: 'call-end',
+        signal_data: {},
+      }]);
+    } else {
+      await supabase.from('meeting_signals').insert([{
+        meeting_id: meetingId!,
+        from_user: guestIdRef.current,
+        to_user: 'host',
+        signal_type: 'call-end',
+        signal_data: {},
+      }]);
+    }
+
+    // Update meeting status
+    await supabase
+      .from('meetings')
+      .update({
+        status: 'ended',
+        ended_at: new Date().toISOString(),
+      })
+      .eq('id', meetingId);
 
     setMeetingEnded(true);
   };
@@ -529,6 +659,11 @@ const PublicMeeting = () => {
             <CardTitle>Reunião encerrada</CardTitle>
             <CardDescription>
               A reunião foi finalizada. Obrigado por participar!
+              {callDuration > 0 && (
+                <span className="block mt-2">
+                  Duração: {formatTime(callDuration)}
+                </span>
+              )}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -608,7 +743,7 @@ const PublicMeeting = () => {
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
             <span className="text-lg font-semibold text-primary">
-              {hostName.charAt(0).toUpperCase()}
+              {(isHost ? guestName : hostName).charAt(0).toUpperCase()}
             </span>
           </div>
           <div>
@@ -634,7 +769,6 @@ const PublicMeeting = () => {
           </div>
         </div>
 
-        {/* Copy link button for host */}
         {isHost && waitingForGuests && (
           <Button variant="outline" size="sm" onClick={copyLink} className="mr-2">
             {copied ? (
@@ -683,7 +817,7 @@ const PublicMeeting = () => {
                 <>
                   <div className="h-24 w-24 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
                     <span className="text-4xl font-semibold text-primary">
-                      {hostName.charAt(0).toUpperCase()}
+                      {(isHost ? 'G' : hostName.charAt(0)).toUpperCase()}
                     </span>
                   </div>
                   {isConnecting && (

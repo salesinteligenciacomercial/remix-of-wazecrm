@@ -3,7 +3,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { 
   Mic, MicOff, Video, VideoOff, PhoneOff, 
-  Monitor, MonitorOff, Circle, Square, Download,
+  Monitor, MonitorOff, Circle, Square,
   Loader2
 } from 'lucide-react';
 import { useWebRTC } from '@/hooks/useWebRTC';
@@ -21,6 +21,17 @@ interface VideoCallModalProps {
   onCallEnded: () => void;
 }
 
+// Find supported mime type for recording
+const getSupportedMimeType = () => {
+  const mimeTypes = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4',
+  ];
+  return mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
+};
+
 export const VideoCallModal = ({
   open,
   onClose,
@@ -37,6 +48,7 @@ export const VideoCallModal = ({
   const [recordingTime, setRecordingTime] = useState(0);
   const [callDuration, setCallDuration] = useState(0);
   const [isConnecting, setIsConnecting] = useState(true);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -62,16 +74,19 @@ export const VideoCallModal = ({
     localUserId,
     remoteUserId,
     onRemoteStream: (stream) => {
+      console.log('Remote stream received');
       setRemoteStream(stream);
       setIsConnecting(false);
     },
     onConnectionStateChange: (state) => {
+      console.log('Connection state changed:', state);
       if (state === 'connected') {
         setIsConnecting(false);
-        // Start call duration timer
-        callIntervalRef.current = setInterval(() => {
-          setCallDuration(prev => prev + 1);
-        }, 1000);
+        if (!callIntervalRef.current) {
+          callIntervalRef.current = setInterval(() => {
+            setCallDuration(prev => prev + 1);
+          }, 1000);
+        }
       }
     },
     onCallEnded: () => {
@@ -79,16 +94,29 @@ export const VideoCallModal = ({
     },
   });
 
-  // Initialize call
+  // Initialize call once when modal opens
   useEffect(() => {
-    if (open) {
-      if (isCaller) {
-        startCall(callType === 'video');
-      } else {
-        answerCall(callType === 'video');
-      }
+    if (open && !hasInitialized) {
+      setHasInitialized(true);
+      
+      const initCall = async () => {
+        try {
+          if (isCaller) {
+            console.log('Starting call as caller...');
+            await startCall(callType === 'video');
+          } else {
+            console.log('Answering call...');
+            await answerCall(callType === 'video');
+          }
+        } catch (error) {
+          console.error('Error initializing call:', error);
+          toast.error('Erro ao iniciar chamada');
+        }
+      };
+      
+      initCall();
     }
-  }, [open, isCaller, callType, startCall, answerCall]);
+  }, [open, hasInitialized, isCaller, callType, startCall, answerCall]);
 
   // Set local video
   useEffect(() => {
@@ -114,7 +142,6 @@ export const VideoCallModal = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Recording functions
   const startRecording = () => {
     const streams: MediaStream[] = [];
     if (localStream) streams.push(localStream);
@@ -126,25 +153,24 @@ export const VideoCallModal = ({
     }
 
     try {
-      // Combine streams for recording
       const audioContext = new AudioContext();
       const destination = audioContext.createMediaStreamDestination();
 
       streams.forEach(stream => {
-        const source = audioContext.createMediaStreamSource(stream);
-        source.connect(destination);
+        if (stream.getAudioTracks().length > 0) {
+          const source = audioContext.createMediaStreamSource(stream);
+          source.connect(destination);
+        }
       });
 
-      // Get video from local or remote
       const videoTrack = localStream?.getVideoTracks()[0] || remoteStream?.getVideoTracks()[0];
       const combinedStream = new MediaStream([
         ...destination.stream.getAudioTracks(),
         ...(videoTrack ? [videoTrack] : []),
       ]);
 
-      const mediaRecorder = new MediaRecorder(combinedStream, {
-        mimeType: 'video/webm;codecs=vp9,opus',
-      });
+      const mimeType = getSupportedMimeType();
+      const mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
 
       mediaRecorderRef.current = mediaRecorder;
       recordedChunksRef.current = [];
@@ -189,7 +215,8 @@ export const VideoCallModal = ({
   const downloadRecording = () => {
     if (recordedChunksRef.current.length === 0) return;
 
-    const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+    const mimeType = getSupportedMimeType();
+    const blob = new Blob(recordedChunksRef.current, { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -203,17 +230,20 @@ export const VideoCallModal = ({
   };
 
   const handleClose = () => {
-    // Stop recording if active
     if (isRecording) {
       stopRecording();
     }
 
-    // Clear timers
     if (callIntervalRef.current) {
       clearInterval(callIntervalRef.current);
+      callIntervalRef.current = null;
     }
 
     sendEndCall();
+    setHasInitialized(false);
+    setRemoteStream(null);
+    setIsConnecting(true);
+    setCallDuration(0);
     onCallEnded();
     onClose();
   };
@@ -303,7 +333,6 @@ export const VideoCallModal = ({
 
         {/* Controls */}
         <div className="flex items-center justify-center gap-4 p-6 border-t bg-background">
-          {/* Audio toggle */}
           <Button
             variant={isAudioEnabled ? 'secondary' : 'destructive'}
             size="lg"
@@ -313,7 +342,6 @@ export const VideoCallModal = ({
             {isAudioEnabled ? <Mic className="h-6 w-6" /> : <MicOff className="h-6 w-6" />}
           </Button>
 
-          {/* Video toggle */}
           <Button
             variant={isVideoEnabled ? 'secondary' : 'destructive'}
             size="lg"
@@ -323,7 +351,6 @@ export const VideoCallModal = ({
             {isVideoEnabled ? <Video className="h-6 w-6" /> : <VideoOff className="h-6 w-6" />}
           </Button>
 
-          {/* Screen share */}
           <Button
             variant={isScreenSharing ? 'default' : 'secondary'}
             size="lg"
@@ -333,7 +360,6 @@ export const VideoCallModal = ({
             {isScreenSharing ? <MonitorOff className="h-6 w-6" /> : <Monitor className="h-6 w-6" />}
           </Button>
 
-          {/* Recording */}
           <Button
             variant={isRecording ? 'destructive' : 'secondary'}
             size="lg"
@@ -343,7 +369,6 @@ export const VideoCallModal = ({
             {isRecording ? <Square className="h-6 w-6" /> : <Circle className="h-6 w-6" />}
           </Button>
 
-          {/* End call */}
           <Button
             variant="destructive"
             size="lg"

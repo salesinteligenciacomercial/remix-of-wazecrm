@@ -10,12 +10,32 @@ interface WebRTCConfig {
   onCallEnded: () => void;
 }
 
+// ICE Servers with TURN fallback for restrictive networks
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    // Free TURN servers for testing
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 export const useWebRTC = (config: WebRTCConfig) => {
@@ -29,13 +49,25 @@ export const useWebRTC = (config: WebRTCConfig) => {
   const screenStreamRef = useRef<MediaStream | null>(null);
   const originalVideoTrackRef = useRef<MediaStreamTrack | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const iceCandidateQueueRef = useRef<RTCIceCandidate[]>([]);
+  const hasRemoteDescriptionRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 3;
 
   // Initialize media
   const initializeMedia = useCallback(async (video: boolean = true) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: video ? { width: 1280, height: 720 } : false,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: video ? { 
+          width: { ideal: 1280 }, 
+          height: { ideal: 720 },
+          facingMode: 'user',
+        } : false,
       });
       setLocalStream(stream);
       return stream;
@@ -45,8 +77,31 @@ export const useWebRTC = (config: WebRTCConfig) => {
     }
   }, []);
 
+  // Process queued ICE candidates
+  const processIceCandidateQueue = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    if (!pc || !hasRemoteDescriptionRef.current) return;
+
+    while (iceCandidateQueueRef.current.length > 0) {
+      const candidate = iceCandidateQueueRef.current.shift();
+      if (candidate) {
+        try {
+          await pc.addIceCandidate(candidate);
+          console.log('Added queued ICE candidate');
+        } catch (error) {
+          console.error('Error adding queued ICE candidate:', error);
+        }
+      }
+    }
+  }, []);
+
   // Create peer connection
   const createPeerConnection = useCallback((stream: MediaStream) => {
+    // Close existing connection if any
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+    }
+
     const pc = new RTCPeerConnection(ICE_SERVERS);
 
     // Add local tracks
@@ -56,6 +111,7 @@ export const useWebRTC = (config: WebRTCConfig) => {
 
     // Handle remote stream
     pc.ontrack = (event) => {
+      console.log('Remote track received:', event.track.kind);
       if (event.streams[0]) {
         config.onRemoteStream(event.streams[0]);
       }
@@ -64,18 +120,41 @@ export const useWebRTC = (config: WebRTCConfig) => {
     // Handle ICE candidates
     pc.onicecandidate = async (event) => {
       if (event.candidate) {
-        await sendSignal('ice-candidate', { candidate: event.candidate });
+        console.log('Local ICE candidate generated');
+        await sendSignal('ice-candidate', { candidate: event.candidate.toJSON() });
+      }
+    };
+
+    // Handle ICE connection state
+    pc.oniceconnectionstatechange = () => {
+      console.log('ICE connection state:', pc.iceConnectionState);
+      
+      if (pc.iceConnectionState === 'failed') {
+        // Attempt ICE restart
+        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          reconnectAttemptsRef.current++;
+          console.log(`ICE restart attempt ${reconnectAttemptsRef.current}`);
+          pc.restartIce();
+        }
+      } else if (pc.iceConnectionState === 'connected') {
+        reconnectAttemptsRef.current = 0;
       }
     };
 
     // Handle connection state changes
     pc.onconnectionstatechange = () => {
+      console.log('Connection state:', pc.connectionState);
       setConnectionState(pc.connectionState);
       config.onConnectionStateChange(pc.connectionState);
       
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        console.log('Connection state:', pc.connectionState);
+      if (pc.connectionState === 'failed') {
+        console.log('Connection failed, attempting reconnect...');
       }
+    };
+
+    // Handle negotiation needed
+    pc.onnegotiationneeded = async () => {
+      console.log('Negotiation needed');
     };
 
     peerConnectionRef.current = pc;
@@ -85,13 +164,19 @@ export const useWebRTC = (config: WebRTCConfig) => {
   // Send signaling data
   const sendSignal = useCallback(async (signalType: string, signalData: any) => {
     try {
-      await supabase.from('meeting_signals').insert({
+      const { error } = await supabase.from('meeting_signals').insert({
         meeting_id: config.meetingId,
         from_user: config.localUserId,
         to_user: config.remoteUserId,
         signal_type: signalType,
         signal_data: signalData,
       });
+      
+      if (error) {
+        console.error('Error sending signal:', error);
+      } else {
+        console.log('Signal sent:', signalType);
+      }
     } catch (error) {
       console.error('Error sending signal:', error);
     }
@@ -100,24 +185,45 @@ export const useWebRTC = (config: WebRTCConfig) => {
   // Handle incoming signals
   const handleSignal = useCallback(async (signal: any) => {
     const pc = peerConnectionRef.current;
-    if (!pc) return;
+    if (!pc) {
+      console.warn('No peer connection when handling signal');
+      return;
+    }
 
     try {
+      console.log('Handling signal:', signal.signal_type);
+      
       switch (signal.signal_type) {
         case 'offer':
           await pc.setRemoteDescription(new RTCSessionDescription(signal.signal_data));
+          hasRemoteDescriptionRef.current = true;
+          await processIceCandidateQueue();
+          
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          await sendSignal('answer', answer);
+          await sendSignal('answer', { type: answer.type, sdp: answer.sdp });
           break;
 
         case 'answer':
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.signal_data));
+          if (pc.signalingState === 'have-local-offer') {
+            await pc.setRemoteDescription(new RTCSessionDescription(signal.signal_data));
+            hasRemoteDescriptionRef.current = true;
+            await processIceCandidateQueue();
+          }
           break;
 
         case 'ice-candidate':
           if (signal.signal_data.candidate) {
-            await pc.addIceCandidate(new RTCIceCandidate(signal.signal_data.candidate));
+            const candidate = new RTCIceCandidate(signal.signal_data.candidate);
+            
+            if (hasRemoteDescriptionRef.current) {
+              await pc.addIceCandidate(candidate);
+              console.log('ICE candidate added immediately');
+            } else {
+              // Queue the candidate for later
+              iceCandidateQueueRef.current.push(candidate);
+              console.log('ICE candidate queued');
+            }
           }
           break;
 
@@ -129,12 +235,14 @@ export const useWebRTC = (config: WebRTCConfig) => {
     } catch (error) {
       console.error('Error handling signal:', error);
     }
-  }, [config, sendSignal]);
+  }, [config, sendSignal, processIceCandidateQueue]);
 
   // Subscribe to signals
   const subscribeToSignals = useCallback(() => {
+    const channelName = `meeting-signals-${config.meetingId}-${config.localUserId}-${Date.now()}`;
+    
     const channel = supabase
-      .channel(`meeting-signals-${config.meetingId}-${config.localUserId}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -149,28 +257,56 @@ export const useWebRTC = (config: WebRTCConfig) => {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+      });
 
     channelRef.current = channel;
     return channel;
   }, [config, handleSignal]);
 
-  // Start call (caller)
+  // Start call (caller - creates offer)
   const startCall = useCallback(async (video: boolean = true) => {
-    const stream = await initializeMedia(video);
-    const pc = createPeerConnection(stream);
-    subscribeToSignals();
+    try {
+      console.log('Starting call as caller...');
+      hasRemoteDescriptionRef.current = false;
+      iceCandidateQueueRef.current = [];
+      
+      const stream = await initializeMedia(video);
+      const pc = createPeerConnection(stream);
+      subscribeToSignals();
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    await sendSignal('offer', offer);
+      // Create and send offer
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: video,
+      });
+      await pc.setLocalDescription(offer);
+      await sendSignal('offer', { type: offer.type, sdp: offer.sdp });
+      
+      console.log('Offer sent');
+    } catch (error) {
+      console.error('Error starting call:', error);
+      throw error;
+    }
   }, [initializeMedia, createPeerConnection, subscribeToSignals, sendSignal]);
 
-  // Answer call (callee)
+  // Answer call (callee - waits for offer, sends answer)
   const answerCall = useCallback(async (video: boolean = true) => {
-    const stream = await initializeMedia(video);
-    createPeerConnection(stream);
-    subscribeToSignals();
+    try {
+      console.log('Answering call...');
+      hasRemoteDescriptionRef.current = false;
+      iceCandidateQueueRef.current = [];
+      
+      const stream = await initializeMedia(video);
+      createPeerConnection(stream);
+      subscribeToSignals();
+      
+      console.log('Ready to receive offer');
+    } catch (error) {
+      console.error('Error answering call:', error);
+      throw error;
+    }
   }, [initializeMedia, createPeerConnection, subscribeToSignals]);
 
   // Toggle audio
@@ -244,6 +380,8 @@ export const useWebRTC = (config: WebRTCConfig) => {
 
   // End call
   const endCall = useCallback(() => {
+    console.log('Ending call...');
+    
     // Stop all tracks
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
@@ -263,6 +401,11 @@ export const useWebRTC = (config: WebRTCConfig) => {
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
+
+    // Reset state
+    hasRemoteDescriptionRef.current = false;
+    iceCandidateQueueRef.current = [];
+    reconnectAttemptsRef.current = 0;
 
     setLocalStream(null);
     setIsAudioEnabled(true);
