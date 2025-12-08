@@ -18,6 +18,7 @@ import Relatorios from "./pages/Relatorios";
 import ChatInterno from "./pages/ChatInterno";
 import Reunioes from "./pages/Reunioes";
 import PublicMeeting from "./pages/PublicMeeting";
+import Discador from "./pages/Discador";
 import { MainLayout } from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
 import { Component, ErrorInfo, ReactNode } from 'react';
@@ -79,6 +80,7 @@ const App = () => (
               <Route path="configuracoes" element={<Configuracoes />} />
               <Route path="chat-equipe" element={<ChatInterno />} />
               <Route path="reunioes" element={<Reunioes />} />
+              <Route path="discador" element={<Discador />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

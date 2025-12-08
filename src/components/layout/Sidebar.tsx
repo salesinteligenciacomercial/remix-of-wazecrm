@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Users, MessageSquare, Calendar, Bot, Settings, LogOut, MessagesSquare, Video } from "lucide-react";
+import { LayoutDashboard, Users, MessageSquare, Calendar, Bot, Settings, LogOut, MessagesSquare, Video, PhoneCall } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,6 +55,11 @@ const navigation = [{
   href: "/reunioes",
   icon: Video,
   menuKey: "reunioes"
+}, {
+  name: "Discador",
+  href: "/discador",
+  icon: PhoneCall,
+  menuKey: "discador"
 }, {
   name: "Configurações",
   href: "/configuracoes",

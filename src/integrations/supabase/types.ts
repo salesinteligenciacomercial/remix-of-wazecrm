@@ -199,6 +199,68 @@ export type Database = {
         }
         Relationships: []
       }
+      call_history: {
+        Row: {
+          call_end: string | null
+          call_result: string | null
+          call_start: string
+          company_id: string
+          created_at: string
+          duration_seconds: number | null
+          id: string
+          lead_id: string | null
+          lead_name: string | null
+          notes: string | null
+          notes_required: boolean | null
+          phone_number: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          call_end?: string | null
+          call_result?: string | null
+          call_start?: string
+          company_id: string
+          created_at?: string
+          duration_seconds?: number | null
+          id?: string
+          lead_id?: string | null
+          lead_name?: string | null
+          notes?: string | null
+          notes_required?: boolean | null
+          phone_number: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          call_end?: string | null
+          call_result?: string | null
+          call_start?: string
+          company_id?: string
+          created_at?: string
+          duration_seconds?: number | null
+          id?: string
+          lead_id?: string | null
+          lead_name?: string | null
+          notes?: string | null
+          notes_required?: boolean | null
+          phone_number?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_history_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           allow_ai_features: boolean | null
