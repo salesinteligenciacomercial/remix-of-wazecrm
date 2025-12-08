@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Video, Phone, Clock, Plus } from 'lucide-react';
+import { Video, Phone, Clock, Plus, Link2 } from 'lucide-react';
 import { useMeetings, IncomingCall } from '@/hooks/useMeetings';
 import { MeetingHistory } from '@/components/meetings/MeetingHistory';
 import { StartCallDialog } from '@/components/meetings/StartCallDialog';
 import { VideoCallModal } from '@/components/meetings/VideoCallModal';
 import { IncomingCallModal } from '@/components/meetings/IncomingCallModal';
+import { CreatePublicMeetingDialog } from '@/components/meetings/CreatePublicMeetingDialog';
 
 const Reunioes = () => {
   const [showStartCallDialog, setShowStartCallDialog] = useState(false);
+  const [showCreatePublicMeeting, setShowCreatePublicMeeting] = useState(false);
   const [activeCall, setActiveCall] = useState<{
     meetingId: string;
     remoteUserId: string;
@@ -75,10 +77,16 @@ const Reunioes = () => {
             <h1 className="text-2xl font-bold text-foreground">Reuniões</h1>
             <p className="text-muted-foreground">Chamadas de áudio e vídeo com sua equipe</p>
           </div>
-          <Button onClick={() => setShowStartCallDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Chamada
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowCreatePublicMeeting(true)}>
+              <Link2 className="h-4 w-4 mr-2" />
+              Criar Sala Pública
+            </Button>
+            <Button onClick={() => setShowStartCallDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Chamada
+            </Button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -131,6 +139,20 @@ const Reunioes = () => {
                   Inicie uma ligação de áudio com um membro da equipe
                 </p>
               </div>
+
+              {/* Public meeting card */}
+              <div
+                onClick={() => setShowCreatePublicMeeting(true)}
+                className="flex flex-col items-center justify-center p-8 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 cursor-pointer hover:bg-blue-500/10 transition-colors"
+              >
+                <div className="p-4 rounded-full bg-blue-500/20 mb-4">
+                  <Link2 className="h-8 w-8 text-blue-600" />
+                </div>
+                <h3 className="font-semibold text-lg mb-1">Sala Pública</h3>
+                <p className="text-sm text-muted-foreground text-center">
+                  Crie um link para reunião com participantes externos
+                </p>
+              </div>
             </div>
           </TabsContent>
         </Tabs>
@@ -141,6 +163,13 @@ const Reunioes = () => {
         open={showStartCallDialog}
         onClose={() => setShowStartCallDialog(false)}
         onStartCall={handleStartCall}
+      />
+
+      {/* Create Public Meeting Dialog */}
+      <CreatePublicMeetingDialog
+        open={showCreatePublicMeeting}
+        onClose={() => setShowCreatePublicMeeting(false)}
+        onMeetingCreated={(id) => console.log('Meeting created:', id)}
       />
 
       {/* Video Call Modal */}
