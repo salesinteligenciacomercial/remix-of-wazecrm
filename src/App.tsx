@@ -17,6 +17,7 @@ import Configuracoes from "./pages/Configuracoes";
 import Relatorios from "./pages/Relatorios";
 import ChatInterno from "./pages/ChatInterno";
 import Reunioes from "./pages/Reunioes";
+import PublicMeeting from "./pages/PublicMeeting";
 import { MainLayout } from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
 import { Component, ErrorInfo, ReactNode } from 'react';
@@ -63,6 +64,7 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/agenda/:slug" element={<AgendaPublica />} />
+            <Route path="/meeting/:meetingId" element={<PublicMeeting />} />
             <Route path="/" element={<MainLayout />}>
               <Route index element={<Navigate to="/analytics" replace />} />
               <Route path="dashboard" element={<Navigate to="/analytics" replace />} />
