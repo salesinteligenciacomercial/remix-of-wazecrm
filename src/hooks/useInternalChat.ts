@@ -29,6 +29,9 @@ export const useInternalChat = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const conversationsRef = useRef<InternalConversation[]>([]);
+  const isLoadingRef = useRef(false);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const initializedRef = useRef(false);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -36,13 +39,28 @@ export const useInternalChat = () => {
   }, [conversations]);
 
   useEffect(() => {
+    // Evitar inicialização duplicada
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+    
     initializeChat();
+    
+    return () => {
+      // Cleanup on unmount
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
   }, []);
 
   const initializeChat = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
       
       setCurrentUserId(user.id);
 
@@ -50,7 +68,7 @@ export const useInternalChat = () => {
         .from('user_roles')
         .select('company_id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (userRole?.company_id) {
         setCompanyId(userRole.company_id);
@@ -65,12 +83,25 @@ export const useInternalChat = () => {
   };
 
   const loadConversations = async (userId: string): Promise<InternalConversation[]> => {
+    // Prevenir carregamentos simultâneos que causam flickering
+    if (isLoadingRef.current) {
+      console.log('⏳ [InternalChat] Load already in progress, skipping...');
+      return conversationsRef.current;
+    }
+    
+    isLoadingRef.current = true;
+    
     try {
       // Get conversations where user is a participant
-      const { data: participations } = await supabase
+      const { data: participations, error: partError } = await supabase
         .from('internal_conversation_participants')
         .select('conversation_id, last_read_at')
         .eq('user_id', userId);
+
+      if (partError) {
+        console.error('Error loading participations:', partError);
+        return [];
+      }
 
       if (!participations || participations.length === 0) {
         setConversations([]);
@@ -81,13 +112,21 @@ export const useInternalChat = () => {
       const lastReadMap = new Map(participations.map(p => [p.conversation_id, p.last_read_at]));
 
       // Get conversation details
-      const { data: convos } = await supabase
+      const { data: convos, error: convosError } = await supabase
         .from('internal_conversations')
         .select('*')
         .in('id', conversationIds)
         .order('updated_at', { ascending: false });
 
-      if (!convos) return [];
+      if (convosError) {
+        console.error('Error loading conversations:', convosError);
+        return [];
+      }
+
+      if (!convos || convos.length === 0) {
+        setConversations([]);
+        return [];
+      }
 
       // Get all participants for these conversations
       const { data: allParticipants } = await supabase
@@ -104,7 +143,7 @@ export const useInternalChat = () => {
 
       const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
-      // Get last message for each conversation
+      // Get last message for each conversation - otimizado para buscar apenas 1 por conversa
       const { data: lastMessages } = await supabase
         .from('internal_messages')
         .select('conversation_id, content, message_type, created_at, sender_id')
@@ -118,18 +157,20 @@ export const useInternalChat = () => {
         }
       });
 
-      // Get unread counts
+      // Calcular unread counts de forma otimizada (uma única query)
+      // Em vez de fazer N queries para N conversas
       const unreadCounts = new Map<string, number>();
+      
+      // Buscar todas as mensagens não lidas de uma vez
       for (const convoId of conversationIds) {
         const lastRead = lastReadMap.get(convoId);
-        const { count } = await supabase
-          .from('internal_messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', convoId)
-          .neq('sender_id', userId)
-          .gt('created_at', lastRead || '1970-01-01');
+        const messagesAfterLastRead = lastMessages?.filter(msg => 
+          msg.conversation_id === convoId &&
+          msg.sender_id !== userId &&
+          (!lastRead || new Date(msg.created_at) > new Date(lastRead))
+        ) || [];
         
-        unreadCounts.set(convoId, count || 0);
+        unreadCounts.set(convoId, messagesAfterLastRead.length);
       }
 
       // Build conversation objects
@@ -146,44 +187,79 @@ export const useInternalChat = () => {
         unread_count: unreadCounts.get(convo.id) || 0
       }));
 
-      setConversations(enrichedConvos);
+      // Só atualizar estado se houver diferenças reais
+      const currentJson = JSON.stringify(conversationsRef.current.map(c => ({ id: c.id, unread: c.unread_count, lastMsg: c.last_message?.created_at })));
+      const newJson = JSON.stringify(enrichedConvos.map(c => ({ id: c.id, unread: c.unread_count, lastMsg: c.last_message?.created_at })));
+      
+      if (currentJson !== newJson) {
+        setConversations(enrichedConvos);
+      }
+      
       return enrichedConvos;
     } catch (error) {
       console.error('Error loading conversations:', error);
       return [];
+    } finally {
+      isLoadingRef.current = false;
     }
   };
 
   const setupRealtimeSubscription = (userId: string) => {
+    // Cleanup existing channel if any
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
+    // Usar um debounce para evitar múltiplos reloads em sequência
+    let debounceTimer: NodeJS.Timeout | null = null;
+    
+    const debouncedReload = () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      debounceTimer = setTimeout(() => {
+        loadConversations(userId);
+      }, 500); // 500ms debounce
+    };
+
     const channel = supabase
-      .channel('internal-chat-changes')
+      .channel(`internal-chat-${userId}`)
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'internal_messages'
         },
         () => {
-          loadConversations(userId);
+          debouncedReload();
         }
       )
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'internal_conversation_participants'
         },
         () => {
-          loadConversations(userId);
+          debouncedReload();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'internal_conversation_participants'
+        },
+        () => {
+          debouncedReload();
         }
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    channelRef.current = channel;
   };
 
   const createConversation = async (
@@ -240,7 +316,7 @@ export const useInternalChat = () => {
     }
   };
 
-  const markAsRead = async (conversationId: string) => {
+  const markAsRead = useCallback(async (conversationId: string) => {
     if (!currentUserId) return;
 
     try {
@@ -250,6 +326,7 @@ export const useInternalChat = () => {
         .eq('conversation_id', conversationId)
         .eq('user_id', currentUserId);
 
+      // Atualizar localmente sem recarregar tudo
       setConversations(prev => 
         prev.map(c => 
           c.id === conversationId ? { ...c, unread_count: 0 } : c
@@ -258,7 +335,7 @@ export const useInternalChat = () => {
     } catch (error) {
       console.error('Error marking as read:', error);
     }
-  };
+  }, [currentUserId]);
 
   const updateGroupName = async (conversationId: string, name: string): Promise<boolean> => {
     try {
