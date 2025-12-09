@@ -238,7 +238,7 @@ export const useWebRTC = (config: WebRTCConfig) => {
   }, [config, sendSignal, processIceCandidateQueue]);
 
   // Subscribe to signals
-  const subscribeToSignals = useCallback((onCallAccepted?: () => void) => {
+  const subscribeToSignals = useCallback(() => {
     const channelName = `meeting-signals-${config.meetingId}-${config.localUserId}-${Date.now()}`;
     
     console.log('Subscribing to signals for meeting:', config.meetingId);
@@ -258,13 +258,7 @@ export const useWebRTC = (config: WebRTCConfig) => {
           console.log('Received signal:', signal?.signal_type, 'for meeting:', signal?.meeting_id);
           
           if (signal && signal.meeting_id === config.meetingId) {
-            // Handle call-accept signal - caller should now send offer
-            if (signal.signal_type === 'call-accept' && onCallAccepted) {
-              console.log('Call accepted! Sending offer...');
-              onCallAccepted();
-            } else {
-              handleSignal(signal);
-            }
+            handleSignal(signal);
           }
         }
       )
@@ -276,34 +270,28 @@ export const useWebRTC = (config: WebRTCConfig) => {
     return channel;
   }, [config, handleSignal]);
 
-  // Start call (caller - waits for call-accept, then sends offer)
+  // Start call (caller - sends offer immediately, callee responds with answer)
   const startCall = useCallback(async (video: boolean = true) => {
     try {
-      console.log('Starting call as caller - waiting for accept...');
+      console.log('Starting call as caller...');
       hasRemoteDescriptionRef.current = false;
       iceCandidateQueueRef.current = [];
       
       const stream = await initializeMedia(video);
       const pc = createPeerConnection(stream);
       
-      // Subscribe to signals with callback for when call is accepted
-      subscribeToSignals(async () => {
-        try {
-          console.log('Call accepted - creating and sending offer...');
-          // Create and send offer AFTER call is accepted
-          const offer = await pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: video,
-          });
-          await pc.setLocalDescription(offer);
-          await sendSignal('offer', { type: offer.type, sdp: offer.sdp });
-          console.log('Offer sent successfully');
-        } catch (err) {
-          console.error('Error sending offer:', err);
-        }
+      // Subscribe to signals to receive answer
+      subscribeToSignals();
+      
+      // Create and send offer immediately
+      console.log('Creating and sending offer...');
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: video,
       });
-
-      console.log('Caller ready - waiting for remote user to accept...');
+      await pc.setLocalDescription(offer);
+      await sendSignal('offer', { type: offer.type, sdp: offer.sdp });
+      console.log('Offer sent successfully');
     } catch (error) {
       console.error('Error starting call:', error);
       throw error;
