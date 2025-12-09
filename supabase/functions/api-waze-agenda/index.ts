@@ -386,7 +386,7 @@ Deno.serve(async (req) => {
     // POST: Criar compromisso
     if (action === 'compromissos' && method === 'POST') {
       const body = await req.json()
-      const { titulo, tipo_servico, data_hora_inicio, data_hora_fim, status, observacoes, paciente, telefone, lead_id, agenda_id } = body
+      const { titulo, tipo_servico, data_hora_inicio, data_hora_fim, status, observacoes, paciente, telefone, lead_id, agenda_id, enviar_confirmacao } = body
 
       if (!tipo_servico || !data_hora_inicio || !data_hora_fim) {
         return new Response(
@@ -426,8 +426,85 @@ Deno.serve(async (req) => {
 
       console.log('[api-waze-agenda] Compromisso criado:', novoCompromisso.id)
 
+      // Enviar mensagem de confirmação via WhatsApp se solicitado ou por padrão
+      let confirmacaoEnviada = false
+      const telefoneContato = telefone || paciente
+      
+      if (telefoneContato) {
+        try {
+          // Normalizar telefone
+          const telefoneNormalizado = telefoneContato.replace(/\D/g, '')
+          
+          if (telefoneNormalizado.length >= 10) {
+            // Formatar data/hora
+            const dataHora = new Date(data_hora_inicio)
+            const dataFormatada = dataHora.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            const horaFormatada = dataHora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+            
+            const tipoServicoFormatado = tipo_servico?.trim()
+              ? tipo_servico.charAt(0).toUpperCase() + tipo_servico.slice(1)
+              : 'Compromisso'
+
+            const nomeContato = paciente || 'Cliente'
+
+            const mensagemConfirmacao = `✅ *Agendamento Confirmado*\n\n` +
+              `Olá ${nomeContato}! Seu agendamento foi confirmado com sucesso.\n\n` +
+              `📅 *Data:* ${dataFormatada}\n` +
+              `⏰ *Horário:* ${horaFormatada}\n` +
+              `📋 *Serviço:* ${tipoServicoFormatado}\n` +
+              `✅ *Status:* Agendado\n\n` +
+              `Aguardamos você no dia e horário agendados!\n\n` +
+              `_Esta é uma confirmação automática do seu agendamento._`
+
+            console.log('[api-waze-agenda] Enviando confirmação para:', telefoneNormalizado)
+
+            // Chamar edge function enviar-whatsapp
+            const whatsappResponse = await fetch(`${supabaseUrl}/functions/v1/enviar-whatsapp`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({
+                numero: telefoneNormalizado,
+                mensagem: mensagemConfirmacao,
+                company_id: profissional.company_id
+              })
+            })
+
+            if (whatsappResponse.ok) {
+              console.log('[api-waze-agenda] ✅ Confirmação enviada com sucesso!')
+              confirmacaoEnviada = true
+
+              // Salvar mensagem na tabela conversas
+              await supabaseAdmin.from('conversas').insert({
+                numero: telefoneNormalizado,
+                telefone_formatado: telefoneNormalizado,
+                mensagem: mensagemConfirmacao,
+                origem: 'WhatsApp',
+                status: 'Enviada',
+                fromme: true,
+                sent_by: profissional.nome,
+                company_id: profissional.company_id,
+                owner_id: user.id,
+                lead_id: lead_id || null,
+                nome_contato: nomeContato
+              })
+            } else {
+              console.error('[api-waze-agenda] Erro ao enviar confirmação:', await whatsappResponse.text())
+            }
+          }
+        } catch (whatsappError) {
+          console.error('[api-waze-agenda] Erro ao enviar confirmação WhatsApp:', whatsappError)
+        }
+      }
+
       return new Response(
-        JSON.stringify({ success: true, compromisso: novoCompromisso }),
+        JSON.stringify({ 
+          success: true, 
+          compromisso: novoCompromisso,
+          confirmacao_enviada: confirmacaoEnviada
+        }),
         { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -435,7 +512,7 @@ Deno.serve(async (req) => {
     // PUT: Atualizar compromisso
     if (action === 'compromissos' && method === 'PUT') {
       const body = await req.json()
-      const { id, ...updates } = body
+      const { id, enviar_notificacao, ...updates } = body
 
       if (!id) {
         return new Response(
@@ -444,10 +521,10 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Verificar se compromisso pertence ao profissional
+      // Buscar compromisso existente com dados completos
       const { data: existente } = await supabaseAdmin
         .from('compromissos')
-        .select('id')
+        .select('*, lead:leads(name, phone, telefone)')
         .eq('id', id)
         .eq('profissional_id', profissional.id)
         .single()
@@ -476,8 +553,81 @@ Deno.serve(async (req) => {
 
       console.log('[api-waze-agenda] Compromisso atualizado:', id)
 
+      // Enviar notificação de alteração via WhatsApp
+      let notificacaoEnviada = false
+      const telefoneContato = existente.telefone || existente.lead?.phone || existente.lead?.telefone
+
+      if (telefoneContato) {
+        try {
+          const telefoneNormalizado = telefoneContato.replace(/\D/g, '')
+
+          if (telefoneNormalizado.length >= 10) {
+            // Usar nova data/hora se foi alterada, senão usar a existente
+            const novaDataHora = updates.data_hora_inicio || existente.data_hora_inicio
+            const dataHora = new Date(novaDataHora)
+            const dataFormatada = dataHora.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            const horaFormatada = dataHora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+            const tipoServico = (updates.tipo_servico || existente.tipo_servico || 'Compromisso')
+            const tipoServicoFormatado = tipoServico.charAt(0).toUpperCase() + tipoServico.slice(1)
+            const nomeContato = existente.paciente || existente.lead?.name || 'Cliente'
+
+            const mensagemAlteracao = `📝 *Compromisso Alterado*\n\n` +
+              `Olá ${nomeContato}! Seu agendamento foi alterado.\n\n` +
+              `📅 *Nova Data:* ${dataFormatada}\n` +
+              `⏰ *Novo Horário:* ${horaFormatada}\n` +
+              `📋 *Serviço:* ${tipoServicoFormatado}\n` +
+              `✅ *Status:* ${updates.status || existente.status}\n\n` +
+              `Aguardamos você no novo dia e horário!\n\n` +
+              `_Esta é uma notificação automática de alteração._`
+
+            console.log('[api-waze-agenda] Enviando notificação de alteração para:', telefoneNormalizado)
+
+            const whatsappResponse = await fetch(`${supabaseUrl}/functions/v1/enviar-whatsapp`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({
+                numero: telefoneNormalizado,
+                mensagem: mensagemAlteracao,
+                company_id: profissional.company_id
+              })
+            })
+
+            if (whatsappResponse.ok) {
+              console.log('[api-waze-agenda] ✅ Notificação de alteração enviada!')
+              notificacaoEnviada = true
+
+              await supabaseAdmin.from('conversas').insert({
+                numero: telefoneNormalizado,
+                telefone_formatado: telefoneNormalizado,
+                mensagem: mensagemAlteracao,
+                origem: 'WhatsApp',
+                status: 'Enviada',
+                fromme: true,
+                sent_by: profissional.nome,
+                company_id: profissional.company_id,
+                owner_id: user.id,
+                lead_id: existente.lead_id || null,
+                nome_contato: nomeContato
+              })
+            } else {
+              console.error('[api-waze-agenda] Erro ao enviar notificação alteração:', await whatsappResponse.text())
+            }
+          }
+        } catch (whatsappError) {
+          console.error('[api-waze-agenda] Erro ao enviar notificação alteração:', whatsappError)
+        }
+      }
+
       return new Response(
-        JSON.stringify({ success: true, compromisso: compromissoAtualizado }),
+        JSON.stringify({ 
+          success: true, 
+          compromisso: compromissoAtualizado,
+          notificacao_enviada: notificacaoEnviada
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -493,10 +643,10 @@ Deno.serve(async (req) => {
         )
       }
 
-      // Verificar permissão
+      // Buscar compromisso com dados completos para enviar notificação
       const { data: existente } = await supabaseAdmin
         .from('compromissos')
-        .select('id')
+        .select('*, lead:leads(name, phone, telefone)')
         .eq('id', id)
         .eq('profissional_id', profissional.id)
         .single()
@@ -524,8 +674,79 @@ Deno.serve(async (req) => {
 
       console.log('[api-waze-agenda] Compromisso cancelado:', id)
 
+      // Enviar notificação de cancelamento via WhatsApp
+      let notificacaoEnviada = false
+      const telefoneContato = existente.telefone || existente.lead?.phone || existente.lead?.telefone
+
+      if (telefoneContato) {
+        try {
+          const telefoneNormalizado = telefoneContato.replace(/\D/g, '')
+
+          if (telefoneNormalizado.length >= 10) {
+            const dataHora = new Date(existente.data_hora_inicio)
+            const dataFormatada = dataHora.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            const horaFormatada = dataHora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+            const tipoServico = existente.tipo_servico || 'Compromisso'
+            const tipoServicoFormatado = tipoServico.charAt(0).toUpperCase() + tipoServico.slice(1)
+            const nomeContato = existente.paciente || existente.lead?.name || 'Cliente'
+
+            const mensagemCancelamento = `❌ *Compromisso Cancelado*\n\n` +
+              `Olá ${nomeContato}! Infelizmente seu compromisso foi cancelado.\n\n` +
+              `📅 *Data:* ${dataFormatada}\n` +
+              `⏰ *Horário:* ${horaFormatada}\n` +
+              `📋 *Serviço:* ${tipoServicoFormatado}\n` +
+              `❌ *Status:* Cancelado\n\n` +
+              `Entre em contato conosco se tiver dúvidas ou desejar reagendar.\n\n` +
+              `_Esta é uma notificação automática de cancelamento._`
+
+            console.log('[api-waze-agenda] Enviando notificação de cancelamento para:', telefoneNormalizado)
+
+            const whatsappResponse = await fetch(`${supabaseUrl}/functions/v1/enviar-whatsapp`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({
+                numero: telefoneNormalizado,
+                mensagem: mensagemCancelamento,
+                company_id: profissional.company_id
+              })
+            })
+
+            if (whatsappResponse.ok) {
+              console.log('[api-waze-agenda] ✅ Notificação de cancelamento enviada!')
+              notificacaoEnviada = true
+
+              await supabaseAdmin.from('conversas').insert({
+                numero: telefoneNormalizado,
+                telefone_formatado: telefoneNormalizado,
+                mensagem: mensagemCancelamento,
+                origem: 'WhatsApp',
+                status: 'Enviada',
+                fromme: true,
+                sent_by: profissional.nome,
+                company_id: profissional.company_id,
+                owner_id: user.id,
+                lead_id: existente.lead_id || null,
+                nome_contato: nomeContato
+              })
+            } else {
+              console.error('[api-waze-agenda] Erro ao enviar notificação cancelamento:', await whatsappResponse.text())
+            }
+          }
+        } catch (whatsappError) {
+          console.error('[api-waze-agenda] Erro ao enviar notificação cancelamento:', whatsappError)
+        }
+      }
+
       return new Response(
-        JSON.stringify({ success: true, message: 'Compromisso cancelado' }),
+        JSON.stringify({ 
+          success: true, 
+          message: 'Compromisso cancelado',
+          notificacao_enviada: notificacaoEnviada
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
