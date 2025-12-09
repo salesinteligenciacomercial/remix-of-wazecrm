@@ -114,6 +114,15 @@ Deno.serve(async (req) => {
 
     console.log('[api-waze-agenda] Profissional encontrado:', profissional.id, profissional.nome)
 
+    // Buscar agendas vinculadas ao profissional (via responsavel_id)
+    const { data: agendasVinculadas } = await supabaseAdmin
+      .from('agendas')
+      .select('id')
+      .eq('responsavel_id', profissional.id)
+    
+    const agendaIds = agendasVinculadas?.map(a => a.id) || []
+    console.log('[api-waze-agenda] Agendas vinculadas ao profissional:', agendaIds)
+
     // Parse da URL para determinar a ação
     const url = new URL(req.url)
     const action = url.searchParams.get('action') || 'dashboard'
@@ -135,17 +144,26 @@ Deno.serve(async (req) => {
       const dataLimite = new Date()
       dataLimite.setDate(dataLimite.getDate() + 30)
 
-      const { data: compromissos, error: compError } = await supabaseAdmin
+      // Buscar compromissos por profissional_id OU por agenda_id vinculada ao profissional
+      let compromissosQuery = supabaseAdmin
         .from('compromissos')
         .select(`
           *,
           lead:leads(id, name, phone, telefone, email),
           agenda:agendas(id, nome, tipo)
         `)
-        .eq('profissional_id', profissional.id)
         .gte('data_hora_inicio', inicioHoje)
         .lte('data_hora_inicio', dataLimite.toISOString())
         .order('data_hora_inicio', { ascending: true })
+
+      // Filtrar por profissional_id OU agenda_id vinculada
+      if (agendaIds.length > 0) {
+        compromissosQuery = compromissosQuery.or(`profissional_id.eq.${profissional.id},agenda_id.in.(${agendaIds.join(',')})`)
+      } else {
+        compromissosQuery = compromissosQuery.eq('profissional_id', profissional.id)
+      }
+
+      const { data: compromissos, error: compError } = await compromissosQuery
 
       if (compError) {
         console.error('[api-waze-agenda] Erro ao buscar compromissos:', compError)
@@ -330,8 +348,14 @@ Deno.serve(async (req) => {
           lead:leads(id, name, phone, telefone, email),
           agenda:agendas(id, nome, tipo)
         `)
-        .eq('profissional_id', profissional.id)
         .order('data_hora_inicio', { ascending: true })
+
+      // Filtrar por profissional_id OU agenda_id vinculada
+      if (agendaIds.length > 0) {
+        query = query.or(`profissional_id.eq.${profissional.id},agenda_id.in.(${agendaIds.join(',')})`)
+      } else {
+        query = query.eq('profissional_id', profissional.id)
+      }
 
       if (dataInicio) {
         query = query.gte('data_hora_inicio', dataInicio)
