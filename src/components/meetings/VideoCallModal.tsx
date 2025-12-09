@@ -118,17 +118,23 @@ export const VideoCallModal = ({
     }
   }, [open, hasInitialized, isCaller, callType, startCall, answerCall]);
 
-  // Set local video
+  // Set local video with explicit play
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.play().catch(err => {
+        console.log('Local video play error:', err);
+      });
     }
   }, [localStream]);
 
-  // Set remote video
+  // Set remote video with explicit play
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch(err => {
+        console.log('Remote video play error:', err);
+      });
     }
   }, [remoteStream]);
 
@@ -292,7 +298,7 @@ export const VideoCallModal = ({
             ref={remoteVideoRef}
             autoPlay
             playsInline
-            className="absolute inset-0 w-full h-full object-cover"
+            className={`absolute inset-0 w-full h-full object-cover ${!remoteStream ? 'hidden' : ''}`}
           />
 
           {/* Placeholder when no remote video */}
@@ -321,7 +327,7 @@ export const VideoCallModal = ({
               autoPlay
               playsInline
               muted
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover ${(!localStream || !isVideoEnabled) ? 'hidden' : ''}`}
             />
             {(!localStream || !isVideoEnabled) && (
               <div className="absolute inset-0 flex items-center justify-center bg-muted">
