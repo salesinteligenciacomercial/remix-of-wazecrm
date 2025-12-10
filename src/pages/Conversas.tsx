@@ -142,8 +142,9 @@ interface Meeting {
   };
 }
 const CONVERSATIONS_KEY = "continuum_conversations";
-const CONVERSATIONS_CACHE_KEY = "continuum_conversations_cache_v2"; // ⚡ v2: Corrigido sentBy
-const CONVERSATIONS_CACHE_TIMESTAMP_KEY = "continuum_conversations_cache_timestamp_v2"; // ⚡ v2: Corrigido sentBy
+const CONVERSATIONS_CACHE_KEY = "continuum_conversations_cache_v3"; // ⚡ v3: Agora inclui company_id
+const CONVERSATIONS_CACHE_TIMESTAMP_KEY = "continuum_conversations_cache_timestamp_v3"; // ⚡ v3
+const CONVERSATIONS_CACHE_COMPANY_KEY = "continuum_conversations_cache_company_v3"; // ⚡ NOVO: Armazena company_id do cache
 const QUICK_MESSAGES_KEY = "continuum_quick_messages";
 const QUICK_CATEGORIES_KEY = "continuum_quick_categories";
 const REMINDERS_KEY = "continuum_reminders";
@@ -2083,12 +2084,45 @@ function Conversas() {
 
   // ⚡ CARREGAMENTO INSTANTÂNEO: Carregar conversas imediatamente
   useEffect(() => {
-    // ⚡ PASSO 1: Tentar carregar do cache INSTANTANEAMENTE (mesmo sem userCompanyId)
-    if (!initialLoadRef.current) {
+    // ⚡ PASSO 1: Carregar do banco SEMPRE primeiro para obter userCompanyId
+    const loadInitialData = async () => {
+      // Se já está carregando ou já carregou, não fazer nada
+      if (loadingConversations || initialLoadRef.current) return;
+      
       try {
+        // ⚡ CORREÇÃO CRÍTICA: Primeiro obter o company_id do usuário atual
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.warn('⚠️ [LOAD] Usuário não autenticado');
+          return;
+        }
+        
+        const { data: userRole } = await supabase
+          .from('user_roles')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (!userRole?.company_id) {
+          console.warn('⚠️ [LOAD] Usuário sem empresa associada');
+          return;
+        }
+        
+        const currentCompanyId = userRole.company_id;
+        
+        // ⚡ CORREÇÃO CRÍTICA: Verificar se o cache é da MESMA empresa
+        const cachedCompanyId = sessionStorage.getItem(CONVERSATIONS_CACHE_COMPANY_KEY);
         const cachedData = sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
         const cacheTimestamp = sessionStorage.getItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY);
-        if (cachedData && cacheTimestamp) {
+        
+        // Se cache é de outra empresa, LIMPAR TUDO
+        if (cachedCompanyId && cachedCompanyId !== currentCompanyId) {
+          console.log(`🗑️ [CACHE] Cache de outra empresa (${cachedCompanyId}) - limpando...`);
+          sessionStorage.removeItem(CONVERSATIONS_CACHE_KEY);
+          sessionStorage.removeItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY);
+          sessionStorage.removeItem(CONVERSATIONS_CACHE_COMPANY_KEY);
+        } else if (cachedData && cacheTimestamp && cachedCompanyId === currentCompanyId) {
+          // Cache é da mesma empresa, verificar idade
           const age = Date.now() - parseInt(cacheTimestamp, 10);
           if (age < CACHE_MAX_AGE) {
             const cachedConversations = JSON.parse(cachedData);
@@ -2099,40 +2133,28 @@ function Conversas() {
                 timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
               }))
             }));
-            console.log(`⚡ [CACHE] ${restoredConversations.length} conversas carregadas do cache`);
+            console.log(`⚡ [CACHE] ${restoredConversations.length} conversas carregadas do cache (company: ${currentCompanyId})`);
             setConversations(restoredConversations);
-            setLoadingConversations(false);
           }
         }
-      } catch (error) {
-        console.error('❌ [CACHE] Erro ao carregar cache:', error);
-      }
-    }
-
-    // ⚡ PASSO 2: Carregar do banco quando companyId estiver disponível
-    if (!userCompanyId) {
-      // ⚡ CORREÇÃO: Se não tem userCompanyId, chamar loadSupabaseConversations para obtê-lo
-      console.log('⚡ [LOAD] userCompanyId não disponível, iniciando carregamento para obter...');
-      loadSupabaseConversations().then(() => {
-        console.log('✅ [LOAD] Conversas carregadas (obteve userCompanyId)');
+        
+        // Atualizar state com company_id
+        setUserCompanyId(currentCompanyId);
+        userCompanyIdRef.current = currentCompanyId;
+        
+        // Agora carregar do banco
+        console.log('⚡ [LOAD] Carregando conversas para company:', currentCompanyId);
+        await loadSupabaseConversations();
         initialLoadRef.current = true;
-      }).catch(err => {
-        console.error('❌ [LOAD] Erro ao carregar:', err);
-      });
-      return;
-    }
-
-    // ⚡ Carregar do banco se ainda não carregou
-    if (!initialLoadRef.current) {
-      console.log('⚡ [LOAD] Carregando conversas para company:', userCompanyId);
-      loadSupabaseConversations().then(() => {
         console.log('✅ [LOAD] Conversas carregadas');
-        initialLoadRef.current = true;
-      }).catch(err => {
-        console.error('❌ [LOAD] Erro:', err);
-      });
-    }
-  }, [userCompanyId]); // ⚡ Executar quando userCompanyId mudar
+        
+      } catch (error) {
+        console.error('❌ [LOAD] Erro ao carregar:', error);
+      }
+    };
+    
+    loadInitialData();
+  }, []); // ⚡ Executar apenas uma vez no mount
 
   // Fallback: polling com jitter enquanto desconectado (OTIMIZADO)
   useEffect(() => {
@@ -2175,10 +2197,14 @@ function Conversas() {
   const updateConversationsWithCache = useCallback((updater: (prev: Conversation[]) => Conversation[]) => {
     setConversations(prev => {
       const updated = updater(prev);
-      // Salvar no cache imediatamente
+      // Salvar no cache imediatamente COM company_id
       try {
         sessionStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(updated));
         sessionStorage.setItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY, Date.now().toString());
+        // ⚡ CORREÇÃO: Salvar company_id no cache para validação futura
+        if (userCompanyIdRef.current) {
+          sessionStorage.setItem(CONVERSATIONS_CACHE_COMPANY_KEY, userCompanyIdRef.current);
+        }
       } catch (e) {
         // Ignorar erros de cache (pode estar cheio)
       }
@@ -2986,10 +3012,13 @@ function Conversas() {
           console.log(`✅ [APPEND] Adicionando ${conversasNovas.length} conversas novas (${novasConversas.length - conversasNovas.length} duplicadas ignoradas)`);
           const merged = [...prev, ...conversasNovas];
 
-          // Salvar no cache
+          // Salvar no cache COM company_id
           try {
             sessionStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(merged));
             sessionStorage.setItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY, Date.now().toString());
+            if (companyId) {
+              sessionStorage.setItem(CONVERSATIONS_CACHE_COMPANY_KEY, companyId);
+            }
           } catch (e) {
             console.warn('⚠️ [CACHE] Erro ao salvar cache:', e);
           }
@@ -3083,10 +3112,13 @@ function Conversas() {
           });
           const finalMerged = [...conversasRealtime, ...merged];
 
-          // ⚡ INSTANTÂNEO: Salvar no cache imediatamente
+          // ⚡ INSTANTÂNEO: Salvar no cache imediatamente COM company_id
           try {
             sessionStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(finalMerged));
             sessionStorage.setItem(CONVERSATIONS_CACHE_TIMESTAMP_KEY, Date.now().toString());
+            if (companyId) {
+              sessionStorage.setItem(CONVERSATIONS_CACHE_COMPANY_KEY, companyId);
+            }
           } catch (e) {
             console.warn('⚠️ [CACHE] Erro ao salvar cache:', e);
           }
