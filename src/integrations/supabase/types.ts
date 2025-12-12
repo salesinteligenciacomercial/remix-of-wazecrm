@@ -80,6 +80,59 @@ export type Database = {
           },
         ]
       }
+      ai_process_suggestions: {
+        Row: {
+          approved: boolean | null
+          approved_at: string | null
+          approved_by: string | null
+          company_id: string
+          created_at: string | null
+          details: Json | null
+          id: string
+          rejected_reason: string | null
+          status: string | null
+          suggestion_type: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          approved?: boolean | null
+          approved_at?: string | null
+          approved_by?: string | null
+          company_id: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          rejected_reason?: string | null
+          status?: string | null
+          suggestion_type: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          approved?: boolean | null
+          approved_at?: string | null
+          approved_by?: string | null
+          company_id?: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          rejected_reason?: string | null
+          status?: string | null
+          suggestion_type?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_process_suggestions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_flow_logs: {
         Row: {
           company_id: string
@@ -1366,6 +1419,250 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      processes_feedback: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          description: string | null
+          feedback_type: string
+          id: string
+          target_id: string | null
+          target_type: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          description?: string | null
+          feedback_type: string
+          id?: string
+          target_id?: string | null
+          target_type: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          description?: string | null
+          feedback_type?: string
+          id?: string
+          target_id?: string | null
+          target_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processes_feedback_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processes_playbooks: {
+        Row: {
+          category: string | null
+          company_id: string
+          content: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          owner_id: string
+          title: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string | null
+          company_id: string
+          content?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          owner_id: string
+          title: string
+          type?: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string | null
+          company_id?: string
+          content?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          owner_id?: string
+          title?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processes_playbooks_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processes_reports: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          id: string
+          improvement_suggestions: Json | null
+          insights: Json | null
+          kpis: Json | null
+          owner_id: string
+          period_end: string | null
+          period_start: string | null
+          report_type: string | null
+          title: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          id?: string
+          improvement_suggestions?: Json | null
+          insights?: Json | null
+          kpis?: Json | null
+          owner_id: string
+          period_end?: string | null
+          period_start?: string | null
+          report_type?: string | null
+          title: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          improvement_suggestions?: Json | null
+          insights?: Json | null
+          kpis?: Json | null
+          owner_id?: string
+          period_end?: string | null
+          period_start?: string | null
+          report_type?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processes_reports_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processes_routines: {
+        Row: {
+          channels: Json | null
+          company_id: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          kpis_expected: Json | null
+          name: string
+          owner_id: string
+          steps: Json | null
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          channels?: Json | null
+          company_id: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          kpis_expected?: Json | null
+          name: string
+          owner_id: string
+          steps?: Json | null
+          type?: string
+          updated_at?: string | null
+        }
+        Update: {
+          channels?: Json | null
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          kpis_expected?: Json | null
+          name?: string
+          owner_id?: string
+          steps?: Json | null
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processes_routines_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processes_stages: {
+        Row: {
+          checklist: Json | null
+          company_id: string
+          created_at: string | null
+          dos_and_donts: Json | null
+          id: string
+          kpis_expected: Json | null
+          max_time_hours: number | null
+          objectives: string | null
+          owner_id: string
+          scripts: Json | null
+          stage_name: string
+          stage_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          checklist?: Json | null
+          company_id: string
+          created_at?: string | null
+          dos_and_donts?: Json | null
+          id?: string
+          kpis_expected?: Json | null
+          max_time_hours?: number | null
+          objectives?: string | null
+          owner_id: string
+          scripts?: Json | null
+          stage_name: string
+          stage_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          checklist?: Json | null
+          company_id?: string
+          created_at?: string | null
+          dos_and_donts?: Json | null
+          id?: string
+          kpis_expected?: Json | null
+          max_time_hours?: number | null
+          objectives?: string | null
+          owner_id?: string
+          scripts?: Json | null
+          stage_name?: string
+          stage_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processes_stages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
