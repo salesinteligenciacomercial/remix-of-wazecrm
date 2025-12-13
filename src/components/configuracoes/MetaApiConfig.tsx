@@ -92,6 +92,12 @@ export function MetaApiConfig({ companyId }: MetaApiConfigProps) {
         }
       }
 
+      // Determinar status - se Meta API tem credenciais válidas, marcar como connected
+      const hasMetaCredentials = formData.meta_phone_number_id && formData.meta_access_token;
+      const newStatus = (formData.api_provider === 'meta' || formData.api_provider === 'both') && hasMetaCredentials 
+        ? 'connected' 
+        : 'pending';
+
       // Usar token master global - NÃO gerar token por subconta
       const updateData = {
         api_provider: formData.api_provider,
@@ -99,6 +105,7 @@ export function MetaApiConfig({ companyId }: MetaApiConfigProps) {
         meta_access_token: formData.meta_access_token || null,
         meta_webhook_verify_token: MASTER_VERIFY_TOKEN, // Token fixo global
         meta_business_account_id: formData.meta_business_account_id || null,
+        status: newStatus, // Status atualizado baseado nas credenciais
         updated_at: new Date().toISOString(),
       };
 
@@ -117,7 +124,6 @@ export function MetaApiConfig({ companyId }: MetaApiConfigProps) {
             ...updateData,
             company_id: companyId,
             instance_name: 'meta-' + companyId.slice(0, 8),
-            status: 'pending',
           });
 
         if (error) throw error;
