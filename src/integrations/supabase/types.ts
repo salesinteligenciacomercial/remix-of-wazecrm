@@ -2345,6 +2345,9 @@ export type Database = {
           evolution_api_key: string | null
           evolution_api_url: string | null
           id: string
+          instagram_access_token: string | null
+          instagram_account_id: string | null
+          instagram_username: string | null
           instance_name: string
           last_connected_at: string | null
           meta_access_token: string | null
@@ -2365,6 +2368,9 @@ export type Database = {
           evolution_api_key?: string | null
           evolution_api_url?: string | null
           id?: string
+          instagram_access_token?: string | null
+          instagram_account_id?: string | null
+          instagram_username?: string | null
           instance_name: string
           last_connected_at?: string | null
           meta_access_token?: string | null
@@ -2385,6 +2391,9 @@ export type Database = {
           evolution_api_key?: string | null
           evolution_api_url?: string | null
           id?: string
+          instagram_access_token?: string | null
+          instagram_account_id?: string | null
+          instagram_username?: string | null
           instance_name?: string
           last_connected_at?: string | null
           meta_access_token?: string | null

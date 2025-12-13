@@ -203,30 +203,34 @@ export function MetaIntegrationsConfig({ companyId }: MetaIntegrationsConfigProp
         if (error) throw error;
       }
       
-      // Save verify token to whatsapp_connections
-      if (instagramVerifyToken) {
-        const { data: existingConn } = await supabase
+      // Save verify token AND instagram_account_id to whatsapp_connections
+      const { data: existingConn } = await supabase
+        .from('whatsapp_connections')
+        .select('id')
+        .eq('company_id', companyId)
+        .maybeSingle();
+      
+      const connectionData = {
+        meta_webhook_verify_token: instagramVerifyToken || null,
+        instagram_account_id: instagramIgId || null,
+        instagram_access_token: instagramToken || null,
+      };
+      
+      if (existingConn) {
+        await supabase
           .from('whatsapp_connections')
-          .select('id')
-          .eq('company_id', companyId)
-          .maybeSingle();
-        
-        if (existingConn) {
-          await supabase
-            .from('whatsapp_connections')
-            .update({ meta_webhook_verify_token: instagramVerifyToken })
-            .eq('id', existingConn.id);
-        } else {
-          await supabase
-            .from('whatsapp_connections')
-            .insert({ 
-              company_id: companyId, 
-              instance_name: `META_${companyId.slice(0, 8).toUpperCase()}`,
-              meta_webhook_verify_token: instagramVerifyToken,
-              api_provider: 'meta',
-              status: 'disconnected'
-            });
-        }
+          .update(connectionData)
+          .eq('id', existingConn.id);
+      } else {
+        await supabase
+          .from('whatsapp_connections')
+          .insert({ 
+            company_id: companyId, 
+            instance_name: `META_${companyId.slice(0, 8).toUpperCase()}`,
+            api_provider: 'meta',
+            status: 'disconnected',
+            ...connectionData
+          });
       }
 
       toast({ title: 'Instagram configurado com sucesso!' });
