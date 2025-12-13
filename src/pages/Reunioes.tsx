@@ -5,7 +5,7 @@ import { Video, Phone, Clock, Plus, Link2 } from 'lucide-react';
 import { useMeetings, IncomingCall } from '@/hooks/useMeetings';
 import { MeetingHistory } from '@/components/meetings/MeetingHistory';
 import { StartCallDialog } from '@/components/meetings/StartCallDialog';
-import { VideoCallModal } from '@/components/meetings/VideoCallModal';
+import { VideoCallModalV2 } from '@/components/meetings/VideoCallModalV2';
 import { IncomingCallModal } from '@/components/meetings/IncomingCallModal';
 import { CreatePublicMeetingDialog } from '@/components/meetings/CreatePublicMeetingDialog';
 
@@ -172,9 +172,9 @@ const Reunioes = () => {
         onMeetingCreated={(id) => console.log('Meeting created:', id)}
       />
 
-      {/* Video Call Modal */}
+      {/* Video Call Modal V2 */}
       {activeCall && currentUserId && (
-        <VideoCallModal
+        <VideoCallModalV2
           open={true}
           onClose={() => setActiveCall(null)}
           meetingId={activeCall.meetingId}

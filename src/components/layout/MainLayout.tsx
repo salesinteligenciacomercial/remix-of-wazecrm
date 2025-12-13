@@ -4,7 +4,7 @@ import { Header } from "./Header";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
-import { GlobalCallListener } from "@/components/meetings/GlobalCallListener";
+import { GlobalCallListenerV2 } from "@/components/meetings/GlobalCallListenerV2";
 
 export function MainLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -151,8 +151,8 @@ export function MainLayout() {
         </main>
       </div>
       
-      {/* Global call listener - works on any page */}
-      <GlobalCallListener />
+      {/* Global call listener V2 - works on any page */}
+      <GlobalCallListenerV2 />
     </div>
   );
 }
