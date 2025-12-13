@@ -35,8 +35,8 @@ async function verifyWebhookSignature(payload: string, signature: string, appSec
   return computedSignature === signature;
 }
 
-// Transformar payload do Meta para formato interno
-function transformMetaPayload(entry: any) {
+// Transformar payload do WhatsApp Meta para formato interno
+function transformWhatsAppPayload(entry: any) {
   const messages: any[] = [];
   
   for (const change of entry.changes || []) {
@@ -53,7 +53,6 @@ function transformMetaPayload(entry: any) {
       let messageType = 'text';
       let messageContent = '';
       let mediaUrl = '';
-      let mediaType = '';
       
       switch (message.type) {
         case 'text':
@@ -63,7 +62,7 @@ function transformMetaPayload(entry: any) {
         case 'image':
           messageType = 'image';
           messageContent = message.image?.caption || '[Imagem]';
-          mediaUrl = message.image?.id; // ID da mídia, precisa buscar URL
+          mediaUrl = message.image?.id;
           break;
         case 'video':
           messageType = 'video';
@@ -119,15 +118,165 @@ function transformMetaPayload(entry: any) {
         contact_name: contact?.profile?.name || contact?.wa_id || message.from,
         phone_number_id: phoneNumberId,
         display_phone_number: displayPhoneNumber,
-        context: message.context, // Para respostas a mensagens
+        context: message.context,
         is_from_me: false,
+        source: 'whatsapp',
       });
     }
     
-    // Processar status de mensagens (enviadas, entregues, lidas)
+    // Processar status de mensagens
     for (const status of value.statuses || []) {
-      console.log('Status de mensagem:', JSON.stringify(status, null, 2));
-      // Aqui você pode atualizar o status das mensagens enviadas
+      console.log('Status de mensagem WhatsApp:', JSON.stringify(status, null, 2));
+    }
+  }
+  
+  return messages;
+}
+
+// Transformar payload do Instagram para formato interno
+function transformInstagramPayload(entry: any) {
+  const messages: any[] = [];
+  const instagramAccountId = entry.id;
+  
+  console.log('📸 [INSTAGRAM] Processando entry para account:', instagramAccountId);
+  
+  for (const change of entry.changes || []) {
+    console.log('📸 [INSTAGRAM] Change field:', change.field);
+    
+    // Instagram mensagens chegam no field "messages"
+    if (change.field === 'messages') {
+      const value = change.value;
+      console.log('📸 [INSTAGRAM] Mensagem value:', JSON.stringify(value, null, 2));
+      
+      // Estrutura do webhook Instagram Messaging
+      const senderId = value.sender?.id;
+      const recipientId = value.recipient?.id;
+      const messageData = value.message;
+      
+      if (messageData) {
+        let messageType = 'text';
+        let messageContent = '';
+        let mediaUrl = '';
+        
+        // Texto
+        if (messageData.text) {
+          messageType = 'text';
+          messageContent = messageData.text;
+        }
+        // Imagem
+        else if (messageData.attachments) {
+          for (const attachment of messageData.attachments) {
+            if (attachment.type === 'image') {
+              messageType = 'image';
+              messageContent = '[Imagem Instagram]';
+              mediaUrl = attachment.payload?.url || '';
+            } else if (attachment.type === 'video') {
+              messageType = 'video';
+              messageContent = '[Vídeo Instagram]';
+              mediaUrl = attachment.payload?.url || '';
+            } else if (attachment.type === 'audio') {
+              messageType = 'audio';
+              messageContent = '[Áudio Instagram]';
+              mediaUrl = attachment.payload?.url || '';
+            } else if (attachment.type === 'file') {
+              messageType = 'document';
+              messageContent = '[Arquivo Instagram]';
+              mediaUrl = attachment.payload?.url || '';
+            } else if (attachment.type === 'share') {
+              messageType = 'text';
+              messageContent = '[Post compartilhado]';
+              mediaUrl = attachment.payload?.url || '';
+            } else if (attachment.type === 'story_mention') {
+              messageType = 'text';
+              messageContent = '[Menção em Story]';
+              mediaUrl = attachment.payload?.url || '';
+            }
+          }
+        }
+        // Story reply
+        else if (messageData.reply_to?.story) {
+          messageType = 'text';
+          messageContent = `[Resposta ao Story] ${messageData.text || ''}`;
+        }
+        // Reação
+        else if (messageData.reaction) {
+          messageType = 'text';
+          messageContent = `[Reação: ${messageData.reaction}]`;
+        }
+        
+        messages.push({
+          message_id: messageData.mid || `ig_${Date.now()}`,
+          from: senderId,
+          timestamp: value.timestamp || Math.floor(Date.now() / 1000),
+          type: messageType,
+          content: messageContent || '[Mensagem Instagram]',
+          media_id: mediaUrl,
+          contact_name: senderId, // Será atualizado com o username se disponível
+          instagram_account_id: instagramAccountId,
+          recipient_id: recipientId,
+          is_from_me: false,
+          source: 'instagram',
+        });
+      }
+    }
+    
+    // Comments (menções em comentários)
+    if (change.field === 'comments') {
+      const value = change.value;
+      console.log('📸 [INSTAGRAM] Comentário:', JSON.stringify(value, null, 2));
+      
+      messages.push({
+        message_id: value.id || `ig_comment_${Date.now()}`,
+        from: value.from?.id || 'unknown',
+        timestamp: value.created_time ? new Date(value.created_time).getTime() / 1000 : Math.floor(Date.now() / 1000),
+        type: 'text',
+        content: `[Comentário] ${value.text || ''}`,
+        media_id: null,
+        contact_name: value.from?.username || value.from?.id || 'Usuário Instagram',
+        instagram_account_id: instagramAccountId,
+        is_from_me: false,
+        source: 'instagram_comment',
+      });
+    }
+  }
+  
+  // Também processar messaging diretamente se existir (formato alternativo)
+  for (const messaging of entry.messaging || []) {
+    console.log('📸 [INSTAGRAM] Messaging direto:', JSON.stringify(messaging, null, 2));
+    
+    const senderId = messaging.sender?.id;
+    const recipientId = messaging.recipient?.id;
+    const messageData = messaging.message;
+    
+    if (messageData && senderId !== recipientId) {
+      let messageType = 'text';
+      let messageContent = '';
+      let mediaUrl = '';
+      
+      if (messageData.text) {
+        messageType = 'text';
+        messageContent = messageData.text;
+      } else if (messageData.attachments) {
+        for (const attachment of messageData.attachments) {
+          messageType = attachment.type || 'image';
+          messageContent = `[${attachment.type || 'Anexo'} Instagram]`;
+          mediaUrl = attachment.payload?.url || '';
+        }
+      }
+      
+      messages.push({
+        message_id: messageData.mid || `ig_${Date.now()}`,
+        from: senderId,
+        timestamp: messaging.timestamp || Math.floor(Date.now() / 1000),
+        type: messageType,
+        content: messageContent || '[Mensagem Instagram]',
+        media_id: mediaUrl,
+        contact_name: senderId,
+        instagram_account_id: instagramAccountId,
+        recipient_id: recipientId,
+        is_from_me: false,
+        source: 'instagram',
+      });
     }
   }
   
@@ -143,15 +292,14 @@ serve(async (req) => {
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
     
-    console.log('Meta Webhook Verification:', { mode, token, challenge });
+    console.log('🔐 Meta Webhook Verification:', { mode, token, challenge });
     
-    // Buscar token de verificação do banco
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     
-    // Buscar qualquer conexão com token de verificação
+    // Buscar conexão com token de verificação
     const { data: connections } = await supabase
       .from('whatsapp_connections')
       .select('meta_webhook_verify_token, company_id')
@@ -160,11 +308,11 @@ serve(async (req) => {
     const validToken = connections?.find(c => c.meta_webhook_verify_token === token);
     
     if (mode === 'subscribe' && validToken) {
-      console.log('Webhook verificado com sucesso para company:', validToken.company_id);
+      console.log('✅ Webhook verificado com sucesso para company:', validToken.company_id);
       return new Response(challenge, { status: 200 });
     }
     
-    console.warn('Falha na verificação do webhook');
+    console.warn('❌ Falha na verificação do webhook - token não encontrado');
     return new Response('Forbidden', { status: 403 });
   }
 
@@ -179,89 +327,180 @@ serve(async (req) => {
       const rawBody = await req.text();
       const signature = req.headers.get('x-hub-signature-256');
       
-      console.log('Meta Webhook - Payload recebido');
+      console.log('📨 Meta Webhook - Payload recebido');
       
       const body = JSON.parse(rawBody);
-      
-      // Verificar se é do WhatsApp
-      if (body.object !== 'whatsapp_business_account') {
-        console.log('Payload não é do WhatsApp Business');
-        return new Response('OK', { status: 200, headers: corsHeaders });
-      }
+      console.log('📨 Meta Webhook - Object type:', body.object);
+      console.log('📨 Meta Webhook - Entry count:', body.entry?.length);
 
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       );
 
-      for (const entry of body.entry || []) {
-        const messages = transformMetaPayload(entry);
+      // Processar WhatsApp Business
+      if (body.object === 'whatsapp_business_account') {
+        console.log('📱 Processando mensagens WhatsApp...');
         
-        for (const msg of messages) {
-          // Buscar conexão pelo phone_number_id
-          const { data: connection } = await supabase
-            .from('whatsapp_connections')
-            .select('company_id, meta_access_token')
-            .eq('meta_phone_number_id', msg.phone_number_id)
-            .single();
+        for (const entry of body.entry || []) {
+          const messages = transformWhatsAppPayload(entry);
           
-          if (!connection) {
-            console.warn('Conexão não encontrada para phone_number_id:', msg.phone_number_id);
-            continue;
-          }
+          for (const msg of messages) {
+            const { data: connection } = await supabase
+              .from('whatsapp_connections')
+              .select('company_id, meta_access_token')
+              .eq('meta_phone_number_id', msg.phone_number_id)
+              .single();
+            
+            if (!connection) {
+              console.warn('❌ Conexão não encontrada para phone_number_id:', msg.phone_number_id);
+              continue;
+            }
 
-          const company_id = connection.company_id;
-          
-          // Formatar número
-          let formattedNumber = msg.from.replace(/[^0-9]/g, '');
-          if (!formattedNumber.startsWith('55') && formattedNumber.length <= 11) {
-            formattedNumber = '55' + formattedNumber;
-          }
+            const company_id = connection.company_id;
+            
+            let formattedNumber = msg.from.replace(/[^0-9]/g, '');
+            if (!formattedNumber.startsWith('55') && formattedNumber.length <= 11) {
+              formattedNumber = '55' + formattedNumber;
+            }
 
-          // Buscar lead existente
-          const { data: existingLead } = await supabase
-            .from('leads')
-            .select('id, name')
-            .eq('company_id', company_id)
-            .or(`telefone.ilike.%${formattedNumber}%,phone.ilike.%${formattedNumber}%`)
-            .limit(1)
-            .single();
+            const { data: existingLead } = await supabase
+              .from('leads')
+              .select('id, name')
+              .eq('company_id', company_id)
+              .or(`telefone.ilike.%${formattedNumber}%,phone.ilike.%${formattedNumber}%`)
+              .limit(1)
+              .single();
 
-          // Preparar dados para inserção
-          const conversaData = {
-            numero: formattedNumber,
-            telefone_formatado: formattedNumber,
-            mensagem: msg.content,
-            tipo_mensagem: msg.type,
-            origem: 'WhatsApp',
-            status: 'Recebida',
-            fromme: false,
-            company_id: company_id,
-            lead_id: existingLead?.id || null,
-            nome_contato: existingLead?.name || msg.contact_name || formattedNumber,
-            midia_url: msg.media_id || null, // Por enquanto salva o ID da mídia
-            is_group: false,
-          };
+            const conversaData = {
+              numero: formattedNumber,
+              telefone_formatado: formattedNumber,
+              mensagem: msg.content,
+              tipo_mensagem: msg.type,
+              origem: 'WhatsApp Meta',
+              status: 'Recebida',
+              fromme: false,
+              company_id: company_id,
+              lead_id: existingLead?.id || null,
+              nome_contato: existingLead?.name || msg.contact_name || formattedNumber,
+              midia_url: msg.media_id || null,
+              is_group: false,
+            };
 
-          console.log('Inserindo conversa Meta:', JSON.stringify(conversaData, null, 2));
+            console.log('💾 Inserindo conversa WhatsApp Meta:', JSON.stringify(conversaData, null, 2));
 
-          const { error: insertError } = await supabase
-            .from('conversas')
-            .insert(conversaData);
+            const { error: insertError } = await supabase
+              .from('conversas')
+              .insert(conversaData);
 
-          if (insertError) {
-            console.error('Erro ao inserir conversa:', insertError);
-          } else {
-            console.log('Conversa inserida com sucesso');
+            if (insertError) {
+              console.error('❌ Erro ao inserir conversa WhatsApp:', insertError);
+            } else {
+              console.log('✅ Conversa WhatsApp inserida com sucesso');
+            }
           }
         }
+      }
+      
+      // Processar Instagram
+      else if (body.object === 'instagram') {
+        console.log('📸 Processando mensagens Instagram...');
+        
+        for (const entry of body.entry || []) {
+          const messages = transformInstagramPayload(entry);
+          console.log('📸 Mensagens Instagram transformadas:', messages.length);
+          
+          for (const msg of messages) {
+            // Buscar conexão pelo instagram_account_id
+            let connection = null;
+            
+            // Primeiro tentar pelo instagram_account_id
+            if (msg.instagram_account_id) {
+              const { data: conn } = await supabase
+                .from('whatsapp_connections')
+                .select('company_id, instagram_access_token, instagram_username')
+                .eq('instagram_account_id', msg.instagram_account_id)
+                .single();
+              
+              connection = conn;
+            }
+            
+            // Se não encontrar, tentar buscar qualquer conexão com Instagram configurado
+            if (!connection) {
+              const { data: conn } = await supabase
+                .from('whatsapp_connections')
+                .select('company_id, instagram_access_token, instagram_username')
+                .not('instagram_account_id', 'is', null)
+                .limit(1)
+                .single();
+              
+              connection = conn;
+            }
+            
+            if (!connection) {
+              console.warn('❌ Conexão Instagram não encontrada para account_id:', msg.instagram_account_id);
+              continue;
+            }
+
+            const company_id = connection.company_id;
+            
+            // Usar o sender ID como número (Instagram não tem telefone)
+            const instagramUserId = msg.from || 'instagram_user';
+
+            // Buscar lead existente pelo Instagram ID ou criar identificador
+            const { data: existingLead } = await supabase
+              .from('leads')
+              .select('id, name')
+              .eq('company_id', company_id)
+              .or(`telefone.eq.${instagramUserId},phone.eq.${instagramUserId}`)
+              .limit(1)
+              .single();
+
+            const conversaData = {
+              numero: instagramUserId,
+              telefone_formatado: instagramUserId,
+              mensagem: msg.content,
+              tipo_mensagem: msg.type === 'text' ? 'texto' : msg.type,
+              origem: 'Instagram',
+              status: 'Recebida',
+              fromme: false,
+              company_id: company_id,
+              lead_id: existingLead?.id || null,
+              nome_contato: existingLead?.name || msg.contact_name || `Instagram ${instagramUserId}`,
+              midia_url: msg.media_id || null,
+              is_group: false,
+            };
+
+            console.log('💾 Inserindo conversa Instagram:', JSON.stringify(conversaData, null, 2));
+
+            const { error: insertError } = await supabase
+              .from('conversas')
+              .insert(conversaData);
+
+            if (insertError) {
+              console.error('❌ Erro ao inserir conversa Instagram:', insertError);
+            } else {
+              console.log('✅ Conversa Instagram inserida com sucesso');
+            }
+          }
+        }
+      }
+      
+      // Processar Page (Facebook Messenger - para futuro)
+      else if (body.object === 'page') {
+        console.log('📘 Processando mensagens Facebook Messenger (não implementado ainda)...');
+      }
+      
+      else {
+        console.log('⚠️ Tipo de objeto não reconhecido:', body.object);
+        console.log('📨 Payload completo:', JSON.stringify(body, null, 2));
       }
 
       return new Response('OK', { status: 200, headers: corsHeaders });
       
     } catch (error) {
-      console.error('Meta Webhook - Erro:', error);
-      return new Response('OK', { status: 200, headers: corsHeaders }); // Sempre retornar 200 para o Meta
+      console.error('❌ Meta Webhook - Erro:', error);
+      return new Response('OK', { status: 200, headers: corsHeaders });
     }
   }
 
