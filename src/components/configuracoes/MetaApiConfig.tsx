@@ -9,6 +9,11 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Save, CheckCircle, AlertCircle, ExternalLink, Copy, Eye, EyeOff } from 'lucide-react';
 
+// Token de verificação MASTER GLOBAL para multi-tenant SaaS
+// IMPORTANTE: Este é o ÚNICO token usado para TODAS as subcontas
+// Configure este mesmo token no painel Meta Developers
+const MASTER_VERIFY_TOKEN = 'wazecrm_master_2024';
+
 interface MetaApiConfigProps {
   companyId: string;
 }
@@ -87,18 +92,12 @@ export function MetaApiConfig({ companyId }: MetaApiConfigProps) {
         }
       }
 
-      // Gerar token de verificação se não existir
-      let webhookVerifyToken = formData.meta_webhook_verify_token;
-      if (!webhookVerifyToken && (formData.api_provider === 'meta' || formData.api_provider === 'both')) {
-        webhookVerifyToken = crypto.randomUUID();
-        setFormData(prev => ({ ...prev, meta_webhook_verify_token: webhookVerifyToken }));
-      }
-
+      // Usar token master global - NÃO gerar token por subconta
       const updateData = {
         api_provider: formData.api_provider,
         meta_phone_number_id: formData.meta_phone_number_id || null,
         meta_access_token: formData.meta_access_token || null,
-        meta_webhook_verify_token: webhookVerifyToken || null,
+        meta_webhook_verify_token: MASTER_VERIFY_TOKEN, // Token fixo global
         meta_business_account_id: formData.meta_business_account_id || null,
         updated_at: new Date().toISOString(),
       };
@@ -288,24 +287,25 @@ export function MetaApiConfig({ companyId }: MetaApiConfigProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm">Token de Verificação</Label>
+                    <Label className="text-sm">Token de Verificação (Master Global)</Label>
                     <div className="flex gap-2">
                       <Input 
-                        value={formData.meta_webhook_verify_token || 'Será gerado ao salvar'} 
+                        value={MASTER_VERIFY_TOKEN} 
                         readOnly 
-                        className="font-mono text-xs bg-background"
+                        className="font-mono text-xs bg-green-50 border-green-300 dark:bg-green-950 dark:border-green-700"
                       />
-                      {formData.meta_webhook_verify_token && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          onClick={() => copyToClipboard(formData.meta_webhook_verify_token, 'Token')}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => copyToClipboard(MASTER_VERIFY_TOKEN, 'Token')}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
                     </div>
+                    <p className="text-xs text-green-600 dark:text-green-400">
+                      ✓ Token ÚNICO para todas as subcontas - configure este mesmo valor no Meta Developers
+                    </p>
                   </div>
 
                   <p className="text-xs text-muted-foreground">
