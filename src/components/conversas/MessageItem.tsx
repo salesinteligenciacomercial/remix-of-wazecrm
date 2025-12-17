@@ -82,7 +82,7 @@ function MessageItemComponent({
 }: MessageItemProps) {
   const [showActions, setShowActions] = useState(false);
   const [dragStart, setDragStart] = useState<number | null>(null);
-  const [pdfExpanded, setPdfExpanded] = useState(false);
+  
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
 
@@ -446,77 +446,48 @@ function MessageItemComponent({
                   )}
                 </div>
               ) : (mediaUrl || message.mediaUrl) ? (
-                pdfExpanded ? (
-                  <div className="space-y-2">
-                    <iframe 
-                      src={mediaUrl || message.mediaUrl || ''} 
-                      className="w-full h-[500px] border border-border rounded"
-                      title="PDF Viewer"
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setPdfExpanded(false)}
-                        className="flex-1"
-                      >
-                        Fechar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onDownload?.(mediaUrl || message.mediaUrl || '', message.fileName || 'documento.pdf')}
-                      >
-                        <Download className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onPdfClick?.(mediaUrl || message.mediaUrl || '', message.fileName || 'documento.pdf')}
-                      >
-                        <FileText className="h-3 w-3 mr-2" />
-                        Abrir no visor
-                      </Button>
+                <div className="space-y-2">
+                  {/* Preview thumbnail do PDF */}
+                  <PDFPreview
+                    url={mediaUrl || message.mediaUrl || ''}
+                    fileName={message.fileName}
+                    onClick={() => {
+                      const url = mediaUrl || message.mediaUrl;
+                      if (url) window.open(url, '_blank');
+                    }}
+                  />
+                  
+                  {/* Nome do arquivo com ícone */}
+                  {message.fileName && (
+                    <div className="flex items-center gap-2 p-2 bg-muted/30 rounded text-xs border border-border">
+                      <FileText className="h-4 w-4 text-red-600" />
+                      <span className="font-medium truncate flex-1">{message.fileName}</span>
+                      <Badge variant="secondary" className="text-[10px]">PDF</Badge>
                     </div>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const url = mediaUrl || message.mediaUrl;
+                        if (url) window.open(url, '_blank');
+                      }}
+                      className="flex-1"
+                    >
+                      <FileText className="h-3 w-3 mr-2" />
+                      Abrir PDF
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onDownload?.(mediaUrl || message.mediaUrl || '', message.fileName || 'documento.pdf')}
+                    >
+                      <Download className="h-3 w-3" />
+                    </Button>
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    {/* Preview thumbnail do PDF */}
-                    <PDFPreview
-                      url={mediaUrl || message.mediaUrl || ''}
-                      fileName={message.fileName}
-                      onClick={() => setPdfExpanded(true)}
-                    />
-                    
-                    {/* Nome do arquivo com ícone */}
-                    {message.fileName && (
-                      <div className="flex items-center gap-2 p-2 bg-muted/30 rounded text-xs border border-border">
-                        <FileText className="h-4 w-4 text-red-600" />
-                        <span className="font-medium truncate flex-1">{message.fileName}</span>
-                        <Badge variant="secondary" className="text-[10px]">PDF</Badge>
-                      </div>
-                    )}
-                    
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setPdfExpanded(true)}
-                        className="flex-1"
-                      >
-                        <FileText className="h-3 w-3 mr-2" />
-                        Abrir
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onDownload?.(mediaUrl || message.mediaUrl || '', message.fileName || 'documento.pdf')}
-                      >
-                        <Download className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                )
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center p-6 border border-border rounded-lg bg-muted/50">
                   <FileText className="h-12 w-12 text-red-600 mb-2" />
