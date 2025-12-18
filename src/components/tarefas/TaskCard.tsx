@@ -415,22 +415,26 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
     const file = event.target.files?.[0];
     if (!file) return;
 
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      toast.error('Arquivo muito grande. Máximo: 10MB');
+      return;
+    }
+
     setUploading(true);
     try {
-      const { supabase } = await import("@/integrations/supabase/client");
-
       // Upload file to Supabase Storage
       const fileExt = file.name.split('.').pop();
-      const fileName = `${task.id}/${Date.now()}.${fileExt}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('task-attachments')
+      const fileName = `task-files/${task.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from('internal-chat-media')
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
-        .from('task-attachments')
+        .from('internal-chat-media')
         .getPublicUrl(fileName);
 
       // Update task attachments
@@ -441,11 +445,18 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       };
 
       const updatedAttachments = [...attachments, newAttachment];
+      
+      // Persistir no banco de dados
+      const { error: updateError } = await supabase
+        .from('tasks')
+        .update({ attachments: updatedAttachments })
+        .eq('id', task.id);
+      
+      if (updateError) throw updateError;
+      
       setAttachments(updatedAttachments);
-
-      // NOTA: Campo 'attachments' não existe na tabela tasks
-      // Anexos não serão persistidos no banco
-      toast.success("Arquivo anexado (apenas localmente)!");
+      onUpdate();
+      toast.success("Arquivo anexado!");
     } catch (error) {
       console.error("Erro ao fazer upload:", error);
       setAttachments(task.attachments || []);
@@ -453,28 +464,38 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
     } finally {
       setUploading(false);
     }
-  }, [task.id, attachments, onUpdate]);
+  }, [task.id, attachments, task.attachments, onUpdate]);
 
   const addExternalLink = useCallback(async () => {
     if (!attachmentUrl.trim()) return;
 
     try {
-      const { supabase } = await import("@/integrations/supabase/client");
+      let url = attachmentUrl.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
 
       const newAttachment = {
         name: attachmentUrl,
-        url: attachmentUrl,
+        url: url,
         type: 'link'
       };
 
       const updatedAttachments = [...attachments, newAttachment];
+      
+      // Persistir no banco de dados
+      const { error: updateError } = await supabase
+        .from('tasks')
+        .update({ attachments: updatedAttachments })
+        .eq('id', task.id);
+      
+      if (updateError) throw updateError;
+      
       setAttachments(updatedAttachments);
-
-      // NOTA: Campo 'attachments' não existe na tabela tasks
-      // Anexos serão mantidos apenas localmente
       setAttachmentUrl("");
       setShowAttachmentDialog(false);
-      toast.success("Link adicionado (apenas localmente)!");
+      onUpdate();
+      toast.success("Link adicionado!");
     } catch (error) {
       console.error("Erro ao adicionar link:", error);
       toast.error("Erro ao adicionar link");
@@ -482,13 +503,25 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
   }, [attachmentUrl, attachments, task.id, onUpdate]);
 
   const removeAttachment = useCallback(async (index: number) => {
-    const updatedAttachments = attachments.filter((_, i) => i !== index);
-    setAttachments(updatedAttachments);
-    
-    // NOTA: Campo 'attachments' não existe na tabela tasks
-    // Anexos não serão persistidos no banco
-    toast.success("Anexo removido (apenas localmente)!");
-  }, [attachments]);
+    try {
+      const updatedAttachments = attachments.filter((_, i) => i !== index);
+      
+      // Persistir no banco de dados
+      const { error: updateError } = await supabase
+        .from('tasks')
+        .update({ attachments: updatedAttachments })
+        .eq('id', task.id);
+      
+      if (updateError) throw updateError;
+      
+      setAttachments(updatedAttachments);
+      onUpdate();
+      toast.success("Anexo removido!");
+    } catch (error) {
+      console.error("Erro ao remover anexo:", error);
+      toast.error("Erro ao remover anexo");
+    }
+  }, [attachments, task.id, onUpdate]);
 
   const {
     attributes,
