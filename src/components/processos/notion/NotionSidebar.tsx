@@ -14,7 +14,6 @@ import {
   BookOpen,
   Workflow,
   GitBranch,
-  LayoutGrid,
   CalendarDays
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,9 +52,7 @@ interface NotionSidebarProps {
   selectedPageId: string | null;
   onSelectPage: (page: any) => void;
   onCreatePage: (parentId?: string | null, type?: string) => void;
-  onViewKanban: () => void;
   onViewCalendar: () => void;
-  showKanban: boolean;
   showCalendar: boolean;
 }
 
@@ -64,9 +61,7 @@ export function NotionSidebar({
   selectedPageId, 
   onSelectPage, 
   onCreatePage,
-  onViewKanban,
   onViewCalendar,
-  showKanban,
   showCalendar
 }: NotionSidebarProps) {
   const [allItems, setAllItems] = useState<SidebarItem[]>([]);
@@ -411,16 +406,6 @@ export function NotionSidebar({
         <div className="p-2 space-y-2">
           {/* Quick Views */}
           <div className="space-y-1">
-            <div
-              className={cn(
-                "flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer transition-colors",
-                showKanban ? "bg-primary/10 text-primary" : "hover:bg-muted/50"
-              )}
-              onClick={onViewKanban}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              <span className="text-sm">Kanban</span>
-            </div>
             <div
               className={cn(
                 "flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer transition-colors",
