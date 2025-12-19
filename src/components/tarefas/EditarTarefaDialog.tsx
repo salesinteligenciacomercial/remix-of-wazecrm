@@ -30,6 +30,7 @@ import { useTagsManager } from "@/hooks/useTagsManager";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
+import { PdfViewerDialog } from "./PdfViewerDialog";
 
 interface Task {
   id: string;
@@ -99,6 +100,9 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
   const [attachmentName, setAttachmentName] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState("");
+  const [pdfViewerName, setPdfViewerName] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -1004,29 +1008,20 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
                       {isPdf && (
                         <div 
                           className="flex items-center gap-3 p-4 bg-red-50 cursor-pointer hover:bg-red-100 transition-colors"
-                          onClick={() => openPdfSafely(att.url, att.name)}
+                          onClick={() => {
+                            setPdfViewerUrl(att.url);
+                            setPdfViewerName(att.name);
+                            setPdfViewerOpen(true);
+                          }}
                         >
                           <div className="p-2 rounded bg-red-500/10">
                             <FileText className="h-8 w-8 text-red-600" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{att.name}</p>
-                            <p className="text-xs text-muted-foreground">Clique para abrir o PDF</p>
+                            <p className="text-xs text-muted-foreground">Clique para visualizar</p>
                           </div>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openPdfSafely(att.url, att.name);
-                              }}
-                              title="Baixar"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
                             <Button
                               type="button"
                               size="sm"
@@ -1107,6 +1102,14 @@ export function EditarTarefaDialog({ task, onTaskUpdated }: EditarTarefaDialogPr
           </div>
         </Tabs>
       </DialogContent>
+
+      {/* PDF Viewer Dialog */}
+      <PdfViewerDialog
+        open={pdfViewerOpen}
+        onOpenChange={setPdfViewerOpen}
+        url={pdfViewerUrl}
+        fileName={pdfViewerName}
+      />
     </Dialog>
   );
 }

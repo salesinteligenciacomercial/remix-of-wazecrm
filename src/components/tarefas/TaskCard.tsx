@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
+import { PdfViewerDialog } from "./PdfViewerDialog";
 
 interface Task {
   id: string;
@@ -104,6 +105,9 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [ownerName, setOwnerName] = useState<string | null>(task.owner_name || null);
   const [isOwnTask, setIsOwnTask] = useState(true);
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState("");
+  const [pdfViewerName, setPdfViewerName] = useState("");
 
   // ✅ MELHORADO: Usar hook useTaskTimer para gerenciar timer
   const {
@@ -1228,7 +1232,11 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
                     {isPdf && (
                       <div 
                         className="flex items-center gap-2 p-2 rounded bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors"
-                        onClick={() => openPdfSafely(attachment.url, attachment.name)}
+                        onClick={() => {
+                          setPdfViewerUrl(attachment.url);
+                          setPdfViewerName(attachment.name);
+                          setPdfViewerOpen(true);
+                        }}
                       >
                         <FileText className="h-5 w-5 text-red-600 flex-shrink-0" />
                         <span className="flex-1 text-xs truncate font-medium">{attachment.name}</span>
@@ -1684,6 +1692,14 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
           leadPhone={leadPhone || ""}
         />
       )}
+
+      {/* PDF Viewer Dialog */}
+      <PdfViewerDialog
+        open={pdfViewerOpen}
+        onOpenChange={setPdfViewerOpen}
+        url={pdfViewerUrl}
+        fileName={pdfViewerName}
+      />
     </Card>
   );
 });
