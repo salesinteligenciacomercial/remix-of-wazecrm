@@ -73,6 +73,10 @@ interface Task {
   attachments?: { name: string; url: string; type?: string }[];
   owner_id?: string;
   owner_name?: string;
+  column_id?: string;
+  board_id?: string;
+  status?: string;
+  tags?: string[];
 }
 
 interface TaskCardProps {
@@ -592,13 +596,14 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
         done: false // Resetar status dos itens
       }));
 
-      // Criar nova tarefa com os mesmos dados
+      // Criar nova tarefa com os mesmos dados (incluindo column_id e board_id)
       const { error } = await supabase
         .from('tasks')
         .insert({
           title: `${task.title} (cópia)`,
           description: task.description,
           priority: task.priority,
+          status: task.status || 'pendente',
           assignee_id: task.assignee_id,
           responsaveis: task.responsaveis || [],
           start_date: task.start_date,
@@ -607,8 +612,11 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
           checklist: newChecklist,
           comments: [], // Não copiar comentários
           attachments: task.attachments || [],
+          tags: task.tags || [],
           owner_id: user.id,
           company_id: userRole?.company_id || null,
+          column_id: task.column_id, // Manter na mesma coluna
+          board_id: task.board_id, // Manter no mesmo quadro
           tempo_gasto: 0,
           time_tracking_iniciado: null,
           time_tracking_pausado: true
