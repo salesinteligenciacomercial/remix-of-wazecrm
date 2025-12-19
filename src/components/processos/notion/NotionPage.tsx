@@ -9,7 +9,12 @@ import {
   Image as ImageIcon,
   Copy,
   Download,
-  ExternalLink
+  ExternalLink,
+  CheckSquare,
+  Square,
+  Plus,
+  Trash,
+  GripVertical
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +31,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BlockEditor } from "./BlockEditor";
@@ -37,6 +43,12 @@ import { PageHistory } from "./PageHistory";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
 
 interface ProcessPage {
   id: string;
@@ -70,6 +82,8 @@ export function NotionPage({ page, onPageUpdate }: NotionPageProps) {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+  const [newItemText, setNewItemText] = useState('');
   const [properties, setProperties] = useState<any>(page.properties || {});
 
   useEffect(() => {
@@ -77,6 +91,11 @@ export function NotionPage({ page, onPageUpdate }: NotionPageProps) {
     setIcon(page.icon);
     setProperties(page.properties || {});
     loadBlocks();
+    // Load checklist for tasks
+    if (page.page_type === 'task') {
+      const savedChecklist = (page.properties as any)?.checklist || [];
+      setChecklist(savedChecklist);
+    }
   }, [page.id]);
 
   const loadBlocks = async () => {
@@ -94,6 +113,50 @@ export function NotionPage({ page, onPageUpdate }: NotionPageProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveChecklist = async (newChecklist: ChecklistItem[]) => {
+    const newProperties = { ...properties, checklist: newChecklist };
+    await supabase
+      .from('process_pages')
+      .update({ properties: newProperties })
+      .eq('id', page.id);
+    setProperties(newProperties);
+  };
+
+  const addChecklistItem = async () => {
+    if (!newItemText.trim()) return;
+    const newItem: ChecklistItem = {
+      id: crypto.randomUUID(),
+      text: newItemText.trim(),
+      done: false
+    };
+    const newChecklist = [...checklist, newItem];
+    setChecklist(newChecklist);
+    setNewItemText('');
+    await saveChecklist(newChecklist);
+  };
+
+  const toggleChecklistItem = async (itemId: string) => {
+    const newChecklist = checklist.map(item =>
+      item.id === itemId ? { ...item, done: !item.done } : item
+    );
+    setChecklist(newChecklist);
+    await saveChecklist(newChecklist);
+  };
+
+  const removeChecklistItem = async (itemId: string) => {
+    const newChecklist = checklist.filter(item => item.id !== itemId);
+    setChecklist(newChecklist);
+    await saveChecklist(newChecklist);
+  };
+
+  const updateChecklistItemText = async (itemId: string, text: string) => {
+    const newChecklist = checklist.map(item =>
+      item.id === itemId ? { ...item, text } : item
+    );
+    setChecklist(newChecklist);
+    await saveChecklist(newChecklist);
   };
 
   const updateTitle = useCallback(async (newTitle: string) => {
@@ -315,6 +378,94 @@ export function NotionPage({ page, onPageUpdate }: NotionPageProps) {
               Atualizado em {format(new Date(page.updated_at), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
             </p>
           </div>
+
+          {/* Checklist for Tasks */}
+          {page.page_type === 'task' && (
+            <div className="mb-8">
+              <div className="flex items-center gap-2 mb-4">
+                <CheckSquare className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold text-lg">Checklist</h3>
+                <span className="text-sm text-muted-foreground">
+                  ({checklist.filter(i => i.done).length}/{checklist.length})
+                </span>
+              </div>
+              
+              {/* Progress bar */}
+              {checklist.length > 0 && (
+                <div className="w-full h-2 bg-muted rounded-full mb-4 overflow-hidden">
+                  <div 
+                    className="h-full bg-primary rounded-full transition-all duration-300"
+                    style={{ 
+                      width: `${(checklist.filter(i => i.done).length / checklist.length) * 100}%` 
+                    }}
+                  />
+                </div>
+              )}
+              
+              {/* Checklist items */}
+              <div className="space-y-2 mb-4">
+                {checklist.map((item) => (
+                  <div 
+                    key={item.id}
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-lg border border-border bg-card group transition-all",
+                      item.done && "bg-muted/50"
+                    )}
+                  >
+                    <button
+                      onClick={() => toggleChecklistItem(item.id)}
+                      className="flex-shrink-0"
+                    >
+                      {item.done ? (
+                        <CheckSquare className="h-5 w-5 text-primary" />
+                      ) : (
+                        <Square className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
+                      )}
+                    </button>
+                    <input
+                      type="text"
+                      value={item.text}
+                      onChange={(e) => updateChecklistItemText(item.id, e.target.value)}
+                      className={cn(
+                        "flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 text-sm",
+                        item.done && "line-through text-muted-foreground"
+                      )}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
+                      onClick={() => removeChecklistItem(item.id)}
+                    >
+                      <Trash className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Add new item */}
+              <div className="flex items-center gap-2">
+                <Square className="h-5 w-5 text-muted-foreground" />
+                <Input
+                  value={newItemText}
+                  onChange={(e) => setNewItemText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addChecklistItem()}
+                  placeholder="Adicionar item..."
+                  className="flex-1 border-dashed"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={addChecklistItem}
+                  disabled={!newItemText.trim()}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <Separator className="my-6" />
+            </div>
+          )}
 
           {/* Block Editor */}
           {loading ? (

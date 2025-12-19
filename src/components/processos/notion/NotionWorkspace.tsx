@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { NotionSidebar } from "./NotionSidebar";
 import { NotionPage } from "./NotionPage";
 import { TemplateLibrary } from "./TemplateLibrary";
-import { ProcessKanban } from "./ProcessKanban";
 import { ProcessCalendar } from "./ProcessCalendar";
 import { Button } from "@/components/ui/button";
 import { 
@@ -22,7 +21,6 @@ import {
   BookOpen,
   Workflow,
   GitBranch,
-  LayoutGrid,
   CalendarDays,
   CheckSquare
 } from "lucide-react";
@@ -52,7 +50,6 @@ export function NotionWorkspace({ companyId }: NotionWorkspaceProps) {
   const [selectedPage, setSelectedPage] = useState<ProcessPage | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [showKanban, setShowKanban] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
 
   const handleSelectPage = async (page: any) => {
@@ -61,7 +58,6 @@ export function NotionWorkspace({ companyId }: NotionWorkspaceProps) {
       return;
     }
     
-    setShowKanban(false);
     setShowCalendar(false);
     
     const { data, error } = await supabase
@@ -172,7 +168,6 @@ export function NotionWorkspace({ companyId }: NotionWorkspaceProps) {
       });
 
       setSelectedPage(data);
-      setShowKanban(false);
       setShowCalendar(false);
       setRefreshTrigger(prev => prev + 1);
       toast.success(`${titleMap[type]} criado`);
@@ -198,29 +193,21 @@ export function NotionWorkspace({ companyId }: NotionWorkspaceProps) {
     
     if (data) {
       setSelectedPage(data);
-      setShowKanban(false);
       setShowCalendar(false);
       setRefreshTrigger(prev => prev + 1);
     }
   };
 
-  const handleViewKanban = () => {
-    setSelectedPage(null);
-    setShowKanban(true);
-    setShowCalendar(false);
-  };
-
   const handleViewCalendar = () => {
     setSelectedPage(null);
-    setShowKanban(false);
     setShowCalendar(true);
   };
 
   const renderContent = () => {
-    if (showKanban) {
+    if (showCalendar) {
       return (
         <div className="p-4 h-full overflow-auto">
-          <ProcessKanban companyId={companyId} />
+          <ProcessCalendar companyId={companyId} />
         </div>
       );
     }
@@ -304,9 +291,7 @@ export function NotionWorkspace({ companyId }: NotionWorkspaceProps) {
           selectedPageId={selectedPage?.id || null}
           onSelectPage={handleSelectPage}
           onCreatePage={handleCreateItem}
-          onViewKanban={handleViewKanban}
           onViewCalendar={handleViewCalendar}
-          showKanban={showKanban}
           showCalendar={showCalendar}
         />
       )}
@@ -326,15 +311,6 @@ export function NotionWorkspace({ companyId }: NotionWorkspaceProps) {
             
             {/* Quick View Buttons */}
             <div className="flex items-center gap-1">
-              <Button
-                variant={showKanban ? "secondary" : "ghost"}
-                size="sm"
-                onClick={handleViewKanban}
-                className="h-7 px-2 text-xs gap-1"
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Kanban</span>
-              </Button>
               <Button
                 variant={showCalendar ? "secondary" : "ghost"}
                 size="sm"
