@@ -19,7 +19,9 @@ import {
   Link as LinkIcon,
   File,
   Video,
-  Upload
+  Upload,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,6 +30,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -69,6 +77,7 @@ export function BlockEditor({ pageId, blocks, onBlocksChange }: BlockEditorProps
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const [showBlockMenu, setShowBlockMenu] = useState<string | null>(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [expandedBlock, setExpandedBlock] = useState<Block | null>(null);
   const blockRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
 
   const createBlock = async (type: string, position: number, content?: any) => {
@@ -220,45 +229,83 @@ export function BlockEditor({ pageId, blocks, onBlocksChange }: BlockEditorProps
     setShowAddMenu(false);
   };
 
+  // Auto-resize textarea
+  const autoResize = useCallback((el: HTMLTextAreaElement | null) => {
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 200)}px`; // Max 200px, then show expand button
+    }
+  }, []);
+
   const renderBlockContent = (block: Block, index: number) => {
+    const textContent = block.content.text || '';
+    const isLongText = textContent.length > 200 || textContent.split('\n').length > 5;
+    
     const commonProps = {
-      ref: (el: HTMLTextAreaElement) => el && blockRefs.current.set(block.id, el),
-      value: block.content.text || '',
-      onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => 
-        updateBlock(block.id, { ...block.content, text: e.target.value }),
+      ref: (el: HTMLTextAreaElement) => {
+        if (el) {
+          blockRefs.current.set(block.id, el);
+          autoResize(el);
+        }
+      },
+      value: textContent,
+      onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        updateBlock(block.id, { ...block.content, text: e.target.value });
+        autoResize(e.target);
+      },
       onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => handleKeyDown(e, block, index),
       onFocus: () => setFocusedBlockId(block.id),
       className: cn(
         "w-full resize-none border-0 bg-transparent focus:ring-0 focus-visible:ring-0 p-0",
-        "placeholder:text-muted-foreground/50 overflow-hidden"
+        "placeholder:text-muted-foreground/50"
       ),
       placeholder: block.block_type === 'paragraph' ? "Digite '/' para comandos ou clique + para adicionar..." : '',
-      rows: 1,
+      style: { minHeight: '24px', maxHeight: '200px', overflow: isLongText ? 'hidden' : 'auto' }
+    };
+
+    // Wrapper para adicionar botão de expandir em textos longos
+    const wrapWithExpand = (content: React.ReactNode) => {
+      if (!isLongText) return content;
+      return (
+        <div className="relative">
+          {content}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute bottom-0 right-0 h-6 px-2 text-xs bg-background/80 hover:bg-muted"
+            onClick={() => setExpandedBlock(block)}
+            title="Expandir texto"
+          >
+            <Maximize2 className="h-3 w-3 mr-1" />
+            Ver mais
+          </Button>
+        </div>
+      );
     };
 
     switch (block.block_type) {
       case 'heading1':
-        return <textarea {...commonProps} className={cn(commonProps.className, "text-3xl font-bold")} placeholder="Título 1" />;
+        return wrapWithExpand(<textarea {...commonProps} className={cn(commonProps.className, "text-3xl font-bold")} placeholder="Título 1" />);
       case 'heading2':
-        return <textarea {...commonProps} className={cn(commonProps.className, "text-2xl font-semibold")} placeholder="Título 2" />;
+        return wrapWithExpand(<textarea {...commonProps} className={cn(commonProps.className, "text-2xl font-semibold")} placeholder="Título 2" />);
       case 'heading3':
-        return <textarea {...commonProps} className={cn(commonProps.className, "text-xl font-medium")} placeholder="Título 3" />;
+        return wrapWithExpand(<textarea {...commonProps} className={cn(commonProps.className, "text-xl font-medium")} placeholder="Título 3" />);
       case 'bullet_list':
-        return (
+        return wrapWithExpand(
           <div className="flex items-start gap-2">
             <span className="mt-1">•</span>
             <textarea {...commonProps} placeholder="Item da lista" />
           </div>
         );
       case 'numbered_list':
-        return (
+        return wrapWithExpand(
           <div className="flex items-start gap-2">
             <span className="mt-1 text-muted-foreground">{index + 1}.</span>
             <textarea {...commonProps} placeholder="Item da lista" />
           </div>
         );
       case 'checklist':
-        return (
+        return wrapWithExpand(
           <div className="flex items-start gap-2">
             <input
               type="checkbox"
@@ -274,19 +321,19 @@ export function BlockEditor({ pageId, blocks, onBlocksChange }: BlockEditorProps
           </div>
         );
       case 'quote':
-        return (
+        return wrapWithExpand(
           <div className="border-l-4 border-primary/50 pl-4 italic">
             <textarea {...commonProps} placeholder="Citação..." />
           </div>
         );
       case 'code':
-        return (
+        return wrapWithExpand(
           <div className="bg-muted rounded-lg p-3 font-mono text-sm">
             <textarea {...commonProps} className={cn(commonProps.className, "font-mono")} placeholder="// Código..." />
           </div>
         );
       case 'callout':
-        return (
+        return wrapWithExpand(
           <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 flex items-start gap-3">
             <span>💡</span>
             <textarea {...commonProps} placeholder="Destaque..." />
@@ -353,7 +400,7 @@ export function BlockEditor({ pageId, blocks, onBlocksChange }: BlockEditorProps
           </div>
         );
       default:
-        return <textarea {...commonProps} />;
+        return wrapWithExpand(<textarea {...commonProps} />);
     }
   };
 
@@ -501,6 +548,37 @@ export function BlockEditor({ pageId, blocks, onBlocksChange }: BlockEditorProps
           </Popover>
         </div>
       )}
+
+      {/* Dialog para expandir/visualizar texto longo */}
+      <Dialog open={!!expandedBlock} onOpenChange={() => setExpandedBlock(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Maximize2 className="h-5 w-5" />
+              Visualizar Conteúdo Completo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              value={expandedBlock?.content.text || ''}
+              onChange={(e) => {
+                if (expandedBlock) {
+                  updateBlock(expandedBlock.id, { ...expandedBlock.content, text: e.target.value });
+                  setExpandedBlock({ ...expandedBlock, content: { ...expandedBlock.content, text: e.target.value } });
+                }
+              }}
+              className="min-h-[300px] text-base leading-relaxed"
+              placeholder="Digite o conteúdo..."
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setExpandedBlock(null)}>
+                <Minimize2 className="h-4 w-4 mr-2" />
+                Minimizar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
