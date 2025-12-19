@@ -44,14 +44,26 @@ interface Task {
   title: string;
   description: string | null;
   priority: string;
+  status?: string;
   assignee_id: string | null;
   assignee_name?: string;
+  responsaveis?: string[];
+  responsaveis_names?: string[];
   start_date: string | null; // Data início do prazo
   due_date: string | null; // Data final do prazo
   lead_id: string | null;
   lead_name?: string;
   column_id?: string | null;
   board_id?: string | null;
+  checklist?: { id?: string; text: string; done: boolean }[];
+  comments?: { id?: string; text: string; author_id?: string; created_at?: string }[];
+  attachments?: { name: string; url: string; type?: string }[];
+  tags?: string[];
+  tempo_gasto?: number;
+  time_tracking_iniciado?: string;
+  time_tracking_pausado?: boolean;
+  owner_id?: string;
+  owner_name?: string;
 }
 
 interface Column {
