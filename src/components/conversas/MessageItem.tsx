@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { MessageActions } from "./MessageActions";
 import { PDFPreview } from "./PDFPreview";
+import { PdfViewerDialog } from "./PdfViewerDialog";
 import { toast } from "@/hooks/use-toast";
 import { getMediaUrl } from "@/utils/mediaLoader";
 
@@ -85,6 +86,9 @@ function MessageItemComponent({
   
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
+  
+  // Estado para PDF Viewer Dialog
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
 
   const repliedMessage = message.replyTo && allMessages 
     ? allMessages.find(m => m.id === message.replyTo)
@@ -451,10 +455,7 @@ function MessageItemComponent({
                   <PDFPreview
                     url={mediaUrl || message.mediaUrl || ''}
                     fileName={message.fileName}
-                    onClick={() => {
-                      const url = mediaUrl || message.mediaUrl;
-                      if (url) window.open(url, '_blank');
-                    }}
+                    onClick={() => setPdfViewerOpen(true)}
                   />
                   
                   {/* Nome do arquivo com ícone */}
@@ -470,10 +471,7 @@ function MessageItemComponent({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        const url = mediaUrl || message.mediaUrl;
-                        if (url) window.open(url, '_blank');
-                      }}
+                      onClick={() => setPdfViewerOpen(true)}
                       className="flex-1"
                     >
                       <FileText className="h-3 w-3 mr-2" />
@@ -487,6 +485,14 @@ function MessageItemComponent({
                       <Download className="h-3 w-3" />
                     </Button>
                   </div>
+                  
+                  {/* PDF Viewer Dialog */}
+                  <PdfViewerDialog
+                    open={pdfViewerOpen}
+                    onOpenChange={setPdfViewerOpen}
+                    url={mediaUrl || message.mediaUrl || ''}
+                    fileName={message.fileName}
+                  />
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center p-6 border border-border rounded-lg bg-muted/50">
