@@ -120,7 +120,7 @@ export function HorarioSeletor({
           compromissos: compromissosNoHorario,
         });
 
-        horarioAtual = addMinutes(horarioAtual, 30); // Intervalos de 30 minutos
+        horarioAtual = addMinutes(horarioAtual, duracaoMinutos); // Intervalos baseados na duração configurada
       }
     };
 
