@@ -22,7 +22,11 @@ import {
   Upload,
   Maximize2,
   Minimize2,
-  LayoutGrid
+  LayoutGrid,
+  FileText,
+  Workflow,
+  GitBranch,
+  FilePlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,6 +46,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { FileAttachment, AttachmentDisplay, LinkDisplay } from "./FileAttachment";
 import { InlineKanban } from "./InlineKanban";
+import { InlinePlaybook } from "./InlinePlaybook";
+import { InlineCadence } from "./InlineCadence";
+import { InlineStage } from "./InlineStage";
 
 interface Block {
   id: string;
@@ -54,6 +61,7 @@ interface BlockEditorProps {
   pageId: string;
   blocks: Block[];
   onBlocksChange: (blocks: Block[]) => void;
+  companyId?: string | null;
 }
 
 const BLOCK_TYPES = [
@@ -65,6 +73,9 @@ const BLOCK_TYPES = [
   { type: 'numbered_list', icon: ListOrdered, label: 'Lista numerada', shortcut: '1.', category: 'Listas' },
   { type: 'checklist', icon: CheckSquare, label: 'Lista de tarefas', shortcut: '[]', category: 'Listas' },
   { type: 'kanban', icon: LayoutGrid, label: 'Quadro Kanban', shortcut: '', category: 'Listas' },
+  { type: 'playbook', icon: FileText, label: 'Playbook', shortcut: '', category: 'Processos' },
+  { type: 'cadence', icon: Workflow, label: 'Cadência', shortcut: '', category: 'Processos' },
+  { type: 'stage', icon: GitBranch, label: 'Etapa', shortcut: '', category: 'Processos' },
   { type: 'quote', icon: Quote, label: 'Citação', shortcut: '>', category: 'Formatação' },
   { type: 'code', icon: Code, label: 'Código', shortcut: '```', category: 'Formatação' },
   { type: 'callout', icon: AlertCircle, label: 'Destaque', shortcut: '!', category: 'Formatação' },
@@ -76,7 +87,7 @@ const BLOCK_TYPES = [
   { type: 'embed', icon: Video, label: 'Embed (YouTube, etc)', shortcut: '', category: 'Mídia' },
 ];
 
-export function BlockEditor({ pageId, blocks, onBlocksChange }: BlockEditorProps) {
+export function BlockEditor({ pageId, blocks, onBlocksChange, companyId }: BlockEditorProps) {
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const [showBlockMenu, setShowBlockMenu] = useState<string | null>(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -407,6 +418,30 @@ export function BlockEditor({ pageId, blocks, onBlocksChange }: BlockEditorProps
           <InlineKanban
             content={block.content.kanbanData || { columns: [], tasks: [] }}
             onUpdate={(kanbanData) => updateBlock(block.id, { ...block.content, kanbanData })}
+            onRemove={() => deleteBlock(block.id)}
+          />
+        );
+      case 'playbook':
+        return (
+          <InlinePlaybook
+            content={block.content.playbookData || { title: '', type: 'atendimento', category: '', content: '' }}
+            onUpdate={(playbookData) => updateBlock(block.id, { ...block.content, playbookData })}
+            onRemove={() => deleteBlock(block.id)}
+          />
+        );
+      case 'cadence':
+        return (
+          <InlineCadence
+            content={block.content.cadenceData || { name: '', type: 'prospeccao', channels: [], steps: [] }}
+            onUpdate={(cadenceData) => updateBlock(block.id, { ...block.content, cadenceData })}
+            onRemove={() => deleteBlock(block.id)}
+          />
+        );
+      case 'stage':
+        return (
+          <InlineStage
+            content={block.content.stageData || { stage_name: '', objectives: '', max_time_hours: 24, checklist: [], dos: [], donts: [] }}
+            onUpdate={(stageData) => updateBlock(block.id, { ...block.content, stageData })}
             onRemove={() => deleteBlock(block.id)}
           />
         );
