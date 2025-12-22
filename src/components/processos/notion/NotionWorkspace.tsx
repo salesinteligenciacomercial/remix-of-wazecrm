@@ -225,6 +225,7 @@ export function NotionWorkspace({ companyId }: NotionWorkspaceProps) {
         <NotionPage 
           page={selectedPage} 
           onPageUpdate={handlePageUpdate}
+          companyId={companyId}
         />
       );
     }

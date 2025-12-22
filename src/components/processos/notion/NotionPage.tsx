@@ -73,11 +73,12 @@ interface Block {
 interface NotionPageProps {
   page: ProcessPage;
   onPageUpdate: () => void;
+  companyId?: string | null;
 }
 
 const EMOJI_LIST = ['📄', '📝', '📋', '📌', '📎', '📁', '📂', '💼', '💡', '🎯', '🚀', '✨', '⭐', '🔥', '💪', '🎨', '🎭', '🎬', '🎪', '🎢', '📊', '📈', '📉', '💹', '💰', '💵', '💳', '🏆', '🥇', '🎖️', '🏅', '📱', '💻', '🖥️', '⌨️', '🖱️', '🔧', '⚙️', '🔩', '🔨', '📞', '☎️', '📧', '✉️', '📬', '📮', '🗂️', '📑', '📓', '📔', '📒', '📕', '📗', '📘', '📙'];
 
-export function NotionPage({ page, onPageUpdate }: NotionPageProps) {
+export function NotionPage({ page, onPageUpdate, companyId }: NotionPageProps) {
   const [title, setTitle] = useState(page.title);
   const [icon, setIcon] = useState(page.icon);
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -496,6 +497,7 @@ export function NotionPage({ page, onPageUpdate }: NotionPageProps) {
               pageId={page.id}
               blocks={blocks}
               onBlocksChange={handleBlocksChange}
+              companyId={companyId}
             />
           )}
         </div>
