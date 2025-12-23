@@ -23,7 +23,7 @@ interface MessageActionsProps {
   messageId: string;
   content: string;
   sender: "user" | "contact";
-  messageType?: "text" | "image" | "audio" | "pdf" | "video" | "contact";
+  messageType?: "text" | "image" | "audio" | "pdf" | "video" | "contact" | "document";
   mediaUrl?: string;
   fileName?: string;
   onReply: (messageId: string) => void;
@@ -165,7 +165,7 @@ export function MessageActions({
           </DropdownMenuItem>
           
           {/* Opção de Download para mídias */}
-          {mediaUrl && (messageType === "image" || messageType === "video" || messageType === "audio" || messageType === "pdf") && (
+          {mediaUrl && (messageType === "image" || messageType === "video" || messageType === "audio" || messageType === "pdf" || messageType === "document") && (
             <DropdownMenuItem onClick={() => {
               handleDownload();
               setShowEmojiPicker(false);
