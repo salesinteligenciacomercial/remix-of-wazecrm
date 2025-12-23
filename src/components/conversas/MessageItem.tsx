@@ -28,7 +28,7 @@ import { getMediaUrl, isPermanentUrl } from "@/utils/mediaLoader";
 interface Message {
   id: string;
   content: string;
-  type: "text" | "image" | "audio" | "pdf" | "video" | "contact";
+  type: "text" | "image" | "audio" | "pdf" | "video" | "contact" | "document";
   sender: "user" | "contact";
   timestamp: Date;
   delivered: boolean;
@@ -46,6 +46,18 @@ interface Message {
     name: string;
     phone: string;
   };
+}
+
+// Helper para verificar se é PDF (tipo pdf ou document com extensão .pdf)
+function isPdfMessage(message: Message): boolean {
+  if (message.type === 'pdf') return true;
+  if (message.type === 'document') {
+    // Verificar extensão do arquivo ou mimetype
+    if (message.fileName?.toLowerCase().endsWith('.pdf')) return true;
+    if (message.mimeType?.includes('pdf')) return true;
+    if (message.mediaUrl?.toLowerCase().includes('.pdf')) return true;
+  }
+  return false;
 }
 
 interface MessageItemProps {
@@ -97,7 +109,7 @@ function MessageItemComponent({
   // Carregar mídia quando componente montar
   useEffect(() => {
     // ⚡ CORREÇÃO DEFINITIVA: Priorizar URLs permanentes do Storage
-    if (message.mediaUrl && (message.type === 'image' || message.type === 'video' || message.type === 'audio' || message.type === 'pdf')) {
+    if (message.mediaUrl && (message.type === 'image' || message.type === 'video' || message.type === 'audio' || message.type === 'pdf' || message.type === 'document')) {
       
       // ✅ PRIORIDADE 1: URLs permanentes do Supabase Storage (nunca expiram)
       if (isPermanentUrl(message.mediaUrl)) {
@@ -451,8 +463,8 @@ function MessageItemComponent({
             </div>
           )}
           
-          {/* PDF Message */}
-          {message.type === "pdf" && (
+          {/* PDF Message - trata tanto tipo "pdf" quanto "document" com extensão .pdf */}
+          {isPdfMessage(message) && (
             <div className="space-y-2 min-w-[250px]">
               {mediaLoading ? (
                 <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-border rounded-lg bg-muted/50">
