@@ -1258,8 +1258,8 @@ function Conversas() {
           type: tipoMensagem as any,
           sender: isFromMe ? 'user' : 'contact',
           timestamp: new Date(novaMensagem.created_at || Date.now()),
-          delivered: true,
-          read: novaMensagem.status !== 'Recebida',
+          delivered: novaMensagem.delivered === true || novaMensagem.status === 'Enviada',
+          read: novaMensagem.read === true, // ⚡ CORREÇÃO: Usar campo read do banco (true = contato visualizou)
           mediaUrl: novaMensagem.midia_url,
           fileName: novaMensagem.arquivo_nome,
           mimeType: novaMensagem.tipo_mensagem === 'video' ? 'video/mp4' : novaMensagem.tipo_mensagem === 'audio' ? 'audio/mpeg' : novaMensagem.tipo_mensagem === 'image' ? 'image/jpeg' : (novaMensagem.tipo_mensagem === 'document' || novaMensagem.tipo_mensagem === 'pdf') ? 'application/pdf' : undefined,
@@ -2997,8 +2997,8 @@ function Conversas() {
             type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem === 'image' ? 'image' : m.tipo_mensagem === 'audio' ? 'audio' : m.tipo_mensagem === 'video' ? 'video' : (m.tipo_mensagem === 'document' || m.tipo_mensagem === 'pdf') ? 'pdf' : m.tipo_mensagem || 'text') as any,
             sender: sender,
             timestamp: new Date(m.created_at || Date.now()),
-            delivered: true,
-            read: m.status !== 'Recebida',
+            delivered: m.delivered === true || m.status === 'Enviada',
+            read: m.read === true, // ⚡ CORREÇÃO: Usar campo read do banco (true = contato visualizou)
             mediaUrl: m.midia_url,
             fileName: m.arquivo_nome,
             mimeType: m.tipo_mensagem === 'video' ? 'video/mp4' : m.tipo_mensagem === 'audio' ? 'audio/mpeg' : m.tipo_mensagem === 'image' ? 'image/jpeg' : (m.tipo_mensagem === 'document' || m.tipo_mensagem === 'pdf') ? 'application/pdf' : undefined,
@@ -3542,8 +3542,8 @@ function Conversas() {
             type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
             sender: sender,
             timestamp: new Date(m.created_at || Date.now()),
-            delivered: true,
-            read: m.status !== 'Recebida',
+            delivered: m.delivered === true || m.status === 'Enviada',
+            read: m.read === true, // ⚡ CORREÇÃO: Usar campo read do banco (true = contato visualizou)
             mediaUrl: m.midia_url,
             fileName: m.arquivo_nome
           };

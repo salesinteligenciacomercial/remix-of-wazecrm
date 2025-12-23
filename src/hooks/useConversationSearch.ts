@@ -99,8 +99,8 @@ export const useConversationSearch = (companyId: string | null) => {
             type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
             sender: isFromMe ? "user" : "contact",
             timestamp: new Date(m.created_at || Date.now()),
-            delivered: true,
-            read: m.status !== 'Recebida',
+            delivered: m.delivered === true || m.status === 'Enviada',
+            read: m.read === true, // ⚡ CORREÇÃO: Usar campo read do banco (true = contato visualizou)
             mediaUrl: m.midia_url,
             sentBy: m.sent_by || undefined,
           };
@@ -288,8 +288,8 @@ export const loadAllUniqueConversations = async (companyId: string): Promise<Con
         type: (conv.tipo_mensagem === 'texto' ? 'text' : conv.tipo_mensagem || 'text') as any,
         sender: isFromMe ? "user" : "contact",
         timestamp: new Date(conv.created_at || Date.now()),
-        delivered: true,
-        read: conv.status !== 'Recebida',
+        delivered: conv.delivered === true || conv.status === 'Enviada',
+        read: conv.read === true, // ⚡ CORREÇÃO: Usar campo read do banco (true = contato visualizou)
         mediaUrl: conv.midia_url,
         sentBy: conv.sent_by || undefined,
       };
