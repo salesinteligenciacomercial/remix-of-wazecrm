@@ -327,8 +327,8 @@ export const useConversationsLoader = () => {
                 type: (m.tipo_mensagem === 'texto' ? 'text' : m.tipo_mensagem || 'text') as any,
                 sender: isFromMe ? "user" : "contact",
                 timestamp: new Date(m.created_at || Date.now()),
-                delivered: true,
-                read: m.status !== 'Recebida',
+                delivered: m.delivered === true || m.status === 'Enviada',
+                read: m.read === true, // ⚡ CORREÇÃO: Usar campo read do banco (true = contato visualizou)
                 mediaUrl: m.midia_url,
                 sentBy: sentBy, // ✅ CORREÇÃO: Incluir assinatura com fallback correto
               };
