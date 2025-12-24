@@ -7147,7 +7147,7 @@ function Conversas() {
         {/* Header - Fixo, não move com scroll */}
         <div className="px-3 py-4 bg-background border-b border-border flex-shrink-0">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-semibold text-foreground">Bate-Papo</h1>
+            <h1 className="text-xl font-semibold text-foreground">Bate-Papo Multicanal </h1>
             <div className="flex gap-2 items-center">
               <NovaConversaDialog onNovaConversa={async (nome, numero) => {
               try {
