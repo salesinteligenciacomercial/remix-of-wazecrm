@@ -66,7 +66,7 @@ const Discador = () => {
               Discador
             </h1>
             <p className="text-muted-foreground mt-1">
-              Central de ligações do Waze CRM
+              Central de ligações Faça e Receba na  Waze Platform  
             </p>
           </div>
         </div>
