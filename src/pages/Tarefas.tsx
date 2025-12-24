@@ -38,7 +38,6 @@ import { useLeadsSync } from "@/hooks/useLeadsSync";
 import { useGlobalSync } from "@/hooks/useGlobalSync";
 import { useWorkflowAutomation } from "@/hooks/useWorkflowAutomation";
 import { usePermissions } from "@/hooks/usePermissions";
-
 interface Task {
   id: string;
   title: string;
@@ -55,9 +54,22 @@ interface Task {
   lead_name?: string;
   column_id?: string | null;
   board_id?: string | null;
-  checklist?: { id?: string; text: string; done: boolean }[];
-  comments?: { id?: string; text: string; author_id?: string; created_at?: string }[];
-  attachments?: { name: string; url: string; type?: string }[];
+  checklist?: {
+    id?: string;
+    text: string;
+    done: boolean;
+  }[];
+  comments?: {
+    id?: string;
+    text: string;
+    author_id?: string;
+    created_at?: string;
+  }[];
+  attachments?: {
+    name: string;
+    url: string;
+    type?: string;
+  }[];
   tags?: string[];
   tempo_gasto?: number;
   time_tracking_iniciado?: string;
@@ -65,7 +77,6 @@ interface Task {
   owner_id?: string;
   owner_name?: string;
 }
-
 interface Column {
   id: string;
   nome: string;
@@ -73,7 +84,6 @@ interface Column {
   cor: string;
   board_id: string;
 }
-
 interface Board {
   id: string;
   nome: string;
@@ -81,37 +91,34 @@ interface Board {
 }
 
 // ✅ MELHORADO: DroppableColumnContainer com identificação clara da coluna
-const DroppableColumnContainer = React.memo(function DroppableColumnContainer({ columnId, children }: { columnId: string; children: ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({
+const DroppableColumnContainer = React.memo(function DroppableColumnContainer({
+  columnId,
+  children
+}: {
+  columnId: string;
+  children: ReactNode;
+}) {
+  const {
+    setNodeRef,
+    isOver
+  } = useDroppable({
     id: columnId,
-    data: { 
-      type: 'column', 
+    data: {
+      type: 'column',
       columnId: columnId,
-      accepts: ['task'], // ✅ Aceita apenas tarefas
-    },
+      accepts: ['task'] // ✅ Aceita apenas tarefas
+    }
   });
-  
-  return (
-    <div
-      ref={setNodeRef}
-      data-column-id={columnId}
-      data-droppable="true"
-      className={`bg-secondary/20 p-4 rounded-b-lg min-h-[500px] transition-all duration-200 ${
-        isOver 
-          ? 'bg-primary/20 border-2 border-primary border-dashed shadow-lg scale-[1.02]' 
-          : 'border border-transparent'
-      }`}
-    >
+  return <div ref={setNodeRef} data-column-id={columnId} data-droppable="true" className={`bg-secondary/20 p-4 rounded-b-lg min-h-[500px] transition-all duration-200 ${isOver ? 'bg-primary/20 border-2 border-primary border-dashed shadow-lg scale-[1.02]' : 'border border-transparent'}`}>
       {children}
-    </div>
-  );
+    </div>;
 });
 
 // ✅ NOVO: SortableColumn - Coluna que pode ser arrastada e reordenada
-const SortableColumn = React.memo(function SortableColumn({ 
-  column, 
-  tasksByColumn, 
-  tasksPerColumn, 
+const SortableColumn = React.memo(function SortableColumn({
+  column,
+  tasksByColumn,
+  tasksPerColumn,
   taskCountsByColumn,
   TASKS_PER_PAGE,
   tasks,
@@ -120,7 +127,7 @@ const SortableColumn = React.memo(function SortableColumn({
   loadMoreTasks,
   selectedBoard,
   emitGlobalEvent
-}: { 
+}: {
   column: Column;
   tasksByColumn: Record<string, Task[]>;
   tasksPerColumn: Record<string, number>;
@@ -139,144 +146,99 @@ const SortableColumn = React.memo(function SortableColumn({
     setNodeRef,
     transform,
     transition,
-    isDragging,
-  } = useSortable({ 
+    isDragging
+  } = useSortable({
     id: column.id,
     data: {
-      type: 'column', // ✅ CRÍTICO: Identifica drag de coluna
+      type: 'column',
+      // ✅ CRÍTICO: Identifica drag de coluna
       column
     }
   });
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition: isDragging ? 'none' : transition,
-    opacity: isDragging ? 0.7 : 1,
+    opacity: isDragging ? 0.7 : 1
   };
-
-  return (
-    <div 
-      ref={setNodeRef} 
-      style={{
-        ...style,
-        width: isDragging ? '380px' : '380px',
-        minWidth: '380px',
-        maxWidth: '380px',
-        flexShrink: 0,
-        flexGrow: 0,
-        position: 'relative',
-        boxSizing: 'border-box',
-      }}
-      className={`relative group ${isDragging ? 'z-[100]' : ''}`}
-      data-column-id={column.id}
-      data-sortable-column="true"
-    >
+  return <div ref={setNodeRef} style={{
+    ...style,
+    width: isDragging ? '380px' : '380px',
+    minWidth: '380px',
+    maxWidth: '380px',
+    flexShrink: 0,
+    flexGrow: 0,
+    position: 'relative',
+    boxSizing: 'border-box'
+  }} className={`relative group ${isDragging ? 'z-[100]' : ''}`} data-column-id={column.id} data-sortable-column="true">
       {/* Drag handle - igual ao funil */}
-      <div
-        {...attributes}
-        {...listeners}
-        className="absolute -top-2 -left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-      >
+      <div {...attributes} {...listeners} className="absolute -top-2 -left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
         <div className="bg-background border rounded-full p-1 shadow-md">
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </div>
       </div>
       
-      <div 
-        className="text-white p-3 rounded-t-lg" 
-        style={{ backgroundColor: column.cor }}
-      >
+      <div className="text-white p-3 rounded-t-lg" style={{
+      backgroundColor: column.cor
+    }}>
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold">{column.nome}</h3>
           <div className="flex gap-1">
-            <EditarColunaDialog
-              columnId={column.id}
-              nomeAtual={column.nome}
-              corAtual={column.cor}
-              onColumnUpdated={carregarDados}
-            />
-            <DeletarColunaDialog
-              columnId={column.id}
-              columnNome={column.nome}
-              onColumnDeleted={carregarDados}
-            />
+            <EditarColunaDialog columnId={column.id} nomeAtual={column.nome} corAtual={column.cor} onColumnUpdated={carregarDados} />
+            <DeletarColunaDialog columnId={column.id} columnNome={column.nome} onColumnDeleted={carregarDados} />
           </div>
         </div>
         <span className="text-sm">
           {taskCountsByColumn[column.id] || 0} tarefas
         </span>
       </div>
-      <SortableContext 
-        id={column.id} 
-        items={(tasksByColumn[column.id] || []).slice(0, tasksPerColumn[column.id] || TASKS_PER_PAGE).map(t => t.id)} 
-        strategy={verticalListSortingStrategy}
-      >
+      <SortableContext id={column.id} items={(tasksByColumn[column.id] || []).slice(0, tasksPerColumn[column.id] || TASKS_PER_PAGE).map(t => t.id)} strategy={verticalListSortingStrategy}>
         <DroppableColumnContainer columnId={column.id}>
-          <NovaTarefaDialog 
-            columnId={column.id} 
-            boardId={selectedBoard} 
-            onTaskCreated={carregarDados}
-          />
-          {(tasksByColumn[column.id] || [])
-            .slice(0, tasksPerColumn[column.id] || TASKS_PER_PAGE)
-            .map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onDelete={async (id) => {
-                  const taskToDelete = tasks.find(t => t.id === id);
-                  await supabase.functions.invoke("api-tarefas", {
-                    body: { action: "deletar_tarefa", data: { task_id: id } }
-                  });
-                  if (taskToDelete) {
-                    emitGlobalEvent({
-                      type: 'task-deleted',
-                      data: taskToDelete,
-                      source: 'Tarefas'
-                    });
-                  }
-                }}
-                onUpdate={() => {}}
-              />
-            ))}
+          <NovaTarefaDialog columnId={column.id} boardId={selectedBoard} onTaskCreated={carregarDados} />
+          {(tasksByColumn[column.id] || []).slice(0, tasksPerColumn[column.id] || TASKS_PER_PAGE).map(task => <TaskCard key={task.id} task={task} onDelete={async id => {
+          const taskToDelete = tasks.find(t => t.id === id);
+          await supabase.functions.invoke("api-tarefas", {
+            body: {
+              action: "deletar_tarefa",
+              data: {
+                task_id: id
+              }
+            }
+          });
+          if (taskToDelete) {
+            emitGlobalEvent({
+              type: 'task-deleted',
+              data: taskToDelete,
+              source: 'Tarefas'
+            });
+          }
+        }} onUpdate={() => {}} />)}
 
           {(() => {
-            const totalTasksInColumn = taskCountsByColumn[column.id] || 0;
-            const visibleTasks = tasksPerColumn[column.id] || TASKS_PER_PAGE;
-            const hasMoreTasks = totalTasksInColumn > visibleTasks;
-
-            if (hasMoreTasks) {
-              return (
-                <div className="text-center py-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => loadMoreTasks(column.id)}
-                    disabled={loadingMore[column.id]}
-                    className="text-xs"
-                  >
-                    {loadingMore[column.id] ? (
-                      <>
+          const totalTasksInColumn = taskCountsByColumn[column.id] || 0;
+          const visibleTasks = tasksPerColumn[column.id] || TASKS_PER_PAGE;
+          const hasMoreTasks = totalTasksInColumn > visibleTasks;
+          if (hasMoreTasks) {
+            return <div className="text-center py-4">
+                  <Button variant="outline" size="sm" onClick={() => loadMoreTasks(column.id)} disabled={loadingMore[column.id]} className="text-xs">
+                    {loadingMore[column.id] ? <>
                         <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-2"></div>
                         Carregando...
-                      </>
-                    ) : (
-                      `Carregar mais tarefas (${totalTasksInColumn - visibleTasks} restantes)`
-                    )}
+                      </> : `Carregar mais tarefas (${totalTasksInColumn - visibleTasks} restantes)`}
                   </Button>
-                </div>
-              );
-            }
-            return null;
-          })()}
+                </div>;
+          }
+          return null;
+        })()}
         </DroppableColumnContainer>
       </SortableContext>
-    </div>
-  );
+    </div>;
 });
-
 export default function Tarefas() {
-  const { canManageStructure, isAdmin, hasPermission } = usePermissions();
+  const {
+    canManageStructure,
+    isAdmin,
+    hasPermission
+  } = usePermissions();
   const [canManageTaskStructure, setCanManageTaskStructure] = useState(true); // Padrão: permitir (comportamento atual)
   const [tasks, setTasks] = useState<Task[]>([]);
   const [columns, setColumns] = useState<Column[]>([]);
@@ -289,7 +251,10 @@ export default function Tarefas() {
   const [viewMode, setViewMode] = useState<"board" | "calendar" | "dashboard">("board");
   const [searchText, setSearchText] = useState<string>("");
   const [debouncedSearchText, setDebouncedSearchText] = useState<string>("");
-  const [allUsers, setAllUsers] = useState<{ id: string; full_name: string }[]>([]);
+  const [allUsers, setAllUsers] = useState<{
+    id: string;
+    full_name: string;
+  }[]>([]);
   const [filterAssignee, setFilterAssignee] = useState<string>("");
   const [filterPriority, setFilterPriority] = useState<string>("");
   const [filterTag, setFilterTag] = useState<string>("");
@@ -322,14 +287,13 @@ export default function Tarefas() {
     if (isAdmin) {
       return; // Não fazer nada, já está definido como true
     }
-    
+
     // Só verificar permissão se NÃO for admin
     const checkPermission = async () => {
       // ✅ Verificar novamente antes de fazer a chamada (pode ter virado admin)
       if (isAdmin) {
         return;
       }
-      
       try {
         const canManage = await canManageStructure('tarefas');
         console.log('🔐 [Tarefas] Permissão para gerenciar estrutura:', canManage);
@@ -346,24 +310,18 @@ export default function Tarefas() {
         }
       }
     };
-    
     checkPermission();
   }, [isAdmin, canManageStructure]);
-
-  const columnsFiltradas = useMemo(() =>
-    columns.filter((column) => column.board_id === selectedBoard),
-    [columns, selectedBoard]
-  );
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 3 }, // ✅ Reduzido para tornar drag mais responsivo
-    })
-  );
+  const columnsFiltradas = useMemo(() => columns.filter(column => column.board_id === selectedBoard), [columns, selectedBoard]);
+  const sensors = useSensors(useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 3
+    } // ✅ Reduzido para tornar drag mais responsivo
+  }));
 
   // Integrar sincronização de leads em tempo real
   useLeadsSync({
-    onInsert: (newLead) => {
+    onInsert: newLead => {
       console.log('📡 [Tarefas] Novo lead adicionado via sync:', newLead);
       // Atualizar tarefas relacionadas ao lead se necessário
       setTasks(prev => prev.map(task => {
@@ -389,7 +347,7 @@ export default function Tarefas() {
         return task;
       }));
     },
-    onDelete: (deletedLead) => {
+    onDelete: deletedLead => {
       console.log('📡 [Tarefas] Lead removido via sync:', deletedLead);
       // Limpar referências a leads deletados
       setTasks(prev => prev.map(task => {
@@ -407,10 +365,12 @@ export default function Tarefas() {
   });
 
   // Sistema de eventos globais para comunicação entre módulos
-  const { emitGlobalEvent } = useGlobalSync({
+  const {
+    emitGlobalEvent
+  } = useGlobalSync({
     callbacks: {
       // Receber eventos de outros módulos
-      onLeadUpdated: (data) => {
+      onLeadUpdated: data => {
         console.log('🌍 [Tarefas] Lead atualizado via evento global:', data);
         // Atualizar tarefas relacionadas ao lead
         setTasks(prev => prev.map(task => {
@@ -423,12 +383,12 @@ export default function Tarefas() {
           return task;
         }));
       },
-      onTaskCreated: (data) => {
+      onTaskCreated: data => {
         console.log('🌍 [Tarefas] Nova tarefa criada via evento global:', data);
         // Se a tarefa foi criada em outro módulo, recarregar dados
         carregarDados();
       },
-      onTaskUpdated: (data) => {
+      onTaskUpdated: data => {
         console.log('🌍 [Tarefas] Tarefa atualizada via evento global:', data);
         // Atualizar tarefa específica
         setTasks(prev => prev.map(task => {
@@ -443,18 +403,18 @@ export default function Tarefas() {
           return task;
         }));
       },
-      onTaskDeleted: (data) => {
+      onTaskDeleted: data => {
         console.log('🌍 [Tarefas] Tarefa removida via evento global:', data);
         setTasks(prev => prev.filter(task => task.id !== data.id));
       },
-      onMeetingScheduled: (data) => {
+      onMeetingScheduled: data => {
         console.log('🌍 [Tarefas] Reunião agendada, verificar se afeta tarefas:', data);
         // Se uma reunião foi agendada, pode criar tarefa de follow-up automaticamente
         if (data.lead_id) {
           // Opcional: lógica para criar tarefa relacionada
         }
       },
-      onFunnelStageChanged: (data) => {
+      onFunnelStageChanged: data => {
         console.log('🌍 [Tarefas] Lead movido no funil, verificar tarefas relacionadas:', data);
         // Atualizar tarefas relacionadas ao lead que mudou de etapa
         setTasks(prev => prev.map(task => {
@@ -475,12 +435,13 @@ export default function Tarefas() {
   useWorkflowAutomation({
     showNotifications: true
   });
-
   useEffect(() => {
     carregarDados();
     (async () => {
-      const { data } = await supabase.from('profiles').select('id, full_name').order('full_name');
-      setAllUsers((data as any) || []);
+      const {
+        data
+      } = await supabase.from('profiles').select('id, full_name').order('full_name');
+      setAllUsers(data as any || []);
     })();
 
     // Realtime: tasks (atualizações incrementais)
@@ -493,54 +454,54 @@ export default function Tarefas() {
         comments: task.comments ?? [],
         attachments: task.attachments ?? [],
         assignee_name: (task as any).assignee?.full_name,
-        lead_name: (task as any).lead?.nome || task.lead_name, // ✅ CORRIGIDO: usar 'nome' em vez de 'name'
+        lead_name: (task as any).lead?.nome || task.lead_name // ✅ CORRIGIDO: usar 'nome' em vez de 'name'
       } as any;
     };
-
-    const tasksChannel = supabase
-      .channel('tasks_board_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload: any) => {
-        if (payload.eventType === 'INSERT') {
-          setTasks(prev => [formatTask(payload.new), ...prev]);
-        } else if (payload.eventType === 'UPDATE') {
-          setTasks(prev => prev.map(t => t.id === payload.new.id ? formatTask(payload.new) : t));
-        } else if (payload.eventType === 'DELETE') {
-          setTasks(prev => prev.filter(t => t.id !== payload.old.id));
-        }
-      })
-      .subscribe();
+    const tasksChannel = supabase.channel('tasks_board_realtime').on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'tasks'
+    }, (payload: any) => {
+      if (payload.eventType === 'INSERT') {
+        setTasks(prev => [formatTask(payload.new), ...prev]);
+      } else if (payload.eventType === 'UPDATE') {
+        setTasks(prev => prev.map(t => t.id === payload.new.id ? formatTask(payload.new) : t));
+      } else if (payload.eventType === 'DELETE') {
+        setTasks(prev => prev.filter(t => t.id !== payload.old.id));
+      }
+    }).subscribe();
 
     // Realtime: colunas e quadros
     // ✅ CORRIGIDO: Respeitar bloqueio durante operação de drag
-    const columnsChannel = supabase
-      .channel('task_columns_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_columns' }, (payload: any) => {
-        // 🔒 Não recarregar se houver operação de drag em andamento OU coluna sendo arrastada
-        if (isMovingRef.current || activeColumnIdRef.current) {
-          console.log('[REALTIME] 🔒 Ignorando update de coluna durante drag', { 
-            isMoving: isMovingRef.current, 
-            activeColumn: activeColumnIdRef.current 
-          });
-          return;
-        }
-        console.log('[REALTIME] 📡 Recarregando colunas após mudança');
-        carregarDados();
-      })
-      .subscribe();
-
-    const boardsChannel = supabase
-      .channel('task_boards_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_boards' }, () => {
-        // 🔒 Não recarregar se houver operação de drag em andamento
-        if (isMovingRef.current) {
-          console.log('[REALTIME] 🔒 Ignorando update de board durante drag');
-          return;
-        }
-        console.log('[REALTIME] 📡 Recarregando boards após mudança');
-        carregarDados();
-      })
-      .subscribe();
-
+    const columnsChannel = supabase.channel('task_columns_realtime').on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'task_columns'
+    }, (payload: any) => {
+      // 🔒 Não recarregar se houver operação de drag em andamento OU coluna sendo arrastada
+      if (isMovingRef.current || activeColumnIdRef.current) {
+        console.log('[REALTIME] 🔒 Ignorando update de coluna durante drag', {
+          isMoving: isMovingRef.current,
+          activeColumn: activeColumnIdRef.current
+        });
+        return;
+      }
+      console.log('[REALTIME] 📡 Recarregando colunas após mudança');
+      carregarDados();
+    }).subscribe();
+    const boardsChannel = supabase.channel('task_boards_realtime').on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'task_boards'
+    }, () => {
+      // 🔒 Não recarregar se houver operação de drag em andamento
+      if (isMovingRef.current) {
+        console.log('[REALTIME] 🔒 Ignorando update de board durante drag');
+        return;
+      }
+      console.log('[REALTIME] 📡 Recarregando boards após mudança');
+      carregarDados();
+    }).subscribe();
     return () => {
       supabase.removeChannel(tasksChannel);
       supabase.removeChannel(columnsChannel);
@@ -555,15 +516,12 @@ export default function Tarefas() {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return;
       }
-
       switch (event.key.toLowerCase()) {
         case 'n':
           // Nova tarefa - abre o primeiro dialog de nova tarefa
           event.preventDefault();
           if (selectedBoard && columnsFiltradas.length > 0) {
-            const firstColumnButton = document.querySelector(
-              `[data-column-id="${columnsFiltradas[0].id}"] button[data-role="nova-tarefa-btn"]`
-            );
+            const firstColumnButton = document.querySelector(`[data-column-id="${columnsFiltradas[0].id}"] button[data-role="nova-tarefa-btn"]`);
             if (firstColumnButton instanceof HTMLButtonElement) {
               firstColumnButton.click();
             }
@@ -592,19 +550,17 @@ export default function Tarefas() {
           break;
       }
     };
-
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, [selectedBoard, columnsFiltradas]);
-
   const carregarDados = async () => {
     try {
       setLoading(true);
-      
-      const { data: boardsData } = await supabase.from("task_boards").select("*").order("criado_em");
+      const {
+        data: boardsData
+      } = await supabase.from("task_boards").select("*").order("criado_em");
       console.log('📋 [Tarefas] Boards carregados:', boardsData?.length || 0, boardsData);
       setBoards(boardsData || []);
-      
       if (!selectedBoard && boardsData && boardsData.length > 0) {
         console.log('📋 [Tarefas] Selecionando primeiro board:', boardsData[0].id, boardsData[0].nome);
         setSelectedBoard(boardsData[0].id);
@@ -613,58 +569,51 @@ export default function Tarefas() {
       }
 
       // ✅ CRÍTICO: Ordenar colunas por posição - filtrar por board selecionado
-      const columnsQuery = supabase
-        .from("task_columns")
-        .select("*")
-        .order("posicao", { ascending: true });
-      
+      const columnsQuery = supabase.from("task_columns").select("*").order("posicao", {
+        ascending: true
+      });
       if (selectedBoard) {
         columnsQuery.eq("board_id", selectedBoard);
       }
-      
-      const { data: columnsData } = await columnsQuery;
+      const {
+        data: columnsData
+      } = await columnsQuery;
       setColumns(columnsData || []);
 
       // ✅ OTIMIZAÇÃO: Limitar query inicial - só carregar tarefas do board selecionado e limitar quantidade
       console.log("🔍 Executando query de tarefas...");
       console.log("📋 Board ID:", selectedBoard);
-      
+
       // ✅ CORRIGIDO: Tentar query com relacionamento primeiro, se falhar usar query simples
-      let tasksQuery = supabase
-        .from("tasks")
-        .select(`
+      let tasksQuery = supabase.from("tasks").select(`
           *,
           assignee:profiles!tasks_assignee_id_fkey(full_name),
           lead:leads!tasks_lead_id_fkey(id, name, phone)
-        `)
-        .order("created_at", { ascending: false })
-        .limit(INITIAL_LOAD_LIMIT);
+        `).order("created_at", {
+        ascending: false
+      }).limit(INITIAL_LOAD_LIMIT);
 
       // ✅ CRÍTICO: Sempre filtrar por board selecionado (ou carregar todas se não houver board)
       if (selectedBoard) {
         tasksQuery = tasksQuery.eq("board_id", selectedBoard);
       }
-      
-      let { data: tasksData, error: tasksError } = await tasksQuery;
+      let {
+        data: tasksData,
+        error: tasksError
+      } = await tasksQuery;
 
       // ✅ FALLBACK: Se a query com relacionamento falhar, tentar sem relacionamento
       if (tasksError) {
         console.warn("⚠️ Query com relacionamento falhou, tentando sem relacionamento...", tasksError);
-        
-        let fallbackQuery = supabase
-          .from("tasks")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(INITIAL_LOAD_LIMIT);
-        
+        let fallbackQuery = supabase.from("tasks").select("*").order("created_at", {
+          ascending: false
+        }).limit(INITIAL_LOAD_LIMIT);
         if (selectedBoard) {
           fallbackQuery = fallbackQuery.eq("board_id", selectedBoard);
         }
-        
         const fallbackResult = await fallbackQuery;
         const fallbackTasksData = fallbackResult.data;
         tasksError = fallbackResult.error;
-        
         if (tasksError) {
           console.error("❌ Erro ao carregar tarefas (fallback também falhou):", tasksError);
           console.error("❌ Detalhes do erro:", JSON.stringify(tasksError, null, 2));
@@ -672,20 +621,18 @@ export default function Tarefas() {
           setTasks([]);
           return;
         }
-        
+
         // Se o fallback funcionou, buscar dados relacionados manualmente
         if (fallbackTasksData && fallbackTasksData.length > 0) {
           const assigneeIds = [...new Set(fallbackTasksData.map((t: any) => t.assignee_id).filter(Boolean))];
           const leadIds = [...new Set(fallbackTasksData.map((t: any) => t.lead_id).filter(Boolean))];
-          
-          const [assigneesResult, leadsResult] = await Promise.all([
-            assigneeIds.length > 0 ? supabase.from("profiles").select("id, full_name").in("id", assigneeIds) : { data: [] },
-            leadIds.length > 0 ? supabase.from("leads").select("id, name, phone").in("id", leadIds) : { data: [] }
-          ]);
-          
+          const [assigneesResult, leadsResult] = await Promise.all([assigneeIds.length > 0 ? supabase.from("profiles").select("id, full_name").in("id", assigneeIds) : {
+            data: []
+          }, leadIds.length > 0 ? supabase.from("leads").select("id, name, phone").in("id", leadIds) : {
+            data: []
+          }]);
           const assigneesMap = new Map((assigneesResult.data || []).map((a: any) => [a.id, a]));
           const leadsMap = new Map((leadsResult.data || []).map((l: any) => [l.id, l]));
-          
           tasksData = fallbackTasksData.map((task: any) => ({
             ...task,
             assignee: assigneesMap.get(task.assignee_id) || null,
@@ -695,7 +642,6 @@ export default function Tarefas() {
           tasksData = [];
         }
       }
-
       console.log("✅ Tarefas carregadas:", tasksData?.length || 0, "tarefas");
       console.log("📋 Board selecionado:", selectedBoard);
       console.log("📊 Dados brutos:", tasksData);
@@ -708,27 +654,20 @@ export default function Tarefas() {
           task.responsaveis.forEach((id: string) => allResponsaveisIds.add(id));
         }
       });
-      
       let responsaveisMap = new Map<string, string>();
       if (allResponsaveisIds.size > 0) {
-        const { data: responsaveisProfiles } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', Array.from(allResponsaveisIds));
-        
+        const {
+          data: responsaveisProfiles
+        } = await supabase.from('profiles').select('id, full_name').in('id', Array.from(allResponsaveisIds));
         if (responsaveisProfiles) {
           responsaveisProfiles.forEach((p: any) => {
             responsaveisMap.set(p.id, p.full_name);
           });
         }
       }
-      
       const formattedTasks = (tasksData || []).map((task: any) => {
         // Mapear IDs dos responsáveis para nomes
-        const responsaveis_names = Array.isArray(task.responsaveis) 
-          ? task.responsaveis.map((id: string) => responsaveisMap.get(id)).filter(Boolean)
-          : [];
-        
+        const responsaveis_names = Array.isArray(task.responsaveis) ? task.responsaveis.map((id: string) => responsaveisMap.get(id)).filter(Boolean) : [];
         return {
           ...task,
           checklist: task.checklist ?? [],
@@ -736,11 +675,11 @@ export default function Tarefas() {
           comments: task.comments ?? [],
           attachments: task.attachments ?? [],
           assignee_name: task.assignee?.full_name,
-          responsaveis_names, // ✅ NOVO: Nomes dos responsáveis adicionais
-          lead_name: task.lead?.nome || task.lead?.name || task.lead_name,
+          responsaveis_names,
+          // ✅ NOVO: Nomes dos responsáveis adicionais
+          lead_name: task.lead?.nome || task.lead?.name || task.lead_name
         };
       });
-      
       console.log("✅ Tarefas formatadas:", formattedTasks.length);
       setTasks(formattedTasks);
     } catch (error) {
@@ -753,14 +692,15 @@ export default function Tarefas() {
 
   // ✅ MELHORADO: Drag & Drop com validação robusta e logs detalhados
   const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    console.log('[Drag&Drop] 🎯 handleDragEnd iniciado:', { 
-      activeId: active.id, 
+    const {
+      active,
+      over
+    } = event;
+    console.log('[Drag&Drop] 🎯 handleDragEnd iniciado:', {
+      activeId: active.id,
       overId: over?.id,
-      isMovingRef: isMovingRef.current 
+      isMovingRef: isMovingRef.current
     });
-    
     if (!over) {
       console.warn('[Drag&Drop] ❌ Sem destino válido');
       setActiveTaskId(null);
@@ -774,24 +714,22 @@ export default function Tarefas() {
       setActiveTaskId(null);
       return;
     }
-
     const activeId = String(active.id);
     const activeData = (active as any).data?.current;
-    
-    console.log('[Drag&Drop] 📊 Dados do drag:', { 
-      activeId, 
+    console.log('[Drag&Drop] 📊 Dados do drag:', {
+      activeId,
       activeType: activeData?.type,
-      overId: over.id 
+      overId: over.id
     });
-    
+
     // Verificar se estamos arrastando uma coluna
     if (activeData?.type === 'column') {
       console.log('[Drag&Drop] 🔄 Detectado drag de COLUNA');
-      
+
       // ✅ MELHORADO: Detectar se está sobre outra coluna ou sobre um elemento dentro de uma coluna
       const overData: any = (over as any).data?.current || {};
       let overColumnId: string | null = null;
-      
+
       // Prioridade 1: Se over.id é o ID de uma coluna válida
       const isValidColumnId = columnsFiltradas.some(c => c.id === String(over.id));
       if (isValidColumnId) {
@@ -809,11 +747,7 @@ export default function Tarefas() {
         let element: HTMLElement | null = document.querySelector(`[data-column-id]`);
         if (!element) {
           // Se não encontrar, tentar pelo ID do over
-          const overElement = document.elementFromPoint(
-            (over.rect?.left || 0) + (over.rect?.width || 0) / 2,
-            (over.rect?.top || 0) + (over.rect?.height || 0) / 2
-          ) as HTMLElement;
-          
+          const overElement = document.elementFromPoint((over.rect?.left || 0) + (over.rect?.width || 0) / 2, (over.rect?.top || 0) + (over.rect?.height || 0) / 2) as HTMLElement;
           if (overElement) {
             // Procurar elemento pai com data-column-id
             let parent = overElement.closest('[data-column-id]') as HTMLElement;
@@ -827,7 +761,6 @@ export default function Tarefas() {
           }
         }
       }
-      
       if (!overColumnId) {
         console.error('[Drag&Drop] ❌ Não foi possível identificar coluna destino');
         console.log('[Drag&Drop] 📊 Dados disponíveis:', {
@@ -838,39 +771,40 @@ export default function Tarefas() {
         setActiveTaskId(null);
         return;
       }
-      
       const overId = overColumnId;
-      
       if (activeId === overId) {
         console.log('[Drag&Drop] ℹ️ Drop na mesma posição, ignorando');
         setActiveTaskId(null);
         return;
       }
-      
       const oldIndex = columnsFiltradas.findIndex(c => c.id === activeId);
       const newIndex = columnsFiltradas.findIndex(c => c.id === overId);
-      
-      console.log('[Drag&Drop] 📍 Índices:', { 
-        oldIndex, 
-        newIndex, 
+      console.log('[Drag&Drop] 📍 Índices:', {
+        oldIndex,
+        newIndex,
         total: columnsFiltradas.length,
         activeId,
         overId,
-        columnsIds: columnsFiltradas.map(c => ({ id: c.id, nome: c.nome, posicao: c.posicao }))
+        columnsIds: columnsFiltradas.map(c => ({
+          id: c.id,
+          nome: c.nome,
+          posicao: c.posicao
+        }))
       });
-      
       if (oldIndex === -1 || newIndex === -1) {
-        console.error('[Drag&Drop] ❌ Índices inválidos:', { 
-          oldIndex, 
+        console.error('[Drag&Drop] ❌ Índices inválidos:', {
+          oldIndex,
           newIndex,
           activeId,
           overId,
-          columnsFiltradas: columnsFiltradas.map(c => ({ id: c.id, nome: c.nome }))
+          columnsFiltradas: columnsFiltradas.map(c => ({
+            id: c.id,
+            nome: c.nome
+          }))
         });
         setActiveTaskId(null);
         return;
       }
-      
       if (oldIndex !== -1 && newIndex !== -1) {
         try {
           // 🔒 Bloquear operações concorrentes
@@ -879,43 +813,44 @@ export default function Tarefas() {
 
           // ✅ Reordenar colunas localmente primeiro
           const reorderedColumns = arrayMove(columnsFiltradas, oldIndex, newIndex);
-          
           console.log('[Drag&Drop] 📋 Nova ordem:', reorderedColumns.map((c, i) => `${i}. ${c.nome}`));
-          
+
           // ✅ Atualizar posições nas colunas reordenadas
           const updatedColumnsWithPosition = reorderedColumns.map((col, index) => ({
             ...col,
             posicao: index
           }));
-
           console.log('[Drag&Drop] 🎨 Atualizando UI imediatamente...');
-          
+
           // ✅ CRÍTICO: Atualizar estado ANTES de persistir no banco
           // ✅ IMPORTANTE: Usar função de atualização que garante ordem correta
           setColumns(prev => {
             // Filtrar apenas colunas do board atual
             const boardColumns = prev.filter(col => col.board_id === selectedBoard);
             const otherColumns = prev.filter(col => col.board_id !== selectedBoard);
-            
+
             // Criar um mapa das novas posições baseado na ordem reordenada
             const newPositions = new Map(updatedColumnsWithPosition.map(c => [c.id, c.posicao]));
-            
+
             // Atualizar colunas do board atual com as novas posições
             const updatedBoardColumns = boardColumns.map(col => {
               const newPosition = newPositions.get(col.id);
               if (newPosition !== undefined) {
-                return { ...col, posicao: newPosition };
+                return {
+                  ...col,
+                  posicao: newPosition
+                };
               }
               return col;
             });
-            
+
             // ✅ CRÍTICO: Ordenar ANTES de retornar para garantir ordem correta
             updatedBoardColumns.sort((a, b) => a.posicao - b.posicao);
-            
+
             // Retornar colunas atualizadas + outras colunas
             return [...updatedBoardColumns, ...otherColumns];
           });
-          
+
           // ✅ FORÇAR re-render imediato para garantir que a UI atualize
           // Usar requestAnimationFrame para garantir que a atualização aconteça no próximo frame
           requestAnimationFrame(() => {
@@ -926,7 +861,7 @@ export default function Tarefas() {
               return [...boardCols, ...others];
             });
           });
-          
+
           // ✅ DUPLA GARANTIA: Forçar novamente após um pequeno delay
           setTimeout(() => {
             setColumns(current => {
@@ -936,36 +871,31 @@ export default function Tarefas() {
               return [...boardCols, ...others];
             });
           }, 100);
-          
+
           // 💾 Atualizar posições no banco de dados
           console.log('[Drag&Drop] 💾 Atualizando posições no banco...');
-          
           const updatePromises = updatedColumnsWithPosition.map((col, index) => {
             console.log(`[Drag&Drop] 📝 Atualizando ${col.nome}: posicao=${index}`);
-            return supabase
-              .from('task_columns')
-              .update({ posicao: index })
-              .eq('id', col.id);
+            return supabase.from('task_columns').update({
+              posicao: index
+            }).eq('id', col.id);
           });
-
           const results = await Promise.all(updatePromises);
-          
+
           // Verificar erros
           const errors = results.filter(result => result.error);
           if (errors.length > 0) {
             console.error('[Drag&Drop] ❌ Erros nas atualizações:', errors);
             throw new Error('Erro ao atualizar posições das colunas');
           }
-
           console.log('[Drag&Drop] ✅ Colunas reordenadas com sucesso no banco!');
           toast.success("Ordem das colunas atualizada!");
-          
+
           // ✅ NÃO recarregar dados - manter a ordem atualizada no estado
           // O estado local já está correto, não precisa recarregar
-          
+
           // ✅ Aguardar um pouco antes de desbloquear realtime
           await new Promise(resolve => setTimeout(resolve, 500));
-          
         } catch (error) {
           console.error('[Drag&Drop] ❌ Erro ao reordenar colunas:', error);
           toast.error("Erro ao atualizar ordem das colunas");
@@ -980,14 +910,17 @@ export default function Tarefas() {
             console.log('[Drag&Drop] ✓ Realtime desbloqueado');
           }, 3000); // ✅ Aumentado para 3s para garantir persistência completa
         }
-        
+
         // ✅ Limpar estados após drag de coluna
         setActiveTaskId(null);
         setActiveColumnId(null);
         activeColumnIdRef.current = null;
         return;
       } else {
-        console.error('[Drag&Drop] ❌ Índices inválidos:', { oldIndex, newIndex });
+        console.error('[Drag&Drop] ❌ Índices inválidos:', {
+          oldIndex,
+          newIndex
+        });
         setActiveTaskId(null);
         setActiveColumnId(null);
         activeColumnIdRef.current = null;
@@ -999,17 +932,14 @@ export default function Tarefas() {
     console.log('[Drag&Drop] 📝 Detectado drag de TAREFA');
     const taskId = activeId;
     const task = tasks.find(t => t.id === taskId);
-    
     if (!task) {
       console.error('[Drag&Drop] Tarefa não encontrada:', taskId);
       toast.error("Tarefa não encontrada");
       setActiveTaskId(null);
       return;
     }
-
     const overData: any = (over as any).data?.current || {};
     const overId = String(over.id);
-    
     console.log('[Drag&Drop] 🔍 Análise detalhada:', {
       overId,
       overDataType: overData?.type,
@@ -1017,10 +947,10 @@ export default function Tarefas() {
       overAccepts: overData?.accepts,
       taskCurrentColumn: task.column_id
     });
-    
+
     // ✅ MELHORADO: Validação robusta com múltiplos fallbacks
     let newColumnId: string | null = null;
-    
+
     // Prioridade 1: Se over.id é o ID de uma coluna válida
     const isValidColumnId = columnsFiltradas.some(c => c.id === overId);
     if (isValidColumnId) {
@@ -1056,7 +986,10 @@ export default function Tarefas() {
     if (!targetColumn) {
       console.error('[Drag&Drop] Coluna destino não encontrada ou inválida', {
         newColumnId,
-        availableColumns: columnsFiltradas.map(c => ({ id: c.id, nome: c.nome })),
+        availableColumns: columnsFiltradas.map(c => ({
+          id: c.id,
+          nome: c.nome
+        })),
         selectedBoard
       });
       toast.error(`Coluna destino inválida: ${newColumnId}`);
@@ -1070,7 +1003,6 @@ export default function Tarefas() {
       setActiveTaskId(null);
       return;
     }
-
     const oldColumnId = task.column_id;
     console.log('[Drag&Drop] Movendo tarefa', {
       taskId,
@@ -1083,29 +1015,41 @@ export default function Tarefas() {
     // ✅ MELHORADO: Atualização otimista com validação
     setTasks(prev => prev.map(t => {
       if (t.id === taskId) {
-        return { ...t, column_id: newColumnId! };
+        return {
+          ...t,
+          column_id: newColumnId!
+        };
       }
       return t;
     }));
-
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: {
+          session
+        }
+      } = await supabase.auth.getSession();
       if (!session) {
         // Reverter atualização otimista
-        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, column_id: oldColumnId } : t));
+        setTasks(prev => prev.map(t => t.id === taskId ? {
+          ...t,
+          column_id: oldColumnId
+        } : t));
         toast.error("Não autenticado");
         setActiveTaskId(null);
         return;
       }
-
       const response = await supabase.functions.invoke("api-tarefas", {
-        body: { action: "mover_tarefa", data: { task_id: taskId, nova_coluna_id: newColumnId } }
+        body: {
+          action: "mover_tarefa",
+          data: {
+            task_id: taskId,
+            nova_coluna_id: newColumnId
+          }
+        }
       });
-
       if (response.error) {
         throw response.error;
       }
-
       toast.success(`Tarefa movida para "${targetColumn.nome}"`);
 
       // Emitir evento global para sincronização
@@ -1123,72 +1067,81 @@ export default function Tarefas() {
       // Realtime (tasks channel) confirmará a atualização; evitar recarga completa
     } catch (error: any) {
       console.error('[Drag&Drop] Erro ao mover tarefa:', error);
-      
+
       // Reverter atualização otimista
       setTasks(prev => prev.map(t => {
         if (t.id === taskId) {
-          return { ...t, column_id: oldColumnId };
+          return {
+            ...t,
+            column_id: oldColumnId
+          };
         }
         return t;
       }));
-      
       toast.error(error?.message || "Erro ao mover tarefa");
       // Reverter para estado consistente via recarga somente em erro
       carregarDados();
     }
     setActiveTaskId(null);
   };
-
   const handleDragStart = useCallback((event: any) => {
     setActiveTaskId(event.active?.id ?? null);
   }, []);
-
   const handleDragCancel = useCallback(() => setActiveTaskId(null), []);
 
   // 🎯 Navegação horizontal suave (scroll das colunas)
   const scrollHorizontal = useCallback((direction: 'left' | 'right') => {
     if (!scrollContainerRef.current) return;
-    
     const container = scrollContainerRef.current;
     const scrollAmount = 400; // Largura da coluna + gap
-    const targetScroll = direction === 'left' 
-      ? container.scrollLeft - scrollAmount 
-      : container.scrollLeft + scrollAmount;
-    
+    const targetScroll = direction === 'left' ? container.scrollLeft - scrollAmount : container.scrollLeft + scrollAmount;
     container.scrollTo({
       left: targetScroll,
       behavior: 'smooth'
     });
   }, []);
-
   const criarNovoBoard = useCallback(async () => {
     if (!novoBoardNome.trim()) return;
-
     try {
-      const { data: boardData } = await supabase.functions.invoke("api-tarefas", {
-        body: { action: "criar_board", data: { nome: novoBoardNome } }
+      const {
+        data: boardData
+      } = await supabase.functions.invoke("api-tarefas", {
+        body: {
+          action: "criar_board",
+          data: {
+            nome: novoBoardNome
+          }
+        }
       });
-
       const newBoardId = boardData?.data?.id;
 
       // Criar colunas padrão
       if (newBoardId) {
-        const colunasDefault = [
-          { nome: "A Fazer", cor: "#3b82f6", posicao: 0 },
-          { nome: "Em Progresso", cor: "#eab308", posicao: 1 },
-          { nome: "Concluído", cor: "#22c55e", posicao: 2 },
-        ];
-
+        const colunasDefault = [{
+          nome: "A Fazer",
+          cor: "#3b82f6",
+          posicao: 0
+        }, {
+          nome: "Em Progresso",
+          cor: "#eab308",
+          posicao: 1
+        }, {
+          nome: "Concluído",
+          cor: "#22c55e",
+          posicao: 2
+        }];
         for (const coluna of colunasDefault) {
           await supabase.functions.invoke("api-tarefas", {
             body: {
               action: "criar_coluna",
-              data: { ...coluna, board_id: newBoardId },
-            },
+              data: {
+                ...coluna,
+                board_id: newBoardId
+              }
+            }
           });
         }
       }
-
       toast.success("Quadro criado com colunas padrão!");
       setNovoBoardNome("");
       setDialogNovoBoard(false);
@@ -1202,9 +1155,10 @@ export default function Tarefas() {
   const loadMoreTasks = useCallback(async (columnId: string) => {
     const currentCount = tasksPerColumn[columnId] || TASKS_PER_PAGE;
     const newCount = currentCount + TASKS_PER_PAGE;
-
-    setLoadingMore(prev => ({ ...prev, [columnId]: true }));
-
+    setLoadingMore(prev => ({
+      ...prev,
+      [columnId]: true
+    }));
     try {
       // Simular carregamento adicional (na implementação real, faria uma query paginada)
       await new Promise(resolve => setTimeout(resolve, 500)); // Simular delay de rede
@@ -1217,7 +1171,10 @@ export default function Tarefas() {
       console.error('Erro ao carregar mais tarefas:', error);
       toast.error('Erro ao carregar mais tarefas');
     } finally {
-      setLoadingMore(prev => ({ ...prev, [columnId]: false }));
+      setLoadingMore(prev => ({
+        ...prev,
+        [columnId]: false
+      }));
     }
   }, [tasksPerColumn, TASKS_PER_PAGE]);
 
@@ -1235,16 +1192,11 @@ export default function Tarefas() {
       }
     };
   }, [searchText]);
-
   const matchesSearch = useCallback((t: Task) => {
     if (!debouncedSearchText.trim()) return true;
     const q = debouncedSearchText.toLowerCase();
-    return (
-      (t.title || "").toLowerCase().includes(q) ||
-      (t.description || "").toLowerCase().includes(q)
-    );
+    return (t.title || "").toLowerCase().includes(q) || (t.description || "").toLowerCase().includes(q);
   }, [debouncedSearchText]);
-
   const matchesFilters = useCallback((t: any) => {
     if (filterAssignee && !(t.assignee_id === filterAssignee || (t.responsaveis || []).includes(filterAssignee))) return false;
     if (filterPriority && t.priority !== filterPriority) return false;
@@ -1255,10 +1207,8 @@ export default function Tarefas() {
   // ✅ OTIMIZAÇÃO: Memoizar tarefas filtradas por coluna
   const tasksByColumn = useMemo(() => {
     const grouped: Record<string, Task[]> = {};
-    columnsFiltradas.forEach((column) => {
-      grouped[column.id] = tasks.filter(
-        (t) => t.column_id === column.id && matchesSearch(t) && matchesFilters(t)
-      );
+    columnsFiltradas.forEach(column => {
+      grouped[column.id] = tasks.filter(t => t.column_id === column.id && matchesSearch(t) && matchesFilters(t));
     });
     return grouped;
   }, [tasks, columnsFiltradas, matchesSearch, matchesFilters]);
@@ -1266,7 +1216,7 @@ export default function Tarefas() {
   // ✅ OTIMIZAÇÃO: Memoizar contagem de tarefas por coluna
   const taskCountsByColumn = useMemo(() => {
     const counts: Record<string, number> = {};
-    columnsFiltradas.forEach((column) => {
+    columnsFiltradas.forEach(column => {
       counts[column.id] = tasksByColumn[column.id]?.length || 0;
     });
     return counts;
@@ -1278,28 +1228,22 @@ export default function Tarefas() {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const thisWeek = new Date(today);
     thisWeek.setDate(today.getDate() - today.getDay());
-
     const tasksInBoard = tasks.filter(t => t.board_id === selectedBoard);
     const completedTasks = tasksInBoard.filter(t => {
       // Considerar tarefa concluída se estiver em coluna com nome contendo "conclu" ou similar
       const column = columns.find(c => c.id === t.column_id);
-      return column?.nome?.toLowerCase().includes('conclu') ||
-             column?.nome?.toLowerCase().includes('feito') ||
-             column?.nome?.toLowerCase().includes('done');
+      return column?.nome?.toLowerCase().includes('conclu') || column?.nome?.toLowerCase().includes('feito') || column?.nome?.toLowerCase().includes('done');
     });
-
     const overdueTasks = tasksInBoard.filter(t => {
       if (!t.due_date) return false;
       const dueDate = new Date(t.due_date);
       return dueDate < now && !completedTasks.some(ct => ct.id === t.id);
     });
-
     const todayCompleted = completedTasks.filter(t => {
       // Simplificar: considerar como concluído hoje se foi atualizado recentemente
       // Na implementação real, seria melhor ter um campo updated_at
       return true; // Placeholder
     });
-
     const totalTimeSpent = 0; // Simplificado - campo tempo_gasto não existe
     const avgTimePerTask = 0; // Simplificado
 
@@ -1310,18 +1254,15 @@ export default function Tarefas() {
       todayCompleted: todayCompleted.length,
       totalTimeSpent,
       avgTimePerTask,
-      completionRate: tasksInBoard.length > 0 ? (completedTasks.length / tasksInBoard.length) * 100 : 0
+      completionRate: tasksInBoard.length > 0 ? completedTasks.length / tasksInBoard.length * 100 : 0
     };
   }, [tasks, columns, selectedBoard]);
-
   if (loading) return <div className="flex items-center justify-center h-screen"><p>Carregando...</p></div>;
-
-  return (
-    <TarefasProvider>
+  return <TarefasProvider>
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Tarefas (Trello Style)</h1>
+          <h1 className="text-3xl font-bold">Trello</h1>
           <p className="text-muted-foreground">Gerencie suas tarefas em quadros Kanban</p>
           <p className="text-xs text-muted-foreground mt-1">
             💡 Atalhos: <kbd className="px-1 py-0.5 bg-muted rounded text-xs">N</kbd> Nova tarefa •
@@ -1332,57 +1273,34 @@ export default function Tarefas() {
         </div>
         <div className="flex gap-2 items-center">
           <div className="flex items-center gap-1 rounded-md border p-1">
-            <UIButton
-              variant={viewMode === 'board' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('board')}
-            >
+            <UIButton variant={viewMode === 'board' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('board')}>
               🗂 Quadro
             </UIButton>
-            <UIButton
-              variant={viewMode === 'calendar' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('calendar')}
-            >
+            <UIButton variant={viewMode === 'calendar' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('calendar')}>
               📅 Calendário
             </UIButton>
-            <UIButton
-              variant={viewMode === 'dashboard' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('dashboard')}
-            >
+            <UIButton variant={viewMode === 'dashboard' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('dashboard')}>
               📊 Dashboard
             </UIButton>
           </div>
-          <Input
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            placeholder="Buscar tarefas..."
-            className="w-64"
-          />
-          <select className="border rounded-md p-2" value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)}>
+          <Input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="Buscar tarefas..." className="w-64" />
+          <select className="border rounded-md p-2" value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}>
             <option value="">Responsável</option>
             {allUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
           </select>
-          <select className="border rounded-md p-2" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+          <select className="border rounded-md p-2" value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
             <option value="">Prioridade</option>
             <option value="baixa">Baixa</option>
             <option value="media">Média</option>
             <option value="alta">Alta</option>
             <option value="urgente">Urgente</option>
           </select>
-          <select className="border rounded-md p-2" value={filterTag} onChange={(e) => setFilterTag(e.target.value)}>
+          <select className="border rounded-md p-2" value={filterTag} onChange={e => setFilterTag(e.target.value)}>
             <option value="">Tag</option>
-            {Array.from(new Set(tasks.flatMap((t: any) => Array.isArray(t.tags) ? t.tags : []))).map(tag => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
+            {Array.from(new Set(tasks.flatMap((t: any) => Array.isArray(t.tags) ? t.tags : []))).map(tag => <option key={tag} value={tag}>{tag}</option>)}
           </select>
-          {(isAdmin || canManageTaskStructure) && (
-            <>
-              <Button 
-                variant="outline"
-                onClick={() => setDialogNovoBoard(true)}
-              >
+          {(isAdmin || canManageTaskStructure) && <>
+              <Button variant="outline" onClick={() => setDialogNovoBoard(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Novo Quadro
               </Button>
@@ -1394,16 +1312,11 @@ export default function Tarefas() {
                   <div className="space-y-4">
                     <div>
                       <Label>Nome do Quadro</Label>
-                      <Input 
-                        value={novoBoardNome} 
-                        onChange={(e) => setNovoBoardNome(e.target.value)} 
-                        placeholder="Ex: Projeto Q1 2024"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            criarNovoBoard();
-                          }
-                        }}
-                      />
+                      <Input value={novoBoardNome} onChange={e => setNovoBoardNome(e.target.value)} placeholder="Ex: Projeto Q1 2024" onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        criarNovoBoard();
+                      }
+                    }} />
                     </div>
                     <Button onClick={criarNovoBoard} className="w-full">
                       Criar
@@ -1411,172 +1324,115 @@ export default function Tarefas() {
                   </div>
                 </DialogContent>
               </Dialog>
-            </>
-          )}
+            </>}
         </div>
       </div>
 
-      {viewMode === 'board' && boards.length > 0 && (
-        <div className="mb-6">
+      {viewMode === 'board' && boards.length > 0 && <div className="mb-6">
           <Label>Quadro</Label>
           <div className="flex items-center gap-2 mt-2">
-            <select 
-              value={selectedBoard || ""} 
-              onChange={(e) => {
-                console.log('📋 [Tarefas] Board selecionado:', e.target.value);
-                setSelectedBoard(e.target.value);
-              }} 
-              className="flex-1 max-w-xs p-2 border rounded-md"
-            >
-              {boards.map((board) => (
-                <option key={board.id} value={board.id}>
+            <select value={selectedBoard || ""} onChange={e => {
+            console.log('📋 [Tarefas] Board selecionado:', e.target.value);
+            setSelectedBoard(e.target.value);
+          }} className="flex-1 max-w-xs p-2 border rounded-md">
+              {boards.map(board => <option key={board.id} value={board.id}>
                   {board.nome}
-                </option>
-              ))}
+                </option>)}
             </select>
             
             <DropdownMenu open={dropdownMenuOpen} onOpenChange={setDropdownMenuOpen}>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="icon"
-                  disabled={!selectedBoard}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('🔘 [Tarefas] Botão de três pontos clicado');
-                    console.log('🔘 [Tarefas] canManageTaskStructure:', canManageTaskStructure);
-                    console.log('🔘 [Tarefas] isAdmin:', isAdmin);
-                    console.log('🔘 [Tarefas] selectedBoard:', selectedBoard);
-                    console.log('🔘 [Tarefas] boards:', boards);
-                  }}
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                  }}
-                  className="z-10"
-                >
+                <Button variant="outline" size="icon" disabled={!selectedBoard} onClick={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('🔘 [Tarefas] Botão de três pontos clicado');
+                console.log('🔘 [Tarefas] canManageTaskStructure:', canManageTaskStructure);
+                console.log('🔘 [Tarefas] isAdmin:', isAdmin);
+                console.log('🔘 [Tarefas] selectedBoard:', selectedBoard);
+                console.log('🔘 [Tarefas] boards:', boards);
+              }} onMouseDown={e => {
+                e.stopPropagation();
+              }} className="z-10">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent 
-                align="end"
-                className="z-[99999] bg-background border shadow-lg"
-                style={{ zIndex: 99999 }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {!selectedBoard ? (
-                  <DropdownMenuItem disabled>
+              <DropdownMenuContent align="end" className="z-[99999] bg-background border shadow-lg" style={{
+              zIndex: 99999
+            }} onClick={e => e.stopPropagation()}>
+                {!selectedBoard ? <DropdownMenuItem disabled>
                     Selecione um quadro primeiro
-                  </DropdownMenuItem>
-                ) : (isAdmin || canManageTaskStructure) ? (
-                  <>
-                    <DropdownMenuItem 
-                      onClick={(e) => {
-                        console.log('✏️ [Tarefas] Editar Quadro clicado');
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDropdownMenuOpen(false);
-                        setEditarQuadroOpen(true);
-                      }}
-                    >
+                  </DropdownMenuItem> : isAdmin || canManageTaskStructure ? <>
+                    <DropdownMenuItem onClick={e => {
+                  console.log('✏️ [Tarefas] Editar Quadro clicado');
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDropdownMenuOpen(false);
+                  setEditarQuadroOpen(true);
+                }}>
                       <Pencil className="mr-2 h-4 w-4" />
                       Editar Quadro
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={(e) => {
-                        console.log('⚙️ [Tarefas] Gerenciar Colunas clicado');
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDropdownMenuOpen(false);
-                        setEditarQuadroOpen(true);
-                      }}
-                    >
+                    <DropdownMenuItem onClick={e => {
+                  console.log('⚙️ [Tarefas] Gerenciar Colunas clicado');
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDropdownMenuOpen(false);
+                  setEditarQuadroOpen(true);
+                }}>
                       <Settings className="mr-2 h-4 w-4" />
                       Gerenciar Colunas
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={(e) => {
-                        console.log('🗑️ [Tarefas] Excluir Quadro clicado');
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDropdownMenuOpen(false);
-                        setEditarQuadroOpen(true);
-                        // Pequeno delay para garantir que o dialog de edição seja montado primeiro
-                        setTimeout(() => {
-                          setExcluirQuadroOpen(true);
-                        }, 100);
-                      }}
-                      className="text-destructive focus:text-destructive"
-                    >
+                    <DropdownMenuItem onClick={e => {
+                  console.log('🗑️ [Tarefas] Excluir Quadro clicado');
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDropdownMenuOpen(false);
+                  setEditarQuadroOpen(true);
+                  // Pequeno delay para garantir que o dialog de edição seja montado primeiro
+                  setTimeout(() => {
+                    setExcluirQuadroOpen(true);
+                  }, 100);
+                }} className="text-destructive focus:text-destructive">
                       <Trash2 className="mr-2 h-4 w-4" />
                       Excluir Quadro
                     </DropdownMenuItem>
-                  </>
-                ) : (
-                  <DropdownMenuItem disabled>
+                  </> : <DropdownMenuItem disabled>
                     Sem permissão para gerenciar quadros
-                  </DropdownMenuItem>
-                )}
+                  </DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </div>
-      )}
+        </div>}
       
-      {selectedBoard && (
-        <EditarQuadroDialog
-          boardId={selectedBoard}
-          boardNome={boards.find((b) => b.id === selectedBoard)?.nome || ""}
-          onUpdated={() => {
-            console.log('🔄 [Tarefas] Recarregando dados após atualização do quadro');
-            carregarDados();
-          }}
-          open={editarQuadroOpen}
-          onOpenChange={(open) => {
-            console.log('📝 [Tarefas] Dialog de edição:', open ? 'aberto' : 'fechado');
-            setEditarQuadroOpen(open);
-            if (!open) {
-              // Se fechar o dialog de edição, também fechar o dialog de exclusão
-              setExcluirQuadroOpen(false);
-            }
-          }}
-          openDeleteDialog={excluirQuadroOpen}
-          onDeleteDialogChange={(open) => {
-            console.log('🗑️ [Tarefas] Dialog de exclusão:', open ? 'aberto' : 'fechado');
-            setExcluirQuadroOpen(open);
-            // Se o dialog de exclusão for fechado sem excluir, manter o dialog de edição aberto
-            // para que o usuário possa fazer outras ações se desejar
-          }}
-        />
-      )}
+      {selectedBoard && <EditarQuadroDialog boardId={selectedBoard} boardNome={boards.find(b => b.id === selectedBoard)?.nome || ""} onUpdated={() => {
+        console.log('🔄 [Tarefas] Recarregando dados após atualização do quadro');
+        carregarDados();
+      }} open={editarQuadroOpen} onOpenChange={open => {
+        console.log('📝 [Tarefas] Dialog de edição:', open ? 'aberto' : 'fechado');
+        setEditarQuadroOpen(open);
+        if (!open) {
+          // Se fechar o dialog de edição, também fechar o dialog de exclusão
+          setExcluirQuadroOpen(false);
+        }
+      }} openDeleteDialog={excluirQuadroOpen} onDeleteDialogChange={open => {
+        console.log('🗑️ [Tarefas] Dialog de exclusão:', open ? 'aberto' : 'fechado');
+        setExcluirQuadroOpen(open);
+        // Se o dialog de exclusão for fechado sem excluir, manter o dialog de edição aberto
+        // para que o usuário possa fazer outras ações se desejar
+      }} />}
 
       {/* 🎯 Botões de navegação horizontal - apenas em modo board e com mais de 3 colunas */}
-      {viewMode === 'board' && columnsFiltradas.length > 3 && (
-        <div className="flex gap-2 mb-4 justify-end">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => scrollHorizontal('left')}
-            title="Rolar para esquerda"
-          >
+      {viewMode === 'board' && columnsFiltradas.length > 3 && <div className="flex gap-2 mb-4 justify-end">
+          <Button variant="outline" size="icon" onClick={() => scrollHorizontal('left')} title="Rolar para esquerda">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => scrollHorizontal('right')}
-            title="Rolar para direita"
-          >
+          <Button variant="outline" size="icon" onClick={() => scrollHorizontal('right')} title="Rolar para direita">
             <ChevronRight className="h-4 w-4" />
           </Button>
-        </div>
-      )}
+        </div>}
 
-      {viewMode === 'calendar' ? (
-        <TarefaCalendar />
-      ) : viewMode === 'dashboard' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {viewMode === 'calendar' ? <TarefaCalendar /> : viewMode === 'dashboard' ? <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Total de Tarefas */}
           <div className="bg-card p-6 rounded-lg border shadow-sm">
             <div className="flex items-center justify-between">
@@ -1642,112 +1498,58 @@ export default function Tarefas() {
           <div className="bg-card p-6 rounded-lg border shadow-sm md:col-span-2 lg:col-span-4">
             <h3 className="text-lg font-semibold mb-4">Distribuição por Coluna</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {columnsFiltradas.map((column) => {
-                const tasksInColumn = tasks.filter(t => t.column_id === column.id).length;
-                const percentage = productivityMetrics.totalTasks > 0 ? (tasksInColumn / productivityMetrics.totalTasks) * 100 : 0;
-
-                return (
-                  <div key={column.id} className="space-y-2">
+              {columnsFiltradas.map(column => {
+              const tasksInColumn = tasks.filter(t => t.column_id === column.id).length;
+              const percentage = productivityMetrics.totalTasks > 0 ? tasksInColumn / productivityMetrics.totalTasks * 100 : 0;
+              return <div key={column.id} className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="font-medium">{column.nome}</span>
                       <span className="text-muted-foreground">{tasksInColumn}</span>
                     </div>
                     <div className="w-full bg-secondary rounded-full h-2">
-                      <div
-                        className="h-2 rounded-full transition-all duration-300"
-                        style={{
-                          width: `${percentage}%`,
-                          backgroundColor: column.cor
-                        }}
-                      />
+                      <div className="h-2 rounded-full transition-all duration-300" style={{
+                    width: `${percentage}%`,
+                    backgroundColor: column.cor
+                  }} />
                     </div>
-                  </div>
-                );
-              })}
+                  </div>;
+            })}
             </div>
           </div>
-        </div>
-      ) : boards.length === 0 ? (
-        <div className="text-center py-12">
-          {(isAdmin || canManageTaskStructure) ? (
-            <Button onClick={() => setDialogNovoBoard(true)}>
+        </div> : boards.length === 0 ? <div className="text-center py-12">
+          {isAdmin || canManageTaskStructure ? <Button onClick={() => setDialogNovoBoard(true)}>
               <Plus className="mr-2" />
               Criar Primeiro Quadro
-            </Button>
-          ) : (
-            <p className="text-muted-foreground">Entre em contato com o administrador para criar quadros</p>
-          )}
-        </div>
-      ) : columnsFiltradas.length === 0 ? (
-        <div className="text-center py-12">
+            </Button> : <p className="text-muted-foreground">Entre em contato com o administrador para criar quadros</p>}
+        </div> : columnsFiltradas.length === 0 ? <div className="text-center py-12">
           <p className="text-muted-foreground mb-4">Nenhuma coluna criada ainda</p>
-          {(isAdmin || canManageTaskStructure) ? (
-            <p className="text-sm text-muted-foreground">
+          {isAdmin || canManageTaskStructure ? <p className="text-sm text-muted-foreground">
               Crie colunas como "A Fazer", "Em Progresso", "Concluído"
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
+            </p> : <p className="text-sm text-muted-foreground">
               Entre em contato com o administrador para criar colunas
-            </p>
-          )}
-        </div>
-      ) : (
-        <DndContext 
-          sensors={sensors}
-          collisionDetection={closestCorners} 
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
-        >
-          <SortableContext 
-            items={columnsFiltradas.map(c => c.id)} 
-            strategy={horizontalListSortingStrategy}
-          >
+            </p>}
+        </div> : <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
+          <SortableContext items={columnsFiltradas.map(c => c.id)} strategy={horizontalListSortingStrategy}>
             <div ref={scrollContainerRef} className="flex overflow-x-auto gap-4 pb-4 min-h-[500px] scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-muted/20 hover:scrollbar-thumb-primary/50 scroll-smooth">
-              {columnsFiltradas.map((column) => (
-                <SortableColumn
-                  key={column.id}
-                  column={column}
-                  tasksByColumn={tasksByColumn}
-                  tasksPerColumn={tasksPerColumn}
-                  taskCountsByColumn={taskCountsByColumn}
-                  TASKS_PER_PAGE={TASKS_PER_PAGE}
-                  tasks={tasks}
-                  loadingMore={loadingMore}
-                  carregarDados={carregarDados}
-                  loadMoreTasks={loadMoreTasks}
-                  selectedBoard={selectedBoard}
-                  emitGlobalEvent={emitGlobalEvent}
-                />
-              ))}
+              {columnsFiltradas.map(column => <SortableColumn key={column.id} column={column} tasksByColumn={tasksByColumn} tasksPerColumn={tasksPerColumn} taskCountsByColumn={taskCountsByColumn} TASKS_PER_PAGE={TASKS_PER_PAGE} tasks={tasks} loadingMore={loadingMore} carregarDados={carregarDados} loadMoreTasks={loadMoreTasks} selectedBoard={selectedBoard} emitGlobalEvent={emitGlobalEvent} />)}
             {/* Botão para adicionar nova coluna - apenas admin pode criar colunas */}
-            {(isAdmin || canManageTaskStructure) && (
-              <div className="min-w-[380px] flex-shrink-0">
-                <AdicionarColunaDialog
-                  boardId={selectedBoard}
-                  currentColumnsCount={columnsFiltradas.length}
-                  onColumnAdded={carregarDados}
-                />
-              </div>
-            )}
+            {(isAdmin || canManageTaskStructure) && <div className="min-w-[380px] flex-shrink-0">
+                <AdicionarColunaDialog boardId={selectedBoard} currentColumnsCount={columnsFiltradas.length} onColumnAdded={carregarDados} />
+              </div>}
           </div>
           </SortableContext>
           <DragOverlay dropAnimation={{
-            duration: 180,
-            easing: 'cubic-bezier(0.2, 0, 0, 1)',
-          }}>
-            {activeTaskId ? (
-              <div className="min-w-[330px] max-w-[380px] pointer-events-none opacity-90">
+          duration: 180,
+          easing: 'cubic-bezier(0.2, 0, 0, 1)'
+        }}>
+            {activeTaskId ? <div className="min-w-[330px] max-w-[380px] pointer-events-none opacity-90">
                 <div className="rounded-md border bg-card p-4 shadow-lg">
                   <div className="font-semibold">{tasks.find(t => t.id === activeTaskId)?.title}</div>
                   <div className="text-xs text-muted-foreground mt-1">Arrastando…</div>
                 </div>
-              </div>
-            ) : null}
+              </div> : null}
           </DragOverlay>
-        </DndContext>
-      )}
+        </DndContext>}
     </div>
-    </TarefasProvider>
-  );
+    </TarefasProvider>;
 }
