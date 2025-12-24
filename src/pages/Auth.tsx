@@ -240,7 +240,7 @@ export default function Auth() {
           <div className="mx-auto mb-4 h-12 w-12 rounded-lg bg-gradient-primary flex items-center justify-center">
             <span className="text-white font-bold text-2xl">WP   </span>
           </div>
-          <CardTitle className="text-2xl font-bold">WAZE CRM</CardTitle>
+          <CardTitle className="text-2xl font-bold">WAZE PLATFORM </CardTitle>
           <CardDescription>Sistema inteligente de gestão comercial</CardDescription>
         </CardHeader>
         <CardContent>
