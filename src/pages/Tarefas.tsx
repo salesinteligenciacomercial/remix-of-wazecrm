@@ -1262,7 +1262,7 @@ export default function Tarefas() {
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Trello</h1>
+          <h1 className="text-3xl font-bold">Tarefas Estilo Trello</h1>
           <p className="text-muted-foreground">Gerencie suas tarefas em quadros Kanban</p>
           <p className="text-xs text-muted-foreground mt-1">
             💡 Atalhos: <kbd className="px-1 py-0.5 bg-muted rounded text-xs">N</kbd> Nova tarefa •
