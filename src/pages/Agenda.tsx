@@ -3,17 +3,7 @@ import { Calendar as CalendarIcon, Plus, Clock, User, Filter, Settings, Bell, Ch
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,7 +26,6 @@ import { EditarCompromissoDialog } from "@/components/agenda/EditarCompromissoDi
 import { AgendaColaboradores } from "@/components/agenda/AgendaColaboradores";
 import { HorarioComercialConfig, criarHorarioPadrao, converterHorarioAntigo, HorarioComercial } from "@/components/agenda/HorarioComercialConfig";
 import { HorarioSeletor } from "@/components/agenda/HorarioSeletor";
-
 interface Lembrete {
   id: string;
   compromisso_id: string;
@@ -65,7 +54,6 @@ interface Lembrete {
     };
   };
 }
-
 interface AgendaItem {
   id: string;
   nome: string;
@@ -81,7 +69,6 @@ interface AgendaItem {
   responsavel_id?: string;
   permite_simultaneo?: boolean;
 }
-
 interface Compromisso {
   id: string;
   agenda_id?: string;
@@ -103,7 +90,6 @@ interface Compromisso {
     tipo: string;
   };
 }
-
 interface Lead {
   id: string;
   name: string;
@@ -112,13 +98,11 @@ interface Lead {
   email?: string;
   tags?: string[];
 }
-
 export default function Agenda() {
   console.log("🗓️ [Agenda] Componente iniciado!");
-  
+
   // Hook de notificações para escutar lembretes enviados e enviar push notifications
   useNotifications();
-  
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [compromissos, setCompromissos] = useState<Compromisso[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -130,9 +114,7 @@ export default function Agenda() {
   const [horarioComercial, setHorarioComercial] = useState<HorarioComercial>(criarHorarioPadrao());
   const [tempoMedioPadrao, setTempoMedioPadrao] = useState<number>(30);
   const [canalLembretePadrao, setCanalLembretePadrao] = useState<string>("whatsapp");
-  const [diasFuncionamento, setDiasFuncionamento] = useState<string[]>([
-    "segunda", "terca", "quarta", "quinta", "sexta"
-  ]); // Dias da semana que a empresa funciona (padrão: seg-sex)
+  const [diasFuncionamento, setDiasFuncionamento] = useState<string[]>(["segunda", "terca", "quarta", "quinta", "sexta"]); // Dias da semana que a empresa funciona (padrão: seg-sex)
   const [lembretes, setLembretes] = useState<Lembrete[]>([]);
   const [activeTab, setActiveTab] = useState<string>("agenda");
   const [filtroStatusLembrete, setFiltroStatusLembrete] = useState<string>("all");
@@ -143,10 +125,10 @@ export default function Agenda() {
   const [filtroTipoServico, setFiltroTipoServico] = useState<string>("all");
   const [filtroPeriodo, setFiltroPeriodo] = useState<string>("all"); // all, hoje, semana, mes
   const [filtroResponsavel, setFiltroResponsavel] = useState<string>("all");
-  
+
   // Cache de meses carregados para lazy loading
   const [loadedMonths, setLoadedMonths] = useState<Set<string>>(new Set());
-  
+
   // Cache de avatares dos leads
   const [leadAvatars, setLeadAvatars] = useState<Record<string, string>>({});
   const avatarCacheRef = useRef<Map<string, string>>(new Map());
@@ -154,18 +136,23 @@ export default function Agenda() {
   const companyIdRef = useRef<string | null>(null);
 
   // Sistema de eventos globais para comunicação entre módulos
-  const { emitGlobalEvent } = useGlobalSync({
+  const {
+    emitGlobalEvent
+  } = useGlobalSync({
     callbacks: {
       // Receber eventos de outros módulos
-      onLeadUpdated: (data) => {
-        console.log('🌍 [Agenda] Lead atualizado via evento global:', { id: data.id, name: data.name });
-        
+      onLeadUpdated: data => {
+        console.log('🌍 [Agenda] Lead atualizado via evento global:', {
+          id: data.id,
+          name: data.name
+        });
+
         // Validar se dados do lead são válidos
         if (!data || !data.id) {
           console.warn('⚠️ [Agenda] Evento global de lead inválido:', data);
           return;
         }
-        
+
         // Atualizar lista de leads também
         setLeads(prev => prev.map(lead => {
           if (lead.id === data.id) {
@@ -174,12 +161,12 @@ export default function Agenda() {
               ...lead,
               name: data.name || lead.name,
               phone: data.phone || lead.phone,
-              email: data.email || lead.email,
+              email: data.email || lead.email
             };
           }
           return lead;
         }));
-        
+
         // Atualizar compromissos relacionados ao lead - VALIDAÇÃO MELHORADA
         setCompromissos(prev => {
           let updated = false;
@@ -187,42 +174,39 @@ export default function Agenda() {
             // Validar se lead_id existe e corresponde ao lead atualizado
             if (comp.lead_id && comp.lead_id === data.id) {
               console.log('🔄 [Agenda] Atualizando compromisso via evento global:', comp.id, 'com novo lead:', data.name);
-              
+
               // Criar objeto lead completo se não existir
               const leadData = {
                 name: data.name || comp.lead?.name || '',
                 phone: data.phone || comp.lead?.phone
               };
-              
               updated = true;
               return {
                 ...comp,
                 lead: {
                   ...comp.lead,
-                  ...leadData,
+                  ...leadData
                 }
               };
             }
             return comp;
           });
-          
           if (updated) {
             console.log('✅ [Agenda] Compromissos atualizados via evento global:', updatedComps.filter(c => c.lead_id === data.id).length);
           }
-          
           return updatedComps;
         });
       },
-      onTaskCreated: (data) => {
+      onTaskCreated: data => {
         console.log('🌍 [Agenda] Nova tarefa criada, verificar se afeta agenda:', data);
         // Se uma tarefa foi criada, pode afetar disponibilidade
       },
-      onMeetingScheduled: (data) => {
+      onMeetingScheduled: data => {
         console.log('🌍 [Agenda] Reunião agendada via evento global:', data);
         // Adicionar reunião à lista se for relevante
         // Isso pode vir de outros módulos criando reuniões
       },
-      onFunnelStageChanged: (data) => {
+      onFunnelStageChanged: data => {
         console.log('🌍 [Agenda] Lead movido no funil, verificar compromissos:', data);
         // Atualizar compromissos relacionados ao lead que mudou de etapa
       }
@@ -237,8 +221,11 @@ export default function Agenda() {
 
   // Integrar sincronização de leads em tempo real
   useLeadsSync({
-    onInsert: (newLead) => {
-      console.log('📡 [Agenda] Novo lead adicionado via sync:', { id: newLead.id, name: newLead.name });
+    onInsert: newLead => {
+      console.log('📡 [Agenda] Novo lead adicionado via sync:', {
+        id: newLead.id,
+        name: newLead.name
+      });
       setLeads(prev => {
         // Verificar se lead já existe para evitar duplicatas
         const existingIndex = prev.findIndex(l => l.id === newLead.id);
@@ -252,13 +239,13 @@ export default function Agenda() {
       });
     },
     onUpdate: (updatedLead, oldLead) => {
-      console.log('📡 [Agenda] Lead atualizado via sync:', { 
-        id: updatedLead.id, 
-        name: updatedLead.name, 
+      console.log('📡 [Agenda] Lead atualizado via sync:', {
+        id: updatedLead.id,
+        name: updatedLead.name,
         oldName: oldLead?.name,
-        phone: updatedLead.phone 
+        phone: updatedLead.phone
       });
-      
+
       // Atualizar lista de leads
       setLeads(prev => prev.map(lead => {
         if (lead.id === updatedLead.id) {
@@ -267,7 +254,7 @@ export default function Agenda() {
         }
         return lead;
       }));
-      
+
       // Atualizar compromissos relacionados - VALIDAÇÃO MELHORADA
       setCompromissos(prev => {
         let updated = false;
@@ -275,42 +262,42 @@ export default function Agenda() {
           // Validar se lead_id existe e corresponde ao lead atualizado
           if (comp.lead_id && comp.lead_id === updatedLead.id) {
             console.log('🔄 [Agenda] Atualizando compromisso:', comp.id, 'com novo lead:', updatedLead.name);
-            
+
             // Criar objeto lead completo se não existir
             const leadData = {
               name: updatedLead.name,
               phone: updatedLead.phone || comp.lead?.phone
             };
-            
             updated = true;
             return {
               ...comp,
               lead: {
                 ...comp.lead,
-                ...leadData,
+                ...leadData
               }
             };
           }
           return comp;
         });
-        
         if (updated) {
           console.log('✅ [Agenda] Compromissos atualizados:', updatedComps.filter(c => c.lead_id === updatedLead.id).length);
         }
-        
         return updatedComps;
       });
     },
-    onDelete: (deletedLead) => {
-      console.log('📡 [Agenda] Lead removido via sync:', { id: deletedLead.id, name: deletedLead.name });
-      
+    onDelete: deletedLead => {
+      console.log('📡 [Agenda] Lead removido via sync:', {
+        id: deletedLead.id,
+        name: deletedLead.name
+      });
+
       // Remover da lista de leads
       setLeads(prev => {
         const filtered = prev.filter(lead => lead.id !== deletedLead.id);
         console.log(`✅ [Agenda] Lead removido da lista. Total antes: ${prev.length}, depois: ${filtered.length}`);
         return filtered;
       });
-      
+
       // Limpar referências em compromissos - VALIDAÇÃO MELHORADA
       setCompromissos(prev => {
         let updated = false;
@@ -327,11 +314,9 @@ export default function Agenda() {
           }
           return comp;
         });
-        
         if (updated) {
           console.log('✅ [Agenda] Referências ao lead removidas dos compromissos');
         }
-        
         return updatedComps;
       });
     },
@@ -346,7 +331,8 @@ export default function Agenda() {
     data: format(new Date(), "yyyy-MM-dd"),
     hora_inicio: "09:00",
     duracao_minutos: "30",
-    tipo_servico: "", // Opcional - pode ficar vazio
+    tipo_servico: "",
+    // Opcional - pode ficar vazio
     observacoes: "",
     custo_estimado: "",
     enviar_lembrete: true,
@@ -354,30 +340,44 @@ export default function Agenda() {
     horas_antecedencia_horas: "1",
     horas_antecedencia_minutos: "0",
     destinatario_lembrete: "lead",
-    enviar_confirmacao: false, // Nova opção: enviar confirmação imediata
-    notificar_responsavel: true, // Nova opção: notificar responsável via push
+    enviar_confirmacao: false,
+    // Nova opção: enviar confirmação imediata
+    notificar_responsavel: true // Nova opção: notificar responsável via push
   });
-  
   const [leadSearch, setLeadSearch] = useState("");
   const [selectedLeadName, setSelectedLeadName] = useState("");
-  
+
   // Estados para o seletor de horários do formulário (igual ao menu Conversas)
   const [formHorarioComercial, setFormHorarioComercial] = useState<HorarioComercial>({
-    manha: { inicio: "08:00", fim: "12:00", ativo: true },
-    tarde: { inicio: "14:00", fim: "18:00", ativo: true },
-    noite: { inicio: "19:00", fim: "23:00", ativo: false },
-    intervalo_almoco: { inicio: "12:00", fim: "14:00", ativo: true }
+    manha: {
+      inicio: "08:00",
+      fim: "12:00",
+      ativo: true
+    },
+    tarde: {
+      inicio: "14:00",
+      fim: "18:00",
+      ativo: true
+    },
+    noite: {
+      inicio: "19:00",
+      fim: "23:00",
+      ativo: false
+    },
+    intervalo_almoco: {
+      inicio: "12:00",
+      fim: "14:00",
+      ativo: true
+    }
   });
   const [formCompromissosExistentes, setFormCompromissosExistentes] = useState<any[]>([]);
   const [formAgendaSelecionada, setFormAgendaSelecionada] = useState<any>(null);
-  const [formDiasFuncionamento, setFormDiasFuncionamento] = useState<string[]>([
-    "segunda", "terca", "quarta", "quinta", "sexta"
-  ]); // Dias de funcionamento da agenda selecionada no formulário
+  const [formDiasFuncionamento, setFormDiasFuncionamento] = useState<string[]>(["segunda", "terca", "quarta", "quinta", "sexta"]); // Dias de funcionamento da agenda selecionada no formulário
 
   const filteredLeads = useMemo(() => {
     if (!leadSearch.trim()) return leads;
     const search = leadSearch.toLowerCase();
-    return leads.filter((lead) => {
+    return leads.filter(lead => {
       const name = lead.name?.toLowerCase() || "";
       const phone = lead.phone?.toLowerCase() || "";
       const telefone = lead.telefone?.toLowerCase() || "";
@@ -386,29 +386,26 @@ export default function Agenda() {
     });
   }, [leads, leadSearch]);
 
-      // Função otimizada para carregar compromissos com range de datas
+  // Função otimizada para carregar compromissos com range de datas
   const carregarCompromissos = useCallback(async (startDate?: Date, endDate?: Date) => {
     try {
-      let query = supabase
-        .from('compromissos')
-        .select(`
+      let query = supabase.from('compromissos').select(`
           *,
           lead:leads(name, phone),
           agenda:agendas(nome, tipo)
-        `)
-        .order('data_hora_inicio', { ascending: true });
+        `).order('data_hora_inicio', {
+        ascending: true
+      });
 
       // Se range de datas fornecido, filtrar
       if (startDate && endDate) {
-        query = query
-          .gte('data_hora_inicio', startDate.toISOString())
-          .lte('data_hora_inicio', endDate.toISOString());
+        query = query.gte('data_hora_inicio', startDate.toISOString()).lte('data_hora_inicio', endDate.toISOString());
       }
-
-      const { data, error } = await query;
-
+      const {
+        data,
+        error
+      } = await query;
       if (error) throw error;
-      
       if (startDate && endDate) {
         // Lazy loading: adicionar ao cache existente, mas remover duplicatas e ordenar
         setCompromissos(prev => {
@@ -416,9 +413,7 @@ export default function Agenda() {
           const newCompromissos = (data || []).filter(c => !existingIds.has(c.id));
           const allCompromissos = [...prev, ...newCompromissos];
           // Ordenar por data
-          return allCompromissos.sort((a, b) => 
-            new Date(a.data_hora_inicio).getTime() - new Date(b.data_hora_inicio).getTime()
-          );
+          return allCompromissos.sort((a, b) => new Date(a.data_hora_inicio).getTime() - new Date(b.data_hora_inicio).getTime());
         });
       } else {
         // Carregamento inicial: substituir todos
@@ -434,7 +429,7 @@ export default function Agenda() {
   const carregarCompromissosDoMes = useCallback(async (month?: Date, forceReload: boolean = false) => {
     const targetMonth = month || selectedDate;
     const monthKey = format(targetMonth, 'yyyy-MM');
-    
+
     // Se forçar recarregamento, remover do cache primeiro
     if (forceReload) {
       setLoadedMonths(prev => {
@@ -443,25 +438,22 @@ export default function Agenda() {
         return newSet;
       });
     }
-    
+
     // Verificar se o mês já foi carregado usando função de setter
     setLoadedMonths(prev => {
       if (prev.has(monthKey) && !forceReload) {
         console.log(`📅 [Performance] Mês ${monthKey} já carregado, pulando...`);
         return prev; // Não atualizar se já existe e não forçar recarregamento
       }
-      
       console.log(`📅 [Performance] Carregando compromissos do mês ${monthKey}...`);
-      
       const inicio = startOfMonth(targetMonth);
       const fim = endOfMonth(targetMonth);
-      
+
       // Carregar compromissos de forma assíncrona
       carregarCompromissos(inicio, fim).then(() => {
         // Marcar mês como carregado após carregar
         setLoadedMonths(current => new Set(current).add(monthKey));
       });
-      
       return prev; // Retornar estado atual enquanto carrega
     });
   }, [selectedDate, carregarCompromissos]);
@@ -479,12 +471,20 @@ export default function Agenda() {
   };
 
   // Função para buscar avatar do lead com cache
-  const buscarAvatarLead = useCallback(async (lead: { id: string; name: string; phone?: string; telefone?: string }) => {
+  const buscarAvatarLead = useCallback(async (lead: {
+    id: string;
+    name: string;
+    phone?: string;
+    telefone?: string;
+  }) => {
     const telefone = lead.phone || lead.telefone;
     if (!telefone) {
       // Sem telefone, usar fallback
       const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(lead.name)}&background=10b981&color=fff&size=32&bold=true`;
-      setLeadAvatars(prev => ({ ...prev, [lead.id]: fallbackUrl }));
+      setLeadAvatars(prev => ({
+        ...prev,
+        [lead.id]: fallbackUrl
+      }));
       return fallbackUrl;
     }
 
@@ -495,7 +495,10 @@ export default function Agenda() {
     const cacheKey = `lead-${lead.id}`;
     if (avatarCacheRef.current.has(cacheKey)) {
       const cached = avatarCacheRef.current.get(cacheKey)!;
-      setLeadAvatars(prev => ({ ...prev, [lead.id]: cached }));
+      setLeadAvatars(prev => ({
+        ...prev,
+        [lead.id]: cached
+      }));
       return cached;
     }
 
@@ -503,42 +506,45 @@ export default function Agenda() {
     if (avatarFetchingRef.current.has(lead.id)) {
       return leadAvatars[lead.id] || `https://ui-avatars.com/api/?name=${encodeURIComponent(lead.name)}&background=10b981&color=fff&size=32&bold=true`;
     }
-
     avatarFetchingRef.current.add(lead.id);
-
     try {
       // Obter company_id se ainda não tiver
       if (!companyIdRef.current) {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: {
+            user
+          }
+        } = await supabase.auth.getUser();
         if (user) {
-          const { data: userRole } = await supabase
-            .from('user_roles')
-            .select('company_id')
-            .eq('user_id', user.id)
-            .single();
+          const {
+            data: userRole
+          } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single();
           companyIdRef.current = userRole?.company_id || null;
         }
       }
-
       const telefoneNormalizado = normalizePhoneBR(telefone);
       if (!telefoneNormalizado) {
         throw new Error('Telefone inválido');
       }
 
       // Buscar foto com timeout de 5s
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout')), 5000)
-      );
-
+      const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
       const fetchPromise = supabase.functions.invoke('get-profile-picture', {
-        body: { number: telefoneNormalizado, company_id: companyIdRef.current }
+        body: {
+          number: telefoneNormalizado,
+          company_id: companyIdRef.current
+        }
       });
-
-      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
-
+      const {
+        data,
+        error
+      } = (await Promise.race([fetchPromise, timeoutPromise])) as any;
       if (!error && data?.profilePictureUrl) {
         const avatarUrl = data.profilePictureUrl;
-        setLeadAvatars(prev => ({ ...prev, [lead.id]: avatarUrl }));
+        setLeadAvatars(prev => ({
+          ...prev,
+          [lead.id]: avatarUrl
+        }));
         avatarCacheRef.current.set(cacheKey, avatarUrl);
         avatarFetchingRef.current.delete(lead.id);
         return avatarUrl;
@@ -548,7 +554,10 @@ export default function Agenda() {
     } catch (error) {
       // Fallback para avatar gerado
       const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(lead.name)}&background=10b981&color=fff&size=32&bold=true`;
-      setLeadAvatars(prev => ({ ...prev, [lead.id]: fallbackUrl }));
+      setLeadAvatars(prev => ({
+        ...prev,
+        [lead.id]: fallbackUrl
+      }));
       avatarCacheRef.current.set(cacheKey, fallbackUrl);
       avatarFetchingRef.current.delete(lead.id);
       return fallbackUrl;
@@ -558,17 +567,11 @@ export default function Agenda() {
   // Buscar avatares dos leads quando compromissos são carregados
   useEffect(() => {
     const buscarAvatares = async () => {
-      const leadsComTelefone = compromissos
-        .filter(c => c.lead_id && c.lead && c.lead.phone)
-        .map(c => ({ 
-          id: c.lead_id!, 
-          name: c.lead!.name, 
-          phone: c.lead!.phone
-        }))
-        .filter((lead, index, self) => 
-          index === self.findIndex(l => l.id === lead.id)
-        );
-
+      const leadsComTelefone = compromissos.filter(c => c.lead_id && c.lead && c.lead.phone).map(c => ({
+        id: c.lead_id!,
+        name: c.lead!.name,
+        phone: c.lead!.phone
+      })).filter((lead, index, self) => index === self.findIndex(l => l.id === lead.id));
       for (const lead of leadsComTelefone) {
         const cacheKey = lead.id;
         if (!leadAvatars[cacheKey] && !avatarFetchingRef.current.has(cacheKey)) {
@@ -576,7 +579,6 @@ export default function Agenda() {
         }
       }
     };
-
     if (compromissos.length > 0) {
       buscarAvatares();
     }
@@ -585,17 +587,11 @@ export default function Agenda() {
   // Buscar avatares dos leads quando lembretes são carregados
   useEffect(() => {
     const buscarAvataresLembretes = async () => {
-      const leadsComTelefone = lembretes
-        .filter(l => l.compromisso?.lead_id && l.compromisso?.lead && (l.compromisso.lead.phone || l.compromisso.lead.phone))
-        .map(l => ({ 
-          id: l.compromisso!.lead_id!, 
-          name: l.compromisso!.lead!.name, 
-          phone: l.compromisso!.lead!.phone
-        }))
-        .filter((lead, index, self) => 
-          index === self.findIndex(l => l.id === lead.id)
-        );
-
+      const leadsComTelefone = lembretes.filter(l => l.compromisso?.lead_id && l.compromisso?.lead && (l.compromisso.lead.phone || l.compromisso.lead.phone)).map(l => ({
+        id: l.compromisso!.lead_id!,
+        name: l.compromisso!.lead!.name,
+        phone: l.compromisso!.lead!.phone
+      })).filter((lead, index, self) => index === self.findIndex(l => l.id === lead.id));
       for (const lead of leadsComTelefone) {
         const cacheKey = lead.id;
         if (!leadAvatars[cacheKey] && !avatarFetchingRef.current.has(cacheKey)) {
@@ -603,7 +599,6 @@ export default function Agenda() {
         }
       }
     };
-
     if (lembretes.length > 0) {
       buscarAvataresLembretes();
     }
@@ -616,7 +611,6 @@ export default function Agenda() {
       console.log('🔔 [NOTIFICAÇÃO] Permissão de notificação disponível');
     }
   }, []);
-
   useEffect(() => {
     // Carregar apenas compromissos do mês atual inicialmente (otimização)
     carregarCompromissosDoMes();
@@ -625,66 +619,48 @@ export default function Agenda() {
     carregarLembretes();
     carregarConfiguracoes(); // Carregar tempo médio padrão e outras configurações
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    
+
     // Subscrever para atualizações em tempo real
-    const compromissosChannel = supabase
-      .channel('compromissos_realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'compromissos'
-        },
-        () => {
-          // Ao receber atualização em tempo real, recarregar apenas mês atual (forçar recarregamento)
-          carregarCompromissosDoMes(undefined, true);
-        }
-      )
-      .subscribe();
+    const compromissosChannel = supabase.channel('compromissos_realtime').on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'compromissos'
+    }, () => {
+      // Ao receber atualização em tempo real, recarregar apenas mês atual (forçar recarregamento)
+      carregarCompromissosDoMes(undefined, true);
+    }).subscribe();
 
     // Subscrever lembretes em tempo real
-    const lembretesChannel = supabase
-      .channel('lembretes_realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'lembretes'
-        },
-        () => {
-          carregarLembretes();
-        }
-      )
-      .subscribe();
-
+    const lembretesChannel = supabase.channel('lembretes_realtime').on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'lembretes'
+    }, () => {
+      carregarLembretes();
+    }).subscribe();
     return () => {
       supabase.removeChannel(compromissosChannel);
       supabase.removeChannel(lembretesChannel);
     };
   }, [carregarCompromissosDoMes]);
-  
+
   // Efeito para carregar compromissos quando mudar de mês
   useEffect(() => {
     const currentMonth = format(selectedDate, 'yyyy-MM');
     const monthKey = format(startOfMonth(selectedDate), 'yyyy-MM');
-    
+
     // Verificar se precisa carregar o mês atual
     if (!loadedMonths.has(monthKey)) {
       console.log(`📅 [Performance] Mês atual não carregado: ${monthKey}, carregando...`);
       carregarCompromissosDoMes(selectedDate);
     }
   }, [selectedDate, loadedMonths, carregarCompromissosDoMes]);
-
-
   const carregarLeads = async () => {
     try {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('id, name, phone, telefone, email, tags')
-        .order('name');
-
+      const {
+        data,
+        error
+      } = await supabase.from('leads').select('id, name, phone, telefone, email, tags').order('name');
       if (error) throw error;
       setLeads(data || []);
     } catch (error) {
@@ -695,23 +671,24 @@ export default function Agenda() {
   // Carregar configurações da agenda quando abrir o diálogo
   const carregarConfiguracoes = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) {
         console.log('📅 [Agenda] Usuário não encontrado para carregar configurações');
         return;
       }
-
       console.log('📅 [Agenda] Carregando configurações para usuário:', user.id);
-
-      const { data: agenda, error } = await supabase
-        .from('agendas')
-        .select('*')
-        .eq('owner_id', user.id)
-        .eq('tipo', 'principal')
-        .single();
-
-      console.log('📅 [Agenda] Resultado da busca:', { agenda, error });
-
+      const {
+        data: agenda,
+        error
+      } = await supabase.from('agendas').select('*').eq('owner_id', user.id).eq('tipo', 'principal').single();
+      console.log('📅 [Agenda] Resultado da busca:', {
+        agenda,
+        error
+      });
       if (agenda) {
         // Carregar horário comercial
         if ((agenda.disponibilidade as any)?.periodos) {
@@ -723,7 +700,7 @@ export default function Agenda() {
 
         // Carregar tempo médio - prioridade: campo direto > disponibilidade > padrão
         let tempoMedio = 30; // valor padrão
-        
+
         if (agenda.tempo_medio_servico && agenda.tempo_medio_servico > 0) {
           tempoMedio = agenda.tempo_medio_servico;
           console.log('📅 [Agenda] Tempo médio do campo direto:', tempoMedio);
@@ -731,15 +708,14 @@ export default function Agenda() {
           tempoMedio = (agenda.disponibilidade as any).tempo_medio_servico;
           console.log('📅 [Agenda] Tempo médio da disponibilidade:', tempoMedio);
         }
-        
         setTempoMedioPadrao(tempoMedio);
         console.log('📅 [Agenda] ✅ Tempo médio padrão DEFINIDO:', tempoMedio);
-        
+
         // Carregar canal de lembrete
         if ((agenda.disponibilidade as any)?.canal_lembrete_padrao) {
           setCanalLembretePadrao((agenda.disponibilidade as any).canal_lembrete_padrao);
         }
-        
+
         // Carregar dias de funcionamento
         if ((agenda.disponibilidade as any)?.dias_funcionamento) {
           setDiasFuncionamento((agenda.disponibilidade as any).dias_funcionamento);
@@ -754,27 +730,24 @@ export default function Agenda() {
       console.error('❌ [Agenda] Erro ao carregar configurações:', error);
     }
   };
-
   const carregarAgendas = async () => {
     try {
-      const { data, error } = await supabase
-        .from('agendas')
-        .select('*')
-        .eq('status', 'ativo')
-        .order('nome');
-
+      const {
+        data,
+        error
+      } = await supabase.from('agendas').select('*').eq('status', 'ativo').order('nome');
       if (error) throw error;
       setAgendas((data || []) as any[]);
     } catch (error) {
       console.error('Erro ao carregar agendas:', error);
     }
   };
-
   const carregarLembretes = async () => {
     try {
-      const { data, error } = await supabase
-        .from('lembretes')
-        .select(`
+      const {
+        data,
+        error
+      } = await supabase.from('lembretes').select(`
           *,
           compromisso:compromissos(
             id,
@@ -783,9 +756,9 @@ export default function Agenda() {
             tipo_servico,
             lead:leads(name, phone)
           )
-        `)
-        .order('created_at', { ascending: false });
-
+        `).order('created_at', {
+        ascending: false
+      });
       if (error) throw error;
       setLembretes((data || []) as unknown as Lembrete[]);
     } catch (error) {
@@ -798,38 +771,33 @@ export default function Agenda() {
   // IMPORTANTE: Se uma agenda específica foi selecionada, usar os dados dessa agenda
   const carregarFormHorarioComercial = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) return;
-
       let agenda = null;
 
       // Se uma agenda específica foi selecionada, buscar os dados dela
       if (formData.agenda_id) {
-        const { data: agendaSelecionada } = await supabase
-          .from("agendas")
-          .select("*")
-          .eq("id", formData.agenda_id)
-          .single();
-        
+        const {
+          data: agendaSelecionada
+        } = await supabase.from("agendas").select("*").eq("id", formData.agenda_id).single();
         agenda = agendaSelecionada;
         console.log('📅 [Agenda] Carregando horário da agenda selecionada:', agenda?.nome);
       } else {
         // Se não, buscar a agenda principal
-        const { data: agendaPrincipal } = await supabase
-          .from("agendas")
-          .select("*")
-          .eq("owner_id", user.id)
-          .eq("tipo", "principal")
-          .single();
-        
+        const {
+          data: agendaPrincipal
+        } = await supabase.from("agendas").select("*").eq("owner_id", user.id).eq("tipo", "principal").single();
         agenda = agendaPrincipal;
         console.log('📅 [Agenda] Carregando horário da agenda principal');
       }
-
       if (agenda && agenda.disponibilidade && typeof agenda.disponibilidade === 'object') {
         setFormAgendaSelecionada(agenda);
         const disp = agenda.disponibilidade as any;
-        
+
         // Carregar dias de funcionamento da agenda selecionada
         // Suporta tanto 'dias_funcionamento' (novo) quanto 'dias' (antigo)
         const diasConfig = disp.dias_funcionamento || disp.dias;
@@ -841,10 +809,10 @@ export default function Agenda() {
           setFormDiasFuncionamento(["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"]);
           console.log('📅 [Agenda] Dias de funcionamento não encontrados, usando todos os dias');
         }
-        
+
         // O horário comercial é salvo em disponibilidade.periodos
         const periodos = disp.periodos || disp;
-        
+
         // Verificar se está no formato novo (com períodos manha, tarde, noite)
         if (periodos.manha && periodos.tarde) {
           // Formato novo - usar diretamente
@@ -852,23 +820,23 @@ export default function Agenda() {
             manha: {
               inicio: periodos.manha.inicio || "08:00",
               fim: periodos.manha.fim || "12:00",
-              ativo: periodos.manha.ativo !== false, // default true
+              ativo: periodos.manha.ativo !== false // default true
             },
             tarde: {
               inicio: periodos.tarde.inicio || "14:00",
               fim: periodos.tarde.fim || "18:00",
-              ativo: periodos.tarde.ativo !== false, // default true
+              ativo: periodos.tarde.ativo !== false // default true
             },
             noite: {
               inicio: periodos.noite?.inicio || "19:00",
               fim: periodos.noite?.fim || "23:00",
-              ativo: periodos.noite?.ativo === true, // default false - só ativa se explicitamente true
+              ativo: periodos.noite?.ativo === true // default false - só ativa se explicitamente true
             },
             intervalo_almoco: {
               inicio: periodos.intervalo_almoco?.inicio || "12:00",
               fim: periodos.intervalo_almoco?.fim || "14:00",
-              ativo: periodos.intervalo_almoco?.ativo !== false, // default true
-            },
+              ativo: periodos.intervalo_almoco?.ativo !== false // default true
+            }
           });
         } else {
           // Formato antigo - converter
@@ -876,23 +844,23 @@ export default function Agenda() {
             manha: {
               inicio: disp.horario_inicio || "08:00",
               fim: "12:00",
-              ativo: true,
+              ativo: true
             },
             tarde: {
               inicio: "14:00",
               fim: disp.horario_fim || "18:00",
-              ativo: true,
+              ativo: true
             },
             noite: {
               inicio: "19:00",
               fim: "23:00",
-              ativo: false,
+              ativo: false
             },
             intervalo_almoco: {
               inicio: "12:00",
               fim: "14:00",
-              ativo: true,
-            },
+              ativo: true
+            }
           });
         }
       } else if (!agenda) {
@@ -912,12 +880,7 @@ export default function Agenda() {
     try {
       const dataInicio = new Date(formData.data + "T00:00:00");
       const dataFim = new Date(formData.data + "T23:59:59");
-
-      let query = supabase
-        .from("compromissos")
-        .select("id, data_hora_inicio, data_hora_fim, agenda_id")
-        .gte("data_hora_inicio", dataInicio.toISOString())
-        .lte("data_hora_inicio", dataFim.toISOString());
+      let query = supabase.from("compromissos").select("id, data_hora_inicio, data_hora_fim, agenda_id").gte("data_hora_inicio", dataInicio.toISOString()).lte("data_hora_inicio", dataFim.toISOString());
 
       // Se uma agenda específica foi selecionada, filtrar apenas os compromissos dessa agenda
       if (formData.agenda_id) {
@@ -926,15 +889,15 @@ export default function Agenda() {
       } else {
         // Se nenhuma agenda foi selecionada (agenda geral), buscar compromissos sem agenda_id
         // ou criar uma query para a agenda principal do usuário
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: {
+            user
+          }
+        } = await supabase.auth.getUser();
         if (user) {
-          const { data: agendaPrincipal } = await supabase
-            .from("agendas")
-            .select("id")
-            .eq("owner_id", user.id)
-            .eq("tipo", "principal")
-            .single();
-          
+          const {
+            data: agendaPrincipal
+          } = await supabase.from("agendas").select("id").eq("owner_id", user.id).eq("tipo", "principal").single();
           if (agendaPrincipal) {
             // Buscar compromissos da agenda principal OU compromissos sem agenda
             query = query.or(`agenda_id.eq.${agendaPrincipal.id},agenda_id.is.null`);
@@ -942,9 +905,9 @@ export default function Agenda() {
           }
         }
       }
-
-      const { data: compromissos } = await query;
-      
+      const {
+        data: compromissos
+      } = await query;
       console.log('📅 [Agenda] Compromissos carregados para a agenda:', compromissos?.length || 0);
       setFormCompromissosExistentes(compromissos || []);
     } catch (error) {
@@ -954,7 +917,10 @@ export default function Agenda() {
 
   // Função para selecionar horário no formulário
   const handleSelecionarHorarioForm = (horario: string) => {
-    setFormData(prev => ({ ...prev, hora_inicio: horario }));
+    setFormData(prev => ({
+      ...prev,
+      hora_inicio: horario
+    }));
   };
 
   // Carregar horário comercial, compromissos e configurações quando a data, agenda ou dialog mudar
@@ -971,21 +937,20 @@ export default function Agenda() {
   const criarCompromisso = async () => {
     try {
       // === VALIDAÇÕES FRONTEND ===
-      
+
       // 1. Validar data e horários
       if (!formData.data || !formData.hora_inicio) {
         toast.error("Por favor, preencha data, horário e duração");
         return;
       }
-
       const dataHoraInicio = new Date(`${formData.data}T${formData.hora_inicio}:00`);
       const duracaoMin = formAgendaSelecionada?.tempo_medio_servico || tempoMedioPadrao;
       const dataHoraFim = new Date(dataHoraInicio.getTime() + duracaoMin * 60000);
-      
+
       // 3. Validar se data/hora não está no passado (com margem de 1 minuto para evitar falsos positivos)
       const agora = new Date();
       const umMinutoAtras = new Date(agora.getTime() - 60000); // 1 minuto de margem
-      
+
       if (dataHoraInicio < umMinutoAtras) {
         toast.error("Não é possível agendar compromissos no passado");
         return;
@@ -1011,32 +976,33 @@ export default function Agenda() {
       }
 
       // === AUTENTICAÇÃO ===
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) {
         toast.error("Você precisa estar autenticado para criar um compromisso");
         throw new Error("Usuário não autenticado");
       }
-
       console.log('🔍 [DEBUG] Criando compromisso para usuário:', user.id);
 
       // Obter company_id do usuário ANTES de criar compromisso
-      const { data: userRole, error: userRoleError } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', user.id)
-        .single();
-
+      const {
+        data: userRole,
+        error: userRoleError
+      } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single();
       if (userRoleError) {
         console.error('❌ [DEBUG] Erro ao buscar user_role:', userRoleError);
         throw new Error(`Erro ao obter informações da empresa: ${userRoleError.message}`);
       }
-
       if (!userRole || !userRole.company_id) {
-        console.error('❌ [DEBUG] userRole ou company_id não encontrado:', { userRole });
+        console.error('❌ [DEBUG] userRole ou company_id não encontrado:', {
+          userRole
+        });
         toast.error("Erro: Usuário não está associado a nenhuma empresa. Por favor, entre em contato com o administrador.");
         throw new Error("Usuário não está associado a nenhuma empresa. company_id é obrigatório.");
       }
-
       console.log('✅ [DEBUG] company_id obtido:', userRole.company_id);
       console.log('📋 [DEBUG] Dados do formulário:', {
         titulo: formData.titulo,
@@ -1054,15 +1020,12 @@ export default function Agenda() {
         // Carregar agendas se ainda não foram carregadas
         let agendasDisponiveis = agendas;
         if (agendasDisponiveis.length === 0) {
-          const { data: agendasData } = await supabase
-            .from('agendas')
-            .select('*')
-            .eq('status', 'ativo');
+          const {
+            data: agendasData
+          } = await supabase.from('agendas').select('*').eq('status', 'ativo');
           agendasDisponiveis = (agendasData || []) as any[];
         }
-        
         const agendaSelecionada = agendasDisponiveis.find(a => a.id === formData.agenda_id);
-        
         if (!agendaSelecionada) {
           toast.error("Agenda selecionada não encontrada");
           return;
@@ -1076,15 +1039,13 @@ export default function Agenda() {
         const indiceDia = dataHoraInicio.getDay();
         const diaSemanaCompleto = diasSemanaCompleto[indiceDia];
         const diaSemanaAbreviado = diasSemanaAbreviado[indiceDia];
-        
+
         // Verificar em ambos campos e formatos
         const disp: any = agendaSelecionada.disponibilidade || {};
         const diasConfig = disp.dias_funcionamento || disp.dias;
-        
-        const diaValido = !diasConfig || // Se não tem config, aceita qualquer dia
-                          diasConfig.includes(diaSemanaCompleto) || 
-                          diasConfig.includes(diaSemanaAbreviado);
-        
+        const diaValido = !diasConfig ||
+        // Se não tem config, aceita qualquer dia
+        diasConfig.includes(diaSemanaCompleto) || diasConfig.includes(diaSemanaAbreviado);
         if (!diaValido) {
           toast.error(`A agenda "${agendaSelecionada.nome}" não está disponível neste dia da semana`);
           return;
@@ -1094,12 +1055,10 @@ export default function Agenda() {
         // Suporta formato novo (periodos) e antigo (horario_inicio/horario_fim)
         let horarioInicioStr = "08:00";
         let horarioFimStr = "18:00";
-        
         if (disp.periodos) {
           // Formato novo - calcular horário de início e fim baseado nos períodos ativos
           const periodos = disp.periodos;
           const horariosAtivos: string[] = [];
-          
           if (periodos.manha?.ativo) {
             horariosAtivos.push(periodos.manha.inicio, periodos.manha.fim);
           }
@@ -1109,7 +1068,6 @@ export default function Agenda() {
           if (periodos.noite?.ativo) {
             horariosAtivos.push(periodos.noite.inicio, periodos.noite.fim);
           }
-          
           if (horariosAtivos.length > 0) {
             horariosAtivos.sort();
             horarioInicioStr = horariosAtivos[0];
@@ -1120,36 +1078,28 @@ export default function Agenda() {
           horarioInicioStr = disp.horario_inicio;
           horarioFimStr = disp.horario_fim;
         }
-        
         const [horaInicioDisponivel, minutoInicioDisponivel] = horarioInicioStr.split(':').map(Number);
         const [horaFimDisponivel, minutoFimDisponivel] = horarioFimStr.split(':').map(Number);
         const inicioDisponivel = horaInicioDisponivel * 60 + minutoInicioDisponivel;
         const fimDisponivel = horaFimDisponivel * 60 + minutoFimDisponivel;
-        
         const [horaInicio, minutoInicio] = formData.hora_inicio.split(':').map(Number);
         const duracaoMin = formAgendaSelecionada?.tempo_medio_servico || tempoMedioPadrao;
         const inicioSolicitado = horaInicio * 60 + minutoInicio;
         const fimSolicitado = inicioSolicitado + duracaoMin;
-
         if (inicioSolicitado < inicioDisponivel || fimSolicitado > fimDisponivel) {
           toast.error(`O horário está fora do horário de funcionamento da agenda (${horarioInicioStr} - ${horarioFimStr})`);
           return;
         }
 
         // Validar capacidade simultânea
-        const { data: compromissosAgenda, error: capacidadeError } = await supabase
-          .from('compromissos')
-          .select('id')
-          .eq('agenda_id', formData.agenda_id)
-          .eq('status', 'agendado')
-          .lt('data_hora_inicio', dataHoraFim.toISOString())
-          .gt('data_hora_fim', dataHoraInicio.toISOString());
-
+        const {
+          data: compromissosAgenda,
+          error: capacidadeError
+        } = await supabase.from('compromissos').select('id').eq('agenda_id', formData.agenda_id).eq('status', 'agendado').lt('data_hora_inicio', dataHoraFim.toISOString()).gt('data_hora_fim', dataHoraInicio.toISOString());
         if (capacidadeError) {
           console.error('❌ [DEBUG] Erro ao verificar capacidade:', capacidadeError);
           throw capacidadeError;
         }
-
         const ocupacaoAtual = compromissosAgenda?.length || 0;
         if (ocupacaoAtual >= agendaSelecionada.capacidade_simultanea) {
           toast.error(`A agenda "${agendaSelecionada.nome}" já está com capacidade máxima (${agendaSelecionada.capacidade_simultanea} compromissos simultâneos)`);
@@ -1165,22 +1115,16 @@ export default function Agenda() {
         agenda_id: formData.agenda_id || 'nenhuma',
         usuario_id: user.id
       });
-      
-      const conflitosQuery = supabase
-        .from('compromissos')
-        .select('id, data_hora_inicio, data_hora_fim')
-        .eq('status', 'agendado')
-        .lt('data_hora_inicio', dataHoraFim.toISOString())
-        .gt('data_hora_fim', dataHoraInicio.toISOString());
-
+      const conflitosQuery = supabase.from('compromissos').select('id, data_hora_inicio, data_hora_fim').eq('status', 'agendado').lt('data_hora_inicio', dataHoraFim.toISOString()).gt('data_hora_fim', dataHoraInicio.toISOString());
       if (formData.agenda_id) {
         conflitosQuery.eq('agenda_id', formData.agenda_id);
       } else {
         conflitosQuery.eq('usuario_responsavel_id', user.id);
       }
-
-      const { data: conflitos, error: conflitoError } = await conflitosQuery;
-
+      const {
+        data: conflitos,
+        error: conflitoError
+      } = await conflitosQuery;
       if (conflitoError) {
         console.error('❌ [DEBUG] Erro ao verificar conflitos:', {
           message: conflitoError.message,
@@ -1193,12 +1137,9 @@ export default function Agenda() {
       } else {
         console.log('✅ [DEBUG] Verificação de conflitos concluída. Encontrados:', conflitos?.length || 0);
       }
-
       if (conflitos && conflitos.length > 0) {
         console.warn('⚠️ [DEBUG] Conflitos encontrados:', conflitos);
-        const mensagem = formData.agenda_id 
-          ? "Conflito de horário: já existe um compromisso nessa agenda nesse intervalo"
-          : "Conflito de horário: já existe um compromisso nesse intervalo";
+        const mensagem = formData.agenda_id ? "Conflito de horário: já existe um compromisso nessa agenda nesse intervalo" : "Conflito de horário: já existe um compromisso nesse intervalo";
         toast.error(mensagem);
         return;
       }
@@ -1206,7 +1147,7 @@ export default function Agenda() {
       // Criar compromisso COM company_id e agenda_id
       // Garantir que tipo_servico não seja string vazia
       const tipoServicoFinal = formData.tipo_servico?.trim() || 'outro';
-      
+
       // Preparar dados do compromisso - APENAS campos obrigatórios e válidos
       const compromissoData: any = {
         // Campos obrigatórios (NOT NULL)
@@ -1214,7 +1155,7 @@ export default function Agenda() {
         owner_id: user.id,
         data_hora_inicio: dataHoraInicio.toISOString(),
         data_hora_fim: dataHoraFim.toISOString(),
-        tipo_servico: tipoServicoFinal,
+        tipo_servico: tipoServicoFinal
       };
 
       // Adicionar campos opcionais apenas se tiverem valores válidos (não vazios)
@@ -1224,27 +1165,26 @@ export default function Agenda() {
       } else {
         compromissoData.agenda_id = null; // Explicitamente null se vazio
       }
-      
       const leadId = formData.lead_id?.trim();
       if (leadId && leadId.length > 0) {
         compromissoData.lead_id = leadId;
       } else {
         compromissoData.lead_id = null; // Explicitamente null se vazio
       }
-      
+
       // company_id é opcional mas recomendado
       if (userRole.company_id) {
         compromissoData.company_id = userRole.company_id;
       }
-      
+
       // status tem default 'agendado', mas vamos definir explicitamente
       compromissoData.status = 'agendado';
-      
+
       // Campos opcionais de texto
       if (formData.observacoes?.trim()) {
         compromissoData.observacoes = formData.observacoes.trim();
       }
-      
+
       // Custo estimado - validar antes de adicionar
       if (formData.custo_estimado) {
         const custo = parseFloat(formData.custo_estimado);
@@ -1252,16 +1192,15 @@ export default function Agenda() {
           compromissoData.custo_estimado = custo;
         }
       }
-      
+
       // Log dos dados antes de inserir para debug
       console.log('📤 [DEBUG] Dados que serão inseridos:', JSON.stringify(compromissoData, null, 2));
-      
+
       // Tentar inserir o compromisso
-      let { data: compromisso, error } = await supabase
-        .from('compromissos')
-        .insert(compromissoData)
-        .select()
-        .single();
+      let {
+        data: compromisso,
+        error
+      } = await supabase.from('compromissos').insert(compromissoData).select().single();
 
       // Se houver erro, tentar identificar e corrigir
       if (error) {
@@ -1269,7 +1208,6 @@ export default function Agenda() {
         const errorCode = (error as any).code || '';
         const errorDetails = (error as any).details || '';
         const errorHint = (error as any).hint || '';
-        
         console.error('🔍 [DEBUG] Erro detalhado recebido:', {
           message: errorMessage,
           code: errorCode,
@@ -1277,11 +1215,13 @@ export default function Agenda() {
           hint: errorHint,
           fullError: error
         });
-        
+
         // Tentar corrigir erros conhecidos
         let shouldRetry = false;
-        const retryData = { ...compromissoData };
-        
+        const retryData = {
+          ...compromissoData
+        };
+
         // Erro de coluna não encontrada (titulo ou outros)
         if (errorCode === 'PGRST204' || errorMessage.toLowerCase().includes('column') || errorMessage.toLowerCase().includes('titulo')) {
           console.warn('⚠️ [DEBUG] Erro de coluna não encontrada, removendo campos problemáticos...');
@@ -1289,7 +1229,7 @@ export default function Agenda() {
           delete retryData.titulo;
           shouldRetry = true;
         }
-        
+
         // Erro de foreign key - remover referências inválidas
         if (errorCode === '23503') {
           if (errorMessage.includes('agenda_id') && retryData.agenda_id) {
@@ -1308,38 +1248,31 @@ export default function Agenda() {
             shouldRetry = true;
           }
         }
-        
+
         // Tentar novamente se identificamos o problema
         if (shouldRetry) {
           console.log('🔄 [DEBUG] Tentando novamente com dados corrigidos:', JSON.stringify(retryData, null, 2));
-          const retryResult = await supabase
-            .from('compromissos')
-            .insert(retryData)
-            .select()
-            .single();
-          
+          const retryResult = await supabase.from('compromissos').insert(retryData).select().single();
           compromisso = retryResult.data;
           error = retryResult.error;
-          
           if (!error) {
             console.log('✅ [DEBUG] Compromisso criado com sucesso após correção!');
           }
         }
       }
-
       if (error) {
         const errorMessage = error.message || '';
         const errorCode = (error as any).code || '';
         const errorDetails = (error as any).details || '';
         const errorHint = (error as any).hint || '';
-        
+
         // Log completo do erro de forma legível
         console.error('❌ [DEBUG] Erro ao criar compromisso:');
         console.error('  Mensagem:', errorMessage || '(vazia)');
         console.error('  Código:', errorCode || '(vazio)');
         console.error('  Detalhes:', errorDetails || '(vazio)');
         console.error('  Hint:', errorHint || '(vazio)');
-        
+
         // Tentar serializar o erro completo
         try {
           const errorObj = {
@@ -1354,9 +1287,8 @@ export default function Agenda() {
         } catch (e) {
           console.error('  Erro completo (objeto):', error);
         }
-        
         console.error('  Dados tentados:', JSON.stringify(compromissoData, null, 2));
-        
+
         // Mensagens de erro mais específicas baseadas no tipo de erro
         if (errorCode === '23503') {
           // Foreign key violation
@@ -1386,16 +1318,13 @@ export default function Agenda() {
         } else {
           toast.error(`Erro ao criar compromisso: ${errorMessage || errorCode || 'Erro desconhecido'}`);
         }
-        
         throw error;
       }
-
       console.log('✅ [DEBUG] Compromisso criado com sucesso:', compromisso?.id);
 
       // ⚡ CRIAR LEMBRETE AUTOMATICAMENTE PARA TODO COMPROMISSO (OBRIGATÓRIO)
       if (compromisso) {
         console.log('📝 [LEMBRETE] Criando lembrete automaticamente para compromisso:', compromisso.id);
-        
         try {
           // Validar que company_id existe
           if (!userRole.company_id) {
@@ -1405,46 +1334,48 @@ export default function Agenda() {
             // Processar tempo de antecedência (usar valores do formulário ou padrão)
             let horas = parseInt(formData.horas_antecedencia_horas || "0", 10);
             let minutos = parseInt(formData.horas_antecedencia_minutos || "0", 10);
-            
+
             // Se não informado ou inválido, usar valores padrão (1 hora antes)
             if (horas === 0 && minutos === 0) {
               console.log('ℹ️ [LEMBRETE] Usando valores padrão: 1 hora de antecedência');
               horas = 1;
               minutos = 0;
             }
-            
+
             // Validar valores
             if (horas < 0) horas = 1;
             if (minutos < 0 || minutos >= 60) minutos = 0;
 
-              // Converter horas e minutos para formato decimal (garantir precisão)
-            const tempoAntecedenciaDecimal = parseFloat((horas + (minutos / 60)).toFixed(4));
-            
+            // Converter horas e minutos para formato decimal (garantir precisão)
+            const tempoAntecedenciaDecimal = parseFloat((horas + minutos / 60).toFixed(4));
+
             // Calcular data de envio do lembrete baseada na data do compromisso
             const dataEnvio = new Date(dataHoraInicio);
-            dataEnvio.setTime(dataEnvio.getTime() - (tempoAntecedenciaDecimal * 60 * 60 * 1000));
+            dataEnvio.setTime(dataEnvio.getTime() - tempoAntecedenciaDecimal * 60 * 60 * 1000);
 
             // Buscar lead se houver para personalizar mensagem
             const leadSelecionado = leads.find(l => l.id === formData.lead_id);
             const leadNome = leadSelecionado?.name || 'Cliente';
 
             // Mensagem personalizada do lembrete
-            const mensagemLembrete = `Olá ${leadNome}! Lembramos do seu compromisso agendado para ${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`;
+            const mensagemLembrete = `Olá ${leadNome}! Lembramos do seu compromisso agendado para ${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", {
+              locale: ptBR
+            })}.`;
 
             // Preparar dados do lembrete - usar NUMERIC para horas_antecedencia
             const lembreteData = {
               compromisso_id: compromisso.id,
               canal: 'whatsapp',
-              horas_antecedencia: tempoAntecedenciaDecimal, // NUMERIC aceita decimais
+              horas_antecedencia: tempoAntecedenciaDecimal,
+              // NUMERIC aceita decimais
               mensagem: mensagemLembrete,
               status_envio: 'pendente',
               data_envio: dataEnvio.toISOString(),
               destinatario: formData.destinatario_lembrete || 'lead',
               telefone_responsavel: null,
-              company_id: userRole.company_id,
+              company_id: userRole.company_id
             };
-
-            console.log('📝 [LEMBRETE] Dados do lembrete:', { 
+            console.log('📝 [LEMBRETE] Dados do lembrete:', {
               compromisso_id: lembreteData.compromisso_id,
               data_envio: lembreteData.data_envio,
               horas_antecedencia: lembreteData.horas_antecedencia,
@@ -1456,52 +1387,37 @@ export default function Agenda() {
             // Criar lembrete de forma síncrona e garantida
             let lembreteCriado = null;
             let lembreteError = null;
-            
+
             // Tentar inserir com valor decimal
-            const resultado = await supabase
-              .from('lembretes')
-              .insert(lembreteData)
-              .select()
-              .single();
-            
+            const resultado = await supabase.from('lembretes').insert(lembreteData).select().single();
             lembreteCriado = resultado.data;
             lembreteError = resultado.error;
 
             // Se erro for de tipo INTEGER, tentar novamente arredondando para inteiro (fallback temporário)
             if (lembreteError && (lembreteError.message?.includes('integer') || lembreteError.message?.includes('INTEGER'))) {
               console.warn('⚠️ [LEMBRETE] Erro de tipo INTEGER detectado, tentando com valor arredondado (fallback)...');
-              
+
               // Criar novo objeto com valor arredondado para inteiro (horas completas)
               const lembreteDataFallback = {
                 ...lembreteData,
-                horas_antecedencia: Math.round(tempoAntecedenciaDecimal) || 1, // Arredondar para horas completas
+                horas_antecedencia: Math.round(tempoAntecedenciaDecimal) || 1 // Arredondar para horas completas
               };
-              
+
               // Recalcular data de envio com valor arredondado
               const dataEnvioFallback = new Date(dataHoraInicio);
-              dataEnvioFallback.setTime(dataEnvioFallback.getTime() - (lembreteDataFallback.horas_antecedencia * 60 * 60 * 1000));
+              dataEnvioFallback.setTime(dataEnvioFallback.getTime() - lembreteDataFallback.horas_antecedencia * 60 * 60 * 1000);
               lembreteDataFallback.data_envio = dataEnvioFallback.toISOString();
-              
               console.log('🔄 [LEMBRETE] Tentando novamente com valor arredondado:', lembreteDataFallback.horas_antecedencia);
-              
-              const retryResult = await supabase
-                .from('lembretes')
-                .insert(lembreteDataFallback)
-                .select()
-                .single();
-              
+              const retryResult = await supabase.from('lembretes').insert(lembreteDataFallback).select().single();
               lembreteCriado = retryResult.data;
               lembreteError = retryResult.error;
-              
               if (!lembreteError) {
                 console.log('✅ [LEMBRETE] Lembrete criado com valor arredondado (fallback temporário)');
-                toast.warning(
-                  `Lembrete criado com ${lembreteDataFallback.horas_antecedencia} hora(s) de antecedência (arredondado). Para usar minutos, execute a migração SQL.`,
-                  { duration: 8000 }
-                );
+                toast.warning(`Lembrete criado com ${lembreteDataFallback.horas_antecedencia} hora(s) de antecedência (arredondado). Para usar minutos, execute a migração SQL.`, {
+                  duration: 8000
+                });
               }
             }
-
             if (lembreteError) {
               console.error('❌ [LEMBRETE] Erro ao criar lembrete:', lembreteError);
               console.error('❌ [LEMBRETE] Dados que causaram erro:', {
@@ -1511,11 +1427,9 @@ export default function Agenda() {
                 data_envio: lembreteData.data_envio,
                 erro_completo: JSON.stringify(lembreteError, null, 2)
               });
-              
-              toast.error(
-                `Erro ao criar lembrete. Execute o SQL em APLICAR_MIGRACAO_LEMBRETES.sql no Supabase Dashboard para corrigir.`,
-                { duration: 10000 }
-              );
+              toast.error(`Erro ao criar lembrete. Execute o SQL em APLICAR_MIGRACAO_LEMBRETES.sql no Supabase Dashboard para corrigir.`, {
+                duration: 10000
+              });
             } else {
               console.log('✅ [LEMBRETE] Lembrete criado automaticamente e sincronizado:', lembreteCriado?.id);
               console.log('📅 [LEMBRETE] Data de envio calculada:', dataEnvio.toISOString());
@@ -1539,46 +1453,47 @@ export default function Agenda() {
             const telefone = normalizePhoneBR(leadSelecionado.phone || leadSelecionado.telefone || '');
             if (telefone) {
               // Mensagem de confirmação formatada e personalizada
-              const tipoServicoFormatado = formData.tipo_servico?.trim()
-                ? formData.tipo_servico.charAt(0).toUpperCase() + formData.tipo_servico.slice(1)
-                : null;
-              const mensagemConfirmacao = `✅ *Compromisso Confirmado!*\n\n` +
-                `Olá ${leadSelecionado.name}! Seu compromisso foi agendado com sucesso.\n\n` +
-                `📅 *Data:* ${format(dataHoraInicio, "dd/MM/yyyy", { locale: ptBR })}\n` +
-                `🕐 *Horário:* ${format(dataHoraInicio, "HH:mm", { locale: ptBR })} às ${format(dataHoraFim, "HH:mm", { locale: ptBR })}\n` +
-                (tipoServicoFormatado ? `📋 *Tipo:* ${tipoServicoFormatado}\n` : '') +
-                // Título removido - coluna não existe no banco
-                (formData.observacoes ? `\n💬 *Observações:*\n${formData.observacoes}\n` : '') +
-                `\n✅ *Status:* Agendado\n\n` +
-                `Aguardamos você no dia e horário agendados!\n\n` +
-                `_Esta é uma confirmação automática do seu agendamento._`;
-
+              const tipoServicoFormatado = formData.tipo_servico?.trim() ? formData.tipo_servico.charAt(0).toUpperCase() + formData.tipo_servico.slice(1) : null;
+              const mensagemConfirmacao = `✅ *Compromisso Confirmado!*\n\n` + `Olá ${leadSelecionado.name}! Seu compromisso foi agendado com sucesso.\n\n` + `📅 *Data:* ${format(dataHoraInicio, "dd/MM/yyyy", {
+                locale: ptBR
+              })}\n` + `🕐 *Horário:* ${format(dataHoraInicio, "HH:mm", {
+                locale: ptBR
+              })} às ${format(dataHoraFim, "HH:mm", {
+                locale: ptBR
+              })}\n` + (tipoServicoFormatado ? `📋 *Tipo:* ${tipoServicoFormatado}\n` : '') + (
+              // Título removido - coluna não existe no banco
+              formData.observacoes ? `\n💬 *Observações:*\n${formData.observacoes}\n` : '') + `\n✅ *Status:* Agendado\n\n` + `Aguardamos você no dia e horário agendados!\n\n` + `_Esta é uma confirmação automática do seu agendamento._`;
               console.log('📱 [CONFIRMAÇÃO] Enviando mensagem de confirmação imediata...');
-              
-              const { error: confirmacaoError } = await supabase.functions.invoke('enviar-whatsapp', {
+              const {
+                error: confirmacaoError
+              } = await supabase.functions.invoke('enviar-whatsapp', {
                 body: {
                   numero: telefone,
                   mensagem: mensagemConfirmacao,
                   company_id: userRole.company_id
                 }
               });
-
               if (confirmacaoError) {
                 console.error('❌ [CONFIRMAÇÃO] Erro ao enviar confirmação:', confirmacaoError);
                 toast.warning("Compromisso criado, mas não foi possível enviar a confirmação imediata.");
               } else {
                 console.log('✅ [CONFIRMAÇÃO] Mensagem de confirmação enviada com sucesso!');
-                
+
                 // Salvar mensagem de confirmação na tabela conversas para ficar visível no CRM
                 try {
-                  const { data: { user } } = await supabase.auth.getUser();
-                  const { data: userProfile } = user ? await supabase
-                    .from('profiles')
-                    .select('full_name, email')
-                    .eq('id', user.id)
-                    .single() : { data: null };
-                  
-                  const { error: dbError } = await supabase.from('conversas').insert([{
+                  const {
+                    data: {
+                      user
+                    }
+                  } = await supabase.auth.getUser();
+                  const {
+                    data: userProfile
+                  } = user ? await supabase.from('profiles').select('full_name, email').eq('id', user.id).single() : {
+                    data: null
+                  };
+                  const {
+                    error: dbError
+                  } = await supabase.from('conversas').insert([{
                     numero: telefone,
                     telefone_formatado: telefone,
                     mensagem: mensagemConfirmacao,
@@ -1590,9 +1505,8 @@ export default function Agenda() {
                     lead_id: formData.lead_id,
                     owner_id: user?.id,
                     sent_by: userProfile?.full_name || userProfile?.email || 'Equipe',
-                    fromme: true,
+                    fromme: true
                   }]);
-                  
                   if (dbError) {
                     console.error('❌ [CONFIRMAÇÃO] Erro ao salvar mensagem no banco:', dbError);
                   } else {
@@ -1601,7 +1515,6 @@ export default function Agenda() {
                 } catch (saveError) {
                   console.error('❌ [CONFIRMAÇÃO] Erro ao salvar mensagem no banco:', saveError);
                 }
-                
                 toast.success("Compromisso criado e confirmação enviada ao cliente!");
               }
             }
@@ -1617,33 +1530,31 @@ export default function Agenda() {
         try {
           if ('Notification' in window && Notification.permission === 'granted') {
             const tipoServicoNotif = formData.tipo_servico || 'Compromisso';
-            const mensagemNotificacao = `Novo compromisso agendado: ${tipoServicoNotif}\n` +
-              `${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`;
-
+            const mensagemNotificacao = `Novo compromisso agendado: ${tipoServicoNotif}\n` + `${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", {
+              locale: ptBR
+            })}`;
             new Notification('Novo Compromisso Agendado', {
               body: mensagemNotificacao,
               icon: '/favicon.ico',
               badge: '/favicon.ico',
               tag: `compromisso-${compromisso.id}`,
-              requireInteraction: false,
+              requireInteraction: false
             });
-
             console.log('🔔 [NOTIFICAÇÃO] Notificação push enviada ao responsável');
           } else if ('Notification' in window && Notification.permission !== 'denied') {
             // Solicitar permissão se ainda não foi solicitada
             const permission = await Notification.requestPermission();
             if (permission === 'granted') {
               const tipoServicoNotif = formData.tipo_servico || 'Compromisso';
-              const mensagemNotificacao = `Novo compromisso agendado: ${tipoServicoNotif}\n` +
-                `${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`;
-
+              const mensagemNotificacao = `Novo compromisso agendado: ${tipoServicoNotif}\n` + `${format(dataHoraInicio, "dd/MM/yyyy 'às' HH:mm", {
+                locale: ptBR
+              })}`;
               new Notification('Novo Compromisso Agendado', {
                 body: mensagemNotificacao,
                 icon: '/favicon.ico',
                 badge: '/favicon.ico',
-                tag: `compromisso-${compromisso.id}`,
+                tag: `compromisso-${compromisso.id}`
               });
-
               console.log('🔔 [NOTIFICAÇÃO] Permissão concedida e notificação enviada');
             }
           }
@@ -1675,46 +1586,41 @@ export default function Agenda() {
             lead_id: formData.lead_id,
             title: formData.tipo_servico,
             date: dataHoraInicio.toISOString(),
-            duration: (dataHoraFim.getTime() - dataHoraInicio.getTime()) / (1000 * 60), // duração em minutos
+            duration: (dataHoraFim.getTime() - dataHoraInicio.getTime()) / (1000 * 60),
+            // duração em minutos
             status: 'scheduled',
             description: formData.observacoes
           },
           source: 'Agenda'
         });
       }
-
       setNovoCompromissoOpen(false);
       limparFormulario();
-      
+
       // Adicionar compromisso recém-criado diretamente à lista para aparecer instantaneamente
       if (compromisso) {
         // Buscar dados completos do compromisso com relacionamentos
-        const { data: compromissoCompleto } = await supabase
-          .from('compromissos')
-          .select(`
+        const {
+          data: compromissoCompleto
+        } = await supabase.from('compromissos').select(`
             *,
             lead:leads(name, phone),
             agenda:agendas(nome, tipo)
-          `)
-          .eq('id', compromisso.id)
-          .single();
-        
+          `).eq('id', compromisso.id).single();
         if (compromissoCompleto) {
           setCompromissos(prev => {
             // Verificar se já existe para evitar duplicatas
             const exists = prev.some(c => c.id === compromissoCompleto.id);
             if (exists) return prev;
             // Adicionar ao início da lista
-            return [compromissoCompleto, ...prev].sort((a, b) => 
-              new Date(a.data_hora_inicio).getTime() - new Date(b.data_hora_inicio).getTime()
-            );
+            return [compromissoCompleto, ...prev].sort((a, b) => new Date(a.data_hora_inicio).getTime() - new Date(b.data_hora_inicio).getTime());
           });
         }
       }
-      
+
       // Também recarregar o mês para garantir sincronização completa (forçar recarregamento)
       await carregarCompromissosDoMes(undefined, true);
-      
+
       // Realtime também atualizará, mas garantimos atualização imediata
     } catch (error: any) {
       // Log completo do erro de forma legível no catch
@@ -1723,7 +1629,7 @@ export default function Agenda() {
       console.error('  Código:', error?.code || '(vazio)');
       console.error('  Detalhes:', error?.details || '(vazio)');
       console.error('  Hint:', error?.hint || '(vazio)');
-      
+
       // Tentar serializar o erro completo
       try {
         const errorObj = {
@@ -1738,7 +1644,6 @@ export default function Agenda() {
       } catch (e) {
         console.error('  Erro completo (objeto):', error);
       }
-      
       console.error('  FormData:', {
         tipo_servico: formData.tipo_servico,
         data: formData.data,
@@ -1746,69 +1651,58 @@ export default function Agenda() {
         agenda: formData.agenda_id || 'nenhuma',
         lead: formData.lead_id || 'nenhum'
       });
-      
+
       // Se não mostrou mensagem específica antes, mostrar genérica
       // Verificar se já foi exibida uma mensagem de erro específica
       const errorMessage = error?.message || '';
       const errorCode = error?.code || '';
-      const jaMostrouErro = errorMessage.includes('Erro:') || 
-                           errorMessage.toLowerCase().includes('titulo') ||
-                           errorCode === 'PGRST204';
-      
+      const jaMostrouErro = errorMessage.includes('Erro:') || errorMessage.toLowerCase().includes('titulo') || errorCode === 'PGRST204';
       if (!jaMostrouErro) {
         toast.error("Erro ao criar compromisso. Verifique os campos e tente novamente.");
       }
     }
   };
-
   const atualizarStatus = async (id: string, novoStatus: string) => {
     try {
       // Buscar dados do compromisso antes de atualizar para notificação
       const compromissoAtual = compromissos.find(c => c.id === id);
-      
-      const { error } = await supabase
-        .from('compromissos')
-        .update({ status: novoStatus })
-        .eq('id', id);
-
+      const {
+        error
+      } = await supabase.from('compromissos').update({
+        status: novoStatus
+      }).eq('id', id);
       if (error) throw error;
-      
+
       // Enviar notificação de cancelamento se status mudou para 'cancelado' e tiver lead
       if (novoStatus === 'cancelado' && compromissoAtual?.lead_id) {
         try {
-          const { data: leadData } = await supabase
-            .from('leads')
-            .select('name, phone, telefone')
-            .eq('id', compromissoAtual.lead_id)
-            .single();
-
+          const {
+            data: leadData
+          } = await supabase.from('leads').select('name, phone, telefone').eq('id', compromissoAtual.lead_id).single();
           if (leadData && (leadData.phone || leadData.telefone)) {
             const telefone = leadData.phone || leadData.telefone;
             if (telefone) {
               // Obter company_id do usuário
-              const { data: { user } } = await supabase.auth.getUser();
+              const {
+                data: {
+                  user
+                }
+              } = await supabase.auth.getUser();
               if (user) {
-                const { data: userRole } = await supabase
-                  .from('user_roles')
-                  .select('company_id')
-                  .eq('user_id', user.id)
-                  .single();
-
+                const {
+                  data: userRole
+                } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single();
                 if (userRole?.company_id) {
                   const dataHoraInicio = new Date(compromissoAtual.data_hora_inicio);
                   const dataHoraFim = new Date(compromissoAtual.data_hora_fim);
-                  const tipoServicoFormatado = compromissoAtual.tipo_servico 
-                    ? compromissoAtual.tipo_servico.charAt(0).toUpperCase() + compromissoAtual.tipo_servico.slice(1)
-                    : 'Compromisso';
-
-                  const mensagemCancelamento = `❌ *Compromisso Cancelado*\n\n` +
-                    `Olá ${leadData.name}! Infelizmente seu compromisso foi cancelado.\n\n` +
-                    `📅 *Data:* ${format(dataHoraInicio, "dd/MM/yyyy", { locale: ptBR })}\n` +
-                    `🕐 *Horário:* ${format(dataHoraInicio, "HH:mm", { locale: ptBR })} às ${format(dataHoraFim, "HH:mm", { locale: ptBR })}\n` +
-                    `📋 *Tipo:* ${tipoServicoFormatado}\n` +
-                    `\n❌ *Status:* Cancelado\n\n` +
-                    `Entre em contato conosco se tiver dúvidas ou desejar reagendar.\n\n` +
-                    `_Esta é uma notificação automática de cancelamento._`;
+                  const tipoServicoFormatado = compromissoAtual.tipo_servico ? compromissoAtual.tipo_servico.charAt(0).toUpperCase() + compromissoAtual.tipo_servico.slice(1) : 'Compromisso';
+                  const mensagemCancelamento = `❌ *Compromisso Cancelado*\n\n` + `Olá ${leadData.name}! Infelizmente seu compromisso foi cancelado.\n\n` + `📅 *Data:* ${format(dataHoraInicio, "dd/MM/yyyy", {
+                    locale: ptBR
+                  })}\n` + `🕐 *Horário:* ${format(dataHoraInicio, "HH:mm", {
+                    locale: ptBR
+                  })} às ${format(dataHoraFim, "HH:mm", {
+                    locale: ptBR
+                  })}\n` + `📋 *Tipo:* ${tipoServicoFormatado}\n` + `\n❌ *Status:* Cancelado\n\n` + `Entre em contato conosco se tiver dúvidas ou desejar reagendar.\n\n` + `_Esta é uma notificação automática de cancelamento._`;
 
                   // Normalizar telefone
                   const normalizePhoneBR = (phone: string) => {
@@ -1818,10 +1712,10 @@ export default function Agenda() {
                     }
                     return cleaned.startsWith('55') ? cleaned : `55${cleaned}`;
                   };
-
                   const telefoneNormalizado = normalizePhoneBR(telefone);
-
-                  const { error: envioError } = await supabase.functions.invoke('enviar-whatsapp', {
+                  const {
+                    error: envioError
+                  } = await supabase.functions.invoke('enviar-whatsapp', {
                     body: {
                       numero: telefoneNormalizado,
                       mensagem: mensagemCancelamento,
@@ -1832,13 +1726,16 @@ export default function Agenda() {
                   // Salvar mensagem no CRM para ficar visível
                   if (!envioError) {
                     try {
-                      const { data: { user } } = await supabase.auth.getUser();
-                      const { data: userProfile } = user ? await supabase
-                        .from('profiles')
-                        .select('full_name, email')
-                        .eq('id', user.id)
-                        .single() : { data: null };
-                      
+                      const {
+                        data: {
+                          user
+                        }
+                      } = await supabase.auth.getUser();
+                      const {
+                        data: userProfile
+                      } = user ? await supabase.from('profiles').select('full_name, email').eq('id', user.id).single() : {
+                        data: null
+                      };
                       await supabase.from('conversas').insert({
                         numero: telefoneNormalizado,
                         telefone_formatado: telefoneNormalizado,
@@ -1868,30 +1765,26 @@ export default function Agenda() {
           // Não bloquear a atualização se a notificação falhar
         }
       }
-      
       toast.success("Status atualizado!");
       // Atualização otimista; realtime confirmará
-      setCompromissos(prev => prev.map(c => c.id === id ? { ...c, status: novoStatus } : c));
+      setCompromissos(prev => prev.map(c => c.id === id ? {
+        ...c,
+        status: novoStatus
+      } : c));
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
       toast.error("Erro ao atualizar status");
     }
   };
-
   const deletarCompromisso = async (id: string) => {
     try {
       // Primeiro deletar lembretes associados
-      await supabase
-        .from('lembretes')
-        .delete()
-        .eq('compromisso_id', id);
+      await supabase.from('lembretes').delete().eq('compromisso_id', id);
 
       // Depois deletar o compromisso
-      const { error } = await supabase
-        .from('compromissos')
-        .delete()
-        .eq('id', id);
-
+      const {
+        error
+      } = await supabase.from('compromissos').delete().eq('id', id);
       if (error) throw error;
       toast.success("Compromisso deletado com sucesso!");
       // Atualização otimista; realtime confirmará
@@ -1905,19 +1798,20 @@ export default function Agenda() {
   // Função para duplicar compromisso
   const duplicarCompromisso = async (compromisso: Compromisso) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) {
         toast.error("Você precisa estar autenticado");
         return;
       }
 
       // Obter company_id
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', user.id)
-        .single();
-
+      const {
+        data: userRole
+      } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single();
       if (!userRole?.company_id) {
         toast.error("Erro: Empresa não identificada");
         return;
@@ -1931,7 +1825,6 @@ export default function Agenda() {
       novaDataInicio.setDate(novaDataInicio.getDate() + 1);
       const novaDataFim = new Date(dataFimOriginal);
       novaDataFim.setDate(novaDataFim.getDate() + 1);
-
       const novoCompromisso: any = {
         agenda_id: compromisso.agenda_id || null,
         lead_id: compromisso.lead_id || null,
@@ -1943,21 +1836,17 @@ export default function Agenda() {
         tipo_servico: compromisso.tipo_servico || 'outro',
         status: 'agendado',
         observacoes: compromisso.observacoes || null,
-        custo_estimado: compromisso.custo_estimado || null,
+        custo_estimado: compromisso.custo_estimado || null
       };
-
-      const { data: compromissoDuplicado, error } = await supabase
-        .from('compromissos')
-        .insert(novoCompromisso)
-        .select()
-        .single();
-
+      const {
+        data: compromissoDuplicado,
+        error
+      } = await supabase.from('compromissos').insert(novoCompromisso).select().single();
       if (error) {
         console.error('Erro ao duplicar compromisso:', error);
         toast.error("Erro ao duplicar compromisso");
         return;
       }
-
       toast.success("Compromisso duplicado com sucesso!");
       // Recarregar compromissos
       await carregarCompromissos();
@@ -1966,7 +1855,6 @@ export default function Agenda() {
       toast.error("Erro ao duplicar compromisso");
     }
   };
-
   const limparFormulario = () => {
     console.log('🧹 [DEBUG] Limpando formulário de agendamento');
     setFormData({
@@ -1975,8 +1863,10 @@ export default function Agenda() {
       lead_id: "",
       data: format(new Date(), "yyyy-MM-dd"),
       hora_inicio: "09:00",
-      duracao_minutos: tempoMedioPadrao.toString(), // Usar tempo médio configurado
-      tipo_servico: "", // Limpar para forçar nova seleção
+      duracao_minutos: tempoMedioPadrao.toString(),
+      // Usar tempo médio configurado
+      tipo_servico: "",
+      // Limpar para forçar nova seleção
       observacoes: "",
       custo_estimado: "",
       enviar_lembrete: true,
@@ -1985,7 +1875,7 @@ export default function Agenda() {
       horas_antecedencia_minutos: "0",
       destinatario_lembrete: "lead",
       enviar_confirmacao: false,
-      notificar_responsavel: true,
+      notificar_responsavel: true
     });
     setLeadSearch("");
     setSelectedLeadName("");
@@ -2002,8 +1892,7 @@ export default function Agenda() {
   const compromissosDoMes = useMemo(() => {
     const inicio = startOfMonth(selectedDate);
     const fim = endOfMonth(selectedDate);
-    
-    return compromissos.filter((c) => {
+    return compromissos.filter(c => {
       const dataCompromisso = parseISO(c.data_hora_inicio);
       return dataCompromisso >= inicio && dataCompromisso <= fim;
     });
@@ -2011,7 +1900,7 @@ export default function Agenda() {
 
   // Memoizar compromissos do dia com filtro de status
   const compromissosDoDia = useMemo(() => {
-    return compromissos.filter((c) => {
+    return compromissos.filter(c => {
       const dataCompromisso = parseISO(c.data_hora_inicio);
       return isSameDay(dataCompromisso, selectedDate);
     }).filter(c => {
@@ -2026,17 +1915,14 @@ export default function Agenda() {
     const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
     const fimHoje = new Date(hoje);
     fimHoje.setHours(23, 59, 59, 999);
-    
     const inicioSemana = new Date(hoje);
     inicioSemana.setDate(hoje.getDate() - hoje.getDay()); // Domingo
     const fimSemana = new Date(inicioSemana);
     fimSemana.setDate(inicioSemana.getDate() + 6);
     fimSemana.setHours(23, 59, 59, 999);
-    
     const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
     const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0, 23, 59, 59, 999);
-
-    return compromissos.filter((c) => {
+    return compromissos.filter(c => {
       // Filtro de busca
       if (buscaCompromissos.trim()) {
         const busca = buscaCompromissos.toLowerCase();
@@ -2044,12 +1930,7 @@ export default function Agenda() {
         const nomeLead = (c.lead?.name || "").toLowerCase();
         const observacoes = (c.observacoes || "").toLowerCase();
         const nomeAgenda = (c.agenda?.nome || "").toLowerCase();
-        
-        if (
-            !tipoServico.includes(busca) && 
-            !nomeLead.includes(busca) && 
-            !observacoes.includes(busca) &&
-            !nomeAgenda.includes(busca)) {
+        if (!tipoServico.includes(busca) && !nomeLead.includes(busca) && !observacoes.includes(busca) && !nomeAgenda.includes(busca)) {
           return false;
         }
       }
@@ -2086,7 +1967,6 @@ export default function Agenda() {
       if (filtroResponsavel !== "all" && c.usuario_responsavel_id !== filtroResponsavel) {
         return false;
       }
-
       return true;
     }).sort((a, b) => {
       // Ordenar por data/hora (mais recentes primeiro)
@@ -2103,26 +1983,31 @@ export default function Agenda() {
         responsaveis.set(c.usuario_responsavel_id, c.usuario_responsavel_id);
       }
     });
-    return Array.from(responsaveis.entries()).map(([id, name]) => ({ id, name }));
+    return Array.from(responsaveis.entries()).map(([id, name]) => ({
+      id,
+      name
+    }));
   }, [compromissos]);
-
   const getStatusBadge = (status: string) => {
     const badges = {
       agendado: <Badge className="bg-blue-500"><Clock className="h-3 w-3 mr-1" /> Agendado</Badge>,
       concluido: <Badge className="bg-green-500"><CheckCircle2 className="h-3 w-3 mr-1" /> Concluído</Badge>,
-      cancelado: <Badge className="bg-red-500"><XCircle className="h-3 w-3 mr-1" /> Cancelado</Badge>,
+      cancelado: <Badge className="bg-red-500"><XCircle className="h-3 w-3 mr-1" /> Cancelado</Badge>
     };
     return badges[status] || badges.agendado;
   };
-
   const reenviarLembrete = async (lembreteId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('enviar-lembretes', {
-        body: { lembrete_id: lembreteId, force: true }
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('enviar-lembretes', {
+        body: {
+          lembrete_id: lembreteId,
+          force: true
+        }
       });
-
       if (error) throw error;
-
       toast.success("Lembrete reenviado com sucesso!");
       carregarLembretes();
     } catch (error) {
@@ -2130,8 +2015,7 @@ export default function Agenda() {
       toast.error("Erro ao reenviar lembrete");
     }
   };
-
-  const lembretesFiltrados = lembretes.filter((lembrete) => {
+  const lembretesFiltrados = lembretes.filter(lembrete => {
     if (filtroStatusLembrete !== "all" && lembrete.status_envio !== filtroStatusLembrete) return false;
     if (filtroCanalLembrete !== "all" && lembrete.canal !== filtroCanalLembrete) return false;
     if (filtroRecorrencia === "recorrente" && !lembrete.recorrencia) return false;
@@ -2144,33 +2028,30 @@ export default function Agenda() {
     total: compromissosDoMes.length,
     agendados: compromissosDoMes.filter(c => c.status === 'agendado').length,
     concluidos: compromissosDoMes.filter(c => c.status === 'concluido').length,
-    cancelados: compromissosDoMes.filter(c => c.status === 'cancelado').length,
+    cancelados: compromissosDoMes.filter(c => c.status === 'cancelado').length
   }), [compromissosDoMes]);
-
   const estatisticasLembretes = {
     total: lembretes.length,
     enviados: lembretes.filter(l => l.status_envio === 'enviado').length,
     pendentes: lembretes.filter(l => l.status_envio === 'pendente').length,
     erro: lembretes.filter(l => l.status_envio === 'erro').length,
     retry: lembretes.filter(l => l.status_envio === 'retry').length,
-    taxaSucesso: lembretes.length > 0 ? Math.round((lembretes.filter(l => l.status_envio === 'enviado').length / lembretes.length) * 100) : 0,
+    taxaSucesso: lembretes.length > 0 ? Math.round(lembretes.filter(l => l.status_envio === 'enviado').length / lembretes.length * 100) : 0
   };
-
-  return (
-    <div className="space-y-6 p-6">
+  return <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Agenda</h1>
+          <h1 className="text-3xl font-bold text-foreground">Agenda Individual e Muti-Agendas</h1>
           <p className="text-muted-foreground">Gerencie seus compromissos e agendamentos</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={configuracoesOpen} onOpenChange={(open) => {
-            setConfiguracoesOpen(open);
-            if (open) {
-              carregarConfiguracoes();
-            }
-          }}>
+          <Dialog open={configuracoesOpen} onOpenChange={open => {
+          setConfiguracoesOpen(open);
+          if (open) {
+            carregarConfiguracoes();
+          }
+        }}>
             <DialogTrigger asChild>
               <Button variant="outline" size="icon">
                 <Settings className="h-4 w-4" />
@@ -2183,19 +2064,12 @@ export default function Agenda() {
               <div className="space-y-6">
                 <div className="space-y-2">
                   <Label>Tempo médio padrão (minutos)</Label>
-                  <Input 
-                    type="number" 
-                    min="5"
-                    max="480"
-                    step="1"
-                    value={tempoMedioPadrao}
-                    onChange={(e) => {
-                      const valor = parseInt(e.target.value);
-                      if (valor >= 5 && valor <= 480) {
-                        setTempoMedioPadrao(valor);
-                      }
-                    }}
-                  />
+                  <Input type="number" min="5" max="480" step="1" value={tempoMedioPadrao} onChange={e => {
+                  const valor = parseInt(e.target.value);
+                  if (valor >= 5 && valor <= 480) {
+                    setTempoMedioPadrao(valor);
+                  }
+                }} />
                   <p className="text-xs text-muted-foreground">
                     Duração média padrão para cada compromisso (mínimo 5 min, máximo 8 horas)
                   </p>
@@ -2207,32 +2081,36 @@ export default function Agenda() {
                     Selecione os dias da semana em que a empresa funciona.
                   </p>
                   <div className="grid grid-cols-7 gap-2">
-                    {[
-                      { id: "domingo", label: "Dom" },
-                      { id: "segunda", label: "Seg" },
-                      { id: "terca", label: "Ter" },
-                      { id: "quarta", label: "Qua" },
-                      { id: "quinta", label: "Qui" },
-                      { id: "sexta", label: "Sex" },
-                      { id: "sabado", label: "Sáb" },
-                    ].map((dia) => (
-                      <Button
-                        key={dia.id}
-                        type="button"
-                        variant={diasFuncionamento.includes(dia.id) ? "default" : "outline"}
-                        size="sm"
-                        className="h-10"
-                        onClick={() => {
-                          if (diasFuncionamento.includes(dia.id)) {
-                            setDiasFuncionamento(diasFuncionamento.filter(d => d !== dia.id));
-                          } else {
-                            setDiasFuncionamento([...diasFuncionamento, dia.id]);
-                          }
-                        }}
-                      >
+                    {[{
+                    id: "domingo",
+                    label: "Dom"
+                  }, {
+                    id: "segunda",
+                    label: "Seg"
+                  }, {
+                    id: "terca",
+                    label: "Ter"
+                  }, {
+                    id: "quarta",
+                    label: "Qua"
+                  }, {
+                    id: "quinta",
+                    label: "Qui"
+                  }, {
+                    id: "sexta",
+                    label: "Sex"
+                  }, {
+                    id: "sabado",
+                    label: "Sáb"
+                  }].map(dia => <Button key={dia.id} type="button" variant={diasFuncionamento.includes(dia.id) ? "default" : "outline"} size="sm" className="h-10" onClick={() => {
+                    if (diasFuncionamento.includes(dia.id)) {
+                      setDiasFuncionamento(diasFuncionamento.filter(d => d !== dia.id));
+                    } else {
+                      setDiasFuncionamento([...diasFuncionamento, dia.id]);
+                    }
+                  }}>
                         {dia.label}
-                      </Button>
-                    ))}
+                      </Button>)}
                   </div>
                 </div>
 
@@ -2241,10 +2119,7 @@ export default function Agenda() {
                   <p className="text-xs text-muted-foreground mb-2">
                     Configure os períodos de atendimento. Cada empresa/profissional pode ter horários personalizados.
                   </p>
-                  <HorarioComercialConfig 
-                    horario={horarioComercial}
-                    onChange={setHorarioComercial}
-                  />
+                  <HorarioComercialConfig horario={horarioComercial} onChange={setHorarioComercial} />
                 </div>
 
                 <div className="space-y-2">
@@ -2261,88 +2136,81 @@ export default function Agenda() {
                   </Select>
                 </div>
 
-                <Button 
-                  className="w-full"
-                  onClick={async () => {
-                    try {
-                      const { data: { user } } = await supabase.auth.getUser();
-                      if (!user) throw new Error("Usuário não autenticado");
-
-                      const { data: userRole } = await supabase
-                        .from('user_roles')
-                        .select('company_id')
-                        .eq('user_id', user.id)
-                        .single();
-
-                      if (!userRole?.company_id) throw new Error("Empresa não encontrada");
-
-                      // Buscar ou criar agenda padrão
-                      const { data: agendaExistente } = await supabase
-                        .from('agendas')
-                        .select('id')
-                        .eq('owner_id', user.id)
-                        .eq('tipo', 'principal')
-                        .single();
-
-                      const disponibilidade = {
-                        periodos: horarioComercial,
-                        tempo_medio_servico: tempoMedioPadrao,
-                        canal_lembrete_padrao: canalLembretePadrao,
-                        dias_funcionamento: diasFuncionamento,
-                      };
-
-                      console.log('💾 [Agenda] Salvando configurações:', {
-                        tempoMedioPadrao,
-                        diasFuncionamento,
-                        disponibilidade,
-                        agendaExistente: agendaExistente?.id
-                      });
-
-                      if (agendaExistente) {
-                        // Atualizar agenda existente
-                        const { error, data } = await supabase
-                          .from('agendas')
-                          .update({
-                            disponibilidade: disponibilidade as any,
-                            tempo_medio_servico: tempoMedioPadrao,
-                            updated_at: new Date().toISOString(),
-                          })
-                          .eq('id', agendaExistente.id)
-                          .select();
-
-                        console.log('💾 [Agenda] Resultado update:', { error, data });
-                        if (error) throw error;
-                      } else {
-                        // Criar nova agenda
-                        const { error, data } = await supabase
-                          .from('agendas')
-                          .insert({
-                            nome: 'Agenda Principal',
-                            tipo: 'principal',
-                            owner_id: user.id,
-                            company_id: userRole.company_id,
-                            disponibilidade: disponibilidade as any,
-                            tempo_medio_servico: tempoMedioPadrao,
-                            capacidade_simultanea: 1,
-                            status: 'ativo',
-                          })
-                          .select();
-
-                        console.log('💾 [Agenda] Resultado insert:', { error, data });
-                        if (error) throw error;
-                      }
-
-                      // Recarregar configurações para garantir que os valores estão atualizados
-                      await carregarConfiguracoes();
-                      
-                      toast.success(`Configurações salvas! Tempo: ${tempoMedioPadrao} minutos`);
-                      setConfiguracoesOpen(false);
-                    } catch (error: any) {
-                      console.error('Erro ao salvar configurações:', error);
-                      toast.error(`Erro ao salvar: ${error.message || 'Erro desconhecido'}`);
+                <Button className="w-full" onClick={async () => {
+                try {
+                  const {
+                    data: {
+                      user
                     }
-                  }}
-                >
+                  } = await supabase.auth.getUser();
+                  if (!user) throw new Error("Usuário não autenticado");
+                  const {
+                    data: userRole
+                  } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single();
+                  if (!userRole?.company_id) throw new Error("Empresa não encontrada");
+
+                  // Buscar ou criar agenda padrão
+                  const {
+                    data: agendaExistente
+                  } = await supabase.from('agendas').select('id').eq('owner_id', user.id).eq('tipo', 'principal').single();
+                  const disponibilidade = {
+                    periodos: horarioComercial,
+                    tempo_medio_servico: tempoMedioPadrao,
+                    canal_lembrete_padrao: canalLembretePadrao,
+                    dias_funcionamento: diasFuncionamento
+                  };
+                  console.log('💾 [Agenda] Salvando configurações:', {
+                    tempoMedioPadrao,
+                    diasFuncionamento,
+                    disponibilidade,
+                    agendaExistente: agendaExistente?.id
+                  });
+                  if (agendaExistente) {
+                    // Atualizar agenda existente
+                    const {
+                      error,
+                      data
+                    } = await supabase.from('agendas').update({
+                      disponibilidade: disponibilidade as any,
+                      tempo_medio_servico: tempoMedioPadrao,
+                      updated_at: new Date().toISOString()
+                    }).eq('id', agendaExistente.id).select();
+                    console.log('💾 [Agenda] Resultado update:', {
+                      error,
+                      data
+                    });
+                    if (error) throw error;
+                  } else {
+                    // Criar nova agenda
+                    const {
+                      error,
+                      data
+                    } = await supabase.from('agendas').insert({
+                      nome: 'Agenda Principal',
+                      tipo: 'principal',
+                      owner_id: user.id,
+                      company_id: userRole.company_id,
+                      disponibilidade: disponibilidade as any,
+                      tempo_medio_servico: tempoMedioPadrao,
+                      capacidade_simultanea: 1,
+                      status: 'ativo'
+                    }).select();
+                    console.log('💾 [Agenda] Resultado insert:', {
+                      error,
+                      data
+                    });
+                    if (error) throw error;
+                  }
+
+                  // Recarregar configurações para garantir que os valores estão atualizados
+                  await carregarConfiguracoes();
+                  toast.success(`Configurações salvas! Tempo: ${tempoMedioPadrao} minutos`);
+                  setConfiguracoesOpen(false);
+                } catch (error: any) {
+                  console.error('Erro ao salvar configurações:', error);
+                  toast.error(`Erro ao salvar: ${error.message || 'Erro desconhecido'}`);
+                }
+              }}>
                   Salvar Configurações
                 </Button>
               </div>
@@ -2364,102 +2232,73 @@ export default function Agenda() {
                 {/* Campo título removido - coluna não existe no banco de dados */}
                 <div className="space-y-2">
                   <Label>Agenda (Opcional)</Label>
-                  <Select value={formData.agenda_id || "none"} onValueChange={(value) => setFormData({ ...formData, agenda_id: value === "none" ? "" : value })}>
+                  <Select value={formData.agenda_id || "none"} onValueChange={value => setFormData({
+                  ...formData,
+                  agenda_id: value === "none" ? "" : value
+                })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione uma agenda ou deixe vazio" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Nenhuma agenda</SelectItem>
-                      {agendas.map((agenda) => (
-                        <SelectItem key={agenda.id} value={agenda.id}>
+                      {agendas.map(agenda => <SelectItem key={agenda.id} value={agenda.id}>
                           {agenda.nome} ({agenda.tipo}) - {agenda.disponibilidade?.horario_inicio} às {agenda.disponibilidade?.horario_fim}
-                        </SelectItem>
-                      ))}
+                        </SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {formData.agenda_id && (
-                    <p className="text-xs text-muted-foreground">
+                  {formData.agenda_id && <p className="text-xs text-muted-foreground">
                       {(() => {
-                        const agenda = agendas.find(a => a.id === formData.agenda_id);
-                        return agenda ? `Capacidade: ${agenda.capacidade_simultanea} simultâneos | Dias: ${agenda.disponibilidade?.dias?.join(', ')}` : '';
-                      })()}
-                    </p>
-                  )}
+                    const agenda = agendas.find(a => a.id === formData.agenda_id);
+                    return agenda ? `Capacidade: ${agenda.capacidade_simultanea} simultâneos | Dias: ${agenda.disponibilidade?.dias?.join(', ')}` : '';
+                  })()}
+                    </p>}
                 </div>
 
                 <div className="space-y-2">
                   <Label>Cliente / Lead</Label>
-                  <Input
-                    value={leadSearch}
-                    onChange={(e) => setLeadSearch(e.target.value)}
-                    placeholder="Buscar por nome, telefone ou tag..."
-                  />
-                  {leadSearch && (
-                    <div className="border rounded-md max-h-40 overflow-y-auto">
-                      {filteredLeads.length > 0 ? (
-                        filteredLeads.map((lead) => (
-                          <button
-                            key={lead.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({...formData, lead_id: lead.id});
-                              setSelectedLeadName(lead.name);
-                              setLeadSearch("");
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-accent transition-colors text-sm"
-                          >
+                  <Input value={leadSearch} onChange={e => setLeadSearch(e.target.value)} placeholder="Buscar por nome, telefone ou tag..." />
+                  {leadSearch && <div className="border rounded-md max-h-40 overflow-y-auto">
+                      {filteredLeads.length > 0 ? filteredLeads.map(lead => <button key={lead.id} type="button" onClick={() => {
+                    setFormData({
+                      ...formData,
+                      lead_id: lead.id
+                    });
+                    setSelectedLeadName(lead.name);
+                    setLeadSearch("");
+                  }} className="w-full text-left px-3 py-2 hover:bg-accent transition-colors text-sm">
                             <div className="font-medium">{lead.name}</div>
-                            {(lead.phone || lead.telefone) && (
-                              <div className="text-xs text-muted-foreground">
+                            {(lead.phone || lead.telefone) && <div className="text-xs text-muted-foreground">
                                 {lead.phone || lead.telefone}
-                              </div>
-                            )}
-                            {lead.tags && lead.tags.length > 0 && (
-                              <div className="flex gap-1 mt-1">
-                                {lead.tags.slice(0, 3).map((tag: string) => (
-                                  <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                              </div>}
+                            {lead.tags && lead.tags.length > 0 && <div className="flex gap-1 mt-1">
+                                {lead.tags.slice(0, 3).map((tag: string) => <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                                     {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                                  </span>)}
+                              </div>}
+                          </button>) : <div className="px-3 py-2 text-sm text-muted-foreground">
                           Nenhum lead encontrado
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {selectedLeadName && (
-                    <div className="flex items-center justify-between p-2 bg-primary/10 rounded-md">
+                        </div>}
+                    </div>}
+                  {selectedLeadName && <div className="flex items-center justify-between p-2 bg-primary/10 rounded-md">
                       <span className="text-sm font-medium">{selectedLeadName}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setFormData({...formData, lead_id: ""});
-                          setSelectedLeadName("");
-                        }}
-                        className="h-6 px-2"
-                      >
+                      <Button type="button" variant="ghost" size="sm" onClick={() => {
+                    setFormData({
+                      ...formData,
+                      lead_id: ""
+                    });
+                    setSelectedLeadName("");
+                  }} className="h-6 px-2">
                         Remover
                       </Button>
-                    </div>
-                  )}
+                    </div>}
                 </div>
 
                 <div className="space-y-2">
                   <Label>Data <span className="text-destructive">*</span></Label>
-                  <Input 
-                    type="date" 
-                    value={formData.data}
-                    min={format(new Date(), "yyyy-MM-dd")}
-                    onChange={(e) => setFormData({...formData, data: e.target.value})}
-                    className={!formData.data ? "border-amber-500" : ""}
-                  />
+                  <Input type="date" value={formData.data} min={format(new Date(), "yyyy-MM-dd")} onChange={e => setFormData({
+                  ...formData,
+                  data: e.target.value
+                })} className={!formData.data ? "border-amber-500" : ""} />
                 </div>
 
                 {/* Seletor de Horários Disponíveis - igual ao menu Conversas */}
@@ -2467,29 +2306,17 @@ export default function Agenda() {
                   <Label>Selecione o Horário <span className="text-destructive">*</span></Label>
                   <p className="text-xs text-muted-foreground mb-2">
                     Duração do compromisso: <strong>{formAgendaSelecionada?.tempo_medio_servico || tempoMedioPadrao} minutos</strong> 
-                    {formAgendaSelecionada?.permite_simultaneo && formAgendaSelecionada?.capacidade_simultanea > 1 && (
-                      <> | Capacidade simultânea: <strong>{formAgendaSelecionada.capacidade_simultanea}</strong></>
-                    )}
+                    {formAgendaSelecionada?.permite_simultaneo && formAgendaSelecionada?.capacidade_simultanea > 1 && <> | Capacidade simultânea: <strong>{formAgendaSelecionada.capacidade_simultanea}</strong></>}
                   </p>
-                  <HorarioSeletor
-                    data={formData.data}
-                    horarioComercial={formHorarioComercial}
-                    compromissosExistentes={formCompromissosExistentes}
-                    horarioSelecionado={formData.hora_inicio}
-                    duracaoMinutos={formAgendaSelecionada?.tempo_medio_servico || tempoMedioPadrao}
-                    permitirSimultaneo={formAgendaSelecionada?.permite_simultaneo || false}
-                    capacidadeSimultanea={formAgendaSelecionada?.capacidade_simultanea || 1}
-                    diasFuncionamento={formDiasFuncionamento}
-                    onSelecionarHorario={handleSelecionarHorarioForm}
-                  />
+                  <HorarioSeletor data={formData.data} horarioComercial={formHorarioComercial} compromissosExistentes={formCompromissosExistentes} horarioSelecionado={formData.hora_inicio} duracaoMinutos={formAgendaSelecionada?.tempo_medio_servico || tempoMedioPadrao} permitirSimultaneo={formAgendaSelecionada?.permite_simultaneo || false} capacidadeSimultanea={formAgendaSelecionada?.capacidade_simultanea || 1} diasFuncionamento={formDiasFuncionamento} onSelecionarHorario={handleSelecionarHorarioForm} />
                 </div>
 
                 <div className="space-y-2">
                   <Label>Tipo de serviço (Opcional)</Label>
-                  <Select 
-                    value={formData.tipo_servico || "none"} 
-                    onValueChange={(value) => setFormData({...formData, tipo_servico: value === "none" ? "" : value})}
-                  >
+                  <Select value={formData.tipo_servico || "none"} onValueChange={value => setFormData({
+                  ...formData,
+                  tipo_servico: value === "none" ? "" : value
+                })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione o tipo (opcional)" />
                     </SelectTrigger>
@@ -2507,23 +2334,18 @@ export default function Agenda() {
 
                 <div className="space-y-2">
                   <Label>Valor estimado (R$)</Label>
-                  <Input 
-                    type="number" 
-                    step="0.01"
-                    placeholder="0.00"
-                    value={formData.custo_estimado}
-                    onChange={(e) => setFormData({...formData, custo_estimado: e.target.value})}
-                  />
+                  <Input type="number" step="0.01" placeholder="0.00" value={formData.custo_estimado} onChange={e => setFormData({
+                  ...formData,
+                  custo_estimado: e.target.value
+                })} />
                 </div>
 
                 <div className="space-y-2">
                   <Label>Observações</Label>
-                  <Textarea 
-                    placeholder="Observações internas sobre o compromisso..."
-                    value={formData.observacoes}
-                    onChange={(e) => setFormData({...formData, observacoes: e.target.value})}
-                    rows={3}
-                  />
+                  <Textarea placeholder="Observações internas sobre o compromisso..." value={formData.observacoes} onChange={e => setFormData({
+                  ...formData,
+                  observacoes: e.target.value
+                })} rows={3} />
                 </div>
 
                 <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -2533,55 +2355,50 @@ export default function Agenda() {
                       O cliente receberá um lembrete via WhatsApp
                     </p>
                   </div>
-                  <Switch 
-                    checked={formData.enviar_lembrete}
-                    onCheckedChange={(checked) => setFormData({...formData, enviar_lembrete: checked})}
-                  />
+                  <Switch checked={formData.enviar_lembrete} onCheckedChange={checked => setFormData({
+                  ...formData,
+                  enviar_lembrete: checked
+                })} />
                 </div>
 
                 {/* Mensagem de Confirmação Imediata */}
-                {formData.lead_id && (
-                  <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50/50 dark:bg-blue-950/20">
+                {formData.lead_id && <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50/50 dark:bg-blue-950/20">
                     <div className="space-y-1">
                       <Label>Enviar confirmação imediata</Label>
                       <p className="text-xs text-muted-foreground">
                         O cliente receberá uma mensagem de confirmação via WhatsApp agora
                       </p>
                     </div>
-                    <Switch 
-                      checked={formData.enviar_confirmacao}
-                      onCheckedChange={(checked) => setFormData({...formData, enviar_confirmacao: checked})}
-                    />
-                  </div>
-                )}
+                    <Switch checked={formData.enviar_confirmacao} onCheckedChange={checked => setFormData({
+                  ...formData,
+                  enviar_confirmacao: checked
+                })} />
+                  </div>}
 
                 {/* Notificação Push para Responsável */}
                 <div className="flex items-center justify-between p-4 border rounded-lg bg-green-50/50 dark:bg-green-950/20">
                   <div className="space-y-1">
                     <Label>Notificar responsável</Label>
                     <p className="text-xs text-muted-foreground">
-                      {('Notification' in window && Notification.permission === 'granted') 
-                        ? 'Você receberá uma notificação push no navegador'
-                        : 'Você receberá uma notificação push (permissão será solicitada)'}
+                      {'Notification' in window && Notification.permission === 'granted' ? 'Você receberá uma notificação push no navegador' : 'Você receberá uma notificação push (permissão será solicitada)'}
                     </p>
-                    {('Notification' in window && Notification.permission === 'denied') && (
-                      <p className="text-xs text-amber-600 mt-1">
+                    {'Notification' in window && Notification.permission === 'denied' && <p className="text-xs text-amber-600 mt-1">
                         ⚠️ Notificações bloqueadas. Ative nas configurações do navegador.
-                      </p>
-                    )}
+                      </p>}
                   </div>
-                  <Switch 
-                    checked={formData.notificar_responsavel}
-                    onCheckedChange={(checked) => setFormData({...formData, notificar_responsavel: checked})}
-                    disabled={('Notification' in window && Notification.permission === 'denied')}
-                  />
+                  <Switch checked={formData.notificar_responsavel} onCheckedChange={checked => setFormData({
+                  ...formData,
+                  notificar_responsavel: checked
+                })} disabled={'Notification' in window && Notification.permission === 'denied'} />
                 </div>
 
-                {formData.enviar_lembrete && (
-                  <>
+                {formData.enviar_lembrete && <>
                     <div className="space-y-2">
                       <Label>Enviar lembrete para</Label>
-                      <Select value={formData.destinatario_lembrete} onValueChange={(value) => setFormData({...formData, destinatario_lembrete: value})}>
+                      <Select value={formData.destinatario_lembrete} onValueChange={value => setFormData({
+                    ...formData,
+                    destinatario_lembrete: value
+                  })}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -2597,41 +2414,39 @@ export default function Agenda() {
                       <div className="flex items-center gap-2">
                         <div className="flex-1">
                           <Label className="text-xs text-muted-foreground mb-1 block">Horas</Label>
-                          <Select
-                            value={formData.horas_antecedencia_horas}
-                            onValueChange={(value) => {
-                              setFormData({...formData, horas_antecedencia_horas: value});
-                            }}
-                          >
+                          <Select value={formData.horas_antecedencia_horas} onValueChange={value => {
+                        setFormData({
+                          ...formData,
+                          horas_antecedencia_horas: value
+                        });
+                      }}>
                             <SelectTrigger className="h-9">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {Array.from({ length: 25 }, (_, i) => (
-                                <SelectItem key={i} value={i.toString()}>
+                              {Array.from({
+                            length: 25
+                          }, (_, i) => <SelectItem key={i} value={i.toString()}>
                                   {i} {i === 1 ? 'hora' : 'horas'}
-                                </SelectItem>
-                              ))}
+                                </SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
                         <div className="flex-1">
                           <Label className="text-xs text-muted-foreground mb-1 block">Minutos</Label>
-                          <Select
-                            value={formData.horas_antecedencia_minutos}
-                            onValueChange={(value) => {
-                              setFormData({...formData, horas_antecedencia_minutos: value});
-                            }}
-                          >
+                          <Select value={formData.horas_antecedencia_minutos} onValueChange={value => {
+                        setFormData({
+                          ...formData,
+                          horas_antecedencia_minutos: value
+                        });
+                      }}>
                             <SelectTrigger className="h-9">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {[0, 5, 10, 15, 20, 30, 45].map((min) => (
-                                <SelectItem key={min} value={min.toString()}>
+                              {[0, 5, 10, 15, 20, 30, 45].map(min => <SelectItem key={min} value={min.toString()}>
                                   {min} {min === 1 ? 'minuto' : 'minutos'}
-                                </SelectItem>
-                              ))}
+                                </SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
@@ -2640,18 +2455,10 @@ export default function Agenda() {
                         Selecione quantas horas e minutos antes do compromisso o lembrete deve ser enviado.
                       </p>
                     </div>
-                  </>
-                )}
+                  </>}
 
-                <Button 
-                  className="w-full" 
-                  onClick={criarCompromisso}
-                  disabled={!formData.data || !formData.hora_inicio}
-                >
-                  {!formData.data || !formData.hora_inicio 
-                    ? "Preencha os campos obrigatórios (data, horário e duração)"
-                    : "Criar Agendamento"
-                  }
+                <Button className="w-full" onClick={criarCompromisso} disabled={!formData.data || !formData.hora_inicio}>
+                  {!formData.data || !formData.hora_inicio ? "Preencha os campos obrigatórios (data, horário e duração)" : "Criar Agendamento"}
                 </Button>
                 <p className="text-xs text-center text-muted-foreground">
                   <span className="text-destructive">*</span> Campos obrigatórios
@@ -2752,54 +2559,39 @@ export default function Agenda() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => {
-                    if (date) {
-                      setSelectedDate(date);
-                      // Lazy loading: carregar compromissos do mês quando mudar de data
-                      const newMonth = format(date, 'yyyy-MM');
-                      const currentMonth = format(selectedDate, 'yyyy-MM');
-                      if (newMonth !== currentMonth) {
-                        console.log(`📅 [Performance] Mudança de mês detectada: ${currentMonth} -> ${newMonth}`);
-                        carregarCompromissosDoMes(date);
-                      }
-                    }
-                  }}
-                  onMonthChange={(date) => {
-                    // Lazy loading: carregar compromissos quando usuário navegar para novo mês
-                    console.log(`📅 [Performance] Navegação para mês: ${format(date, 'yyyy-MM')}`);
+                <Calendar mode="single" selected={selectedDate} onSelect={date => {
+                if (date) {
+                  setSelectedDate(date);
+                  // Lazy loading: carregar compromissos do mês quando mudar de data
+                  const newMonth = format(date, 'yyyy-MM');
+                  const currentMonth = format(selectedDate, 'yyyy-MM');
+                  if (newMonth !== currentMonth) {
+                    console.log(`📅 [Performance] Mudança de mês detectada: ${currentMonth} -> ${newMonth}`);
                     carregarCompromissosDoMes(date);
-                  }}
-                  locale={ptBR}
-                  className="rounded-md border"
-                  modifiers={{
-                    hasCompromissos: compromissosDoMes
-                      .filter(c => c.status === 'agendado')
-                      .map(c => {
-                        const date = parseISO(c.data_hora_inicio);
-                        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                      }),
-                    hasConcluidos: compromissosDoMes
-                      .filter(c => c.status === 'concluido')
-                      .map(c => {
-                        const date = parseISO(c.data_hora_inicio);
-                        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                      }),
-                    hasCancelados: compromissosDoMes
-                      .filter(c => c.status === 'cancelado')
-                      .map(c => {
-                        const date = parseISO(c.data_hora_inicio);
-                        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                      }),
-                  }}
-                  modifiersClassNames={{
-                    hasCompromissos: "bg-blue-100 text-blue-900 font-semibold hover:bg-blue-200",
-                    hasConcluidos: "bg-green-100 text-green-900 hover:bg-green-200",
-                    hasCancelados: "bg-red-100 text-red-900 hover:bg-red-200",
-                  }}
-                />
+                  }
+                }
+              }} onMonthChange={date => {
+                // Lazy loading: carregar compromissos quando usuário navegar para novo mês
+                console.log(`📅 [Performance] Navegação para mês: ${format(date, 'yyyy-MM')}`);
+                carregarCompromissosDoMes(date);
+              }} locale={ptBR} className="rounded-md border" modifiers={{
+                hasCompromissos: compromissosDoMes.filter(c => c.status === 'agendado').map(c => {
+                  const date = parseISO(c.data_hora_inicio);
+                  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                }),
+                hasConcluidos: compromissosDoMes.filter(c => c.status === 'concluido').map(c => {
+                  const date = parseISO(c.data_hora_inicio);
+                  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                }),
+                hasCancelados: compromissosDoMes.filter(c => c.status === 'cancelado').map(c => {
+                  const date = parseISO(c.data_hora_inicio);
+                  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                })
+              }} modifiersClassNames={{
+                hasCompromissos: "bg-blue-100 text-blue-900 font-semibold hover:bg-blue-200",
+                hasConcluidos: "bg-green-100 text-green-900 hover:bg-green-200",
+                hasCancelados: "bg-red-100 text-red-900 hover:bg-red-200"
+              }} />
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-blue-500"></div>
@@ -2823,7 +2615,9 @@ export default function Agenda() {
                 <div className="flex justify-between items-center">
                   <CardTitle className="flex items-center gap-2">
                     <Clock className="h-5 w-5" />
-                    {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
+                    {format(selectedDate, "dd 'de' MMMM", {
+                    locale: ptBR
+                  })}
                   </CardTitle>
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
                     <SelectTrigger className="w-32">
@@ -2840,15 +2634,11 @@ export default function Agenda() {
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[400px]">
-                  {compromissosDoDia.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
+                  {compromissosDoDia.length === 0 ? <div className="text-center py-8 text-muted-foreground">
                       <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
                       <p>Nenhum compromisso para este dia</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {compromissosDoDia.map((compromisso) => (
-                        <Card key={compromisso.id} className="border-l-4 border-l-blue-500">
+                    </div> : <div className="space-y-3">
+                      {compromissosDoDia.map(compromisso => <Card key={compromisso.id} className="border-l-4 border-l-blue-500">
                           <CardContent className="pt-4">
                             <div className="flex justify-between items-start mb-2">
                               <div className="space-y-1 flex-1">
@@ -2860,84 +2650,49 @@ export default function Agenda() {
                                   <Clock className="h-3 w-3" />
                                   {format(parseISO(compromisso.data_hora_inicio), "HH:mm")} - {format(parseISO(compromisso.data_hora_fim), "HH:mm")}
                                 </p>
-                                {compromisso.agenda && (
-                                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                {compromisso.agenda && <p className="text-xs text-muted-foreground flex items-center gap-1">
                                     <CalendarIcon className="h-3 w-3" />
                                     {compromisso.agenda.nome} ({compromisso.agenda.tipo})
-                                  </p>
-                                )}
-                                {compromisso.lead && (
-                                  <div className="flex items-center gap-2">
+                                  </p>}
+                                {compromisso.lead && <div className="flex items-center gap-2">
                                     <Avatar className="h-6 w-6">
-                                      <AvatarImage 
-                                        src={compromisso.lead_id ? leadAvatars[compromisso.lead_id] : undefined} 
-                                        alt={compromisso.lead.name}
-                                        onError={(e) => {
-                                          // Se falhar, tentar buscar
-                                          if (compromisso.lead_id && compromisso.lead) {
-                                            buscarAvatarLead({
-                                              id: compromisso.lead_id,
-                                              name: compromisso.lead.name,
-                                              phone: compromisso.lead.phone,
-                                              telefone: compromisso.lead.phone
-                                            });
-                                          }
-                                        }}
-                                      />
+                                      <AvatarImage src={compromisso.lead_id ? leadAvatars[compromisso.lead_id] : undefined} alt={compromisso.lead.name} onError={e => {
+                                // Se falhar, tentar buscar
+                                if (compromisso.lead_id && compromisso.lead) {
+                                  buscarAvatarLead({
+                                    id: compromisso.lead_id,
+                                    name: compromisso.lead.name,
+                                    phone: compromisso.lead.phone,
+                                    telefone: compromisso.lead.phone
+                                  });
+                                }
+                              }} />
                                       <AvatarFallback className="h-6 w-6 text-xs bg-primary/10">
                                         {compromisso.lead.name.charAt(0).toUpperCase()}
                                       </AvatarFallback>
                                     </Avatar>
                                     <span className="text-sm">{compromisso.lead.name}</span>
-                                  </div>
-                                )}
-                                {compromisso.observacoes && (
-                                  <p className="text-xs text-muted-foreground mt-2">
+                                  </div>}
+                                {compromisso.observacoes && <p className="text-xs text-muted-foreground mt-2">
                                     {compromisso.observacoes}
-                                  </p>
-                                )}
+                                  </p>}
                               </div>
                               <div className="flex gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => duplicarCompromisso(compromisso)}
-                                  title="Duplicar compromisso"
-                                >
+                                <Button size="sm" variant="ghost" onClick={() => duplicarCompromisso(compromisso)} title="Duplicar compromisso">
                                   <Copy className="h-4 w-4" />
                                 </Button>
-                                <EditarCompromissoDialog
-                                  compromisso={compromisso}
-                                  onCompromissoUpdated={carregarCompromissos}
-                                />
-                                {compromisso.status === 'agendado' && (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => atualizarStatus(compromisso.id, 'concluido')}
-                                      title="Marcar como concluído"
-                                    >
+                                <EditarCompromissoDialog compromisso={compromisso} onCompromissoUpdated={carregarCompromissos} />
+                                {compromisso.status === 'agendado' && <>
+                                    <Button size="sm" variant="ghost" onClick={() => atualizarStatus(compromisso.id, 'concluido')} title="Marcar como concluído">
                                       <CheckCircle2 className="h-4 w-4" />
                                     </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => atualizarStatus(compromisso.id, 'cancelado')}
-                                      title="Cancelar compromisso"
-                                    >
+                                    <Button size="sm" variant="ghost" onClick={() => atualizarStatus(compromisso.id, 'cancelado')} title="Cancelar compromisso">
                                       <XCircle className="h-4 w-4" />
                                     </Button>
-                                  </>
-                                )}
+                                  </>}
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                      title="Deletar compromisso"
-                                    >
+                                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Deletar compromisso">
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
                                   </AlertDialogTrigger>
@@ -2950,10 +2705,7 @@ export default function Agenda() {
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={() => deletarCompromisso(compromisso.id)}
-                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                      >
+                                      <AlertDialogAction onClick={() => deletarCompromisso(compromisso.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                                         Deletar
                                       </AlertDialogAction>
                                     </AlertDialogFooter>
@@ -2962,10 +2714,8 @@ export default function Agenda() {
                               </div>
                             </div>
                           </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
+                        </Card>)}
+                    </div>}
                 </ScrollArea>
               </CardContent>
             </Card>
@@ -2980,12 +2730,7 @@ export default function Agenda() {
                 <div className="flex flex-col sm:flex-row gap-3">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar por título, tipo, lead, agenda..."
-                      value={buscaCompromissos}
-                      onChange={(e) => setBuscaCompromissos(e.target.value)}
-                      className="pl-9"
-                    />
+                    <Input placeholder="Buscar por título, tipo, lead, agenda..." value={buscaCompromissos} onChange={e => setBuscaCompromissos(e.target.value)} className="pl-9" />
                   </div>
                   <Select value={filtroAgenda} onValueChange={setFiltroAgenda}>
                     <SelectTrigger className="w-full sm:w-[200px]">
@@ -2993,11 +2738,9 @@ export default function Agenda() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas as agendas</SelectItem>
-                      {agendas.map((agenda) => (
-                        <SelectItem key={agenda.id} value={agenda.id}>
+                      {agendas.map(agenda => <SelectItem key={agenda.id} value={agenda.id}>
                           {agenda.nome}
-                        </SelectItem>
-                      ))}
+                        </SelectItem>)}
                     </SelectContent>
                   </Select>
                   <Select value={filtroTipoServico} onValueChange={setFiltroTipoServico}>
@@ -3025,70 +2768,44 @@ export default function Agenda() {
                       <SelectItem value="mes">Este mês</SelectItem>
                     </SelectContent>
                   </Select>
-                  {responsaveisUnicos.length > 0 && (
-                    <Select value={filtroResponsavel} onValueChange={setFiltroResponsavel}>
+                  {responsaveisUnicos.length > 0 && <Select value={filtroResponsavel} onValueChange={setFiltroResponsavel}>
                       <SelectTrigger className="w-full sm:w-[200px]">
                         <SelectValue placeholder="Responsável" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos os responsáveis</SelectItem>
-                        {responsaveisUnicos.map((resp) => (
-                          <SelectItem key={resp.id} value={resp.id}>
+                        {responsaveisUnicos.map(resp => <SelectItem key={resp.id} value={resp.id}>
                             {resp.name.substring(0, 8)}...
-                          </SelectItem>
-                        ))}
+                          </SelectItem>)}
                       </SelectContent>
-                    </Select>
-                  )}
+                    </Select>}
                 </div>
-                {(buscaCompromissos || filtroAgenda !== "all" || filtroTipoServico !== "all" || filtroPeriodo !== "all" || filtroResponsavel !== "all") && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {(buscaCompromissos || filtroAgenda !== "all" || filtroTipoServico !== "all" || filtroPeriodo !== "all" || filtroResponsavel !== "all") && <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Filter className="h-4 w-4" />
                     <span>
                       {compromissosFiltrados.length} de {compromissos.length} compromissos
                     </span>
-                    {(buscaCompromissos || filtroAgenda !== "all" || filtroTipoServico !== "all" || filtroPeriodo !== "all" || filtroResponsavel !== "all") && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setBuscaCompromissos("");
-                          setFiltroAgenda("all");
-                          setFiltroTipoServico("all");
-                          setFiltroPeriodo("all");
-                          setFiltroResponsavel("all");
-                        }}
-                        className="h-6 px-2 text-xs"
-                      >
+                    {(buscaCompromissos || filtroAgenda !== "all" || filtroTipoServico !== "all" || filtroPeriodo !== "all" || filtroResponsavel !== "all") && <Button variant="ghost" size="sm" onClick={() => {
+                  setBuscaCompromissos("");
+                  setFiltroAgenda("all");
+                  setFiltroTipoServico("all");
+                  setFiltroPeriodo("all");
+                  setFiltroResponsavel("all");
+                }} className="h-6 px-2 text-xs">
                         Limpar filtros
-                      </Button>
-                    )}
-                  </div>
-                )}
+                      </Button>}
+                  </div>}
               </div>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-[600px]">
                 <div className="space-y-2">
-                  {compromissosFiltrados.length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">
+                  {compromissosFiltrados.length === 0 ? <div className="text-center py-12 text-muted-foreground">
                       <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
                       <p>
-                        {compromissos.length === 0 
-                          ? "Nenhum compromisso cadastrado" 
-                          : "Nenhum compromisso encontrado com os filtros aplicados"}
+                        {compromissos.length === 0 ? "Nenhum compromisso cadastrado" : "Nenhum compromisso encontrado com os filtros aplicados"}
                       </p>
-                    </div>
-                  ) : (
-                    compromissosFiltrados.map((compromisso) => (
-                      <Card 
-                        key={compromisso.id} 
-                        className={`border-l-4 ${
-                          compromisso.status === 'agendado' ? 'border-l-blue-500' :
-                          compromisso.status === 'concluido' ? 'border-l-green-500' :
-                          'border-l-red-500'
-                        } hover:shadow-md transition-shadow`}
-                      >
+                    </div> : compromissosFiltrados.map(compromisso => <Card key={compromisso.id} className={`border-l-4 ${compromisso.status === 'agendado' ? 'border-l-blue-500' : compromisso.status === 'concluido' ? 'border-l-green-500' : 'border-l-red-500'} hover:shadow-md transition-shadow`}>
                         <CardContent className="pt-4">
                           <div className="flex justify-between items-start">
                             <div className="space-y-2 flex-1">
@@ -3098,70 +2815,49 @@ export default function Agenda() {
                               </div>
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <CalendarDays className="h-4 w-4" />
-                                <span>{format(parseISO(compromisso.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                                <span>{format(parseISO(compromisso.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", {
+                              locale: ptBR
+                            })}</span>
                                 <span>•</span>
                                 <Clock className="h-4 w-4" />
                                 <span>
                                   {format(parseISO(compromisso.data_hora_inicio), "HH:mm")} - {format(parseISO(compromisso.data_hora_fim), "HH:mm")}
                                 </span>
                               </div>
-                              {compromisso.agenda && (
-                                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              {compromisso.agenda && <p className="text-xs text-muted-foreground flex items-center gap-1">
                                   <CalendarIcon className="h-3 w-3" />
                                   {compromisso.agenda.nome} ({compromisso.agenda.tipo})
-                                </p>
-                              )}
-                              {compromisso.lead && (
-                                <div className="flex items-center gap-2">
+                                </p>}
+                              {compromisso.lead && <div className="flex items-center gap-2">
                                   <Avatar className="h-6 w-6">
-                                    <AvatarImage 
-                                      src={compromisso.lead_id ? leadAvatars[compromisso.lead_id] : undefined} 
-                                      alt={compromisso.lead.name}
-                                      onError={(e) => {
-                                        if (compromisso.lead_id && compromisso.lead) {
-                                          buscarAvatarLead({
-                                            id: compromisso.lead_id,
-                                            name: compromisso.lead.name,
-                                            phone: compromisso.lead.phone,
-                                            telefone: compromisso.lead.phone
-                                          });
-                                        }
-                                      }}
-                                    />
+                                    <AvatarImage src={compromisso.lead_id ? leadAvatars[compromisso.lead_id] : undefined} alt={compromisso.lead.name} onError={e => {
+                              if (compromisso.lead_id && compromisso.lead) {
+                                buscarAvatarLead({
+                                  id: compromisso.lead_id,
+                                  name: compromisso.lead.name,
+                                  phone: compromisso.lead.phone,
+                                  telefone: compromisso.lead.phone
+                                });
+                              }
+                            }} />
                                     <AvatarFallback className="h-6 w-6 text-xs bg-primary/10">
                                       {compromisso.lead.name.charAt(0).toUpperCase()}
                                     </AvatarFallback>
                                   </Avatar>
                                   <span className="text-sm">{compromisso.lead.name}</span>
-                                </div>
-                              )}
-                              {compromisso.custo_estimado && (
-                                <p className="text-sm font-medium text-primary">
+                                </div>}
+                              {compromisso.custo_estimado && <p className="text-sm font-medium text-primary">
                                   R$ {compromisso.custo_estimado.toFixed(2)}
-                                </p>
-                              )}
+                                </p>}
                             </div>
                             <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => duplicarCompromisso(compromisso)}
-                                title="Duplicar compromisso"
-                              >
+                              <Button size="sm" variant="ghost" onClick={() => duplicarCompromisso(compromisso)} title="Duplicar compromisso">
                                 <Copy className="h-4 w-4" />
                               </Button>
-                              <EditarCompromissoDialog
-                                compromisso={compromisso}
-                                onCompromissoUpdated={carregarCompromissos}
-                              />
+                              <EditarCompromissoDialog compromisso={compromisso} onCompromissoUpdated={carregarCompromissos} />
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    title="Deletar compromisso"
-                                  >
+                                  <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Deletar compromisso">
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </AlertDialogTrigger>
@@ -3174,10 +2870,7 @@ export default function Agenda() {
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => deletarCompromisso(compromisso.id)}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    >
+                                    <AlertDialogAction onClick={() => deletarCompromisso(compromisso.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                                       Deletar
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
@@ -3186,9 +2879,7 @@ export default function Agenda() {
                             </div>
                           </div>
                         </CardContent>
-                      </Card>
-                    ))
-                  )}
+                      </Card>)}
                 </div>
               </ScrollArea>
             </CardContent>
@@ -3249,19 +2940,11 @@ export default function Agenda() {
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-[600px]">
-                {lembretesFiltrados.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
+                {lembretesFiltrados.length === 0 ? <div className="text-center py-12 text-muted-foreground">
                     <Bell className="h-12 w-12 mx-auto mb-2 opacity-50" />
                     <p>{lembretes.length === 0 ? "Nenhum lembrete criado" : "Nenhum lembrete encontrado com os filtros aplicados"}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {lembretesFiltrados.map((lembrete) => (
-                      <Card key={lembrete.id} className={`border-l-4 ${
-                        lembrete.status_envio === 'enviado' ? 'border-l-green-500' :
-                        lembrete.status_envio === 'pendente' ? 'border-l-yellow-500' :
-                        'border-l-red-500'
-                      }`}>
+                  </div> : <div className="space-y-3">
+                    {lembretesFiltrados.map(lembrete => <Card key={lembrete.id} className={`border-l-4 ${lembrete.status_envio === 'enviado' ? 'border-l-green-500' : lembrete.status_envio === 'pendente' ? 'border-l-yellow-500' : 'border-l-red-500'}`}>
                         <CardContent className="pt-4">
                           <div className="space-y-2">
                                 <div className="flex justify-between items-start">
@@ -3270,91 +2953,49 @@ export default function Agenda() {
                                   <span className="font-medium">
                                     {lembrete.compromisso?.titulo || lembrete.compromisso?.tipo_servico || 'Compromisso'}
                                   </span>
-                                  <Badge variant={
-                                    lembrete.status_envio === 'enviado' ? 'default' :
-                                    lembrete.status_envio === 'pendente' ? 'secondary' :
-                                    lembrete.status_envio === 'retry' ? 'outline' :
-                                    'destructive'
-                                  }>
-                                    {lembrete.status_envio === 'enviado' ? '✓ Enviado' :
-                                     lembrete.status_envio === 'pendente' ? '⏳ Pendente' :
-                                     lembrete.status_envio === 'retry' ? '🔄 Retry' :
-                                     '✗ Erro'}
+                                  <Badge variant={lembrete.status_envio === 'enviado' ? 'default' : lembrete.status_envio === 'pendente' ? 'secondary' : lembrete.status_envio === 'retry' ? 'outline' : 'destructive'}>
+                                    {lembrete.status_envio === 'enviado' ? '✓ Enviado' : lembrete.status_envio === 'pendente' ? '⏳ Pendente' : lembrete.status_envio === 'retry' ? '🔄 Retry' : '✗ Erro'}
                                   </Badge>
-                                  {lembrete.recorrencia && (
-                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
-                                      🔄 {lembrete.recorrencia === 'semanal' ? 'Semanal' :
-                                          lembrete.recorrencia === 'quinzenal' ? 'Quinzenal' :
-                                          lembrete.recorrencia === 'mensal' ? 'Mensal' :
-                                          'Recorrente'}
-                                    </Badge>
-                                  )}
-                                  {(lembrete.status_envio === 'erro' || lembrete.status_envio === 'retry') && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => reenviarLembrete(lembrete.id)}
-                                      className="h-6 px-2 text-xs"
-                                    >
+                                  {lembrete.recorrencia && <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
+                                      🔄 {lembrete.recorrencia === 'semanal' ? 'Semanal' : lembrete.recorrencia === 'quinzenal' ? 'Quinzenal' : lembrete.recorrencia === 'mensal' ? 'Mensal' : 'Recorrente'}
+                                    </Badge>}
+                                  {(lembrete.status_envio === 'erro' || lembrete.status_envio === 'retry') && <Button size="sm" variant="outline" onClick={() => reenviarLembrete(lembrete.id)} className="h-6 px-2 text-xs">
                                       Reenviar
-                                    </Button>
-                                  )}
+                                    </Button>}
                                 </div>
-                                {lembrete.compromisso?.lead && (
-                                  <div className="flex items-center gap-2">
+                                {lembrete.compromisso?.lead && <div className="flex items-center gap-2">
                                     <Avatar className="h-6 w-6">
-                                      <AvatarImage 
-                                        src={lembrete.compromisso.lead_id ? leadAvatars[lembrete.compromisso.lead_id] : undefined} 
-                                        alt={lembrete.compromisso.lead.name}
-                                        onError={(e) => {
-                                          if (lembrete.compromisso?.lead_id && lembrete.compromisso.lead) {
-                                            buscarAvatarLead({
-                                              id: lembrete.compromisso.lead_id,
-                                              name: lembrete.compromisso.lead.name,
-                                              phone: lembrete.compromisso.lead.phone,
-                                              telefone: lembrete.compromisso.lead.phone
-                                            });
-                                          }
-                                        }}
-                                      />
+                                      <AvatarImage src={lembrete.compromisso.lead_id ? leadAvatars[lembrete.compromisso.lead_id] : undefined} alt={lembrete.compromisso.lead.name} onError={e => {
+                                if (lembrete.compromisso?.lead_id && lembrete.compromisso.lead) {
+                                  buscarAvatarLead({
+                                    id: lembrete.compromisso.lead_id,
+                                    name: lembrete.compromisso.lead.name,
+                                    phone: lembrete.compromisso.lead.phone,
+                                    telefone: lembrete.compromisso.lead.phone
+                                  });
+                                }
+                              }} />
                                       <AvatarFallback className="h-6 w-6 text-xs bg-primary/10">
                                         {lembrete.compromisso.lead.name.charAt(0).toUpperCase()}
                                       </AvatarFallback>
                                     </Avatar>
                                     <span className="text-sm text-muted-foreground">{lembrete.compromisso.lead.name}</span>
-                                  </div>
-                                )}
+                                  </div>}
                                 <p className="text-sm text-muted-foreground flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
-                                  {lembrete.compromisso?.data_hora_inicio && 
-                                    format(parseISO(lembrete.compromisso.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                                  }
+                                  {lembrete.compromisso?.data_hora_inicio && format(parseISO(lembrete.compromisso.data_hora_inicio), "dd/MM/yyyy 'às' HH:mm", {
+                              locale: ptBR
+                            })}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
                                   <strong>Destinatário:</strong> {
-                                    // Se o destinatario contém nome e telefone (formato "Nome (telefone)")
-                                    lembrete.destinatario && lembrete.destinatario !== 'lead' && lembrete.destinatario !== 'responsavel' && lembrete.destinatario !== 'ambos' ? (
-                                      lembrete.destinatario
-                                    ) :
-                                    lembrete.destinatario === 'lead' ? (
-                                      // Tentar pegar do lead vinculado ou do telefone_responsavel
-                                      lembrete.compromisso?.lead ? 
-                                        `${lembrete.compromisso.lead.name}${lembrete.compromisso.lead.phone ? ` (${lembrete.compromisso.lead.phone})` : lembrete.telefone_responsavel ? ` (${lembrete.telefone_responsavel})` : ''}` : 
-                                        lembrete.telefone_responsavel ? `Lead (${lembrete.telefone_responsavel})` : 'Lead'
-                                    ) :
-                                    lembrete.destinatario === 'responsavel' ? (
-                                      lembrete.telefone_responsavel ? 
-                                        `Responsável (${lembrete.telefone_responsavel})` : 
-                                        'Responsável'
-                                    ) :
-                                    lembrete.destinatario === 'ambos' ? (
-                                      <>
+                            // Se o destinatario contém nome e telefone (formato "Nome (telefone)")
+                            lembrete.destinatario && lembrete.destinatario !== 'lead' && lembrete.destinatario !== 'responsavel' && lembrete.destinatario !== 'ambos' ? lembrete.destinatario : lembrete.destinatario === 'lead' ?
+                            // Tentar pegar do lead vinculado ou do telefone_responsavel
+                            lembrete.compromisso?.lead ? `${lembrete.compromisso.lead.name}${lembrete.compromisso.lead.phone ? ` (${lembrete.compromisso.lead.phone})` : lembrete.telefone_responsavel ? ` (${lembrete.telefone_responsavel})` : ''}` : lembrete.telefone_responsavel ? `Lead (${lembrete.telefone_responsavel})` : 'Lead' : lembrete.destinatario === 'responsavel' ? lembrete.telefone_responsavel ? `Responsável (${lembrete.telefone_responsavel})` : 'Responsável' : lembrete.destinatario === 'ambos' ? <>
                                         {lembrete.compromisso?.lead ? `${lembrete.compromisso.lead.name}${lembrete.compromisso.lead.phone ? ` (${lembrete.compromisso.lead.phone})` : ''}` : 'Lead'}
                                         {lembrete.telefone_responsavel && ` e Responsável (${lembrete.telefone_responsavel})`}
-                                      </>
-                                    ) :
-                                    lembrete.telefone_responsavel ? `(${lembrete.telefone_responsavel})` : 'Lead'
-                                  }
+                                      </> : lembrete.telefone_responsavel ? `(${lembrete.telefone_responsavel})` : 'Lead'}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
                                   <strong>Canal:</strong> {lembrete.canal.toUpperCase()}
@@ -3362,50 +3003,37 @@ export default function Agenda() {
                                 <p className="text-sm text-muted-foreground">
                                   <strong>Antecedência:</strong> {lembrete.horas_antecedencia}h
                                 </p>
-                                {lembrete.recorrencia && (
-                                  <p className="text-sm text-blue-600">
-                                    <strong>🔄 Recorrência:</strong> {
-                                      lembrete.recorrencia === 'semanal' ? 'Semanal (toda semana)' :
-                                      lembrete.recorrencia === 'quinzenal' ? 'Quinzenal (a cada 15 dias)' :
-                                      lembrete.recorrencia === 'mensal' ? 'Mensal (todo mês)' :
-                                      lembrete.recorrencia
-                                    }
-                                  </p>
-                                )}
-                                {lembrete.recorrencia && lembrete.proxima_data_envio && lembrete.status_envio === 'pendente' && (
-                                  <p className="text-sm text-green-600">
-                                    <strong>Próximo envio:</strong> {format(parseISO(lembrete.proxima_data_envio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                                  </p>
-                                )}
-                                {lembrete.tentativas && lembrete.tentativas > 0 && (
-                                  <p className="text-sm text-muted-foreground">
+                                {lembrete.recorrencia && <p className="text-sm text-blue-600">
+                                    <strong>🔄 Recorrência:</strong> {lembrete.recorrencia === 'semanal' ? 'Semanal (toda semana)' : lembrete.recorrencia === 'quinzenal' ? 'Quinzenal (a cada 15 dias)' : lembrete.recorrencia === 'mensal' ? 'Mensal (todo mês)' : lembrete.recorrencia}
+                                  </p>}
+                                {lembrete.recorrencia && lembrete.proxima_data_envio && lembrete.status_envio === 'pendente' && <p className="text-sm text-green-600">
+                                    <strong>Próximo envio:</strong> {format(parseISO(lembrete.proxima_data_envio), "dd/MM/yyyy 'às' HH:mm", {
+                              locale: ptBR
+                            })}
+                                  </p>}
+                                {lembrete.tentativas && lembrete.tentativas > 0 && <p className="text-sm text-muted-foreground">
                                     <strong>Tentativas:</strong> {lembrete.tentativas}/3
-                                  </p>
-                                )}
-                                {lembrete.proxima_tentativa && lembrete.status_envio === 'retry' && (
-                                  <p className="text-sm text-orange-600">
-                                    <strong>Próxima tentativa:</strong> {format(parseISO(lembrete.proxima_tentativa), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                                  </p>
-                                )}
-                                {lembrete.data_envio && (
-                                  <p className="text-xs text-muted-foreground">
+                                  </p>}
+                                {lembrete.proxima_tentativa && lembrete.status_envio === 'retry' && <p className="text-sm text-orange-600">
+                                    <strong>Próxima tentativa:</strong> {format(parseISO(lembrete.proxima_tentativa), "dd/MM/yyyy 'às' HH:mm", {
+                              locale: ptBR
+                            })}
+                                  </p>}
+                                {lembrete.data_envio && <p className="text-xs text-muted-foreground">
                                     {lembrete.status_envio === 'enviado' ? 'Enviado em: ' : 'Última tentativa: '}
-                                    {format(parseISO(lembrete.data_envio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                                  </p>
-                                )}
-                                {lembrete.mensagem && (
-                                  <p className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
+                                    {format(parseISO(lembrete.data_envio), "dd/MM/yyyy 'às' HH:mm", {
+                              locale: ptBR
+                            })}
+                                  </p>}
+                                {lembrete.mensagem && <p className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
                                     {lembrete.mensagem}
-                                  </p>
-                                )}
+                                  </p>}
                               </div>
                             </div>
                           </div>
                         </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
+                      </Card>)}
+                  </div>}
               </ScrollArea>
             </CardContent>
           </Card>
@@ -3413,15 +3041,21 @@ export default function Agenda() {
 
         <TabsContent value="minhas-agendas">
           {(() => {
-            console.log('📑 [Agenda] TabsContent minhas-agendas está sendo renderizado!');
-            return null;
-          })()}
-          <div style={{ border: '3px solid blue', padding: '10px', margin: '10px' }}>
-            <p style={{ color: 'blue', fontWeight: 'bold' }}>TESTE: Se você vê esta mensagem, o TabsContent está funcionando!</p>
+          console.log('📑 [Agenda] TabsContent minhas-agendas está sendo renderizado!');
+          return null;
+        })()}
+          <div style={{
+          border: '3px solid blue',
+          padding: '10px',
+          margin: '10px'
+        }}>
+            <p style={{
+            color: 'blue',
+            fontWeight: 'bold'
+          }}>TESTE: Se você vê esta mensagem, o TabsContent está funcionando!</p>
             <AgendaColaboradores />
           </div>
         </TabsContent>
       </Tabs>
-    </div>
-  );
+    </div>;
 }
