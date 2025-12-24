@@ -97,7 +97,7 @@ const Discador = () => {
                   <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                     <Phone className="w-8 h-8 text-primary" />
                   </div>
-                  <CardTitle>Ligar para Lead</CardTitle>
+                  <CardTitle>Ligue para Seus Contatos </CardTitle>
                   <CardDescription>
                     Selecione um lead cadastrado para iniciar uma ligação
                   </CardDescription>
