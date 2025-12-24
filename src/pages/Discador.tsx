@@ -62,8 +62,8 @@ const Discador = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">Call Center<PhoneCall className="w-8 h-8 text-primary" />
-              Discador
+            <h1 className="text-3xl font-bold flex items-center gap-3">​<PhoneCall className="w-8 h-8 text-primary" />
+              Call Center
             </h1>
             <p className="text-muted-foreground mt-1">
               Central de ligações Faça e Receba na  Waze Platform  
