@@ -3052,7 +3052,8 @@ export default function Agenda() {
             <p style={{
             color: 'blue',
             fontWeight: 'bold'
-          }}>TESTE: Se você vê esta mensagem, o TabsContent está funcionando!</p>
+          }}>
+          </p>
             <AgendaColaboradores />
           </div>
         </TabsContent>
