@@ -28,15 +28,21 @@ export const useInternalChat = () => {
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const conversationsRef = useRef<InternalConversation[]>([]);
   const isLoadingRef = useRef(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const initializedRef = useRef(false);
+  const activeConversationIdRef = useRef<string | null>(null);
 
-  // Keep ref in sync with state
+  // Keep refs in sync with state
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
 
   useEffect(() => {
     // Evitar inicialização duplicada
@@ -159,10 +165,17 @@ export const useInternalChat = () => {
 
       // Calcular unread counts de forma otimizada (uma única query)
       // Em vez de fazer N queries para N conversas
+      // Se a conversa está ativa, não conta como não lida
       const unreadCounts = new Map<string, number>();
       
       // Buscar todas as mensagens não lidas de uma vez
       for (const convoId of conversationIds) {
+        // Se é a conversa ativa, unread é 0
+        if (convoId === activeConversationIdRef.current) {
+          unreadCounts.set(convoId, 0);
+          continue;
+        }
+        
         const lastRead = lastReadMap.get(convoId);
         const messagesAfterLastRead = lastMessages?.filter(msg => 
           msg.conversation_id === convoId &&
@@ -441,6 +454,7 @@ export const useInternalChat = () => {
     getTotalUnread,
     getConversationDisplayName,
     getConversationById,
-    refresh
+    refresh,
+    setActiveConversationId
   };
 };
