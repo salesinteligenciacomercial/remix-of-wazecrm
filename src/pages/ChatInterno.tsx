@@ -59,7 +59,8 @@ export default function ChatInterno() {
     updateGroupName,
     addParticipants,
     removeParticipant,
-    refresh
+    refresh,
+    setActiveConversationId
   } = useInternalChat();
   const {
     messages,
@@ -121,11 +122,22 @@ export default function ChatInterno() {
       behavior: 'smooth'
     });
   }, [messages]);
+  // Atualizar conversa ativa e marcar como lido quando seleciona uma conversa
   useEffect(() => {
     if (selectedConversation) {
+      setActiveConversationId(selectedConversation.id);
+      markAsRead(selectedConversation.id);
+    } else {
+      setActiveConversationId(null);
+    }
+  }, [selectedConversation, markAsRead, setActiveConversationId]);
+
+  // Marcar como lido automaticamente quando novas mensagens chegam na conversa ativa
+  useEffect(() => {
+    if (selectedConversation && messages.length > 0) {
       markAsRead(selectedConversation.id);
     }
-  }, [selectedConversation, markAsRead]);
+  }, [selectedConversation, messages.length, markAsRead]);
 
   // Auto-resize textarea
   useEffect(() => {
