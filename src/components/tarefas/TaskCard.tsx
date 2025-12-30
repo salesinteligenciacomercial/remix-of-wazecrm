@@ -807,19 +807,10 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
   }, [localChecklist]);
 
   // ✅ NOVO: Calcular dias restantes e duração do prazo
+  // ✅ IMPORTANTE: Considera se a tarefa está 100% concluída para não mostrar como atrasada
   const deadlineInfo = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    
-    // ✅ DEBUG: Verificar valores recebidos
-    console.log('🔍 [TaskCard Debug]', {
-      taskId: task.id,
-      title: task.title,
-      start_date: task.start_date,
-      due_date: task.due_date,
-      start_date_type: typeof task.start_date,
-      due_date_type: typeof task.due_date
-    });
     
     // ✅ Validar start_date: deve ser uma string não vazia e válida
     const startDate = task.start_date && task.start_date.trim() !== '' 
@@ -831,14 +822,6 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       ? new Date(task.due_date) 
       : null;
     
-    // ✅ Verificar se as datas são válidas
-    if (startDate && isNaN(startDate.getTime())) {
-      console.warn('start_date inválida:', task.start_date);
-    }
-    if (endDate && isNaN(endDate.getTime())) {
-      console.warn('due_date inválida:', task.due_date);
-    }
-    
     if (startDate && !isNaN(startDate.getTime())) startDate.setHours(0, 0, 0, 0);
     if (endDate && !isNaN(endDate.getTime())) endDate.setHours(0, 0, 0, 0);
     
@@ -848,6 +831,33 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
     let timeProgress = 0;
     let status: 'not_started' | 'in_progress' | 'overdue' | 'completed' = 'not_started';
     
+    // ✅ Verificar se a tarefa está 100% concluída (checklist completo)
+    const isTaskComplete = localChecklist && localChecklist.length > 0 && localChecklist.every(i => i.done);
+    
+    // Se a tarefa está concluída, marcar como completed independente da data
+    if (isTaskComplete) {
+      status = 'completed';
+      timeProgress = 100;
+      
+      if (endDate && !isNaN(endDate.getTime())) {
+        if (startDate && !isNaN(startDate.getTime())) {
+          totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        }
+      }
+      
+      return {
+        startDate: startDate && !isNaN(startDate.getTime()) ? startDate : null,
+        endDate: endDate && !isNaN(endDate.getTime()) ? endDate : null,
+        daysRemaining: 0,
+        totalDays,
+        daysElapsed: totalDays,
+        timeProgress: 100,
+        status: 'completed' as const,
+        hasDeadline: !!(endDate && !isNaN(endDate.getTime()))
+      };
+    }
+    
+    // Cálculo normal para tarefas não concluídas
     if (endDate && !isNaN(endDate.getTime())) {
       daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       
@@ -884,7 +894,7 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
       status,
       hasDeadline: !!(endDate && !isNaN(endDate.getTime()))
     };
-  }, [task.start_date, task.due_date]);
+  }, [task.start_date, task.due_date, localChecklist]);
 
   return (
     <Card
@@ -943,6 +953,7 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
                   {deadlineInfo.hasDeadline && (
                     <div className="flex flex-col gap-1 mt-1">
                       <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-md self-start ${
+                        deadlineInfo.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                         deadlineInfo.status === 'overdue' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-muted/50 text-muted-foreground'
                       }`}>
                         <CalendarIcon className="h-3 w-3" />
@@ -955,27 +966,38 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
                         }
                       </span>
                       </div>
-                      {/* Contador de dias e progresso */}
-                      <div className={`flex items-center gap-2 text-[10px] px-2 ${
-                        deadlineInfo.status === 'overdue' ? 'text-red-600' : 
-                        deadlineInfo.daysRemaining <= 2 ? 'text-orange-600' : 'text-muted-foreground'
-                      }`}>
-                        <span>
-                          {deadlineInfo.status === 'overdue' 
-                            ? `⚠️ Atrasado ${Math.abs(deadlineInfo.daysRemaining)} dia(s)`
-                            : deadlineInfo.daysRemaining === 0 
-                              ? '⏰ Vence hoje!'
-                              : deadlineInfo.daysRemaining === 1
-                                ? '⏰ Vence amanhã'
-                                : `📅 Faltam ${deadlineInfo.daysRemaining} dias`
-                          }
-                        </span>
-                        {deadlineInfo.totalDays > 0 && (
-                          <span className="text-muted-foreground">
-                            • Duração: {deadlineInfo.totalDays} dia(s)
+                      {/* Contador de dias e progresso - Só mostra se NÃO estiver concluído */}
+                      {deadlineInfo.status !== 'completed' ? (
+                        <div className={`flex items-center gap-2 text-[10px] px-2 ${
+                          deadlineInfo.status === 'overdue' ? 'text-red-600' : 
+                          deadlineInfo.daysRemaining <= 2 ? 'text-orange-600' : 'text-muted-foreground'
+                        }`}>
+                          <span>
+                            {deadlineInfo.status === 'overdue' 
+                              ? `⚠️ Atrasado ${Math.abs(deadlineInfo.daysRemaining)} dia(s)`
+                              : deadlineInfo.daysRemaining === 0 
+                                ? '⏰ Vence hoje!'
+                                : deadlineInfo.daysRemaining === 1
+                                  ? '⏰ Vence amanhã'
+                                  : `📅 Faltam ${deadlineInfo.daysRemaining} dias`
+                            }
                           </span>
-                        )}
-                      </div>
+                          {deadlineInfo.totalDays > 0 && (
+                            <span className="text-muted-foreground">
+                              • Duração: {deadlineInfo.totalDays} dia(s)
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-[10px] px-2 text-green-600">
+                          <span>✅ Concluído</span>
+                          {deadlineInfo.totalDays > 0 && (
+                            <span className="text-muted-foreground">
+                              • Duração: {deadlineInfo.totalDays} dia(s)
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -998,6 +1020,7 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
                 {deadlineInfo.hasDeadline && (
                   <div className="flex flex-col gap-1">
                     <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-md self-start ${
+                      deadlineInfo.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                       deadlineInfo.status === 'overdue' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-muted/50 text-muted-foreground'
                     }`}>
                       <CalendarIcon className="h-3 w-3" />
@@ -1010,27 +1033,38 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
                         }
                       </span>
                     </div>
-                    {/* Contador de dias e progresso */}
-                    <div className={`flex items-center gap-2 text-[10px] px-2 ${
-                      deadlineInfo.status === 'overdue' ? 'text-red-600' : 
-                      deadlineInfo.daysRemaining <= 2 ? 'text-orange-600' : 'text-muted-foreground'
-                    }`}>
-                      <span>
-                        {deadlineInfo.status === 'overdue' 
-                          ? `⚠️ Atrasado ${Math.abs(deadlineInfo.daysRemaining)} dia(s)`
-                          : deadlineInfo.daysRemaining === 0 
-                            ? '⏰ Vence hoje!'
-                            : deadlineInfo.daysRemaining === 1
-                              ? '⏰ Vence amanhã'
-                              : `📅 Faltam ${deadlineInfo.daysRemaining} dias`
-                        }
-                      </span>
-                      {deadlineInfo.totalDays > 0 && (
-                        <span className="text-muted-foreground">
-                          • Duração: {deadlineInfo.totalDays} dia(s)
+                    {/* Contador de dias e progresso - Só mostra se NÃO estiver concluído */}
+                    {deadlineInfo.status !== 'completed' ? (
+                      <div className={`flex items-center gap-2 text-[10px] px-2 ${
+                        deadlineInfo.status === 'overdue' ? 'text-red-600' : 
+                        deadlineInfo.daysRemaining <= 2 ? 'text-orange-600' : 'text-muted-foreground'
+                      }`}>
+                        <span>
+                          {deadlineInfo.status === 'overdue' 
+                            ? `⚠️ Atrasado ${Math.abs(deadlineInfo.daysRemaining)} dia(s)`
+                            : deadlineInfo.daysRemaining === 0 
+                              ? '⏰ Vence hoje!'
+                              : deadlineInfo.daysRemaining === 1
+                                ? '⏰ Vence amanhã'
+                                : `📅 Faltam ${deadlineInfo.daysRemaining} dias`
+                          }
                         </span>
-                      )}
-                    </div>
+                        {deadlineInfo.totalDays > 0 && (
+                          <span className="text-muted-foreground">
+                            • Duração: {deadlineInfo.totalDays} dia(s)
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-[10px] px-2 text-green-600">
+                        <span>✅ Concluído</span>
+                        {deadlineInfo.totalDays > 0 && (
+                          <span className="text-muted-foreground">
+                            • Duração: {deadlineInfo.totalDays} dia(s)
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
