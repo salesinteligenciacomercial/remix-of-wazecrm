@@ -1572,37 +1572,32 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate 
               <Play className="h-3 w-3" />
             </Button>
           )}
-          {/* Attachments Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0"
-                onPointerDown={(e) => e.stopPropagation()}
-                title="Adicionar anexo"
-              >
+          {/* Attachments - Clique direto para upload */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 relative"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            title="Adicionar anexo (PDF, imagem, documento)"
+            disabled={uploading}
+            asChild
+          >
+            <label className="cursor-pointer flex items-center justify-center">
+              <input
+                type="file"
+                accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls"
+                onChange={handleFileUpload}
+                className="hidden"
+                disabled={uploading}
+              />
+              {uploading ? (
+                <div className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              ) : (
                 <Paperclip className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <label className="cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*,.pdf,.doc,.docx,.txt"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    disabled={uploading}
-                  />
-                  {uploading ? "Enviando..." : "📎 Upload de arquivo"}
-                </label>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowAttachmentDialog(true)}>
-                🔗 Adicionar link
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              )}
+            </label>
+          </Button>
           <Button
             variant="ghost"
             size="sm"
