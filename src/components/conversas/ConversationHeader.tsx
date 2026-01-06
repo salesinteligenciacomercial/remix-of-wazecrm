@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Video, Info, User, MessageSquare, Instagram, Facebook, FileText, DollarSign, RefreshCw, CheckCircle2, AlertCircle, Loader2, Check, Plus, RotateCcw, ArrowRightLeft, Bot } from "lucide-react";
+import { Phone, Video, Info, User, MessageSquare, Instagram, Facebook, FileText, DollarSign, RefreshCw, CheckCircle2, AlertCircle, Loader2, Check, Plus, RotateCcw, ArrowRightLeft, Bot, ArrowLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader as UIDialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useEffect, useState } from "react";
@@ -32,6 +32,8 @@ import { useEffect, useState } from "react";
    isContactInactive?: boolean;
    onRestoreConversation?: () => void;
    restoringConversation?: boolean;
+   onBack?: () => void;
+   showBackButton?: boolean;
  }
 
   export function ConversationHeader({
@@ -57,6 +59,8 @@ import { useEffect, useState } from "react";
    isContactInactive = false,
    onRestoreConversation,
    restoringConversation = false,
+   onBack,
+   showBackButton = false,
   }: ConversationHeaderProps) {
    const [finalizeOpen, setFinalizeOpen] = useState(false);
    const [finalizeMessage, setFinalizeMessage] = useState("");
@@ -125,6 +129,18 @@ import { useEffect, useState } from "react";
        <div className="p-4 space-y-3">
          <div className="flex items-center justify-between">
            <div className="flex items-center gap-3">
+              {/* Botão Voltar (Mobile) */}
+              {showBackButton && onBack && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onBack}
+                  className="mr-1 md:hidden"
+                  title="Voltar"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              )}
               {/* Avatar do Lead com Indicador de Status Online/Offline */}
               <div className="relative">
                 <Avatar className="h-14 w-14 border-2 border-primary/20">

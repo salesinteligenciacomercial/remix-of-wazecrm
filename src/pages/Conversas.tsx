@@ -14,7 +14,8 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { MessageSquare, Instagram, Facebook, Send, Search, Bot, User, Paperclip, Clock, Calendar, Zap, FileText, Tag, TrendingUp, ArrowRightLeft, Image as ImageIcon, Mic, FileUp, Check, CheckCheck, Phone, Video, Info, DollarSign, Users, Bell, Download, Volume2, RefreshCw, CheckCircle2, AlertCircle, Reply, CheckSquare, X, Plus, Trash2, Loader2, UserCog } from "lucide-react";
+import { MessageSquare, Instagram, Facebook, Send, Search, Bot, User, Paperclip, Clock, Calendar, Zap, FileText, Tag, TrendingUp, ArrowRightLeft, Image as ImageIcon, Mic, FileUp, Check, CheckCheck, Phone, Video, Info, DollarSign, Users, Bell, Download, Volume2, RefreshCw, CheckCircle2, AlertCircle, Reply, CheckSquare, X, Plus, Trash2, Loader2, UserCog, ArrowLeft } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -253,6 +254,7 @@ const initialConversations: Conversation[] = [{
   }]
 }];
 function Conversas() {
+  const isMobile = useIsMobile();
   const {
     isAdmin
   } = usePermissions();
@@ -7143,7 +7145,8 @@ function Conversas() {
   };
   return <div className="flex h-screen w-full bg-background overflow-hidden">
       {/* Sidebar esquerda - tema cinza claro */}
-      <div className="w-[380px] flex-shrink-0 bg-muted/30 border-r border-border flex flex-col">
+      {/* No mobile: esconder quando uma conversa está selecionada */}
+      <div className={`${isMobile ? (selectedConv ? 'hidden' : 'w-full') : 'w-[380px]'} flex-shrink-0 bg-muted/30 border-r border-border flex flex-col`}>
         {/* Header - Fixo, não move com scroll */}
         <div className="px-3 py-4 bg-background border-b border-border flex-shrink-0">
           <div className="flex items-center justify-between mb-4">
@@ -7520,14 +7523,15 @@ function Conversas() {
       </div>
 
       {/* Chat Area - Estrutura fixa sem movimento vertical */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 scrollbar-hide" style={{
+      {/* No mobile: mostrar apenas quando uma conversa está selecionada */}
+      <div className={`${isMobile && !selectedConv ? 'hidden' : 'flex-1'} flex flex-col h-full overflow-hidden min-w-0 scrollbar-hide`} style={{
       scrollbarWidth: 'none',
       msOverflowStyle: 'none'
     } as React.CSSProperties}>
         {selectedConv ? <>
             {/* Header - ABSOLUTAMENTE FIXO */}
             <div className="flex-shrink-0 bg-background border-b">
-              <ConversationHeader contactName={selectedConv.contactName} channel={selectedConv.channel} avatarUrl={selectedConv.avatarUrl} produto={selectedConv.produto} valor={selectedConv.valor} responsavel={selectedConv.responsavel} tags={selectedConv.tags} funnelStage={selectedConv.funnelStage} showInfoPanel={showInfoPanel} onToggleInfoPanel={() => setShowInfoPanel(!showInfoPanel)} syncStatus={syncStatus} leadVinculado={leadVinculado} mostrarBotaoCriarLead={mostrarBotaoCriarLead} onCriarLead={criarLeadManualmente} onFinalizeAtendimento={finalizarAtendimento} onTransferAtendimento={() => setTransferDialogOpen(true)} onToggleAI={() => toggleAiMode(selectedConv.id)} isAIActive={aiMode[selectedConv.id] || false} onlineStatus={onlineStatus[selectedConv.id] || 'unknown'} isContactInactive={isContactInactive} onRestoreConversation={handleRestoreConversation} restoringConversation={restoringConversation} />
+              <ConversationHeader contactName={selectedConv.contactName} channel={selectedConv.channel} avatarUrl={selectedConv.avatarUrl} produto={selectedConv.produto} valor={selectedConv.valor} responsavel={selectedConv.responsavel} tags={selectedConv.tags} funnelStage={selectedConv.funnelStage} showInfoPanel={showInfoPanel} onToggleInfoPanel={() => setShowInfoPanel(!showInfoPanel)} syncStatus={syncStatus} leadVinculado={leadVinculado} mostrarBotaoCriarLead={mostrarBotaoCriarLead} onCriarLead={criarLeadManualmente} onFinalizeAtendimento={finalizarAtendimento} onTransferAtendimento={() => setTransferDialogOpen(true)} onToggleAI={() => toggleAiMode(selectedConv.id)} isAIActive={aiMode[selectedConv.id] || false} onlineStatus={onlineStatus[selectedConv.id] || 'unknown'} isContactInactive={isContactInactive} onRestoreConversation={handleRestoreConversation} restoringConversation={restoringConversation} showBackButton={isMobile} onBack={() => setSelectedConv(null)} />
             </div>
             
             {/* Dialog de Transferir Atendimento */}
