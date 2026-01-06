@@ -399,60 +399,44 @@ export default function ChatInterno() {
       <div className={`flex-1 flex flex-col ${showMobileList && 'hidden md:flex'}`}>
         {selectedConversation ? <>
             {/* Header do Chat */}
-            <div className="p-3 md:p-4 border-b border-border flex items-center gap-2 md:gap-3 bg-card overflow-hidden">
-              <Button variant="ghost" size="icon" className="md:hidden shrink-0 h-8 w-8" onClick={() => setShowMobileList(true)}>
+            <div className="p-3 md:p-4 border-b border-border flex items-center gap-2 md:gap-3 bg-card" style={{ overflow: 'visible' }}>
+              <Button variant="ghost" size="icon" className="md:hidden h-8 w-8" style={{ flexShrink: 0, minWidth: '32px' }} onClick={() => setShowMobileList(true)}>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               
-              <Avatar className="h-8 w-8 md:h-10 md:w-10 shrink-0">
+              <Avatar className="h-8 w-8 md:h-10 md:w-10" style={{ flexShrink: 0, minWidth: '32px' }}>
                 <AvatarImage src={getConversationAvatar(selectedConversation) || undefined} />
                 <AvatarFallback className={selectedConversation.is_group ? 'bg-primary/20' : 'bg-muted'}>
                   {selectedConversation.is_group ? <Users className="h-4 w-4 text-primary" /> : getInitials(getConversationName(selectedConversation))}
                 </AvatarFallback>
               </Avatar>
               
-              <div className="flex-1 min-w-0 overflow-hidden">
-                <h3 className="font-semibold text-foreground truncate text-sm md:text-base">
+              <div style={{ flex: '1 1 0%', minWidth: 0, maxWidth: 'calc(100% - 180px)', overflow: 'hidden' }}>
+                <h3 className="font-semibold text-foreground text-sm md:text-base" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {getConversationName(selectedConversation)}
                 </h3>
-                {selectedConversation.is_group && selectedConversation.participants && <p className="text-xs text-muted-foreground truncate">
+                {selectedConversation.is_group && selectedConversation.participants && (
+                  <p className="text-xs text-muted-foreground" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {selectedConversation.participants.length} participantes
-                  </p>}
+                  </p>
+                )}
               </div>
 
               {/* Call buttons - only for 1:1 conversations */}
               {!selectedConversation.is_group && (
-                <div className="flex items-center shrink-0">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" onClick={() => handleStartCall('audio')} className="text-muted-foreground hover:text-primary h-8 w-8 shrink-0">
-                          <Phone className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Chamada de áudio</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" onClick={() => handleStartCall('video')} className="text-muted-foreground hover:text-primary h-8 w-8 shrink-0">
-                          <VideoIcon className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Chamada de vídeo</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                <div className="flex items-center" style={{ flexShrink: 0 }}>
+                  <Button variant="ghost" size="icon" onClick={() => handleStartCall('audio')} className="text-muted-foreground hover:text-primary h-8 w-8" style={{ flexShrink: 0, minWidth: '32px' }}>
+                    <Phone className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleStartCall('video')} className="text-muted-foreground hover:text-primary h-8 w-8" style={{ flexShrink: 0, minWidth: '32px' }}>
+                    <VideoIcon className="h-4 w-4" />
+                  </Button>
                 </div>
               )}
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" style={{ flexShrink: 0, minWidth: '32px' }}>
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
