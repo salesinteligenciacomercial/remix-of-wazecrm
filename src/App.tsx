@@ -20,6 +20,7 @@ import Reunioes from "./pages/Reunioes";
 import PublicMeeting from "./pages/PublicMeeting";
 import Discador from "./pages/Discador";
 import ProcessosComerciais from "./pages/ProcessosComerciais";
+import OAuthCallback from "./pages/OAuthCallback";
 import { MainLayout } from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
 import { Component, ErrorInfo, ReactNode } from 'react';
@@ -65,6 +66,7 @@ const App = () => (
           <Sonner />
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/agenda/:slug" element={<AgendaPublica />} />
             <Route path="/meeting/:meetingId" element={<PublicMeeting />} />
             <Route path="/" element={<MainLayout />}>
