@@ -5,13 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Tag, X, Plus } from "lucide-react";
+import { Pencil, Tag, X, Plus, Paperclip, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTagsManager } from "@/hooks/useTagsManager";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { LeadAttachments } from "@/components/leads/LeadAttachments";
 
 interface EditarLeadDialogProps {
   lead: {
@@ -68,6 +69,9 @@ export function EditarLeadDialog({
   });
   const [newTag, setNewTag] = useState("");
   const [tagsPopoverOpen, setTagsPopoverOpen] = useState(false);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [attachmentsCount, setAttachmentsCount] = useState(0);
+  const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
 
   // Reset form data when lead changes
   useEffect(() => {
@@ -90,8 +94,24 @@ export function EditarLeadDialog({
   useEffect(() => {
     if (open) {
       carregarDados();
+      fetchAttachmentsCount();
     }
   }, [open]);
+
+  const fetchAttachmentsCount = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('lead_attachments')
+        .select('*', { count: 'exact', head: true })
+        .eq('lead_id', lead.id);
+      
+      if (!error && count !== null) {
+        setAttachmentsCount(count);
+      }
+    } catch (error) {
+      console.error('Error fetching attachments count:', error);
+    }
+  };
 
   useEffect(() => {
     if (formData.funil_id) {
@@ -139,6 +159,7 @@ export function EditarLeadDialog({
 
       setFunis(funisData || []);
       setEtapas(etapasData || []);
+      setUserCompanyId(companyIdForUsers || null);
       setResponsaveis(responsaveisList);
     } catch (error) {
       console.error("Erro ao carregar dados do funil:", error);
@@ -484,6 +505,33 @@ export function EditarLeadDialog({
             </div>
           </div>
 
+          {/* Ficha Técnica / Arquivos */}
+          <div className="border rounded-lg p-3 bg-muted/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Ficha Técnica</span>
+                {attachmentsCount > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {attachmentsCount} arquivo{attachmentsCount > 1 ? 's' : ''}
+                  </Badge>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAttachmentsOpen(true)}
+              >
+                <FileText className="h-4 w-4 mr-1" />
+                {attachmentsCount > 0 ? 'Ver Arquivos' : 'Adicionar Arquivos'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Fotos de antes/depois, exames, laudos e documentos
+            </p>
+          </div>
+
           <div className="flex gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1">
               Cancelar
@@ -495,6 +543,17 @@ export function EditarLeadDialog({
           </form>
         )}
       </DialogContent>
+
+      {/* Lead Attachments Modal */}
+      {userCompanyId && (
+        <LeadAttachments
+          open={attachmentsOpen}
+          onOpenChange={setAttachmentsOpen}
+          leadId={lead.id}
+          companyId={userCompanyId}
+          leadName={lead.nome}
+        />
+      )}
     </Dialog>
   );
 }
