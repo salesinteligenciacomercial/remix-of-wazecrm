@@ -337,9 +337,9 @@ export function LeadAdsFormsConfig() {
                   <div className="space-y-2">
                     <Label>Funil Padrão</Label>
                     <Select
-                      value={form.auto_funil_id || ''}
+                      value={form.auto_funil_id || 'none'}
                       onValueChange={value => updateForm(form.id, { 
-                        auto_funil_id: value || null,
+                        auto_funil_id: value === 'none' ? null : value,
                         auto_etapa_id: null 
                       })}
                     >
@@ -347,7 +347,7 @@ export function LeadAdsFormsConfig() {
                         <SelectValue placeholder="Selecione um funil" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Nenhum</SelectItem>
+                        <SelectItem value="none">Nenhum</SelectItem>
                         {funis.map(f => (
                           <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                         ))}
@@ -357,15 +357,15 @@ export function LeadAdsFormsConfig() {
                   <div className="space-y-2">
                     <Label>Etapa Inicial</Label>
                     <Select
-                      value={form.auto_etapa_id || ''}
-                      onValueChange={value => updateForm(form.id, { auto_etapa_id: value || null })}
+                      value={form.auto_etapa_id || 'none'}
+                      onValueChange={value => updateForm(form.id, { auto_etapa_id: value === 'none' ? null : value })}
                       disabled={!form.auto_funil_id}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione uma etapa" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Nenhuma</SelectItem>
+                        <SelectItem value="none">Nenhuma</SelectItem>
                         {getEtapasForFunil(form.auto_funil_id).map(e => (
                           <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
                         ))}
@@ -375,14 +375,14 @@ export function LeadAdsFormsConfig() {
                   <div className="space-y-2">
                     <Label>Responsável Padrão</Label>
                     <Select
-                      value={form.auto_responsavel_id || ''}
-                      onValueChange={value => updateForm(form.id, { auto_responsavel_id: value || null })}
+                      value={form.auto_responsavel_id || 'none'}
+                      onValueChange={value => updateForm(form.id, { auto_responsavel_id: value === 'none' ? null : value })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione um responsável" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Nenhum</SelectItem>
+                        <SelectItem value="none">Nenhum</SelectItem>
                         {profiles.map(p => (
                           <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
                         ))}
