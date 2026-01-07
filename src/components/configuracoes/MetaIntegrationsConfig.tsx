@@ -52,7 +52,7 @@ interface TenantIntegration {
 }
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '1353481286527361';
-const META_REDIRECT_URI = 'https://wazecrm.lovable.app/';
+const META_REDIRECT_URI = 'https://wazecrm.lovable.app/oauth/callback';
 
 // Token de verificação MASTER GLOBAL para multi-tenant SaaS
 // IMPORTANTE: Este é o ÚNICO token usado para TODAS as subcontas
