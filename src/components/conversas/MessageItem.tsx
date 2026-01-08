@@ -696,11 +696,18 @@ END:VCARD`;
               })}
             </span>
             {message.sender === "user" && (
-              <div className="flex items-center gap-0.5" title={message.read ? 'Visualizado' : message.delivered ? 'Entregue' : 'Enviado'}>
+              <div 
+                className={`flex items-center gap-0.5 ${
+                  message.read 
+                    ? 'bg-[#53bdeb]/15 px-1.5 py-0.5 rounded-full' 
+                    : ''
+                }`} 
+                title={message.read ? 'Visualizado' : message.delivered ? 'Entregue' : 'Enviado'}
+              >
                 {message.read ? (
                   <>
-                    <CheckCheck className="h-3.5 w-3.5 text-[#53bdeb]" />
-                    <span className="text-[9px] text-[#53bdeb] font-medium ml-0.5">Visto</span>
+                    <CheckCheck className="h-4 w-4 text-[#53bdeb] drop-shadow-sm" />
+                    <span className="text-[10px] text-[#53bdeb] font-semibold ml-0.5">Visto</span>
                   </>
                 ) : message.delivered ? (
                   <>
