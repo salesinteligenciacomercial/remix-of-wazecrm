@@ -187,12 +187,31 @@ export async function getMediaUrl(messageId: string, type?: string): Promise<str
             }
           });
 
+          // ⚡ CORREÇÃO: Verificar erro de mídia expirada tanto em data quanto em error
           if (response.data?.error === 'media_expired') {
             console.warn('⚠️ [MEDIA-LOADER] Mídia Meta expirada:', response.data.message);
             throw new Error('MEDIA_EXPIRED');
           }
 
+          // Quando status é 410, o SDK coloca o erro em response.error
           if (response.error) {
+            const errorContext = response.error?.context;
+            // Tentar extrair o body JSON do erro
+            try {
+              const errorBody = errorContext?.body ? JSON.parse(errorContext.body) : null;
+              if (errorBody?.error === 'media_expired') {
+                console.warn('⚠️ [MEDIA-LOADER] Mídia Meta expirada (via error):', errorBody.message);
+                throw new Error('MEDIA_EXPIRED');
+              }
+            } catch {}
+            
+            // Verificar se a mensagem de erro indica mídia expirada
+            const errorMessage = response.error.message || String(response.error);
+            if (errorMessage.includes('media_expired') || errorMessage.includes('410')) {
+              console.warn('⚠️ [MEDIA-LOADER] Mídia Meta expirada (erro 410)');
+              throw new Error('MEDIA_EXPIRED');
+            }
+            
             console.error('❌ [MEDIA-LOADER] Erro na edge function Meta:', response.error);
             throw new Error(`Erro ao baixar mídia Meta: ${response.error.message}`);
           }
@@ -260,12 +279,31 @@ export async function getMediaUrl(messageId: string, type?: string): Promise<str
             }
           });
 
+          // ⚡ CORREÇÃO: Verificar erro de mídia expirada tanto em data quanto em error
           if (response.data?.error === 'media_expired') {
             console.warn('⚠️ [MEDIA-LOADER] Mídia Evolution expirada:', response.data.message);
             throw new Error('MEDIA_EXPIRED');
           }
 
+          // Quando status é 410, o SDK coloca o erro em response.error
           if (response.error) {
+            const errorContext = response.error?.context;
+            // Tentar extrair o body JSON do erro
+            try {
+              const errorBody = errorContext?.body ? JSON.parse(errorContext.body) : null;
+              if (errorBody?.error === 'media_expired') {
+                console.warn('⚠️ [MEDIA-LOADER] Mídia Evolution expirada (via error):', errorBody.message);
+                throw new Error('MEDIA_EXPIRED');
+              }
+            } catch {}
+            
+            // Verificar se a mensagem de erro indica mídia expirada
+            const errorMessage = response.error.message || String(response.error);
+            if (errorMessage.includes('media_expired') || errorMessage.includes('410')) {
+              console.warn('⚠️ [MEDIA-LOADER] Mídia Evolution expirada (erro 410)');
+              throw new Error('MEDIA_EXPIRED');
+            }
+            
             console.error('❌ [MEDIA-LOADER] Erro na edge function Evolution:', response.error);
             throw new Error(`Erro ao baixar mídia: ${response.error.message}`);
           }
