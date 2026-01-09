@@ -29,10 +29,11 @@ export function MediaUpload({ onFileSelected }: MediaUploadProps) {
       return;
     }
 
-    // ⚡ VALIDAÇÃO: Limite de tamanho (16MB)
-    if (file.size > 16 * 1024 * 1024) {
+    // ⚡ VALIDAÇÃO: Limite de tamanho (50MB)
+    const MAX_FILE_SIZE_MB = 50;
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
       console.error('❌ [MEDIA-UPLOAD] Arquivo muito grande:', file.size);
-      alert('O arquivo é muito grande. Tamanho máximo: 16MB');
+      alert(`O arquivo é muito grande. Tamanho máximo: ${MAX_FILE_SIZE_MB}MB`);
       event.target.value = '';
       return;
     }
