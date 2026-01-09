@@ -31,10 +31,21 @@ Deno.serve(async (req) => {
 
     console.log('📝 Corrigindo texto:', texto.substring(0, 50) + '...');
 
+    // Obter API Key do Lovable AI Gateway
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      console.error('❌ LOVABLE_API_KEY não configurada');
+      return new Response(
+        JSON.stringify({ textoCorrigido: texto, corrigido: false, erro: 'API key não configurada' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Usar Lovable AI Gateway para correção rápida
-    const response = await fetch('https://llm.lovable.dev/v1/chat/completions', {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -68,7 +79,23 @@ REGRAS IMPORTANTES:
     });
 
     if (!response.ok) {
-      console.error('❌ Erro na API de IA:', response.status, await response.text());
+      const errorText = await response.text();
+      console.error('❌ Erro na API de IA:', response.status, errorText);
+      
+      // Verificar rate limit ou pagamento
+      if (response.status === 429) {
+        return new Response(
+          JSON.stringify({ textoCorrigido: texto, corrigido: false, erro: 'Rate limit excedido' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (response.status === 402) {
+        return new Response(
+          JSON.stringify({ textoCorrigido: texto, corrigido: false, erro: 'Créditos insuficientes' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       // Fallback: retornar texto original se IA falhar
       return new Response(
         JSON.stringify({ textoCorrigido: texto, corrigido: false, erro: 'Erro na correção' }),
