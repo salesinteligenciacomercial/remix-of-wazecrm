@@ -36,6 +36,7 @@ interface Message {
   mediaUrl?: string;
   fileName?: string;
   mimeType?: string;
+  fileSize?: number; // Tamanho do arquivo em bytes
   transcricao?: string;
   transcriptionStatus?: "pending" | "processing" | "completed" | "error"; // MELHORIA: Status da transcrição
   reaction?: string;
@@ -59,6 +60,10 @@ function isPdfMessage(message: Message): boolean {
   }
   return false;
 }
+
+// Limite de tamanho para preview no CRM (10MB) - arquivos maiores mostram apenas botão de download
+const MAX_PREVIEW_SIZE_MB = 10;
+const MAX_PREVIEW_SIZE_BYTES = MAX_PREVIEW_SIZE_MB * 1024 * 1024;
 
 interface MessageItemProps {
   message: Message;
@@ -495,76 +500,142 @@ function MessageItemComponent({
           {/* PDF Message - trata tanto tipo "pdf" quanto "document" com extensão .pdf */}
           {isPdfMessage(message) && (
             <div className="space-y-2 min-w-[250px]">
-              {mediaExpired ? (
-                <div className="flex flex-col items-center justify-center p-6 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                  <AlertCircle className="h-10 w-10 text-amber-500 mb-2" />
-                  <span className="text-sm text-amber-700 dark:text-amber-300 font-medium text-center">PDF expirado</span>
-                  <span className="text-xs text-amber-600 dark:text-amber-400 text-center mt-1">Mídias do WhatsApp expiram após alguns dias</span>
-                </div>
-              ) : mediaLoading ? (
-                <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-border rounded-lg bg-muted/50">
-                  <FileText className="h-12 w-12 text-muted-foreground mb-2" />
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mb-1" />
-                  <span className="text-sm text-muted-foreground">Carregando PDF...</span>
-                  {message.fileName && (
-                    <span className="text-xs text-muted-foreground mt-1 text-center px-2">{message.fileName}</span>
-                  )}
-                </div>
-              ) : (mediaUrl || message.mediaUrl) ? (
-                <div className="space-y-2">
-                  {/* Preview thumbnail do PDF */}
-                  <PDFPreview
-                    url={mediaUrl || message.mediaUrl || ''}
-                    fileName={message.fileName}
-                    onClick={() => setPdfViewerOpen(true)}
-                  />
-                  
-                  {/* Nome do arquivo com ícone */}
-                  {message.fileName && (
-                    <div className="flex items-center gap-2 p-2 bg-muted/30 rounded text-xs border border-border">
-                      <FileText className="h-4 w-4 text-red-600" />
-                      <span className="font-medium truncate flex-1">{message.fileName}</span>
-                      <Badge variant="secondary" className="text-[10px]">PDF</Badge>
+              {(() => {
+                // Verificar se arquivo é muito grande para preview
+                const isLargeFile = message.fileSize && message.fileSize > MAX_PREVIEW_SIZE_BYTES;
+                const fileSizeMB = message.fileSize ? (message.fileSize / (1024 * 1024)).toFixed(1) : null;
+                
+                if (mediaExpired) {
+                  return (
+                    <div className="flex flex-col items-center justify-center p-6 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <AlertCircle className="h-10 w-10 text-amber-500 mb-2" />
+                      <span className="text-sm text-amber-700 dark:text-amber-300 font-medium text-center">PDF expirado</span>
+                      <span className="text-xs text-amber-600 dark:text-amber-400 text-center mt-1">Mídias do WhatsApp expiram após alguns dias</span>
                     </div>
-                  )}
-                  
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setPdfViewerOpen(true)}
-                      className="flex-1"
-                    >
-                      <FileText className="h-3 w-3 mr-2" />
-                      Abrir PDF
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onDownload?.(mediaUrl || message.mediaUrl || '', message.fileName || 'documento.pdf')}
-                    >
-                      <Download className="h-3 w-3" />
-                    </Button>
+                  );
+                }
+                
+                if (isLargeFile) {
+                  // Arquivo grande - mostrar mensagem e opção de download
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex flex-col items-center justify-center p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <FileText className="h-12 w-12 text-blue-600 mb-2" />
+                        <span className="text-sm text-blue-700 dark:text-blue-300 font-medium text-center">
+                          📄 Arquivo PDF Grande
+                        </span>
+                        {message.fileName && (
+                          <span className="text-xs text-blue-600 dark:text-blue-400 mt-1 text-center px-2 truncate max-w-full">
+                            {message.fileName}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="secondary" className="text-[10px]">PDF</Badge>
+                          <Badge variant="outline" className="text-[10px] bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300">
+                            {fileSizeMB} MB
+                          </Badge>
+                        </div>
+                        <div className="mt-3 p-2 bg-blue-100 dark:bg-blue-900/50 rounded text-xs text-blue-800 dark:text-blue-200 text-center">
+                          <AlertCircle className="h-3 w-3 inline-block mr-1" />
+                          Arquivo muito grande para visualização no CRM.
+                          <br />
+                          Baixe o arquivo para visualizar no seu computador.
+                        </div>
+                      </div>
+                      
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => onDownload?.(mediaUrl || message.mediaUrl || '', message.fileName || 'documento.pdf')}
+                        className="w-full bg-blue-600 hover:bg-blue-700"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Baixar PDF ({fileSizeMB} MB)
+                      </Button>
+                    </div>
+                  );
+                }
+                
+                if (mediaLoading) {
+                  return (
+                    <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-border rounded-lg bg-muted/50">
+                      <FileText className="h-12 w-12 text-muted-foreground mb-2" />
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mb-1" />
+                      <span className="text-sm text-muted-foreground">Carregando PDF...</span>
+                      {message.fileName && (
+                        <span className="text-xs text-muted-foreground mt-1 text-center px-2">{message.fileName}</span>
+                      )}
+                    </div>
+                  );
+                }
+                
+                if (mediaUrl || message.mediaUrl) {
+                  return (
+                    <div className="space-y-2">
+                      {/* Preview thumbnail do PDF */}
+                      <PDFPreview
+                        url={mediaUrl || message.mediaUrl || ''}
+                        fileName={message.fileName}
+                        onClick={() => setPdfViewerOpen(true)}
+                      />
+                      
+                      {/* Nome do arquivo com ícone e tamanho */}
+                      {message.fileName && (
+                        <div className="flex items-center gap-2 p-2 bg-muted/30 rounded text-xs border border-border">
+                          <FileText className="h-4 w-4 text-red-600" />
+                          <span className="font-medium truncate flex-1">{message.fileName}</span>
+                          {fileSizeMB && (
+                            <Badge variant="outline" className="text-[9px]">{fileSizeMB} MB</Badge>
+                          )}
+                          <Badge variant="secondary" className="text-[10px]">PDF</Badge>
+                        </div>
+                      )}
+                      
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setPdfViewerOpen(true)}
+                          className="flex-1"
+                        >
+                          <FileText className="h-3 w-3 mr-2" />
+                          Abrir PDF
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onDownload?.(mediaUrl || message.mediaUrl || '', message.fileName || 'documento.pdf')}
+                        >
+                          <Download className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      
+                      {/* PDF Viewer Dialog */}
+                      <PdfViewerDialog
+                        open={pdfViewerOpen}
+                        onOpenChange={setPdfViewerOpen}
+                        url={message.mediaUrl || mediaUrl || ''}
+                        fileName={message.fileName}
+                      />
+                    </div>
+                  );
+                }
+                
+                // Fallback - arquivo sem URL (ainda não carregou ou falhou)
+                return (
+                  <div className="flex flex-col items-center justify-center p-6 border border-border rounded-lg bg-muted/50">
+                    <FileText className="h-12 w-12 text-red-600 mb-2" />
+                    <span className="text-sm text-muted-foreground font-medium">📄 Documento PDF</span>
+                    {message.fileName && (
+                      <span className="text-xs text-muted-foreground mt-1 text-center px-2">{message.fileName}</span>
+                    )}
+                    {fileSizeMB && (
+                      <Badge variant="outline" className="text-[9px] mt-1">{fileSizeMB} MB</Badge>
+                    )}
+                    <Badge variant="secondary" className="text-[10px] mt-2">PDF</Badge>
                   </div>
-                  
-                  {/* PDF Viewer Dialog - Sempre usar URL original para evitar problemas com blob URL expirada */}
-                  <PdfViewerDialog
-                    open={pdfViewerOpen}
-                    onOpenChange={setPdfViewerOpen}
-                    url={message.mediaUrl || mediaUrl || ''}
-                    fileName={message.fileName}
-                  />
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center p-6 border border-border rounded-lg bg-muted/50">
-                  <FileText className="h-12 w-12 text-red-600 mb-2" />
-                  <span className="text-sm text-muted-foreground font-medium">📄 Documento PDF</span>
-                  {message.fileName && (
-                    <span className="text-xs text-muted-foreground mt-1 text-center px-2">{message.fileName}</span>
-                  )}
-                  <Badge variant="secondary" className="text-[10px] mt-2">PDF</Badge>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
           

@@ -36,13 +36,14 @@ async function verifyWebhookSignature(payload: string, signature: string, appSec
 }
 
 // Construir JSON estruturado para mídia Meta API
-function buildMetaMediaJson(mediaId: string, mimeType?: string, sha256?: string, fileName?: string) {
+function buildMetaMediaJson(mediaId: string, mimeType?: string, sha256?: string, fileName?: string, fileSize?: number) {
   return JSON.stringify({
     media_id: mediaId,
     source: 'meta',
     mimetype: mimeType || null,
     sha256: sha256 || null,
     file_name: fileName || null,
+    file_size: fileSize || null, // Tamanho do arquivo em bytes (se disponível)
   });
 }
 
@@ -99,7 +100,9 @@ function transformWhatsAppPayload(entry: any) {
             mediaUrl = buildMetaMediaJson(
               message.image?.id,
               message.image?.mime_type,
-              message.image?.sha256
+              message.image?.sha256,
+              undefined,
+              message.image?.file_size // Tamanho se disponível
             );
             break;
           case 'video':
@@ -108,7 +111,9 @@ function transformWhatsAppPayload(entry: any) {
             mediaUrl = buildMetaMediaJson(
               message.video?.id,
               message.video?.mime_type,
-              message.video?.sha256
+              message.video?.sha256,
+              undefined,
+              message.video?.file_size // Tamanho se disponível
             );
             break;
           case 'audio':
@@ -117,7 +122,9 @@ function transformWhatsAppPayload(entry: any) {
             mediaUrl = buildMetaMediaJson(
               message.audio?.id,
               message.audio?.mime_type || 'audio/ogg; codecs=opus',
-              message.audio?.sha256
+              message.audio?.sha256,
+              undefined,
+              message.audio?.file_size // Tamanho se disponível
             );
             break;
           case 'document':
@@ -128,7 +135,8 @@ function transformWhatsAppPayload(entry: any) {
               message.document?.id,
               message.document?.mime_type,
               message.document?.sha256,
-              fileName
+              fileName,
+              message.document?.file_size // Tamanho se disponível
             );
             break;
           case 'sticker':

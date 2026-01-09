@@ -44,6 +44,22 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useTagsManager } from "@/hooks/useTagsManager";
 import { useConversationSearch, loadAllUniqueConversations } from "@/hooks/useConversationSearch";
 import * as evolutionAPI from "@/services/evolutionApi";
+
+// Função auxiliar para extrair fileSize do JSON de mídia
+function extractFileSizeFromMediaUrl(mediaUrl?: string): number | undefined {
+  if (!mediaUrl) return undefined;
+  try {
+    // Tentar parsear como JSON (formato usado pelo Meta API)
+    const parsed = JSON.parse(mediaUrl);
+    if (parsed.file_size && typeof parsed.file_size === 'number') {
+      return parsed.file_size;
+    }
+  } catch {
+    // Não é JSON, ignorar
+  }
+  return undefined;
+}
+
 interface Message {
   id: string;
   content: string;
@@ -55,6 +71,7 @@ interface Message {
   mediaUrl?: string;
   fileName?: string;
   mimeType?: string;
+  fileSize?: number; // Tamanho do arquivo em bytes
   transcricao?: string;
   transcriptionStatus?: "pending" | "processing" | "completed" | "error"; // Status da transcrição
   reaction?: string;
@@ -1259,6 +1276,7 @@ function Conversas() {
           // ⚡ CORREÇÃO: Usar campo read do banco (true = contato visualizou)
           mediaUrl: novaMensagem.midia_url,
           fileName: novaMensagem.arquivo_nome,
+          fileSize: extractFileSizeFromMediaUrl(novaMensagem.midia_url),
           mimeType: novaMensagem.tipo_mensagem === 'video' ? 'video/mp4' : novaMensagem.tipo_mensagem === 'audio' ? 'audio/mpeg' : novaMensagem.tipo_mensagem === 'image' ? 'image/jpeg' : novaMensagem.tipo_mensagem === 'document' || novaMensagem.tipo_mensagem === 'pdf' ? 'application/pdf' : undefined,
           sentBy: sentBy
         };
@@ -2104,6 +2122,7 @@ function Conversas() {
             read: msg.status === 'Lida',
             mediaUrl: msg.midia_url,
             fileName: msg.arquivo_nome,
+            fileSize: extractFileSizeFromMediaUrl(msg.midia_url),
             mimeType: msg.tipo_mensagem === 'video' ? 'video/mp4' : msg.tipo_mensagem === 'audio' ? 'audio/mpeg' : msg.tipo_mensagem === 'image' ? 'image/jpeg' : msg.tipo_mensagem === 'document' || msg.tipo_mensagem === 'pdf' ? 'application/pdf' : undefined,
             sentBy: sentBy
           };
@@ -3030,6 +3049,7 @@ function Conversas() {
             // ⚡ CORREÇÃO: Usar campo read do banco (true = contato visualizou)
             mediaUrl: m.midia_url,
             fileName: m.arquivo_nome,
+            fileSize: extractFileSizeFromMediaUrl(m.midia_url),
             mimeType: m.tipo_mensagem === 'video' ? 'video/mp4' : m.tipo_mensagem === 'audio' ? 'audio/mpeg' : m.tipo_mensagem === 'image' ? 'image/jpeg' : m.tipo_mensagem === 'document' || m.tipo_mensagem === 'pdf' ? 'application/pdf' : undefined,
             sentBy: sentBy // Nome do usuário que enviou
           };
