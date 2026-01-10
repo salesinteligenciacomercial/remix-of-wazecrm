@@ -36,6 +36,17 @@ import { FilaDialog } from "@/components/configuracoes/FilaDialog";
 import { FilaColaboradoresDialog } from "@/components/configuracoes/FilaColaboradoresDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Navigate } from "react-router-dom";
+import { EditarUsuarioDialog } from "@/components/configuracoes/EditarUsuarioDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Colaborador {
   id: string; // user_roles.id
@@ -75,6 +86,12 @@ export default function Configuracoes() {
   const [filaSelecionada, setFilaSelecionada] = useState<any | null>(null);
   
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
+  const [editarUsuarioDialogOpen, setEditarUsuarioDialogOpen] = useState(false);
+  const [colaboradorParaEditar, setColaboradorParaEditar] = useState<Colaborador | null>(null);
+  const [excluirDialogOpen, setExcluirDialogOpen] = useState(false);
+  const [colaboradorParaExcluir, setColaboradorParaExcluir] = useState<Colaborador | null>(null);
+  const [excluindoUsuario, setExcluindoUsuario] = useState(false);
+  
   const [novoColaborador, setNovoColaborador] = useState({
     nome: "",
     email: "",
@@ -459,6 +476,46 @@ export default function Configuracoes() {
     }
   };
 
+  const abrirEditarUsuario = (colaborador: Colaborador) => {
+    setColaboradorParaEditar(colaborador);
+    setEditarUsuarioDialogOpen(true);
+  };
+
+  const abrirExcluirUsuario = (colaborador: Colaborador) => {
+    setColaboradorParaExcluir(colaborador);
+    setExcluirDialogOpen(true);
+  };
+
+  const confirmarExcluirUsuario = async () => {
+    if (!colaboradorParaExcluir?.userId) return;
+    
+    setExcluindoUsuario(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('excluir-usuario', {
+        body: {
+          userId: colaboradorParaExcluir.userId,
+          companyId: currentCompany?.id,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({ title: 'Usuário excluído com sucesso' });
+      await carregarColaboradores();
+      setExcluirDialogOpen(false);
+      setColaboradorParaExcluir(null);
+    } catch (e: any) {
+      console.error('Erro ao excluir usuário:', e);
+      toast({ 
+        variant: 'destructive', 
+        title: 'Erro ao excluir usuário', 
+        description: e.message || 'Ocorreu um erro ao excluir o usuário'
+      });
+    } finally {
+      setExcluindoUsuario(false);
+    }
+  };
+
   const removerColaborador = async (id: string) => {
     try {
       const { error } = await supabase.from('user_roles').delete().eq('id', id);
@@ -768,14 +825,25 @@ export default function Configuracoes() {
                       </div>
                     </div>
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => removerColaborador(colaborador.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => abrirEditarUsuario(colaborador)}
+                        title="Editar usuário"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => abrirExcluirUsuario(colaborador)}
+                        title="Excluir usuário"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
 
@@ -788,6 +856,37 @@ export default function Configuracoes() {
               </div>
             </CardContent>
           </Card>
+
+          <EditarUsuarioDialog
+            open={editarUsuarioDialogOpen}
+            onOpenChange={setEditarUsuarioDialogOpen}
+            colaborador={colaboradorParaEditar}
+            companyId={currentCompany?.id || ''}
+            onSuccess={carregarColaboradores}
+          />
+
+          <AlertDialog open={excluirDialogOpen} onOpenChange={setExcluirDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tem certeza que deseja excluir o usuário <strong>{colaboradorParaExcluir?.nome}</strong>?
+                  <br /><br />
+                  Esta ação irá remover o acesso do usuário à empresa. Se o usuário não estiver vinculado a outras empresas, ele será completamente excluído do sistema.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={excluindoUsuario}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={confirmarExcluirUsuario}
+                  disabled={excluindoUsuario}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {excluindoUsuario ? "Excluindo..." : "Excluir Usuário"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
     </>
   );
 
