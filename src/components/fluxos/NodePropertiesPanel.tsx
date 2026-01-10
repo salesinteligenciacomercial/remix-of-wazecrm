@@ -119,6 +119,7 @@ export function NodePropertiesPanel({ selectedNode, onUpdate }: NodePropertiesPa
                   <SelectItem value="adicionar_nota">Adicionar nota</SelectItem>
                   <SelectItem value="acionar_ia">Acionar IA</SelectItem>
                   <SelectItem value="whatsapp">Enviar WhatsApp</SelectItem>
+                  <SelectItem value="instagram">Enviar Instagram</SelectItem>
                   <SelectItem value="email">Enviar Email</SelectItem>
                   <SelectItem value="webhook">Chamar Webhook</SelectItem>
                 </SelectContent>
@@ -134,7 +135,9 @@ export function NodePropertiesPanel({ selectedNode, onUpdate }: NodePropertiesPa
                 {...inputProps}
               />
             </div>
-            {(selectedNode.data.actionType === 'enviar_mensagem' || selectedNode.data.actionType === 'whatsapp') && (
+            {(selectedNode.data.actionType === 'enviar_mensagem' || 
+              selectedNode.data.actionType === 'whatsapp' ||
+              selectedNode.data.actionType === 'instagram') && (
               <div className="space-y-2">
                 <Label className="text-slate-300 text-xs font-medium">Mensagem</Label>
                 <Textarea

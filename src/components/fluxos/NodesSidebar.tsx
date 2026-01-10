@@ -55,6 +55,7 @@ const nodeCategories = [
     description: 'Conecte com serviços externos',
     nodes: [
       { type: 'action', label: 'WhatsApp', icon: <Phone className="h-4 w-4" />, color: 'bg-green-600', subType: 'whatsapp' },
+      { type: 'action', label: 'Instagram', icon: <MessageSquare className="h-4 w-4" />, color: 'bg-gradient-to-br from-purple-500 to-pink-500', subType: 'instagram' },
       { type: 'action', label: 'Email', icon: <Mail className="h-4 w-4" />, color: 'bg-red-500', subType: 'email' },
       { type: 'action', label: 'Webhook', icon: <Webhook className="h-4 w-4" />, color: 'bg-slate-500', subType: 'webhook' },
     ]
