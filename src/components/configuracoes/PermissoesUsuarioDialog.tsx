@@ -40,6 +40,7 @@ interface PermissoesUsuarioDialogProps {
 
 // Mapeamento de módulos para labels amigáveis
 const moduleLabels: Record<string, string> = {
+  analytics: "Analytics",
   leads: "Leads",
   conversas: "Conversas",
   agenda: "Agenda",
@@ -48,7 +49,12 @@ const moduleLabels: Record<string, string> = {
   relatorios: "Relatórios",
   configuracoes: "Configurações",
   fluxos: "Fluxos de Automação",
+  automacao: "Automação e IA",
   usuarios: "Usuários",
+  chat_equipe: "Chat da Equipe",
+  reunioes: "Reuniões",
+  discador: "Discador",
+  processos: "Processos Comerciais",
 };
 
 // Mapeamento de ações para labels amigáveis
@@ -59,6 +65,7 @@ const actionLabels: Record<string, string> = {
   delete: "Excluir",
   send: "Enviar",
   manage: "Gerenciar",
+  call: "Realizar Chamadas",
 };
 
 export function PermissoesUsuarioDialog({
