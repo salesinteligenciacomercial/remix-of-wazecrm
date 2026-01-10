@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Instagram, Facebook, MoreVertical, Edit, UserPlus, Trash2, Lock, Unlock, User, CheckCircle2, Circle } from "lucide-react";
+import { MessageSquare, Instagram, Facebook, MoreVertical, Edit, UserPlus, Trash2, Lock, Unlock, User, CheckCircle2, Circle, Pin, PinOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -37,6 +37,8 @@ interface ConversationListItemProps {
   onCreateLead?: () => void;
   onDeleteConversation?: () => void;
   onToggleBlock?: () => void;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
   assignedUser?: {
     id: string;
     name: string;
@@ -68,6 +70,8 @@ function ConversationListItemComponent({
   onCreateLead,
   onDeleteConversation,
   onToggleBlock,
+  isPinned = false,
+  onTogglePin,
   assignedUser,
   lastRespondedBy,
   status,
@@ -101,7 +105,7 @@ function ConversationListItemComponent({
     <div
       className={`relative p-4 border-b border-border cursor-pointer transition-colors hover:bg-muted/50 ${
         isSelected ? "bg-muted/70" : ""
-      }`}
+      } ${isPinned ? "bg-amber-50/50 dark:bg-amber-950/20" : ""}`}
       onClick={onClick}
       style={{ 
         position: 'relative', 
@@ -165,6 +169,9 @@ function ConversationListItemComponent({
               )}
               {isBlocked && (
                 <Lock className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
+              )}
+              {isPinned && (
+                <Pin className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
               )}
             </div>
             
@@ -268,6 +275,26 @@ function ConversationListItemComponent({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56" onClick={(e) => e.stopPropagation()}>
+              {/* Opção de Fixar/Desafixar */}
+              {onTogglePin && (
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onTogglePin();
+                }}>
+                  {isPinned ? (
+                    <>
+                      <PinOff className="h-4 w-4 mr-2" />
+                      Desafixar conversa
+                    </>
+                  ) : (
+                    <>
+                      <Pin className="h-4 w-4 mr-2" />
+                      Fixar conversa
+                    </>
+                  )}
+                </DropdownMenuItem>
+              )}
+              
               {!isGroup && onEditName && (
                 <DropdownMenuItem onClick={(e) => {
                   e.stopPropagation();
