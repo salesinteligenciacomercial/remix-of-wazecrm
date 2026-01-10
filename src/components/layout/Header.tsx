@@ -1,4 +1,4 @@
-import { Building2, PanelLeftClose, PanelLeft, MessageSquare, Instagram, Zap, Clock, Users, LogOut, Settings, Menu } from "lucide-react";
+import { Building2, PanelLeftClose, PanelLeft, MessageSquare, Instagram, Zap, Clock, Users, LogOut, Settings, Menu, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useTheme } from "@/hooks/useTheme";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import {
   DropdownMenu,
@@ -16,6 +17,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -31,6 +38,7 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { theme, toggleTheme } = useTheme();
 
   // Métricas rápidas para página de Conversas
   const conversationsMetrics = useMemo(() => {
@@ -265,6 +273,29 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
               <span className="md:hidden">{companyName.substring(0, 10)}{companyName.length > 10 ? '...' : ''}</span>
             </Badge>
           )}
+
+          {/* Theme Toggle Button */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleTheme}
+                  className="h-9 w-9 hover:bg-muted transition-colors"
+                >
+                  {theme === 'dark' ? (
+                    <Sun className="h-5 w-5 text-yellow-500" />
+                  ) : (
+                    <Moon className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           <NotificationCenter />
 
