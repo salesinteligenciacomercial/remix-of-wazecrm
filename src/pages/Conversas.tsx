@@ -173,6 +173,7 @@ const SCHEDULED_MESSAGES_KEY = "continuum_scheduled_messages";
 const MEETINGS_KEY = "continuum_meetings";
 const AI_MODE_KEY = "continuum_ai_mode";
 const AUTO_CORRECT_KEY = "continuum_auto_correct_enabled"; // Chave para salvar preferência de correção automática
+const PINNED_CONVERSATIONS_KEY = "continuum_pinned_conversations"; // Chave para salvar conversas fixadas
 const CACHE_MAX_AGE = 30 * 60 * 1000; // Cache válido por 30 minutos (carregamento instantâneo)
 
 const initialConversations: Conversation[] = [{
@@ -418,6 +419,28 @@ function Conversas() {
     return saved !== null ? JSON.parse(saved) : true; // Habilitado por padrão
   });
   const [isCorrectingText, setIsCorrectingText] = useState(false); // Estado de loading durante correção
+
+  // 📌 Estado para conversas fixadas
+  const [pinnedConversations, setPinnedConversations] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem(PINNED_CONVERSATIONS_KEY);
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+
+  // Função para alternar conversa fixada
+  const togglePinConversation = useCallback((conversationId: string) => {
+    setPinnedConversations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(conversationId)) {
+        newSet.delete(conversationId);
+        toast.success("Conversa desafixada");
+      } else {
+        newSet.add(conversationId);
+        toast.success("Conversa fixada no topo");
+      }
+      localStorage.setItem(PINNED_CONVERSATIONS_KEY, JSON.stringify([...newSet]));
+      return newSet;
+    });
+  }, []);
 
   // MELHORIA: Estados para sincronização realtime - Iniciar como conectado para UX instantânea
   const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting' | 'error'>('connected');
@@ -924,8 +947,16 @@ function Conversas() {
     }
     console.log('📊 [DEBUG] Após busca:', filtered.length);
 
-    // Ordenar por última mensagem (mais recentes primeiro)
+    // Ordenar: primeiro conversas fixadas, depois por última mensagem (mais recentes primeiro)
     filtered = filtered.sort((a, b) => {
+      // Prioridade 1: Conversas fixadas ficam no topo
+      const aIsPinned = pinnedConversations.has(a.id) || pinnedConversations.has(a.phoneNumber || '');
+      const bIsPinned = pinnedConversations.has(b.id) || pinnedConversations.has(b.phoneNumber || '');
+      
+      if (aIsPinned && !bIsPinned) return -1;
+      if (!aIsPinned && bIsPinned) return 1;
+      
+      // Prioridade 2: Ordenar por última mensagem
       const aLastMsg = a.messages?.[a.messages.length - 1];
       const bLastMsg = b.messages?.[b.messages.length - 1];
       const aTimestamp = aLastMsg?.timestamp instanceof Date ? aLastMsg.timestamp : aLastMsg?.timestamp ? new Date(aLastMsg.timestamp) : null;
@@ -935,7 +966,7 @@ function Conversas() {
       return bTime - aTime;
     });
     return filtered;
-  }, [conversations, filter, debouncedSearchTerm, currentUserId, blockedGroups, hasSearched, searchResults]);
+  }, [conversations, filter, debouncedSearchTerm, currentUserId, blockedGroups, hasSearched, searchResults, pinnedConversations]);
 
   // Mensagens exibidas: sempre refletir state atual da conversa selecionada (evitar cache obsoleto)
   // ⚡ CORREÇÃO: Não limitar mensagens exibidas - mostrar todas para preservar histórico
@@ -7465,7 +7496,7 @@ function Conversas() {
             </div> : filteredConversations.length === 0 ? <div className="flex flex-col items-center justify-center h-64 gap-3">
               <MessageSquare className="h-12 w-12 text-muted-foreground/50" />
               <p className="text-sm text-muted-foreground">Nenhuma conversa encontrada</p>
-            </div> : filteredConversations.map(conv => <ConversationListItem key={conv.id} contactName={conv.contactName} channel={conv.channel} lastMessage={conv.lastMessage} timestamp={new Date(conv.messages[conv.messages.length - 1]?.timestamp)} unread={conv.unread} isSelected={selectedConv?.id === conv.id} avatarUrl={conv.avatarUrl} tags={conv.tags} responsavel={conv.assignedUser?.name} funnelStage={conv.funnelStage} valor={conv.valor} conversationId={conv.id} leadId={leadsVinculados[conv.id] || leadsVinculados[safeFormatPhoneNumber(conv.id)]} isGroup={conv.isGroup} isBlocked={blockedGroups.has(conv.phoneNumber || conv.id)} assignedUser={conv.assignedUser} status={conv.status} origemApi={conv.origemApi} lastRespondedBy={(() => {
+            </div> : filteredConversations.map(conv => <ConversationListItem key={conv.id} contactName={conv.contactName} channel={conv.channel} lastMessage={conv.lastMessage} timestamp={new Date(conv.messages[conv.messages.length - 1]?.timestamp)} unread={conv.unread} isSelected={selectedConv?.id === conv.id} avatarUrl={conv.avatarUrl} tags={conv.tags} responsavel={conv.assignedUser?.name} funnelStage={conv.funnelStage} valor={conv.valor} conversationId={conv.id} leadId={leadsVinculados[conv.id] || leadsVinculados[safeFormatPhoneNumber(conv.id)]} isGroup={conv.isGroup} isBlocked={blockedGroups.has(conv.phoneNumber || conv.id)} assignedUser={conv.assignedUser} status={conv.status} origemApi={conv.origemApi} isPinned={pinnedConversations.has(conv.id) || pinnedConversations.has(conv.phoneNumber || '')} onTogglePin={() => togglePinConversation(conv.id)} lastRespondedBy={(() => {
           // ⚡ Buscar última mensagem enviada pelo usuário para mostrar quem respondeu
           const userMessages = conv.messages.filter(m => m.sender === "user");
           if (userMessages.length > 0) {
