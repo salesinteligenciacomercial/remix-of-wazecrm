@@ -69,7 +69,35 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
   const [attachmentsCount, setAttachmentsCount] = useState(0);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [diasNoFunil, setDiasNoFunil] = useState<number | null>(null);
+  const [creatorColor, setCreatorColor] = useState<string>('#6366f1');
+  const [creatorName, setCreatorName] = useState<string | null>(null);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
+
+  // Função para gerar cor consistente baseada no ID do usuário
+  const generateColorFromId = (id: string): string => {
+    const colors = [
+      '#6366f1', // indigo
+      '#8b5cf6', // violet
+      '#d946ef', // fuchsia
+      '#ec4899', // pink
+      '#f43f5e', // rose
+      '#ef4444', // red
+      '#f97316', // orange
+      '#eab308', // yellow
+      '#84cc16', // lime
+      '#22c55e', // green
+      '#14b8a6', // teal
+      '#06b6d4', // cyan
+      '#0ea5e9', // sky
+      '#3b82f6', // blue
+    ];
+    
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
 
   const normalizePhoneBR = (raw?: string): string | null => {
     if (!raw) return null;
@@ -326,6 +354,38 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
     calcularDiasNoFunil();
   }, [lead.created_at]);
 
+  // Carregar informações do criador do lead
+  useEffect(() => {
+    const carregarCriador = async () => {
+      try {
+        const { data: leadData } = await supabase
+          .from("leads")
+          .select("owner_id")
+          .eq("id", lead.id)
+          .maybeSingle();
+        
+        if (leadData?.owner_id) {
+          setCreatorColor(generateColorFromId(leadData.owner_id));
+          
+          // Buscar nome do criador
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, email")
+            .eq("id", leadData.owner_id)
+            .maybeSingle();
+          
+          if (profile) {
+            setCreatorName(profile.full_name || profile.email || null);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar criador:", error);
+      }
+    };
+    
+    carregarCriador();
+  }, [lead.id]);
+
   useEffect(() => {
     if (lead.id) {
       carregarProximasAtividades();
@@ -419,7 +479,11 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
   return (
     <Card
       ref={setNodeRef}
-      style={style}
+      style={{
+        ...style,
+        borderLeftWidth: '4px',
+        borderLeftColor: creatorColor,
+      }}
       {...attributes}
       onClick={(e) => {
         if (!isDragging) {
@@ -432,6 +496,23 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
       }`}
     >
       <div className="absolute inset-0 bg-gradient-card opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+      {/* Indicador visual do criador no topo */}
+      {creatorName && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div 
+                className="absolute top-0 right-0 w-3 h-3 rounded-bl-md cursor-default"
+                style={{ backgroundColor: creatorColor }}
+              />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs">Criado por: <span className="font-medium">{creatorName}</span></p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
 
       <div className="relative space-y-2">
         {/* Header sempre visível */}
