@@ -546,16 +546,16 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
               {lead.tags && lead.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {lead.tags.map((tag) => (
-                    <TooltipProvider key={tag}>
+                    <TooltipProvider key={tag} delayDuration={100}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge variant="secondary" className="text-xs max-w-[60px] cursor-default">
+                          <Badge variant="secondary" className="text-xs max-w-[60px] cursor-default hover:max-w-none transition-all">
                             <Tag className="h-2.5 w-2.5 mr-1 flex-shrink-0" />
                             <span className="truncate">{tag}</span>
                           </Badge>
                         </TooltipTrigger>
-                        <TooltipContent side="top">
-                          <p>{tag}</p>
+                        <TooltipContent side="top" className="z-[9999]">
+                          <p className="font-medium">{tag}</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
