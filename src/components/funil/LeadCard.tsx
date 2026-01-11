@@ -699,83 +699,95 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
           </div>
         )}
 
-        {/* Valor Estimado - SEMPRE VISÍVEL */}
-        {lead.value !== undefined && lead.value > 0 && (
-          <div className="flex flex-col pt-2 border-t border-border/50">
-            <span className="text-xs text-muted-foreground font-medium">Valor Estimado</span>
-            <Badge className="font-semibold bg-gradient-success text-success-foreground shadow-sm mt-1 w-fit">
-              R$ {lead.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </Badge>
+        {/* Valor Estimado + Botões de Ação - SEMPRE VISÍVEL */}
+        <div className="flex items-center justify-between pt-2 border-t border-border/50">
+          {lead.value !== undefined && lead.value > 0 ? (
+            <div className="flex flex-col">
+              <span className="text-xs text-muted-foreground font-medium">Valor Estimado</span>
+              <Badge className="font-semibold bg-gradient-success text-success-foreground shadow-sm mt-1 w-fit">
+                R$ {lead.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </Badge>
+            </div>
+          ) : (
+            <div />
+          )}
+          
+          {/* Botões de ação sempre visíveis */}
+          <div 
+            className="flex gap-0.5"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div onClick={(e) => e.stopPropagation()}>
+              <MoverLeadFunilDialog
+                leadId={lead.id}
+                leadNome={lead.nome}
+                funilAtualId={lead.funil_id}
+                etapaAtualId={lead.etapa_id}
+                onLeadMoved={() => onLeadMoved?.()}
+              />
+            </div>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={handleAgendaModal}
+                  >
+                    <Calendar className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Próximo compromisso:</p>
+                  <p className="font-medium">{proximoCompromisso || "Nenhum agendado"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={handleTarefaModal}
+                  >
+                    <CheckSquare className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Próxima tarefa:</p>
+                  <p className="font-medium">{proximaTarefa || "Nenhuma pendente"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+              onClick={handleDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
-        )}
+        </div>
 
         {/* Conteúdo expandido */}
         {isExpanded && (
           <div className="space-y-3 border-t pt-3" onClick={(e) => e.stopPropagation()}>
-            {/* Botões de ação */}
+            {/* Botões adicionais */}
             <div
               className="flex gap-1 flex-wrap"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
             >
               <div onClick={(e) => e.stopPropagation()}>
-                <MoverLeadFunilDialog
-                  leadId={lead.id}
-                  leadNome={lead.nome}
-                  funilAtualId={lead.funil_id}
-                  etapaAtualId={lead.etapa_id}
-                  onLeadMoved={() => onLeadMoved?.()}
-                />
-              </div>
-              <div onClick={(e) => e.stopPropagation()}>
                 <EditarLeadDialog lead={lead} onLeadUpdated={onLeadMoved || (() => {})} />
               </div>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={handleAgendaModal}
-                    >
-                      <Calendar className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Próximo compromisso:</p>
-                    <p className="font-medium">{proximoCompromisso || "Nenhum agendado"}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={handleTarefaModal}
-                    >
-                      <CheckSquare className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Próxima tarefa:</p>
-                    <p className="font-medium">{proximaTarefa || "Nenhuma pendente"}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                onClick={handleDelete}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
             </div>
 
             <AgendaModal
