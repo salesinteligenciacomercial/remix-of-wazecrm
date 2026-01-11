@@ -1287,58 +1287,55 @@ function Conversas() {
           return;
         }
         
-        // ⚡ CORREÇÃO: Se for UPDATE, verificar se é apenas atualização de status (read/delivered)
+        // ⚡ CORREÇÃO: Se for UPDATE, SEMPRE atualizar status de leitura e retornar
+        // UPDATE significa que a mensagem já existe no banco - apenas atualizar status
         if (payload.eventType === 'UPDATE') {
-          const oldData = payload.old as any;
-          const isStatusUpdate = (novaMensagem.read !== oldData?.read) || (novaMensagem.delivered !== oldData?.delivered);
+          console.log('👁️ [REALTIME] UPDATE recebido - atualizando status:', {
+            id: novaMensagem.id,
+            read: novaMensagem.read,
+            delivered: novaMensagem.delivered
+          });
           
-          if (isStatusUpdate) {
-            console.log('👁️ [REALTIME] Atualizando status de leitura:', {
-              id: novaMensagem.id,
-              read: novaMensagem.read,
-              delivered: novaMensagem.delivered
-            });
-            
-            // Atualizar status de leitura na conversa selecionada
-            setSelectedConv(prevSelected => {
-              if (!prevSelected) return prevSelected;
-              
-              const mensagemIndex = prevSelected.messages.findIndex(m => m.id === novaMensagem.id);
-              if (mensagemIndex !== -1) {
-                const novasMensagens = [...prevSelected.messages];
-                novasMensagens[mensagemIndex] = {
-                  ...novasMensagens[mensagemIndex],
-                  read: novaMensagem.read === true,
-                  delivered: novaMensagem.delivered === true
-                };
-                return {
-                  ...prevSelected,
-                  messages: novasMensagens
-                };
-              }
-              return prevSelected;
-            });
-            
-            // Atualizar status de leitura na lista de conversas
-            setConversations(prev => prev.map(conv => {
-              const mensagemIndex = conv.messages.findIndex(m => m.id === novaMensagem.id);
-              if (mensagemIndex !== -1) {
-                const novasMensagens = [...conv.messages];
-                novasMensagens[mensagemIndex] = {
-                  ...novasMensagens[mensagemIndex],
-                  read: novaMensagem.read === true,
-                  delivered: novaMensagem.delivered === true
-                };
-                return {
-                  ...conv,
-                  messages: novasMensagens
-                };
-              }
-              return conv;
-            }));
-            
-            return; // Apenas atualização de status, não processar como nova mensagem
-          }
+          // Atualizar status de leitura na conversa selecionada
+          setSelectedConv(prevSelected => {
+            if (!prevSelected) return prevSelected;
+            const mensagemIndex = prevSelected.messages.findIndex(m => m.id === novaMensagem.id);
+            if (mensagemIndex !== -1) {
+              const novasMensagens = [...prevSelected.messages];
+              novasMensagens[mensagemIndex] = {
+                ...novasMensagens[mensagemIndex],
+                read: novaMensagem.read === true,
+                delivered: novaMensagem.delivered === true || novaMensagem.status === 'Enviada'
+              };
+              return {
+                ...prevSelected,
+                messages: novasMensagens
+              };
+            }
+            return prevSelected;
+          });
+          
+          // Atualizar também na lista de conversas
+          setConversations(prev => prev.map(conv => {
+            const mensagemIndex = conv.messages.findIndex(m => m.id === novaMensagem.id);
+            if (mensagemIndex !== -1) {
+              const novasMensagens = [...conv.messages];
+              novasMensagens[mensagemIndex] = {
+                ...novasMensagens[mensagemIndex],
+                read: novaMensagem.read === true,
+                delivered: novaMensagem.delivered === true || novaMensagem.status === 'Enviada'
+              };
+              return {
+                ...conv,
+                messages: novasMensagens
+              };
+            }
+            return conv;
+          }));
+          
+          // ⚡ CORREÇÃO CRÍTICA: UPDATE sempre significa mensagem existente
+          // Não processar como nova mensagem - apenas atualizar status e retornar
+          return;
         }
         
         const isFromMe = novaMensagem.fromme === true || String(novaMensagem.fromme) === 'true';
