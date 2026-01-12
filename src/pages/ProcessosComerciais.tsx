@@ -3,18 +3,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
-  GitBranch, 
-  BarChart3, 
-  FileBarChart, 
-  BookOpen,
-  Workflow,
   Target,
-  TrendingUp,
   Brain,
-  FileText
+  FileText,
+  AlertTriangle
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { KPIsDashboard } from "@/components/processos/KPIsDashboard";
+import { ProcessInsightsReport } from "@/components/processos/ProcessInsightsReport";
 import { SugestoesIAList } from "@/components/processos/SugestoesIAList";
 import { NotionWorkspace } from "@/components/processos/notion/NotionWorkspace";
 
@@ -81,8 +76,7 @@ export default function ProcessosComerciais() {
 
   const sections = [
     { id: "workspace", title: "Workspace", description: "Páginas, Tarefas, Calendário, Playbooks, Cadências e Etapas", icon: FileText, color: "text-primary", bgColor: "bg-primary/10", count: null },
-    { id: "kpis", title: "KPIs & Conversões", description: "Dashboard com taxas de conversão e métricas de desempenho", icon: TrendingUp, color: "text-orange-500", bgColor: "bg-orange-500/10", count: null },
-    { id: "relatorios", title: "Relatórios de Processos", description: "Insights automáticos da IA sobre gargalos e melhorias", icon: FileBarChart, color: "text-red-500", bgColor: "bg-red-500/10", count: null },
+    { id: "insights", title: "Insights & Gargalos", description: "Análise automática de gargalos e pontos de melhoria", icon: AlertTriangle, color: "text-orange-500", bgColor: "bg-orange-500/10", count: null },
     { id: "sugestoes", title: "Sugestões da IA", description: "Aprovação de melhorias sugeridas pela IA de Processos", icon: Brain, color: "text-cyan-500", bgColor: "bg-cyan-500/10", count: stats.suggestions }
   ];
 
@@ -106,13 +100,13 @@ export default function ProcessosComerciais() {
             <FileText className="h-4 w-4" />
             <span className="hidden md:inline">Workspace</span>
           </TabsTrigger>
-          <TabsTrigger value="kpis" className="flex items-center gap-2 py-2">
-            <TrendingUp className="h-4 w-4" />
-            <span className="hidden md:inline">KPIs & Relatórios</span>
+          <TabsTrigger value="insights" className="flex items-center gap-2 py-2">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="hidden md:inline">Insights & Gargalos</span>
           </TabsTrigger>
           <TabsTrigger value="sugestoes" className="flex items-center gap-2 py-2 relative">
             <Brain className="h-4 w-4" />
-            <span className="hidden md:inline">IA</span>
+            <span className="hidden md:inline">Sugestões da IA</span>
             {stats.suggestions > 0 && (
               <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
                 {stats.suggestions}
@@ -125,17 +119,17 @@ export default function ProcessosComerciais() {
           <NotionWorkspace companyId={companyId} />
         </TabsContent>
 
-        <TabsContent value="kpis" className="space-y-4">
+        <TabsContent value="insights" className="space-y-4">
           <Card className="border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-orange-500" />
-                KPIs & Relatórios
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
+                Insights & Gargalos
               </CardTitle>
-              <CardDescription>Dashboard com métricas de conversão, desempenho e insights do time</CardDescription>
+              <CardDescription>Análise automática de gargalos e pontos de melhoria nos seus processos comerciais</CardDescription>
             </CardHeader>
             <CardContent>
-              <KPIsDashboard companyId={companyId} />
+              <ProcessInsightsReport companyId={companyId} onSuggestionsGenerated={loadSuggestions} />
             </CardContent>
           </Card>
         </TabsContent>
