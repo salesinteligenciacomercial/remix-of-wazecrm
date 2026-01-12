@@ -106,10 +106,6 @@ export default function ProcessosComerciais() {
             <FileText className="h-4 w-4" />
             <span className="hidden md:inline">Workspace</span>
           </TabsTrigger>
-          <TabsTrigger value="home" className="flex items-center gap-2 py-2">
-            <Target className="h-4 w-4" />
-            <span className="hidden md:inline">Visão Geral</span>
-          </TabsTrigger>
           <TabsTrigger value="kpis" className="flex items-center gap-2 py-2">
             <TrendingUp className="h-4 w-4" />
             <span className="hidden md:inline">KPIs</span>
@@ -131,64 +127,6 @@ export default function ProcessosComerciais() {
 
         <TabsContent value="workspace">
           <NotionWorkspace companyId={companyId} />
-        </TabsContent>
-
-        <TabsContent value="home" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {sections.map((section) => (
-              <Card 
-                key={section.id} 
-                className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-[1.02] border-border/50" 
-                onClick={() => setActiveTab(section.id)}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className={`p-3 rounded-xl ${section.bgColor}`}>
-                      <section.icon className={`h-6 w-6 ${section.color}`} />
-                    </div>
-                    {section.count !== null && (
-                      <Badge variant="secondary" className="text-lg px-3">{section.count}</Badge>
-                    )}
-                  </div>
-                  <CardTitle className="text-lg mt-3">{section.title}</CardTitle>
-                  <CardDescription className="text-sm">{section.description}</CardDescription>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
-          
-          <Card className="border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-primary" />
-                Visão Geral do Módulo
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-4 rounded-xl bg-blue-500/10 text-center">
-                  <BookOpen className="h-6 w-6 mx-auto mb-2 text-blue-500" />
-                  <p className="text-3xl font-bold text-blue-500">{stats.playbooks}</p>
-                  <p className="text-sm text-muted-foreground">Playbooks</p>
-                </div>
-                <div className="p-4 rounded-xl bg-purple-500/10 text-center">
-                  <Workflow className="h-6 w-6 mx-auto mb-2 text-purple-500" />
-                  <p className="text-3xl font-bold text-purple-500">{stats.routines}</p>
-                  <p className="text-sm text-muted-foreground">Cadências</p>
-                </div>
-                <div className="p-4 rounded-xl bg-green-500/10 text-center">
-                  <GitBranch className="h-6 w-6 mx-auto mb-2 text-green-500" />
-                  <p className="text-3xl font-bold text-green-500">{stats.stages}</p>
-                  <p className="text-sm text-muted-foreground">Etapas</p>
-                </div>
-                <div className="p-4 rounded-xl bg-cyan-500/10 text-center">
-                  <Brain className="h-6 w-6 mx-auto mb-2 text-cyan-500" />
-                  <p className="text-3xl font-bold text-cyan-500">{stats.suggestions}</p>
-                  <p className="text-sm text-muted-foreground">Sugestões Pendentes</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="kpis" className="space-y-4">
