@@ -400,41 +400,31 @@ export function ProcessInsightsReport({ companyId, onSuggestionsGenerated }: Pro
 
   return (
     <div className="space-y-6">
-      {/* Header com filtro e ações */}
+      {/* Header com ações */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-muted/30 rounded-lg">
         <div className="flex items-center gap-3">
-          <Filter className="h-5 w-5 text-muted-foreground" />
-          <span className="text-sm font-medium">Filtrar por Funil:</span>
-          <Select value={selectedFunilId} onValueChange={setSelectedFunilId}>
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Todos os Funis" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4" />
-                  Todos os Funis
-                </div>
-              </SelectItem>
-              {funis.map((funil) => (
-                <SelectItem key={funil.id} value={funil.id}>
-                  {funil.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Brain className="h-5 w-5 text-primary" />
+          <span className="text-sm font-medium">Monitoramento em Tempo Real</span>
+          {unseenCount > 0 && (
+            <Badge variant="destructive" className="gap-1">
+              {unseenCount} novos alertas
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
-          {pendingSuggestions > 0 && (
-            <Badge variant="secondary" className="gap-1">
-              <Brain className="h-3 w-3" />
-              {pendingSuggestions} sugestões pendentes
-            </Badge>
-          )}
+          <Button 
+            onClick={() => refreshInsights()}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Atualizar
+          </Button>
           <Button 
             onClick={generateSuggestions} 
-            disabled={analyzing || bottlenecks.length === 0}
+            disabled={analyzing || (bottlenecks.length === 0 && insights.length === 0)}
             size="sm"
             className="gap-2"
           >
@@ -453,157 +443,271 @@ export function ProcessInsightsReport({ companyId, onSuggestionsGenerated }: Pro
         </div>
       </div>
 
-      {loading ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-          <p>Analisando processos...</p>
-        </div>
-      ) : (
-        <>
-          {/* Gargalos Identificados */}
-          <Card className="border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <AlertTriangle className="h-5 w-5 text-orange-500" />
-                Gargalos Identificados
-              </CardTitle>
-              <CardDescription>
-                Pontos críticos que precisam de atenção no seu processo comercial
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {bottlenecks.length === 0 ? (
-                <div className="flex items-center gap-3 p-4 bg-green-500/10 rounded-lg border border-green-500/20">
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                  <div>
-                    <p className="font-medium text-green-700 dark:text-green-400">Nenhum gargalo crítico encontrado</p>
-                    <p className="text-sm text-muted-foreground">Seus processos estão funcionando bem!</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {bottlenecks.map((bottleneck, index) => (
-                    <div 
-                      key={`${bottleneck.etapaId}-${bottleneck.type}-${index}`}
-                      className={`flex items-center justify-between p-4 rounded-lg border ${getSeverityColor(bottleneck.severity)}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-background">
-                          {getBottleneckIcon(bottleneck.type)}
-                        </div>
-                        <div>
+      {/* Tabs por área */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid grid-cols-5 w-full">
+          <TabsTrigger value="all" className="gap-2">
+            <Brain className="h-4 w-4" />
+            <span className="hidden sm:inline">Todos</span>
+            {insights.length > 0 && (
+              <Badge variant="secondary" className="h-5 px-1.5">{insights.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="conversation" className="gap-2">
+            <MessageSquare className="h-4 w-4" />
+            <span className="hidden sm:inline">Conversas</span>
+            {insights.filter(i => i.type === 'conversation').length > 0 && (
+              <Badge variant="secondary" className="h-5 px-1.5">{insights.filter(i => i.type === 'conversation').length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="agenda" className="gap-2">
+            <Calendar className="h-4 w-4" />
+            <span className="hidden sm:inline">Agenda</span>
+            {insights.filter(i => i.type === 'agenda').length > 0 && (
+              <Badge variant="secondary" className="h-5 px-1.5">{insights.filter(i => i.type === 'agenda').length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="task" className="gap-2">
+            <CheckSquare className="h-4 w-4" />
+            <span className="hidden sm:inline">Tarefas</span>
+            {insights.filter(i => i.type === 'task').length > 0 && (
+              <Badge variant="secondary" className="h-5 px-1.5">{insights.filter(i => i.type === 'task').length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="funnel" className="gap-2">
+            <GitBranch className="h-4 w-4" />
+            <span className="hidden sm:inline">Funil</span>
+            {insights.filter(i => i.type === 'funnel').length > 0 && (
+              <Badge variant="secondary" className="h-5 px-1.5">{insights.filter(i => i.type === 'funnel').length}</Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Content for each tab */}
+        <TabsContent value="all" className="space-y-4 mt-4">
+          <InsightsList 
+            insights={insights} 
+            getSeverityColor={getSeverityColor}
+            getInsightIcon={getInsightIcon}
+            getInsightTypeLabel={getInsightTypeLabel}
+            markAsSeen={markAsSeen}
+          />
+        </TabsContent>
+
+        <TabsContent value="conversation" className="space-y-4 mt-4">
+          <InsightsList 
+            insights={insights.filter(i => i.type === 'conversation')} 
+            getSeverityColor={getSeverityColor}
+            getInsightIcon={getInsightIcon}
+            getInsightTypeLabel={getInsightTypeLabel}
+            markAsSeen={markAsSeen}
+            emptyMessage="Nenhum alerta de conversas. O atendimento está fluindo bem!"
+          />
+        </TabsContent>
+
+        <TabsContent value="agenda" className="space-y-4 mt-4">
+          <InsightsList 
+            insights={insights.filter(i => i.type === 'agenda')} 
+            getSeverityColor={getSeverityColor}
+            getInsightIcon={getInsightIcon}
+            getInsightTypeLabel={getInsightTypeLabel}
+            markAsSeen={markAsSeen}
+            emptyMessage="Nenhum alerta de agenda. Compromissos em dia!"
+          />
+        </TabsContent>
+
+        <TabsContent value="task" className="space-y-4 mt-4">
+          <InsightsList 
+            insights={insights.filter(i => i.type === 'task')} 
+            getSeverityColor={getSeverityColor}
+            getInsightIcon={getInsightIcon}
+            getInsightTypeLabel={getInsightTypeLabel}
+            markAsSeen={markAsSeen}
+            emptyMessage="Nenhum alerta de tarefas. Time produtivo!"
+          />
+        </TabsContent>
+
+        <TabsContent value="funnel" className="space-y-4 mt-4">
+          {/* Funnel specific content with stage metrics */}
+          <div className="space-y-4">
+            {/* Funnel filter */}
+            <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Filtrar:</span>
+              <Select value={selectedFunilId} onValueChange={setSelectedFunilId}>
+                <SelectTrigger className="w-[200px] h-8">
+                  <SelectValue placeholder="Todos os Funis" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Funis</SelectItem>
+                  {funis.map((funil) => (
+                    <SelectItem key={funil.id} value={funil.id}>
+                      {funil.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Funnel insights */}
+            <InsightsList 
+              insights={insights.filter(i => i.type === 'funnel')} 
+              getSeverityColor={getSeverityColor}
+              getInsightIcon={getInsightIcon}
+              getInsightTypeLabel={getInsightTypeLabel}
+              markAsSeen={markAsSeen}
+              emptyMessage="Nenhum gargalo no funil. Leads fluindo bem!"
+            />
+
+            {/* Stage Metrics */}
+            {stageMetrics.length > 0 && (
+              <Card className="border-border/50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Target className="h-4 w-4 text-primary" />
+                    Métricas por Etapa
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {stageMetrics.map((metric) => (
+                      <div key={metric.etapaId} className="p-3 border border-border/50 rounded-lg space-y-2">
+                        <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <p className="font-medium">{bottleneck.etapaNome}</p>
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: metric.color }}
+                            />
+                            <span className="font-medium text-sm">{metric.etapaNome}</span>
                             <Badge variant="outline" className="text-xs">
-                              {bottleneck.funilNome}
+                              {metric.funilNome}
                             </Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            {bottleneck.type === 'time' && `${bottleneck.avgDaysInStage} dias em média`}
-                            {bottleneck.type === 'loss' && `${bottleneck.lossRate.toFixed(1)}% de perda`}
-                            {bottleneck.type === 'stuck' && `${bottleneck.leadsCount} leads acumulados`}
-                          </p>
+                          <span className="text-sm font-medium">{metric.leadsCount} leads</span>
                         </div>
-                      </div>
-                      <Badge variant="outline" className={getSeverityColor(bottleneck.severity)}>
-                        {getBottleneckLabel(bottleneck.type)}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                        
+                        <div className="grid grid-cols-3 gap-3 text-xs">
+                          <div>
+                            <p className="text-muted-foreground">Tempo Médio</p>
+                            <p className="font-medium flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {metric.avgDaysInStage} dias
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Taxa de Perda</p>
+                            <p className={`font-medium flex items-center gap-1 ${metric.lossRate > 30 ? 'text-red-500' : ''}`}>
+                              <TrendingDown className="h-3 w-3" />
+                              {metric.lossRate.toFixed(1)}%
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Distribuição</p>
+                            <p className="font-medium">
+                              {metric.conversionRate.toFixed(1)}%
+                            </p>
+                          </div>
+                        </div>
 
-          {/* Métricas por Etapa */}
-          <Card className="border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Target className="h-5 w-5 text-primary" />
-                Análise por Etapa
-              </CardTitle>
-              <CardDescription>
-                Métricas detalhadas de cada etapa do funil
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {stageMetrics.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p>Nenhuma etapa com leads encontrada</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {stageMetrics.map((metric) => (
-                    <div key={metric.etapaId} className="p-4 border border-border/50 rounded-lg space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: metric.color }}
-                          />
-                          <span className="font-medium">{metric.etapaNome}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {metric.funilNome}
-                          </Badge>
-                        </div>
-                        <span className="text-sm font-medium">{metric.leadsCount} leads</span>
+                        <Progress value={metric.conversionRate} className="h-1.5" />
                       </div>
-                      
-                      <div className="grid grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <p className="text-muted-foreground">Tempo Médio</p>
-                          <p className="font-medium flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {metric.avgDaysInStage} dias
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Taxa de Perda</p>
-                          <p className={`font-medium flex items-center gap-1 ${metric.lossRate > 30 ? 'text-red-500' : ''}`}>
-                            <TrendingDown className="h-3 w-3" />
-                            {metric.lossRate.toFixed(1)}%
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Distribuição</p>
-                          <p className="font-medium">
-                            {metric.conversionRate.toFixed(1)}%
-                          </p>
-                        </div>
-                      </div>
-
-                      <Progress 
-                        value={metric.conversionRate} 
-                        className="h-2"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Call to Action para aba IA */}
-          {bottlenecks.length > 0 && (
-            <Card className="border-primary/20 bg-primary/5">
-              <CardContent className="flex items-center justify-between py-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Lightbulb className="h-5 w-5 text-primary" />
+                    ))}
                   </div>
-                  <div>
-                    <p className="font-medium">Melhore seus processos com IA</p>
-                    <p className="text-sm text-muted-foreground">
-                      Clique em "Gerar Sugestões IA" para criar recomendações automáticas baseadas nos gargalos encontrados
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground" />
-              </CardContent>
-            </Card>
-          )}
-        </>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Call to Action */}
+      {insights.filter(i => i.severity === 'high').length > 0 && (
+        <Card className="border-red-500/20 bg-red-500/5">
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-red-500/10">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+              </div>
+              <div>
+                <p className="font-medium text-red-700 dark:text-red-400">
+                  {insights.filter(i => i.severity === 'high').length} problema(s) crítico(s) detectado(s)
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Gere sugestões da IA para receber recomendações de correção
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="h-5 w-5 text-muted-foreground" />
+          </CardContent>
+        </Card>
       )}
+    </div>
+  );
+}
+
+// Subcomponent for insights list
+interface InsightsListProps {
+  insights: AIInsight[];
+  getSeverityColor: (severity: string) => string;
+  getInsightIcon: (type: string) => React.ReactNode;
+  getInsightTypeLabel: (type: string) => string;
+  markAsSeen: (id: string) => void;
+  emptyMessage?: string;
+}
+
+function InsightsList({ 
+  insights, 
+  getSeverityColor, 
+  getInsightIcon,
+  getInsightTypeLabel,
+  markAsSeen,
+  emptyMessage = "Nenhum alerta encontrado. Tudo funcionando bem!"
+}: InsightsListProps) {
+  if (insights.length === 0) {
+    return (
+      <div className="flex items-center gap-3 p-4 bg-green-500/10 rounded-lg border border-green-500/20">
+        <CheckCircle2 className="h-5 w-5 text-green-500" />
+        <div>
+          <p className="font-medium text-green-700 dark:text-green-400">Tudo em ordem!</p>
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-3">
+      {insights.map((insight) => (
+        <div 
+          key={insight.id}
+          className={`flex items-start justify-between p-4 rounded-lg border transition-all ${getSeverityColor(insight.severity)} ${!insight.seen ? 'ring-2 ring-primary/20' : ''}`}
+          onClick={() => markAsSeen(insight.id)}
+        >
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-lg bg-background flex-shrink-0">
+              {getInsightIcon(insight.type)}
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-medium">{insight.title}</p>
+                <Badge variant="outline" className="text-xs">
+                  {getInsightTypeLabel(insight.type)}
+                </Badge>
+                {!insight.seen && (
+                  <Badge variant="default" className="text-xs bg-primary">Novo</Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">{insight.description}</p>
+              <p className="text-xs text-muted-foreground">
+                {new Date(insight.createdAt).toLocaleString('pt-BR')}
+              </p>
+            </div>
+          </div>
+          <Badge variant="outline" className={getSeverityColor(insight.severity)}>
+            {insight.severity === 'high' ? 'Crítico' : insight.severity === 'medium' ? 'Médio' : 'Baixo'}
+          </Badge>
+        </div>
+      ))}
     </div>
   );
 }
