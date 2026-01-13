@@ -780,6 +780,27 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
         </div>
 
 
+        {/* Modais sempre montados (fora do bloco expandido para funcionarem corretamente) */}
+        <AgendaModal
+          open={agendaModalOpen}
+          onOpenChange={setAgendaModalOpen}
+          lead={lead}
+          onAgendamentoCriado={() => {
+            carregarProximasAtividades();
+            onLeadMoved?.();
+          }}
+        />
+
+        <TarefaModal
+          open={tarefaModalOpen}
+          onOpenChange={setTarefaModalOpen}
+          lead={lead}
+          onTarefaCriada={() => {
+            carregarProximasAtividades();
+            onLeadMoved?.();
+          }}
+        />
+
         {/* Conteúdo expandido */}
         {isExpanded && (
           <div className="space-y-3 border-t pt-3" onClick={(e) => e.stopPropagation()}>
@@ -793,26 +814,6 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
                 <EditarLeadDialog lead={lead} onLeadUpdated={onLeadMoved || (() => {})} />
               </div>
             </div>
-
-            <AgendaModal
-              open={agendaModalOpen}
-              onOpenChange={setAgendaModalOpen}
-              lead={lead}
-              onAgendamentoCriado={() => {
-                carregarProximasAtividades();
-                onLeadMoved?.();
-              }}
-            />
-
-            <TarefaModal
-              open={tarefaModalOpen}
-              onOpenChange={setTarefaModalOpen}
-              lead={lead}
-              onTarefaCriada={() => {
-                carregarProximasAtividades();
-                onLeadMoved?.();
-              }}
-            />
 
             {/* Informações adicionais - só no modo expandido */}
             {lead.company && (
