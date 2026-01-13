@@ -86,7 +86,8 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const authHeader = req.headers.get('Authorization')!;
 
     if (!authHeader) {
@@ -97,11 +98,15 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey, {
+    // Cliente com token do usuário para autenticação
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
+    
+    // Cliente com service role para bypass RLS (após validação manual de company_id)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
     if (authError || !user) {
       console.error('❌ [API-TAREFAS] Erro de autenticação:', authError);
       return new Response(
@@ -425,21 +430,40 @@ serve(async (req) => {
           updateData.status = 'concluido';
         }
 
-        const { error } = await supabase
+        console.log('📝 [API-TAREFAS] Movendo tarefa:', { 
+          task_id: validatedData.task_id, 
+          nova_coluna_id: validatedData.nova_coluna_id,
+          company_id: companyId,
+          updateData 
+        });
+
+        const { data: updatedTask, error } = await supabase
           .from("tasks")
           .update(updateData)
           .eq("id", validatedData.task_id)
-          .eq("company_id", companyId);
+          .eq("company_id", companyId)
+          .select()
+          .single();
 
         if (error) {
-          console.error("Error moving task:", error);
+          console.error("❌ [API-TAREFAS] Error moving task:", error);
           return new Response(
-            JSON.stringify({ error: "Erro ao mover tarefa", code: "DATABASE_ERROR" }),
+            JSON.stringify({ error: "Erro ao mover tarefa", code: "DATABASE_ERROR", details: error.message }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        return new Response(JSON.stringify({ success: true, isCompleted: isGanhoColumn }), {
+        if (!updatedTask) {
+          console.error("❌ [API-TAREFAS] Nenhuma tarefa foi atualizada - pode ser problema de company_id ou tarefa não existe");
+          return new Response(
+            JSON.stringify({ error: "Tarefa não encontrada ou sem permissão", code: "NOT_FOUND" }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log('✅ [API-TAREFAS] Tarefa movida com sucesso:', updatedTask.id);
+
+        return new Response(JSON.stringify({ success: true, isCompleted: isGanhoColumn, data: updatedTask }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
