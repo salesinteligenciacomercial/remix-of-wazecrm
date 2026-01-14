@@ -786,6 +786,244 @@ export type Database = {
           },
         ]
       }
+      ia_cadence_rules: {
+        Row: {
+          avoid_hours: Json | null
+          best_contact_hours: Json | null
+          channels_sequence: Json | null
+          company_id: string
+          created_at: string | null
+          days_between_contacts: number | null
+          description: string | null
+          escalate_after_attempts: number | null
+          escalate_to_user_id: string | null
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          max_attempts: number | null
+          name: string
+          priority: number | null
+          target_funnels: string[] | null
+          target_stages: string[] | null
+          target_tags: string[] | null
+          target_temperature: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          avoid_hours?: Json | null
+          best_contact_hours?: Json | null
+          channels_sequence?: Json | null
+          company_id: string
+          created_at?: string | null
+          days_between_contacts?: number | null
+          description?: string | null
+          escalate_after_attempts?: number | null
+          escalate_to_user_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          max_attempts?: number | null
+          name: string
+          priority?: number | null
+          target_funnels?: string[] | null
+          target_stages?: string[] | null
+          target_tags?: string[] | null
+          target_temperature?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          avoid_hours?: Json | null
+          best_contact_hours?: Json | null
+          channels_sequence?: Json | null
+          company_id?: string
+          created_at?: string | null
+          days_between_contacts?: number | null
+          description?: string | null
+          escalate_after_attempts?: number | null
+          escalate_to_user_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          max_attempts?: number | null
+          name?: string
+          priority?: number | null
+          target_funnels?: string[] | null
+          target_stages?: string[] | null
+          target_tags?: string[] | null
+          target_temperature?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ia_cadence_rules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ia_commercial_alerts: {
+        Row: {
+          action_data: Json | null
+          actioned_at: string | null
+          actioned_by: string | null
+          alert_type: string
+          company_id: string
+          conversation_id: string | null
+          created_at: string | null
+          description: string | null
+          expires_at: string | null
+          id: string
+          lead_id: string | null
+          recommended_action: string | null
+          seen_at: string | null
+          severity: string | null
+          status: string | null
+          title: string
+        }
+        Insert: {
+          action_data?: Json | null
+          actioned_at?: string | null
+          actioned_by?: string | null
+          alert_type: string
+          company_id: string
+          conversation_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          lead_id?: string | null
+          recommended_action?: string | null
+          seen_at?: string | null
+          severity?: string | null
+          status?: string | null
+          title: string
+        }
+        Update: {
+          action_data?: Json | null
+          actioned_at?: string | null
+          actioned_by?: string | null
+          alert_type?: string
+          company_id?: string
+          conversation_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          lead_id?: string | null
+          recommended_action?: string | null
+          seen_at?: string | null
+          severity?: string | null
+          status?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ia_commercial_alerts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ia_commercial_alerts_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ia_commercial_metrics: {
+        Row: {
+          avg_engagement_score: number | null
+          avg_response_rate: number | null
+          avg_response_time_minutes: number | null
+          company_id: string
+          completed_followups: number | null
+          conversion_rate: number | null
+          created_at: string | null
+          id: string
+          leads_cold: number | null
+          leads_hot: number | null
+          leads_warm: number | null
+          metric_date: string
+          metrics_data: Json | null
+          opportunities_detected: number | null
+          overdue_followups: number | null
+          pending_followups: number | null
+          risks_detected: number | null
+          top_objections: Json | null
+          total_calls_made: number | null
+          total_leads_monitored: number | null
+          total_meetings_scheduled: number | null
+          total_messages_received: number | null
+          total_messages_sent: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          avg_engagement_score?: number | null
+          avg_response_rate?: number | null
+          avg_response_time_minutes?: number | null
+          company_id: string
+          completed_followups?: number | null
+          conversion_rate?: number | null
+          created_at?: string | null
+          id?: string
+          leads_cold?: number | null
+          leads_hot?: number | null
+          leads_warm?: number | null
+          metric_date?: string
+          metrics_data?: Json | null
+          opportunities_detected?: number | null
+          overdue_followups?: number | null
+          pending_followups?: number | null
+          risks_detected?: number | null
+          top_objections?: Json | null
+          total_calls_made?: number | null
+          total_leads_monitored?: number | null
+          total_meetings_scheduled?: number | null
+          total_messages_received?: number | null
+          total_messages_sent?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          avg_engagement_score?: number | null
+          avg_response_rate?: number | null
+          avg_response_time_minutes?: number | null
+          company_id?: string
+          completed_followups?: number | null
+          conversion_rate?: number | null
+          created_at?: string | null
+          id?: string
+          leads_cold?: number | null
+          leads_hot?: number | null
+          leads_warm?: number | null
+          metric_date?: string
+          metrics_data?: Json | null
+          opportunities_detected?: number | null
+          overdue_followups?: number | null
+          pending_followups?: number | null
+          risks_detected?: number | null
+          top_objections?: Json | null
+          total_calls_made?: number | null
+          total_leads_monitored?: number | null
+          total_meetings_scheduled?: number | null
+          total_messages_received?: number | null
+          total_messages_sent?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ia_commercial_metrics_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ia_configurations: {
         Row: {
           auto_optimization: boolean | null
@@ -842,6 +1080,105 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      ia_lead_intelligence: {
+        Row: {
+          analysis_version: number | null
+          avg_response_time_minutes: number | null
+          company_id: string
+          conversation_sentiment: string | null
+          created_at: string | null
+          days_since_last_contact: number | null
+          decision_makers: Json | null
+          detected_intent: string | null
+          engagement_score: number | null
+          id: string
+          interests: Json | null
+          key_topics: Json | null
+          last_analysis_at: string | null
+          last_message_summary: string | null
+          lead_id: string
+          next_action_date: string | null
+          objections: Json | null
+          purchase_intent: number | null
+          recommended_action: string | null
+          recommended_channel: string | null
+          response_rate: number | null
+          suggested_script: string | null
+          temperature: string | null
+          total_contact_attempts: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          analysis_version?: number | null
+          avg_response_time_minutes?: number | null
+          company_id: string
+          conversation_sentiment?: string | null
+          created_at?: string | null
+          days_since_last_contact?: number | null
+          decision_makers?: Json | null
+          detected_intent?: string | null
+          engagement_score?: number | null
+          id?: string
+          interests?: Json | null
+          key_topics?: Json | null
+          last_analysis_at?: string | null
+          last_message_summary?: string | null
+          lead_id: string
+          next_action_date?: string | null
+          objections?: Json | null
+          purchase_intent?: number | null
+          recommended_action?: string | null
+          recommended_channel?: string | null
+          response_rate?: number | null
+          suggested_script?: string | null
+          temperature?: string | null
+          total_contact_attempts?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          analysis_version?: number | null
+          avg_response_time_minutes?: number | null
+          company_id?: string
+          conversation_sentiment?: string | null
+          created_at?: string | null
+          days_since_last_contact?: number | null
+          decision_makers?: Json | null
+          detected_intent?: string | null
+          engagement_score?: number | null
+          id?: string
+          interests?: Json | null
+          key_topics?: Json | null
+          last_analysis_at?: string | null
+          last_message_summary?: string | null
+          lead_id?: string
+          next_action_date?: string | null
+          objections?: Json | null
+          purchase_intent?: number | null
+          recommended_action?: string | null
+          recommended_channel?: string | null
+          response_rate?: number | null
+          suggested_script?: string | null
+          temperature?: string | null
+          total_contact_attempts?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ia_lead_intelligence_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ia_lead_intelligence_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ia_metrics: {
         Row: {
@@ -980,6 +1317,74 @@ export type Database = {
           status?: string | null
         }
         Relationships: []
+      }
+      ia_scripts: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          description: string | null
+          example_usage: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          script_template: string
+          success_count: number | null
+          success_rate: number | null
+          tags: string[] | null
+          target_channel: string | null
+          target_temperature: string[] | null
+          times_used: number | null
+          trigger_context: string
+          updated_at: string | null
+          variables: Json | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          description?: string | null
+          example_usage?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          script_template: string
+          success_count?: number | null
+          success_rate?: number | null
+          tags?: string[] | null
+          target_channel?: string | null
+          target_temperature?: string[] | null
+          times_used?: number | null
+          trigger_context: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          description?: string | null
+          example_usage?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          script_template?: string
+          success_count?: number | null
+          success_rate?: number | null
+          tags?: string[] | null
+          target_channel?: string | null
+          target_temperature?: string[] | null
+          times_used?: number | null
+          trigger_context?: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ia_scripts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ia_training_data: {
         Row: {
