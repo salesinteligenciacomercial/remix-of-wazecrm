@@ -458,26 +458,96 @@ export default function Tarefas() {
 
     // Realtime: tasks (atualizações incrementais)
     // ✅ CORRIGIDO: Usa campos reais do banco (checklist, tags, comments, attachments) sem fallback
-    const formatTask = (task: any) => {
+    // ✅ MELHORADO: Buscar nomes dos responsáveis assincronamente
+    const formatTaskWithResponsaveis = async (task: any): Promise<Task> => {
+      let responsaveis_names: string[] = [];
+      let assignee_name = (task as any).assignee?.full_name;
+      let lead_name = (task as any).lead?.nome || (task as any).lead?.name || task.lead_name;
+      
+      // Buscar nomes dos responsáveis se houver IDs
+      if (Array.isArray(task.responsaveis) && task.responsaveis.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', task.responsaveis);
+        
+        if (profiles) {
+          responsaveis_names = task.responsaveis
+            .map((id: string) => profiles.find(p => p.id === id)?.full_name)
+            .filter(Boolean);
+        }
+      }
+      
+      // Buscar nome do assignee se não veio no relacionamento
+      if (!assignee_name && task.assignee_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', task.assignee_id)
+          .maybeSingle();
+        assignee_name = profile?.full_name;
+      }
+      
+      // Buscar nome do lead se não veio no relacionamento
+      if (!lead_name && task.lead_id) {
+        const { data: lead } = await supabase
+          .from('leads')
+          .select('name')
+          .eq('id', task.lead_id)
+          .maybeSingle();
+        lead_name = lead?.name;
+      }
+      
       return {
         ...task,
         checklist: task.checklist ?? [],
         tags: task.tags ?? [],
         comments: task.comments ?? [],
         attachments: task.attachments ?? [],
-        assignee_name: (task as any).assignee?.full_name,
-        lead_name: (task as any).lead?.nome || task.lead_name // ✅ CORRIGIDO: usar 'nome' em vez de 'name'
-      } as any;
+        assignee_name,
+        responsaveis_names,
+        lead_name
+      } as Task;
     };
+
+    // Formato simplificado para fallback (sem busca de nomes)
+    const formatTaskSimple = (task: any, existingTask?: Task): Task => {
+      return {
+        ...task,
+        checklist: task.checklist ?? [],
+        tags: task.tags ?? [],
+        comments: task.comments ?? [],
+        attachments: task.attachments ?? [],
+        assignee_name: existingTask?.assignee_name,
+        responsaveis_names: existingTask?.responsaveis_names ?? [],
+        lead_name: existingTask?.lead_name
+      } as Task;
+    };
+
     const tasksChannel = supabase.channel('tasks_board_realtime').on('postgres_changes', {
       event: '*',
       schema: 'public',
       table: 'tasks'
-    }, (payload: any) => {
+    }, async (payload: any) => {
       if (payload.eventType === 'INSERT') {
-        setTasks(prev => [formatTask(payload.new), ...prev]);
+        // Para INSERT, buscar nomes dos responsáveis
+        const formattedTask = await formatTaskWithResponsaveis(payload.new);
+        setTasks(prev => [formattedTask, ...prev]);
       } else if (payload.eventType === 'UPDATE') {
-        setTasks(prev => prev.map(t => t.id === payload.new.id ? formatTask(payload.new) : t));
+        // Para UPDATE, atualizar com dados existentes primeiro, depois buscar nomes
+        setTasks(prev => prev.map(t => {
+          if (t.id === payload.new.id) {
+            // Preservar nomes existentes inicialmente
+            return formatTaskSimple(payload.new, t);
+          }
+          return t;
+        }));
+        // Buscar nomes atualizados em background
+        formatTaskWithResponsaveis(payload.new).then(formattedTask => {
+          setTasks(prev => prev.map(t => 
+            t.id === formattedTask.id ? formattedTask : t
+          ));
+        });
       } else if (payload.eventType === 'DELETE') {
         setTasks(prev => prev.filter(t => t.id !== payload.old.id));
       }
