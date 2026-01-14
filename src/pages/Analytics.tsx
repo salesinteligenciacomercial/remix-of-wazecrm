@@ -308,14 +308,41 @@ export default function Analytics() {
     }
   };
   const fetchFilteredStats = async () => {
-    await Promise.all([fetchReportStats(), fetchCommunicationStats(), fetchProductivityStats()]);
+    await Promise.all([fetchStats(), fetchReportStats(), fetchCommunicationStats(), fetchProductivityStats()]);
   };
   const fetchStats = async () => {
     try {
-      // Leads
-      const {
-        data: leads
-      } = await supabase.from("leads").select("value, status, etapa_id");
+      // ✅ FIX: Calcular data de início baseada no período global
+      let startDate: Date | null = null;
+      if (globalFilters.period !== 'all') {
+        const now = new Date();
+        switch (globalFilters.period) {
+          case 'today':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            break;
+          case 'week':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case 'month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            break;
+          case 'quarter':
+            const quarterStart = Math.floor(now.getMonth() / 3) * 3;
+            startDate = new Date(now.getFullYear(), quarterStart, 1);
+            break;
+          case 'year':
+            startDate = new Date(now.getFullYear(), 0, 1);
+            break;
+        }
+      }
+
+      // Leads - com filtro de período
+      let leadsQuery = supabase.from("leads").select("value, status, etapa_id, created_at");
+      if (startDate) {
+        leadsQuery = leadsQuery.gte('created_at', startDate.toISOString());
+      }
+      const { data: leads } = await leadsQuery;
+
       const totalLeads = leads?.length || 0;
       const totalValue = leads?.reduce((sum, lead) => sum + (Number(lead.value) || 0), 0) || 0;
       const activeDeals = leads?.filter(l => l.status !== "perdido" && l.status !== "ganho").length || 0;
@@ -323,15 +350,19 @@ export default function Analytics() {
       const conversionRate = totalLeads > 0 ? wonDeals / totalLeads * 100 : 0;
 
       // ✅ CORREÇÃO: Contar CONVERSAS ÚNICAS (números únicos) APENAS da empresa do usuário
-      let conversasQuery = supabase.from("conversas").select("numero, telefone_formatado, is_group");
+      let conversasQuery = supabase.from("conversas").select("numero, telefone_formatado, is_group, created_at");
+
+      // Aplicar filtro de período
+      if (startDate) {
+        conversasQuery = conversasQuery.gte('created_at', startDate.toISOString());
+      }
 
       // Aplicar filtro de empresa se disponível
       if (userCompanyId) {
         conversasQuery = conversasQuery.eq('company_id', userCompanyId);
       }
-      const {
-        data: conversasData
-      } = await conversasQuery;
+      const { data: conversasData } = await conversasQuery;
+
       const numerosUnicos = new Set<string>();
       conversasData?.forEach((c: any) => {
         // Incluir grupos também na contagem
@@ -343,31 +374,28 @@ export default function Analytics() {
       });
       const conversasCount = numerosUnicos.size;
 
-      // Compromissos
-      const {
-        count: compromissosCount
-      } = await supabase.from("compromissos").select("*", {
-        count: 'exact',
-        head: true
-      });
+      // Compromissos - com filtro de período
+      let compromissosQuery = supabase.from("compromissos").select("*", { count: 'exact', head: true });
+      if (startDate) {
+        compromissosQuery = compromissosQuery.gte('data_hora_inicio', startDate.toISOString());
+      }
+      const { count: compromissosCount } = await compromissosQuery;
 
-      // Tarefas
-      const {
-        count: tarefasCount
-      } = await supabase.from("tasks").select("*", {
-        count: 'exact',
-        head: true
-      });
+      // Tarefas - com filtro de período
+      let tarefasQuery = supabase.from("tasks").select("*", { count: 'exact', head: true });
+      if (startDate) {
+        tarefasQuery = tarefasQuery.gte('created_at', startDate.toISOString());
+      }
+      const { count: tarefasCount } = await tarefasQuery;
 
-      // Mensagens IA
-      const {
-        count: iaCount
-      } = await supabase.from("ia_training_data").select("*", {
-        count: 'exact',
-        head: true
-      });
+      // Mensagens IA - com filtro de período
+      let iaQuery = supabase.from("ia_training_data").select("*", { count: 'exact', head: true });
+      if (startDate) {
+        iaQuery = iaQuery.gte('created_at', startDate.toISOString());
+      }
+      const { count: iaCount } = await iaQuery;
 
-      // Carregar funis disponíveis
+      // Carregar funis disponíveis (sem filtro de período)
       let funisData: any[] | null = null;
       let funisError: any = null;
       try {
@@ -387,6 +415,9 @@ export default function Analytics() {
       } else if (selectedFunil && !funisData.some((f: any) => f.id === selectedFunil)) {
         setSelectedFunil(null);
       }
+
+      console.log(`📊 [Analytics] Stats carregados - Período: ${globalFilters.period}, Leads: ${totalLeads}, Valor: ${totalValue}`);
+      
       setStats({
         totalLeads,
         totalValue,
