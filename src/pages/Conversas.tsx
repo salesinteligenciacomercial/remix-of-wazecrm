@@ -396,6 +396,9 @@ function Conversas() {
   const [cleanHistoryDialogOpen, setCleanHistoryDialogOpen] = useState(false);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [attachmentsCount, setAttachmentsCount] = useState(0);
+  const [valorVendaDialogOpen, setValorVendaDialogOpen] = useState(false);
+  const [valorVendaInput, setValorVendaInput] = useState("");
+  const [salvandoValor, setSalvandoValor] = useState(false);
   const [cleaningHistory, setCleaningHistory] = useState(false);
   const [cleaningProgress, setCleaningProgress] = useState(0);
   const [cleaningStats, setCleaningStats] = useState({
@@ -7029,6 +7032,46 @@ function Conversas() {
       toast.error('Erro ao processar lead');
     }
   };
+
+  // ✅ Salvar valor da venda rapidamente (sem abrir formulário completo)
+  const handleSalvarValorVenda = async () => {
+    if (!leadVinculado?.id) {
+      toast.error('Salve o lead no CRM primeiro');
+      return;
+    }
+    
+    setSalvandoValor(true);
+    const valorNumerico = valorVendaInput ? parseFloat(valorVendaInput.replace(/[^\d.,]/g, '').replace(',', '.')) : 0;
+    
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .update({ value: valorNumerico })
+        .eq('id', leadVinculado.id);
+      
+      if (error) throw error;
+      
+      // Atualizar estado local
+      setLeadVinculado({ ...leadVinculado, value: valorNumerico });
+      
+      // Atualizar a conversa selecionada
+      if (selectedConv) {
+        setSelectedConv(prev => prev ? {
+          ...prev,
+          valor: valorNumerico ? `R$ ${Number(valorNumerico).toLocaleString('pt-BR')}` : undefined
+        } : null);
+      }
+      
+      setValorVendaDialogOpen(false);
+      toast.success('Valor atualizado com sucesso!');
+    } catch (err) {
+      console.error('Erro ao salvar valor:', err);
+      toast.error('Erro ao salvar valor');
+    } finally {
+      setSalvandoValor(false);
+    }
+  };
+
   const handleEditName = async (conversationId: string) => {
     const conv = conversations.find(c => c.id === conversationId);
     if (!conv) return;
@@ -8091,6 +8134,21 @@ function Conversas() {
                     }} triggerButton={<Button size="sm" variant="outline" className="w-full">
                                   <FileText className="h-3 w-3 mr-2" /> Editar Informações
                                 </Button>} />
+                            {/* ✅ NOVO: Botão rápido para adicionar valor da venda */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full gap-2 mt-2"
+                              onClick={() => {
+                                setValorVendaInput(leadVinculado?.value?.toString() || "");
+                                setValorVendaDialogOpen(true);
+                              }}
+                            >
+                              <DollarSign className="h-3 w-3 text-green-600" />
+                              {leadVinculado?.value 
+                                ? `Valor: R$ ${Number(leadVinculado.value).toLocaleString("pt-BR")}` 
+                                : "Adicionar Valor da Venda"}
+                            </Button>
                           </> : <div className="space-y-2">
                             <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-amber-500/10 text-amber-600 border-amber-500/20">
                               <AlertCircle className="h-3 w-3" />
@@ -9596,6 +9654,54 @@ function Conversas() {
             leadName={leadVinculado.name || selectedConv.contactName}
           />
         </>}
+
+      {/* Dialog: Valor da Venda Rápido */}
+      <Dialog open={valorVendaDialogOpen} onOpenChange={setValorVendaDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-green-600" />
+              Valor da Venda / Negociação
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label htmlFor="valorVendaConversas">Valor (R$)</Label>
+              <Input
+                id="valorVendaConversas"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0,00"
+                value={valorVendaInput}
+                onChange={(e) => setValorVendaInput(e.target.value)}
+                className="text-lg font-medium"
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Digite o valor estimado ou fechado da negociação
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setValorVendaDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleSalvarValorVenda}
+                className="bg-green-600 hover:bg-green-700"
+                disabled={salvandoValor}
+              >
+                {salvandoValor ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                )}
+                Salvar Valor
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>;
 }
 export default Conversas;
