@@ -529,16 +529,32 @@ export default function Tarefas() {
       schema: 'public',
       table: 'tasks'
     }, async (payload: any) => {
+      // 🔒 CRÍTICO: Ignorar eventos de UPDATE durante operações de drag
+      // para evitar race condition que sobrescreve a atualização otimista
+      if (payload.eventType === 'UPDATE' && isMovingRef.current) {
+        console.log('[REALTIME] 🔒 Ignorando UPDATE de tarefa durante drag:', payload.new.id);
+        return;
+      }
+
       if (payload.eventType === 'INSERT') {
         // Para INSERT, buscar nomes dos responsáveis
         const formattedTask = await formatTaskWithResponsaveis(payload.new);
         setTasks(prev => [formattedTask, ...prev]);
       } else if (payload.eventType === 'UPDATE') {
-        // Para UPDATE, atualizar com dados existentes primeiro, depois buscar nomes
+        // Para UPDATE, verificar se o column_id do payload corresponde a uma atualização válida
+        // Isso evita que eventos antigos (com column_id errado) sobrescrevam a atualização otimista
         setTasks(prev => prev.map(t => {
           if (t.id === payload.new.id) {
-            // Preservar nomes existentes inicialmente
-            return formatTaskSimple(payload.new, t);
+            // ✅ MELHORADO: Usar column_id do payload.new (que vem do banco)
+            // mas só se não estiver em operação de drag
+            const updatedTask = formatTaskSimple(payload.new, t);
+            console.log('[REALTIME] 📡 Atualizando tarefa:', {
+              taskId: t.id,
+              oldColumnId: t.column_id,
+              newColumnId: payload.new.column_id,
+              isMoving: isMovingRef.current
+            });
+            return updatedTask;
           }
           return t;
         }));
@@ -1152,6 +1168,10 @@ export default function Tarefas() {
                           targetColumn.nome?.toLowerCase().includes('concluido') ||
                           targetColumn.nome?.includes('✅');
 
+    // 🔒 CRÍTICO: Bloquear realtime durante a operação para evitar race condition
+    console.log('[Drag&Drop] 🔒 Bloqueando realtime durante movimentação de tarefa...');
+    isMovingRef.current = true;
+
     // ✅ MELHORADO: Atualização otimista com validação
     setTasks(prev => prev.map(t => {
       if (t.id === taskId) {
@@ -1184,6 +1204,7 @@ export default function Tarefas() {
         } : t));
         toast.error("Não autenticado");
         setActiveTaskId(null);
+        isMovingRef.current = false; // 🔓 Desbloquear
         return;
       }
       const response = await supabase.functions.invoke("api-tarefas", {
@@ -1245,6 +1266,10 @@ export default function Tarefas() {
       toast.error(error?.message || "Erro ao mover tarefa");
       // Reverter para estado consistente via recarga somente em erro
       carregarDados();
+    } finally {
+      // 🔓 CRÍTICO: Sempre desbloquear realtime no finally para garantir
+      console.log('[Drag&Drop] 🔓 Desbloqueando realtime após movimentação de tarefa');
+      isMovingRef.current = false;
     }
     setActiveTaskId(null);
     lastOverColumnRef.current = null; // ✅ Limpar ref após drag
@@ -1747,6 +1772,9 @@ export default function Tarefas() {
           <SortableContext items={columnsFiltradas.map(c => c.id)} strategy={horizontalListSortingStrategy}>
             <div ref={scrollContainerRef} className="flex overflow-x-auto gap-4 pb-4 min-h-[500px] scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-muted/20 hover:scrollbar-thumb-primary/50 scroll-smooth">
               {columnsFiltradas.map(column => <SortableColumn key={column.id} column={column} tasksByColumn={tasksByColumn} tasksPerColumn={tasksPerColumn} taskCountsByColumn={taskCountsByColumn} TASKS_PER_PAGE={TASKS_PER_PAGE} tasks={tasks} loadingMore={loadingMore} carregarDados={carregarDados} loadMoreTasks={loadMoreTasks} selectedBoard={selectedBoard} emitGlobalEvent={emitGlobalEvent} allColumns={columnsFiltradas} onMoveTask={async (taskId, newColumnId) => {
+                // 🔒 CRÍTICO: Bloquear realtime durante a operação para evitar race condition
+                console.log('[onMoveTask] 🔒 Bloqueando realtime durante movimentação manual...');
+                isMovingRef.current = true;
                 try {
                   // Atualização otimista
                   setTasks(prev => prev.map(t => t.id === taskId ? { ...t, column_id: newColumnId } : t));
@@ -1768,6 +1796,10 @@ export default function Tarefas() {
                   console.error("Erro ao mover tarefa:", error);
                   toast.error(error?.message || "Erro ao mover tarefa");
                   carregarDados(); // Recarregar para reverter
+                } finally {
+                  // 🔓 CRÍTICO: Sempre desbloquear realtime no finally
+                  console.log('[onMoveTask] 🔓 Desbloqueando realtime após movimentação manual');
+                  isMovingRef.current = false;
                 }
               }} />)}
             {/* Botão para adicionar nova coluna - apenas admin pode criar colunas */}
