@@ -7,6 +7,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Cache em memória para evitar chamadas repetidas
+const profilePictureCache = new Map<string, { url: string | null; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
 // Buscar foto de perfil via Evolution API
 async function getEvolutionProfilePicture(
   apiUrl: string,
@@ -19,27 +23,71 @@ async function getEvolutionProfilePicture(
     const url = `${apiUrl}/chat/fetchProfilePictureUrl/${instanceName}`;
     console.log('📗 [EVOLUTION] Buscando foto de perfil:', url);
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': apiKey,
-      },
-      body: JSON.stringify({ 
-        number: isGroup ? String(phoneNumber) : String(phoneNumber).replace(/\D/g, '')
-      }),
-    });
+    // Tentar múltiplas variações do número
+    const numberVariations = isGroup 
+      ? [String(phoneNumber)]
+      : [
+          String(phoneNumber).replace(/\D/g, ''),
+          String(phoneNumber),
+          // Com código do país
+          String(phoneNumber).replace(/\D/g, '').replace(/^55/, ''),
+          // Sem código do país  
+          '55' + String(phoneNumber).replace(/\D/g, '').replace(/^55/, '')
+        ];
 
-    if (!response.ok) {
-      console.log('⚠️ [EVOLUTION] Resposta não OK:', response.status);
-      return null;
+    for (const numberToTry of numberVariations) {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': apiKey,
+          },
+          body: JSON.stringify({ number: numberToTry }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const pictureUrl = data.profilePictureUrl || data.url || data.profilePicture || data.picture;
+          if (pictureUrl) {
+            console.log('✅ [EVOLUTION] Foto encontrada para variação:', numberToTry);
+            return pictureUrl;
+          }
+        }
+      } catch (varError) {
+        // Ignorar erro individual e tentar próxima variação
+        console.log(`⚠️ [EVOLUTION] Variação ${numberToTry} falhou, tentando próxima...`);
+      }
     }
 
-    const data = await response.json();
-    return data.profilePictureUrl || data.url || null;
+    console.log('⚠️ [EVOLUTION] Nenhuma variação retornou foto');
+    return null;
   } catch (error) {
     console.error('❌ [EVOLUTION] Erro ao buscar foto de perfil:', error);
     return null;
+  }
+}
+
+// Salvar foto no lead para cache persistente
+async function saveProfilePictureToLead(
+  supabase: any,
+  companyId: string,
+  phoneNumber: string,
+  profilePictureUrl: string
+): Promise<void> {
+  try {
+    const formattedNumber = String(phoneNumber).replace(/\D/g, '');
+    
+    // Atualizar lead se existir
+    await supabase
+      .from('leads')
+      .update({ profile_picture_url: profilePictureUrl })
+      .eq('company_id', companyId)
+      .or(`telefone.ilike.%${formattedNumber}%,phone.ilike.%${formattedNumber}%`);
+      
+    console.log('💾 [PROFILE-PICTURE] Foto salva no lead para cache persistente');
+  } catch (error) {
+    console.log('⚠️ [PROFILE-PICTURE] Não foi possível salvar foto no lead:', error);
   }
 }
 
@@ -64,86 +112,101 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
-    const globalApiKey = Deno.env.get('EVOLUTION_API_KEY');
-    const defaultInstance = Deno.env.get('EVOLUTION_INSTANCE');
 
     // Verificar se é um grupo (termina com @g.us)
     const isGroup = /@g\.us$/.test(String(number));
     console.log('📋 Tipo de contato:', isGroup ? 'GRUPO' : 'CONTATO INDIVIDUAL');
 
+    // Verificar cache em memória
+    const cacheKey = `${company_id || 'global'}:${number}`;
+    const cached = profilePictureCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      console.log('📦 [CACHE] Retornando foto do cache em memória');
+      return new Response(
+        JSON.stringify({ profilePictureUrl: cached.url }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     let profilePictureUrl: string | null = null;
+    let supabase: any = null;
+
+    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    }
 
     // Primeiro, tentar buscar foto de perfil salva no lead (capturada via webhook Meta)
-    if (company_id && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && !isGroup) {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-      
+    if (company_id && supabase && !isGroup) {
       const formattedNumber = String(number).replace(/\D/g, '');
       console.log('🔍 [PROFILE-PICTURE] Buscando foto de perfil no lead para:', formattedNumber);
       
-      const { data: lead } = await supabase
-        .from('leads')
-        .select('profile_picture_url')
-        .eq('company_id', company_id)
-        .or(`telefone.ilike.%${formattedNumber}%,phone.ilike.%${formattedNumber}%`)
-        .not('profile_picture_url', 'is', null)
-        .limit(1)
-        .maybeSingle();
+      // Buscar com múltiplas variações de telefone
+      const phoneVariations = [
+        formattedNumber,
+        formattedNumber.replace(/^55/, ''),
+        '55' + formattedNumber.replace(/^55/, ''),
+        formattedNumber.slice(-9),
+        formattedNumber.slice(-8)
+      ];
       
-      if (lead?.profile_picture_url) {
-        console.log('✅ [PROFILE-PICTURE] Foto encontrada no lead (Meta webhook)');
-        profilePictureUrl = lead.profile_picture_url;
+      for (const phoneVar of phoneVariations) {
+        if (phoneVar.length >= 8) {
+          const { data: lead } = await supabase
+            .from('leads')
+            .select('profile_picture_url')
+            .eq('company_id', company_id)
+            .or(`telefone.ilike.%${phoneVar}%,phone.ilike.%${phoneVar}%`)
+            .not('profile_picture_url', 'is', null)
+            .limit(1)
+            .maybeSingle();
+          
+          if (lead?.profile_picture_url) {
+            console.log('✅ [PROFILE-PICTURE] Foto encontrada no lead com variação:', phoneVar);
+            profilePictureUrl = lead.profile_picture_url;
+            break;
+          }
+        }
       }
     }
 
-    // Se não encontrou no lead, buscar via APIs
-    if (!profilePictureUrl && company_id && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-      
+    // Se não encontrou no lead, buscar via Evolution API da subconta
+    if (!profilePictureUrl && company_id && supabase) {
       const { data: conn } = await supabase
         .from('whatsapp_connections')
-        .select('instance_name, evolution_api_key, evolution_api_url, api_provider, meta_access_token, meta_phone_number_id')
+        .select('instance_name, evolution_api_key, evolution_api_url')
         .eq('company_id', company_id)
         .eq('status', 'connected')
         .maybeSingle();
       
       console.log('🔍 [PROFILE-PICTURE] Conexão encontrada:', { 
         found: !!conn, 
-        apiProvider: conn?.api_provider,
         instanceName: conn?.instance_name,
         hasEvolutionKey: !!conn?.evolution_api_key,
-        hasMetaToken: !!conn?.meta_access_token
+        hasApiUrl: !!conn?.evolution_api_url
       });
 
-      if (conn) {
-        // Tentar Evolution API se disponível
-        if (conn.instance_name && conn.evolution_api_key) {
-          const apiUrl = conn.evolution_api_url || evolutionUrl;
-          if (apiUrl) {
-            console.log('📗 Tentando Evolution API para foto de perfil...');
-            profilePictureUrl = await getEvolutionProfilePicture(
-              apiUrl.replace(/\/$/, ''),
-              conn.instance_name,
-              conn.evolution_api_key,
-              String(number),
-              isGroup
-            );
-          }
+      if (conn?.instance_name && conn?.evolution_api_key && conn?.evolution_api_url) {
+        console.log('📗 Tentando Evolution API para foto de perfil...');
+        profilePictureUrl = await getEvolutionProfilePicture(
+          conn.evolution_api_url.replace(/\/$/, ''),
+          conn.instance_name,
+          conn.evolution_api_key,
+          String(number),
+          isGroup
+        );
+
+        // Salvar foto no lead para cache persistente
+        if (profilePictureUrl && supabase && company_id && !isGroup) {
+          await saveProfilePictureToLead(supabase, company_id, String(number), profilePictureUrl);
         }
       }
     }
 
-    // Fallback para configuração global se não encontrou via company
-    if (!profilePictureUrl && evolutionUrl && globalApiKey && defaultInstance) {
-      console.log('📗 Usando Evolution global como fallback...');
-      profilePictureUrl = await getEvolutionProfilePicture(
-        evolutionUrl.replace(/\/$/, ''),
-        defaultInstance,
-        globalApiKey,
-        String(number),
-        isGroup
-      );
-    }
+    // Cachear resultado em memória (mesmo se nulo para evitar chamadas repetidas)
+    profilePictureCache.set(cacheKey, {
+      url: profilePictureUrl,
+      timestamp: Date.now()
+    });
 
     console.log('✅ Resultado:', profilePictureUrl ? 'Foto encontrada' : 'Sem foto');
 
