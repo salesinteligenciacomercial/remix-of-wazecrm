@@ -41,6 +41,7 @@ import { MetaIntegrationsConfig } from "@/components/configuracoes/MetaIntegrati
 import { SubcontasManager } from "@/components/configuracoes/SubcontasManager";
 import { LeadAdsFormsConfig } from "@/components/configuracoes/LeadAdsFormsConfig";
 import { GmailConfig } from "@/components/configuracoes/GmailConfig";
+import { ProdutosServicosManager } from "@/components/configuracoes/ProdutosServicosManager";
 import { cleanAllConversationsHistory } from "@/utils/cleanConversationsHistory";
 import { UsuariosSubcontaDialog } from "@/components/configuracoes/UsuariosSubcontaDialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -1004,7 +1005,7 @@ export default function Configuracoes() {
       )}
 
       <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className={`grid w-full ${isMasterAccount ? 'grid-cols-7' : 'grid-cols-6'}`}>
+        <TabsList className={`grid w-full ${isMasterAccount ? 'grid-cols-8' : 'grid-cols-7'}`}>
           {isMasterAccount && (
             <TabsTrigger value="subcontas">
               <Building2 className="mr-2 h-4 w-4" />
@@ -1012,6 +1013,7 @@ export default function Configuracoes() {
             </TabsTrigger>
           )}
           <TabsTrigger value="team">Equipe</TabsTrigger>
+          <TabsTrigger value="produtos">Produtos</TabsTrigger>
           <TabsTrigger value="channels">Canais</TabsTrigger>
           <TabsTrigger value="whatsapp-meta" className="text-green-600">
             <Smartphone className="mr-2 h-4 w-4" />
@@ -1036,6 +1038,10 @@ export default function Configuracoes() {
           {/* Permissões e Configurações de Equipe - reservado a administradores */}
           {(hasRole('admin') || hasRole('company_admin')) && <PermissoesSection />}
           {(hasRole('admin') || hasRole('company_admin')) && <EquipeConfigSection />}
+        </TabsContent>
+
+        <TabsContent value="produtos">
+          <ProdutosServicosManager />
         </TabsContent>
 
         <TabsContent value="channels" className="space-y-4">

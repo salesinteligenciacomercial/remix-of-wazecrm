@@ -9,7 +9,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Trophy, XCircle, DollarSign, Calendar, Loader2 } from "lucide-react";
+import { Trophy, XCircle, DollarSign, Calendar, Loader2, Package, Plus } from "lucide-react";
+
+interface ProdutoServico {
+  id: string;
+  nome: string;
+  preco_sugerido: number;
+  categoria: string | null;
+}
 
 interface FinalizarNegociacaoDialogProps {
   lead: {
@@ -48,24 +55,62 @@ export function FinalizarNegociacaoDialog({
   
   // Campos para venda ganha
   const [valorFinal, setValorFinal] = useState("");
+  const [produtoSelecionado, setProdutoSelecionado] = useState("");
+  const [produtoCustom, setProdutoCustom] = useState("");
+  const [produtos, setProdutos] = useState<ProdutoServico[]>([]);
+  const [loadingProdutos, setLoadingProdutos] = useState(false);
   
   // Campos para venda perdida
   const [motivoPerda, setMotivoPerda] = useState("");
   const [motivoCustom, setMotivoCustom] = useState("");
   const [valorPerdido, setValorPerdido] = useState("");
+  const [produtoPerdido, setProdutoPerdido] = useState("");
   
   const leadName = lead.name || lead.nome || "Lead";
 
-  // Reset form quando o dialog abre
+  // Carregar produtos ao abrir o dialog
   useEffect(() => {
     if (open) {
+      loadProdutos();
       setActiveTab(defaultAction);
       setValorFinal(lead.value?.toString() || "");
       setValorPerdido(lead.value?.toString() || "");
       setMotivoPerda("");
       setMotivoCustom("");
+      setProdutoSelecionado("");
+      setProdutoCustom("");
+      setProdutoPerdido("");
     }
   }, [open, defaultAction, lead.value]);
+
+  const loadProdutos = async () => {
+    setLoadingProdutos(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user?.id) return;
+
+      const { data: role } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', auth.user.id)
+        .maybeSingle();
+
+      if (role?.company_id) {
+        const { data } = await supabase
+          .from('produtos_servicos')
+          .select('id, nome, preco_sugerido, categoria')
+          .eq('company_id', role.company_id)
+          .eq('ativo', true)
+          .order('nome');
+
+        setProdutos(data || []);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error);
+    } finally {
+      setLoadingProdutos(false);
+    }
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -74,27 +119,65 @@ export function FinalizarNegociacaoDialog({
     }).format(value);
   };
 
+  const handleProdutoChange = (value: string) => {
+    setProdutoSelecionado(value);
+    
+    // Se selecionou um produto da lista, preencher o valor sugerido
+    if (value && value !== 'custom') {
+      const produto = produtos.find(p => p.id === value);
+      if (produto && produto.preco_sugerido > 0) {
+        setValorFinal(produto.preco_sugerido.toString());
+      }
+    }
+  };
+
   const handleMarcarGanho = async () => {
     if (!valorFinal || parseFloat(valorFinal) <= 0) {
       toast.error("Informe o valor final da venda");
       return;
     }
 
+    // Verificar se tem produto (seja da lista ou customizado)
+    const produtoFinal = produtoSelecionado === 'custom' ? produtoCustom.trim() : produtoSelecionado;
+    if (!produtoFinal && produtos.length > 0) {
+      toast.error("Selecione o produto/serviço vendido");
+      return;
+    }
+
     setLoading(true);
     try {
+      const updateData: Record<string, any> = {
+        status: 'ganho',
+        value: parseFloat(valorFinal),
+        won_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // Se selecionou um produto da lista, vincular pelo ID
+      if (produtoSelecionado && produtoSelecionado !== 'custom') {
+        updateData.produto_id = produtoSelecionado;
+        // Também salvar o nome no campo servico para compatibilidade
+        const produto = produtos.find(p => p.id === produtoSelecionado);
+        if (produto) {
+          updateData.servico = produto.nome;
+        }
+      } else if (produtoSelecionado === 'custom' && produtoCustom.trim()) {
+        // Se digitou um produto customizado, salvar apenas no campo texto
+        updateData.servico = produtoCustom.trim();
+      }
+
       const { error } = await supabase
         .from('leads')
-        .update({
-          status: 'ganho',
-          value: parseFloat(valorFinal),
-          won_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', lead.id);
 
       if (error) throw error;
 
-      toast.success(`🎉 Venda ganha! ${formatCurrency(parseFloat(valorFinal))}`);
+      const produtoNome = produtoSelecionado === 'custom' 
+        ? produtoCustom 
+        : produtos.find(p => p.id === produtoSelecionado)?.nome || '';
+
+      toast.success(`🎉 Venda ganha! ${formatCurrency(parseFloat(valorFinal))}${produtoNome ? ` - ${produtoNome}` : ''}`);
       onOpenChange(false);
       onUpdated();
     } catch (error) {
@@ -122,15 +205,26 @@ export function FinalizarNegociacaoDialog({
         ? motivoCustom.trim() 
         : MOTIVOS_PERDA.find(m => m.value === motivoPerda)?.label || motivoPerda;
 
+      const updateData: Record<string, any> = {
+        status: 'perdido',
+        loss_reason: motivoFinal,
+        value: valorPerdido ? parseFloat(valorPerdido) : (lead.value || 0),
+        lost_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // Vincular produto se selecionado
+      if (produtoPerdido && produtoPerdido !== 'custom') {
+        updateData.produto_id = produtoPerdido;
+        const produto = produtos.find(p => p.id === produtoPerdido);
+        if (produto) {
+          updateData.servico = produto.nome;
+        }
+      }
+
       const { error } = await supabase
         .from('leads')
-        .update({
-          status: 'perdido',
-          loss_reason: motivoFinal,
-          value: valorPerdido ? parseFloat(valorPerdido) : (lead.value || 0),
-          lost_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', lead.id);
 
       if (error) throw error;
@@ -175,8 +269,66 @@ export function FinalizarNegociacaoDialog({
                 <span className="font-medium text-green-800 dark:text-green-200">Parabéns pela venda!</span>
               </div>
               <p className="text-sm text-green-700 dark:text-green-300">
-                Confirme o valor final para registrar a venda.
+                Confirme os detalhes para registrar a venda.
               </p>
+            </div>
+
+            {/* Seleção de Produto */}
+            <div className="space-y-2">
+              <Label htmlFor="produto">Produto/Serviço Vendido</Label>
+              {loadingProdutos ? (
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Carregando produtos...
+                </div>
+              ) : produtos.length > 0 ? (
+                <Select value={produtoSelecionado} onValueChange={handleProdutoChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o produto/serviço" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {produtos.map((produto) => (
+                      <SelectItem key={produto.id} value={produto.id}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{produto.nome}</span>
+                          {produto.preco_sugerido > 0 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {formatCurrency(produto.preco_sugerido)}
+                            </Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Plus className="h-3 w-3" />
+                        Digitar outro...
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={produtoCustom}
+                  onChange={(e) => setProdutoCustom(e.target.value)}
+                  placeholder="Nome do produto ou serviço"
+                />
+              )}
+
+              {produtoSelecionado === 'custom' && (
+                <Input
+                  value={produtoCustom}
+                  onChange={(e) => setProdutoCustom(e.target.value)}
+                  placeholder="Digite o nome do produto/serviço"
+                  className="mt-2"
+                />
+              )}
+
+              {produtos.length === 0 && !loadingProdutos && (
+                <p className="text-xs text-muted-foreground">
+                  💡 Cadastre produtos em Configurações → Produtos para selecionar da lista
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -229,6 +381,25 @@ export function FinalizarNegociacaoDialog({
                 Informe o motivo para análise futura.
               </p>
             </div>
+
+            {/* Produto que seria vendido */}
+            {produtos.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="produtoPerdido">Produto/Serviço (opcional)</Label>
+                <Select value={produtoPerdido} onValueChange={setProdutoPerdido}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Qual produto era a negociação?" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {produtos.map((produto) => (
+                      <SelectItem key={produto.id} value={produto.id}>
+                        {produto.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="motivoPerda">Motivo da Perda *</Label>
