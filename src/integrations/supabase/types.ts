@@ -1799,6 +1799,79 @@ export type Database = {
           },
         ]
       }
+      lead_value_history: {
+        Row: {
+          change_type: string
+          changed_by: string | null
+          company_id: string
+          created_at: string | null
+          id: string
+          lead_id: string
+          new_etapa_id: string | null
+          new_status: string | null
+          new_value: number | null
+          notes: string | null
+          old_etapa_id: string | null
+          old_status: string | null
+          old_value: number | null
+          value_change: number | null
+        }
+        Insert: {
+          change_type: string
+          changed_by?: string | null
+          company_id: string
+          created_at?: string | null
+          id?: string
+          lead_id: string
+          new_etapa_id?: string | null
+          new_status?: string | null
+          new_value?: number | null
+          notes?: string | null
+          old_etapa_id?: string | null
+          old_status?: string | null
+          old_value?: number | null
+          value_change?: number | null
+        }
+        Update: {
+          change_type?: string
+          changed_by?: string | null
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          lead_id?: string
+          new_etapa_id?: string | null
+          new_status?: string | null
+          new_value?: number | null
+          notes?: string | null
+          old_etapa_id?: string | null
+          old_status?: string | null
+          old_value?: number | null
+          value_change?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_value_history_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_value_history_new_etapa_id_fkey"
+            columns: ["new_etapa_id"]
+            isOneToOne: false
+            referencedRelation: "etapas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_value_history_old_etapa_id_fkey"
+            columns: ["old_etapa_id"]
+            isOneToOne: false
+            referencedRelation: "etapas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           ad_creative_name: string | null
@@ -1812,14 +1885,18 @@ export type Database = {
           created_at: string | null
           email: string | null
           etapa_id: string | null
+          expected_close_date: string | null
           form_id: string | null
           funil_id: string | null
           id: string
           lead_source_type: string | null
+          loss_reason: string | null
+          lost_at: string | null
           name: string
           notes: string | null
           owner_id: string | null
           phone: string | null
+          probability: number | null
           profile_picture_url: string | null
           responsaveis: string[] | null
           responsavel_id: string | null
@@ -1837,6 +1914,7 @@ export type Database = {
           utm_source: string | null
           utm_term: string | null
           value: number | null
+          won_at: string | null
         }
         Insert: {
           ad_creative_name?: string | null
@@ -1850,14 +1928,18 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           etapa_id?: string | null
+          expected_close_date?: string | null
           form_id?: string | null
           funil_id?: string | null
           id?: string
           lead_source_type?: string | null
+          loss_reason?: string | null
+          lost_at?: string | null
           name: string
           notes?: string | null
           owner_id?: string | null
           phone?: string | null
+          probability?: number | null
           profile_picture_url?: string | null
           responsaveis?: string[] | null
           responsavel_id?: string | null
@@ -1875,6 +1957,7 @@ export type Database = {
           utm_source?: string | null
           utm_term?: string | null
           value?: number | null
+          won_at?: string | null
         }
         Update: {
           ad_creative_name?: string | null
@@ -1888,14 +1971,18 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           etapa_id?: string | null
+          expected_close_date?: string | null
           form_id?: string | null
           funil_id?: string | null
           id?: string
           lead_source_type?: string | null
+          loss_reason?: string | null
+          lost_at?: string | null
           name?: string
           notes?: string | null
           owner_id?: string | null
           phone?: string | null
+          probability?: number | null
           profile_picture_url?: string | null
           responsaveis?: string[] | null
           responsavel_id?: string | null
@@ -1913,6 +2000,7 @@ export type Database = {
           utm_source?: string | null
           utm_term?: string | null
           value?: number | null
+          won_at?: string | null
         }
         Relationships: [
           {

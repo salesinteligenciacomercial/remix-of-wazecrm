@@ -38,7 +38,9 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
     funil_id: "",
     etapa_id: "",
     responsavel_id: "",
-    tags: [] as string[]
+    tags: [] as string[],
+    probability: 50,
+    expected_close_date: ""
   });
   const [newTag, setNewTag] = useState("");
   const [tagsPopoverOpen, setTagsPopoverOpen] = useState(false);
@@ -163,7 +165,9 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
           company_id: userRole.company_id,
           status: "novo",
           stage: "prospeccao",
-          tags: formData.tags.length > 0 ? formData.tags : null
+          tags: formData.tags.length > 0 ? formData.tags : null,
+          probability: formData.probability || 50,
+          expected_close_date: formData.expected_close_date || null
         }])
         .select();
 
@@ -185,7 +189,9 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
         funil_id: "",
         etapa_id: "",
         responsavel_id: "",
-        tags: []
+        tags: [],
+        probability: 50,
+        expected_close_date: ""
       });
       setNewTag("");
       setOpen(false);
@@ -333,6 +339,30 @@ export function NovoLeadDialog({ onLeadCreated, triggerButton }: NovoLeadDialogP
               onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
               placeholder="0.00"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="probability">Probabilidade (%)</Label>
+              <Input
+                id="probability"
+                type="number"
+                min="0"
+                max="100"
+                value={formData.probability}
+                onChange={(e) => setFormData({ ...formData, probability: parseInt(e.target.value) || 50 })}
+                placeholder="50"
+              />
+            </div>
+            <div>
+              <Label htmlFor="expected_close_date">Previsão Fechamento</Label>
+              <Input
+                id="expected_close_date"
+                type="date"
+                value={formData.expected_close_date}
+                onChange={(e) => setFormData({ ...formData, expected_close_date: e.target.value })}
+              />
+            </div>
           </div>
 
           <div>

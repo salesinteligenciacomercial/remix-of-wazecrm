@@ -7,6 +7,8 @@ import { Progress } from "@/components/ui/progress";
 import { BarChart3, TrendingUp, Users, DollarSign, Target, MessageSquare, Calendar, CheckCircle, Bot, Activity, Trophy, XCircle, Download, Share2, Filter, Settings, Eye, PieChart, Clock, Zap, RefreshCw, CalendarDays, UserCheck, AlertTriangle, ArrowUpRight, ArrowDownRight, Megaphone, ExternalLink } from "lucide-react";
 import CampaignAnalytics from "@/components/analytics/CampaignAnalytics";
 import LeadsDrilldownModal, { DrilldownFilterType } from "@/components/analytics/LeadsDrilldownModal";
+import { PipelineFinanceiro } from "@/components/analytics/PipelineFinanceiro";
+import { LossReasonsReport } from "@/components/analytics/LossReasonsReport";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/hooks/usePermissions";
