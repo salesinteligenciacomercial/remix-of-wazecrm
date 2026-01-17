@@ -1897,6 +1897,7 @@ export type Database = {
           owner_id: string | null
           phone: string | null
           probability: number | null
+          produto_id: string | null
           profile_picture_url: string | null
           responsaveis: string[] | null
           responsavel_id: string | null
@@ -1940,6 +1941,7 @@ export type Database = {
           owner_id?: string | null
           phone?: string | null
           probability?: number | null
+          produto_id?: string | null
           profile_picture_url?: string | null
           responsaveis?: string[] | null
           responsavel_id?: string | null
@@ -1983,6 +1985,7 @@ export type Database = {
           owner_id?: string | null
           phone?: string | null
           probability?: number | null
+          produto_id?: string | null
           profile_picture_url?: string | null
           responsaveis?: string[] | null
           responsavel_id?: string | null
@@ -2029,6 +2032,13 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_servicos"
             referencedColumns: ["id"]
           },
         ]
@@ -2721,6 +2731,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "processes_stages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      produtos_servicos: {
+        Row: {
+          ativo: boolean | null
+          categoria: string | null
+          company_id: string
+          created_at: string
+          descricao: string | null
+          id: string
+          nome: string
+          preco_sugerido: number | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          categoria?: string | null
+          company_id: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome: string
+          preco_sugerido?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean | null
+          categoria?: string | null
+          company_id?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome?: string
+          preco_sugerido?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "produtos_servicos_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
