@@ -10,11 +10,12 @@ import { useNavigate } from "react-router-dom";
 import { 
   Users, DollarSign, Search, ExternalLink, Download, Phone, Mail, 
   Building2, Eye, MessageSquare, ArrowUpRight, Loader2, ChevronLeft, ChevronRight,
-  Trophy, XCircle
+  Trophy, XCircle, Pencil
 } from "lucide-react";
 import { toast } from "sonner";
 import { ConversaPopup } from "@/components/leads/ConversaPopup";
 import { FinalizarNegociacaoDialog } from "@/components/leads/FinalizarNegociacaoDialog";
+import { EditarLeadDialog } from "@/components/funil/EditarLeadDialog";
 
 export type DrilldownFilterType = 
   | 'total' 
@@ -77,6 +78,10 @@ export default function LeadsDrilldownModal({
   const [finalizarDialogOpen, setFinalizarDialogOpen] = useState(false);
   const [finalizarDefaultAction, setFinalizarDefaultAction] = useState<'ganho' | 'perdido'>('ganho');
   const [selectedLeadForFinalizar, setSelectedLeadForFinalizar] = useState<Lead | null>(null);
+  
+  // Estado para editar lead
+  const [editarLeadDialogOpen, setEditarLeadDialogOpen] = useState(false);
+  const [selectedLeadForEdit, setSelectedLeadForEdit] = useState<Lead | null>(null);
 
   const fetchLeads = useCallback(async () => {
     if (!userCompanyId || !open) return;
@@ -396,6 +401,18 @@ export default function LeadsDrilldownModal({
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-100"
+                          onClick={() => {
+                            setSelectedLeadForEdit(lead);
+                            setEditarLeadDialogOpen(true);
+                          }}
+                          title="Editar lead"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
                           onClick={() => {
                             setSelectedLeadForFinalizar(lead);
@@ -510,6 +527,30 @@ export default function LeadsDrilldownModal({
             fetchLeads();
           }}
           defaultAction={finalizarDefaultAction}
+        />
+      )}
+
+      {/* Dialog para Editar Lead */}
+      {selectedLeadForEdit && (
+        <EditarLeadDialog
+          lead={{
+            id: selectedLeadForEdit.id,
+            nome: selectedLeadForEdit.name,
+            telefone: selectedLeadForEdit.phone || undefined,
+            email: selectedLeadForEdit.email || undefined,
+            company: selectedLeadForEdit.company || undefined,
+            value: selectedLeadForEdit.value || undefined,
+          }}
+          open={editarLeadDialogOpen}
+          onOpenChange={(isOpen) => {
+            setEditarLeadDialogOpen(isOpen);
+            if (!isOpen) setSelectedLeadForEdit(null);
+          }}
+          onLeadUpdated={() => {
+            fetchLeads();
+            setEditarLeadDialogOpen(false);
+            setSelectedLeadForEdit(null);
+          }}
         />
       )}
     </Dialog>
