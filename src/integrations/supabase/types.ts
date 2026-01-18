@@ -1717,8 +1717,10 @@ export type Database = {
       lead_cadence_progress: {
         Row: {
           assigned_to: string | null
+          cadence_config: Json | null
           cadence_name: string
           cadence_rule_id: string | null
+          cadence_steps: Json | null
           company_id: string
           completed_at: string | null
           completed_steps: Json | null
@@ -1737,8 +1739,10 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          cadence_config?: Json | null
           cadence_name: string
           cadence_rule_id?: string | null
+          cadence_steps?: Json | null
           company_id: string
           completed_at?: string | null
           completed_steps?: Json | null
@@ -1757,8 +1761,10 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          cadence_config?: Json | null
           cadence_name?: string
           cadence_rule_id?: string | null
+          cadence_steps?: Json | null
           company_id?: string
           completed_at?: string | null
           completed_steps?: Json | null
@@ -2983,6 +2989,79 @@ export type Database = {
             columns: ["permission_id"]
             isOneToOne: false
             referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_cadence_actions: {
+        Row: {
+          action_description: string | null
+          cadence_progress_id: string
+          channel: string
+          company_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          lead_id: string
+          message_content: string | null
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+          step_number: number
+          updated_at: string
+        }
+        Insert: {
+          action_description?: string | null
+          cadence_progress_id: string
+          channel: string
+          company_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          lead_id: string
+          message_content?: string | null
+          scheduled_at: string
+          sent_at?: string | null
+          status?: string
+          step_number: number
+          updated_at?: string
+        }
+        Update: {
+          action_description?: string | null
+          cadence_progress_id?: string
+          channel?: string
+          company_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          lead_id?: string
+          message_content?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+          step_number?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_cadence_actions_cadence_progress_id_fkey"
+            columns: ["cadence_progress_id"]
+            isOneToOne: false
+            referencedRelation: "lead_cadence_progress"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_cadence_actions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_cadence_actions_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
         ]
