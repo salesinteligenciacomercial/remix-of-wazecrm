@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, UserPlus, X } from "lucide-react";
+import { Users, UserPlus, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -24,6 +24,7 @@ export function ResponsaveisManager({
   const [novoResponsavel, setNovoResponsavel] = useState("");
   const [responsaveis, setResponsaveis] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
 
   // Função para verificar se é UUID
   const isUUID = (str: string) => {
@@ -31,48 +32,107 @@ export function ResponsaveisManager({
     return uuidRegex.test(str);
   };
 
-  // Converter UUIDs para nomes quando responsaveisAtuais mudar
+  // Carregar responsáveis do banco quando leadId mudar
   useEffect(() => {
-    const convertToNames = async () => {
-      if (!responsaveisAtuais || responsaveisAtuais.length === 0) {
-        setResponsaveis([]);
+    const loadResponsaveisFromDB = async () => {
+      if (!leadId) {
+        // Sem leadId, usar responsaveisAtuais como fallback
+        if (responsaveisAtuais && responsaveisAtuais.length > 0) {
+          await convertToNames(responsaveisAtuais);
+        } else {
+          setResponsaveis([]);
+        }
         return;
       }
 
-      // Verificar se são UUIDs
-      const uuids = responsaveisAtuais.filter(isUUID);
-      const names = responsaveisAtuais.filter(r => !isUUID(r));
-
-      if (uuids.length === 0) {
-        // Não há UUIDs, usar os nomes diretamente
-        setResponsaveis(responsaveisAtuais);
-        return;
-      }
-
-      // Buscar nomes dos UUIDs
+      setInitialLoading(true);
       try {
+        // Buscar responsáveis diretamente do lead no banco
+        const { data: leadData, error } = await supabase
+          .from("leads")
+          .select("responsaveis, responsavel_id")
+          .eq("id", leadId)
+          .single();
+
+        if (error) {
+          console.error("Erro ao buscar responsáveis do lead:", error);
+          // Fallback para responsaveisAtuais
+          if (responsaveisAtuais && responsaveisAtuais.length > 0) {
+            await convertToNames(responsaveisAtuais);
+          }
+          return;
+        }
+
+        // Usar responsaveis array, ou responsavel_id como fallback
+        let uuidsToConvert: string[] = [];
+        
+        if (leadData?.responsaveis && Array.isArray(leadData.responsaveis) && leadData.responsaveis.length > 0) {
+          uuidsToConvert = leadData.responsaveis as string[];
+        } else if (leadData?.responsavel_id) {
+          uuidsToConvert = [leadData.responsavel_id];
+        }
+
+        if (uuidsToConvert.length === 0) {
+          setResponsaveis([]);
+          return;
+        }
+
+        // Buscar nomes dos UUIDs
         const { data: profiles } = await supabase
           .from('profiles')
           .select('id, full_name, email')
-          .in('id', uuids);
+          .in('id', uuidsToConvert);
 
-        if (profiles) {
-          const convertedNames = uuids.map(uuid => {
+        if (profiles && profiles.length > 0) {
+          const convertedNames = uuidsToConvert.map(uuid => {
             const profile = profiles.find(p => p.id === uuid);
             return profile?.full_name || profile?.email || uuid;
           });
-          setResponsaveis([...names, ...convertedNames]);
+          setResponsaveis(convertedNames);
+          console.log('👥 Responsáveis carregados do banco:', convertedNames);
         } else {
-          setResponsaveis(responsaveisAtuais);
+          setResponsaveis([]);
         }
       } catch (error) {
-        console.error('Erro ao converter UUIDs para nomes:', error);
-        setResponsaveis(responsaveisAtuais);
+        console.error('Erro ao carregar responsáveis:', error);
+      } finally {
+        setInitialLoading(false);
       }
     };
 
-    convertToNames();
-  }, [responsaveisAtuais]);
+    loadResponsaveisFromDB();
+  }, [leadId]);
+
+  // Função auxiliar para converter UUIDs para nomes
+  const convertToNames = async (items: string[]) => {
+    const uuids = items.filter(isUUID);
+    const names = items.filter(r => !isUUID(r));
+
+    if (uuids.length === 0) {
+      setResponsaveis(items);
+      return;
+    }
+
+    try {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', uuids);
+
+      if (profiles) {
+        const convertedNames = uuids.map(uuid => {
+          const profile = profiles.find(p => p.id === uuid);
+          return profile?.full_name || profile?.email || uuid;
+        });
+        setResponsaveis([...names, ...convertedNames]);
+      } else {
+        setResponsaveis(items);
+      }
+    } catch (error) {
+      console.error('Erro ao converter UUIDs para nomes:', error);
+      setResponsaveis(items);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -118,6 +178,16 @@ export function ResponsaveisManager({
     }
   };
 
+  // Mapear nomes para UUIDs
+  const getUUIDsFromNames = (names: string[]): string[] => {
+    return names.map(name => {
+      const usuario = usuarios.find(u => 
+        (u.full_name || u.email) === name || u.id === name
+      );
+      return usuario?.id || name;
+    }).filter(id => isUUID(id));
+  };
+
   const adicionarResponsavel = async () => {
     if (!novoResponsavel) {
       toast.error("Selecione um responsável");
@@ -137,20 +207,35 @@ export function ResponsaveisManager({
     const novosResponsaveis = [...responsaveis, nomeResponsavel];
     setResponsaveis(novosResponsaveis);
     
-    // Se tem leadId, salvar no banco
+    // Se tem leadId, salvar no banco - usar campo responsaveis (array de UUIDs)
     if (leadId) {
       setLoading(true);
       try {
-        const { error } = await supabase
+        // Buscar responsáveis atuais do banco
+        const { data: leadData } = await supabase
           .from("leads")
-          .update({ 
-            notes: `Responsáveis: ${novosResponsaveis.join(', ')}`
-          })
-          .eq("id", leadId);
+          .select("responsaveis")
+          .eq("id", leadId)
+          .single();
 
-        if (error) throw error;
+        const currentResponsaveis = (leadData?.responsaveis as string[]) || [];
+        
+        // Adicionar novo UUID se não existir
+        if (!currentResponsaveis.includes(novoResponsavel)) {
+          const updatedResponsaveis = [...currentResponsaveis, novoResponsavel];
+          
+          const { error } = await supabase
+            .from("leads")
+            .update({ 
+              responsaveis: updatedResponsaveis,
+              responsavel_id: updatedResponsaveis[0] // Manter primeiro como principal
+            })
+            .eq("id", leadId);
 
-        console.log('✅ Responsável adicionado:', nomeResponsavel);
+          if (error) throw error;
+        }
+
+        console.log('✅ Responsável adicionado:', nomeResponsavel, 'UUID:', novoResponsavel);
         toast.success(`${nomeResponsavel} adicionado como responsável`);
       } catch (error) {
         console.error("Erro ao salvar responsável:", error);
@@ -162,6 +247,7 @@ export function ResponsaveisManager({
 
     onResponsaveisUpdated(novosResponsaveis);
     setNovoResponsavel("");
+    setOpen(false);
   };
 
   const removerResponsavel = async (nome: string) => {
@@ -172,18 +258,59 @@ export function ResponsaveisManager({
     if (leadId) {
       setLoading(true);
       try {
-        const { error } = await supabase
+        // Buscar responsáveis atuais do banco
+        const { data: leadData } = await supabase
           .from("leads")
-          .update({ 
-            notes: novosResponsaveis.length > 0 
-              ? `Responsáveis: ${novosResponsaveis.join(', ')}`
-              : ''
-          })
-          .eq("id", leadId);
+          .select("responsaveis, responsavel_id")
+          .eq("id", leadId)
+          .single();
 
-        if (error) throw error;
+        const currentResponsaveis = (leadData?.responsaveis as string[]) || [];
+        
+        // Buscar o UUID correspondente ao nome
+        let usuarioIdRemover: string | null = null;
+        
+        // Primeiro tentar encontrar na lista de usuários carregados
+        const usuarioRemover = usuarios.find(u => 
+          (u.full_name || u.email) === nome || u.id === nome
+        );
+        
+        if (usuarioRemover) {
+          usuarioIdRemover = usuarioRemover.id;
+        } else {
+          // Se não encontrou nos usuários carregados, buscar pelo nome no banco
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, email')
+            .in('id', currentResponsaveis);
+          
+          const profileMatch = profiles?.find(p => 
+            p.full_name === nome || p.email === nome
+          );
+          
+          usuarioIdRemover = profileMatch?.id || null;
+        }
 
-        console.log('🗑️ Responsável removido:', nome);
+        if (usuarioIdRemover) {
+          const updatedResponsaveis = currentResponsaveis.filter(id => id !== usuarioIdRemover);
+          
+          const { error } = await supabase
+            .from("leads")
+            .update({ 
+              responsaveis: updatedResponsaveis,
+              // Se o removido era o principal, atualizar para o próximo ou null
+              responsavel_id: updatedResponsaveis.length > 0 
+                ? updatedResponsaveis[0] 
+                : (leadData?.responsavel_id === usuarioIdRemover ? null : leadData?.responsavel_id)
+            })
+            .eq("id", leadId);
+
+          if (error) throw error;
+          console.log('🗑️ Responsável removido:', nome, 'UUID:', usuarioIdRemover);
+        } else {
+          console.warn('⚠️ Não foi possível encontrar UUID para:', nome);
+        }
+        
         toast.success(`${nome} removido dos responsáveis`);
       } catch (error) {
         console.error("Erro ao remover responsável:", error);
@@ -201,16 +328,19 @@ export function ResponsaveisManager({
       <h4 className="text-foreground font-medium mb-2 flex items-center gap-2">
         <Users className="h-4 w-4" /> 
         Responsáveis {responsaveis.length > 0 && `(${responsaveis.length})`}
+        {initialLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
       </h4>
       
       <div className="flex flex-wrap gap-2 mb-3 min-h-[40px]">
-        {responsaveis.length === 0 ? (
+        {initialLoading ? (
+          <p className="text-sm text-muted-foreground">Carregando...</p>
+        ) : responsaveis.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhum responsável atribuído</p>
         ) : (
           responsaveis.map((nome, index) => (
             <Badge 
               key={`${nome}-${index}`} 
-              variant="secondary" 
+              variant="secondary"
               className="gap-2 py-1.5 pr-1"
             >
               <Avatar className="h-5 w-5">
