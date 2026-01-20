@@ -12,9 +12,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { MessageSquare, Instagram, Facebook, Send, Search, Bot, User, Paperclip, Clock, Calendar, Zap, FileText, Tag, TrendingUp, ArrowRightLeft, Image as ImageIcon, Mic, FileUp, Check, CheckCheck, Phone, Video, Info, DollarSign, Users, Bell, Download, Volume2, RefreshCw, CheckCircle2, AlertCircle, Reply, CheckSquare, X, Plus, Trash2, Loader2, UserCog, ArrowLeft, SpellCheck, Trophy, XCircle } from "lucide-react";
+import { MessageSquare, Instagram, Facebook, Send, Search, Bot, User, Paperclip, Clock, Calendar, Zap, FileText, Tag, TrendingUp, ArrowRightLeft, Image as ImageIcon, Mic, FileUp, Check, CheckCheck, Phone, Video, Info, DollarSign, Users, Bell, Download, Volume2, RefreshCw, CheckCircle2, AlertCircle, Reply, CheckSquare, X, Plus, Trash2, Loader2, UserCog, ArrowLeft, SpellCheck, Trophy, XCircle, Eye, ChevronDown, Mail, Building2, Globe, Pencil } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { FinalizarNegociacaoDialog } from "@/components/leads/FinalizarNegociacaoDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
@@ -8149,6 +8151,129 @@ function Conversas() {
                               <CheckCircle2 className="h-3 w-3" />
                               <span className="text-xs font-medium">Lead vinculado no CRM</span>
                             </Badge>
+                            
+                            {/* Seção Expansível de Informações do Lead */}
+                            <Collapsible defaultOpen={true} className="w-full">
+                              <CollapsibleTrigger asChild>
+                                <Button variant="ghost" size="sm" className="w-full justify-between px-2 py-1 h-auto hover:bg-muted/50">
+                                  <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                                    <Eye className="h-3 w-3" />
+                                    Ver Detalhes do Lead
+                                  </span>
+                                  <ChevronDown className="h-3 w-3 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                                </Button>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="space-y-2 mt-2 px-1">
+                                <div className="bg-muted/30 rounded-lg p-3 space-y-2 text-sm border border-border/50">
+                                  {/* Nome */}
+                                  <div className="flex items-center gap-2">
+                                    <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                    <span className="text-muted-foreground">Nome:</span>
+                                    <span className="font-medium truncate">{leadVinculado.name || selectedConv.contactName || '-'}</span>
+                                  </div>
+                                  
+                                  {/* Telefone */}
+                                  <div className="flex items-center gap-2">
+                                    <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                    <span className="text-muted-foreground">Telefone:</span>
+                                    <span className="font-medium">{leadVinculado.phone || leadVinculado.telefone || selectedConv.phoneNumber || '-'}</span>
+                                  </div>
+                                  
+                                  {/* Email */}
+                                  {(leadVinculado.email) && (
+                                    <div className="flex items-center gap-2">
+                                      <Mail className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                      <span className="text-muted-foreground">Email:</span>
+                                      <span className="font-medium truncate">{leadVinculado.email}</span>
+                                    </div>
+                                  )}
+                                  
+                                  {/* CPF */}
+                                  {(leadVinculado.cpf) && (
+                                    <div className="flex items-center gap-2">
+                                      <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                      <span className="text-muted-foreground">CPF:</span>
+                                      <span className="font-medium">{leadVinculado.cpf}</span>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Empresa */}
+                                  {(leadVinculado.company) && (
+                                    <div className="flex items-center gap-2">
+                                      <Building2 className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                      <span className="text-muted-foreground">Empresa:</span>
+                                      <span className="font-medium truncate">{leadVinculado.company}</span>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Origem/Fonte */}
+                                  {(leadVinculado.source) && (
+                                    <div className="flex items-center gap-2">
+                                      <Globe className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                      <span className="text-muted-foreground">Origem:</span>
+                                      <span className="font-medium">{leadVinculado.source}</span>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Data de Nascimento */}
+                                  {(leadVinculado.data_nascimento) && (
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                      <span className="text-muted-foreground">Nascimento:</span>
+                                      <span className="font-medium">
+                                        {new Date(leadVinculado.data_nascimento).toLocaleDateString('pt-BR')}
+                                      </span>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Valor */}
+                                  {(leadVinculado.value && leadVinculado.value > 0) && (
+                                    <div className="flex items-center gap-2">
+                                      <DollarSign className="h-3 w-3 text-green-600 flex-shrink-0" />
+                                      <span className="text-muted-foreground">Valor:</span>
+                                      <span className="font-medium text-green-600">
+                                        R$ {Number(leadVinculado.value).toLocaleString('pt-BR')}
+                                      </span>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Anotações */}
+                                  {(leadVinculado.notes) && (
+                                    <div className="pt-2 border-t border-border/50">
+                                      <div className="flex items-start gap-2">
+                                        <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                        <div>
+                                          <span className="text-muted-foreground">Anotações:</span>
+                                          <p className="text-xs mt-1 text-foreground whitespace-pre-wrap">{leadVinculado.notes}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Status do Lead */}
+                                  {(leadVinculado.status) && (
+                                    <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                                      <span className="text-muted-foreground">Status:</span>
+                                      <Badge 
+                                        variant="outline" 
+                                        className={cn(
+                                          "text-xs",
+                                          leadVinculado.status === 'ganho' && "bg-green-500/10 text-green-600 border-green-500/20",
+                                          leadVinculado.status === 'perdido' && "bg-red-500/10 text-red-600 border-red-500/20",
+                                          leadVinculado.status === 'em_andamento' && "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                                        )}
+                                      >
+                                        {leadVinculado.status === 'ganho' ? 'Ganho' : 
+                                         leadVinculado.status === 'perdido' ? 'Perdido' : 
+                                         leadVinculado.status === 'em_andamento' ? 'Em andamento' : 
+                                         leadVinculado.status}
+                                      </Badge>
+                                    </div>
+                                  )}
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                            
                             {/* Botão para editar informações do lead - usando o mesmo componente completo do menu Leads */}
                             <EditarLeadDialog lead={{
                       id: leadVinculado.id,
@@ -8189,7 +8314,7 @@ function Conversas() {
                         }
                       }
                     }} triggerButton={<Button size="sm" variant="outline" className="w-full">
-                                  <FileText className="h-3 w-3 mr-2" /> Editar Informações
+                                  <Pencil className="h-3 w-3 mr-2" /> Editar Informações
                                 </Button>} />
                             {/* ✅ NOVO: Botão rápido para adicionar valor da venda */}
                             <Button
@@ -8245,15 +8370,6 @@ function Conversas() {
                             </Button>
                           </div>}
                       </div>
-                      {selectedConv.produto && <p className="text-sm text-muted-foreground mb-1">
-                          <strong>Produto:</strong> {selectedConv.produto}
-                        </p>}
-                      {selectedConv.valor && <p className="text-sm text-success font-medium mb-1">
-                          <strong>Valor:</strong> {selectedConv.valor}
-                        </p>}
-                      {selectedConv.anotacoes && <div className="mt-2 p-2 bg-muted rounded text-sm">
-                          <strong>Anotações:</strong> {selectedConv.anotacoes}
-                        </div>}
                     </div>
 
                     {/* Responsáveis */}
