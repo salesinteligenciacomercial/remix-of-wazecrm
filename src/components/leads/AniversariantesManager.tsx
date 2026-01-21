@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,12 @@ import {
   XCircle,
   Gift,
   Users,
-  Image
+  Image,
+  Upload,
+  X,
+  FileVideo,
+  Link as LinkIcon,
+  Loader2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -77,6 +82,10 @@ export function AniversariantesManager() {
     ativo: true
   });
   const [enviando, setEnviando] = useState<Record<string, boolean>>({});
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [mediaPreview, setMediaPreview] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const [mediaInputMode, setMediaInputMode] = useState<'upload' | 'url'>('upload');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -329,8 +338,7 @@ export function AniversariantesManager() {
         toast.success("Mensagem criada!");
       }
 
-      setNovaMensagem({ titulo: "", mensagem: "", midia_url: "", horario_envio: "09:00", ativo: true });
-      setEditingMensagem(null);
+      resetForm();
       carregarDados();
 
     } catch (error) {
@@ -348,6 +356,101 @@ export function AniversariantesManager() {
       horario_envio: msg.horario_envio?.substring(0, 5) || "09:00",
       ativo: msg.ativo
     });
+    
+    // Set preview if there's media
+    if (msg.midia_url) {
+      const isVideo = msg.midia_url.match(/\.(mp4|webm|mov|avi)$/i);
+      setMediaPreview({ url: msg.midia_url, type: isVideo ? 'video' : 'image' });
+      setMediaInputMode('url');
+    } else {
+      setMediaPreview(null);
+      setMediaInputMode('upload');
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Arquivo muito grande. Máximo 10MB.");
+      return;
+    }
+
+    // Validate file type
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    
+    if (!isImage && !isVideo) {
+      toast.error("Apenas imagens e vídeos são permitidos.");
+      return;
+    }
+
+    setUploadingMedia(true);
+
+    try {
+      // Create unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `birthday-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `aniversario/${companyId}/${fileName}`;
+
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('conversation-media')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) throw error;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('conversation-media')
+        .getPublicUrl(filePath);
+
+      // Set the media URL and preview
+      setNovaMensagem(prev => ({ ...prev, midia_url: publicUrl }));
+      setMediaPreview({ url: publicUrl, type: isVideo ? 'video' : 'image' });
+      
+      toast.success("Mídia enviada com sucesso!");
+    } catch (error) {
+      console.error("Erro ao fazer upload:", error);
+      toast.error("Erro ao fazer upload da mídia");
+    } finally {
+      setUploadingMedia(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleUrlChange = (url: string) => {
+    setNovaMensagem(prev => ({ ...prev, midia_url: url }));
+    
+    if (url) {
+      const isVideo = url.match(/\.(mp4|webm|mov|avi)$/i);
+      setMediaPreview({ url, type: isVideo ? 'video' : 'image' });
+    } else {
+      setMediaPreview(null);
+    }
+  };
+
+  const removeMedia = () => {
+    setNovaMensagem(prev => ({ ...prev, midia_url: '' }));
+    setMediaPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const resetForm = () => {
+    setEditingMensagem(null);
+    setNovaMensagem({ titulo: "", mensagem: "", midia_url: "", horario_envio: "09:00", ativo: true });
+    setMediaPreview(null);
+    setMediaInputMode('upload');
   };
 
   const excluirMensagem = async (id: string) => {
@@ -580,14 +683,112 @@ export function AniversariantesManager() {
                           Variáveis: {"{nome}"}, {"{idade}"}, {"{nome_completo}"}
                         </p>
                       </div>
-                      <div>
-                        <Label>URL da Imagem/Vídeo (opcional)</Label>
-                        <Input
-                          value={novaMensagem.midia_url}
-                          onChange={(e) => setNovaMensagem({ ...novaMensagem, midia_url: e.target.value })}
-                          placeholder="https://exemplo.com/imagem.jpg"
-                        />
+                      {/* Seção de Mídia Melhorada */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label>Imagem/Vídeo (opcional)</Label>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant={mediaInputMode === 'upload' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setMediaInputMode('upload')}
+                            >
+                              <Upload className="h-4 w-4 mr-1" />
+                              Upload
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={mediaInputMode === 'url' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setMediaInputMode('url')}
+                            >
+                              <LinkIcon className="h-4 w-4 mr-1" />
+                              URL
+                            </Button>
+                          </div>
+                        </div>
+
+                        {mediaInputMode === 'upload' ? (
+                          <div>
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept="image/*,video/*"
+                              onChange={handleFileUpload}
+                              className="hidden"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full h-20 border-dashed"
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={uploadingMedia}
+                            >
+                              {uploadingMedia ? (
+                                <div className="flex items-center gap-2">
+                                  <Loader2 className="h-5 w-5 animate-spin" />
+                                  <span>Enviando...</span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-1">
+                                  <Upload className="h-6 w-6" />
+                                  <span className="text-sm">Clique para selecionar foto ou vídeo</span>
+                                  <span className="text-xs text-muted-foreground">Máx. 10MB</span>
+                                </div>
+                              )}
+                            </Button>
+                          </div>
+                        ) : (
+                          <Input
+                            value={novaMensagem.midia_url}
+                            onChange={(e) => handleUrlChange(e.target.value)}
+                            placeholder="https://exemplo.com/imagem.jpg"
+                          />
+                        )}
+
+                        {/* Preview da Mídia */}
+                        {mediaPreview && (
+                          <div className="relative rounded-lg overflow-hidden border bg-muted">
+                            {mediaPreview.type === 'video' ? (
+                              <video 
+                                src={mediaPreview.url} 
+                                controls 
+                                className="w-full max-h-48 object-contain"
+                              />
+                            ) : (
+                              <img 
+                                src={mediaPreview.url} 
+                                alt="Preview" 
+                                className="w-full max-h-48 object-contain"
+                                onError={() => {
+                                  toast.error("Erro ao carregar preview da imagem");
+                                  setMediaPreview(null);
+                                }}
+                              />
+                            )}
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              className="absolute top-2 right-2 h-8 w-8"
+                              onClick={removeMedia}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                            <div className="absolute bottom-2 left-2">
+                              <Badge variant="secondary" className="text-xs">
+                                {mediaPreview.type === 'video' ? (
+                                  <><FileVideo className="h-3 w-3 mr-1" /> Vídeo</>
+                                ) : (
+                                  <><Image className="h-3 w-3 mr-1" /> Imagem</>
+                                )}
+                              </Badge>
+                            </div>
+                          </div>
+                        )}
                       </div>
+
                       <div className="flex items-center justify-between">
                         <div>
                           <Label>Horário de Envio Automático</Label>
@@ -611,10 +812,7 @@ export function AniversariantesManager() {
                           {editingMensagem ? "Atualizar" : "Salvar Mensagem"}
                         </Button>
                         {editingMensagem && (
-                          <Button variant="outline" onClick={() => {
-                            setEditingMensagem(null);
-                            setNovaMensagem({ titulo: "", mensagem: "", midia_url: "", horario_envio: "09:00", ativo: true });
-                          }}>
+                          <Button variant="outline" onClick={resetForm}>
                             Cancelar
                           </Button>
                         )}
