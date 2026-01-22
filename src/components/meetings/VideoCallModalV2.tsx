@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { 
   Mic, MicOff, Video, VideoOff, PhoneOff, 
   Monitor, MonitorOff, Circle, Square,
-  Loader2, FileText, Download, X, MessageSquare
+  Loader2, FileText, Download, X, MessageSquare, Move
 } from 'lucide-react';
 import { useWebRTCSession, RoomState, ParticipantRole } from '@/hooks/useWebRTCSession';
 import { toast } from 'sonner';
@@ -105,6 +105,12 @@ export const VideoCallModalV2 = ({
   const [transcriptions, setTranscriptions] = useState<Array<{ text: string; timestamp: string; speaker: string }>>([]);
   const [showTranscriptions, setShowTranscriptions] = useState(false);
 
+  // Local video position state (for dragging camera PiP)
+  type PipPosition = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+  const [localVideoPipPosition, setLocalVideoPipPosition] = useState<PipPosition>('bottom-right');
+  const [isDraggingPip, setIsDraggingPip] = useState(false);
+  const pipDragStartRef = useRef<{ x: number; y: number } | null>(null);
+
   // ========== REFS ==========
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -114,6 +120,7 @@ export const VideoCallModalV2 = ({
   const callIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasInitializedRef = useRef(false);
   const isMountedRef = useRef(true);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   
   // Transcription refs
   const transcriptionRecorderRef = useRef<MediaRecorder | null>(null);
@@ -466,6 +473,69 @@ export const VideoCallModalV2 = ({
     toast.success('Gravação salva!');
   }, []);
 
+  // ========== PIP DRAG HANDLERS ==========
+  const getPipPositionClasses = (position: PipPosition) => {
+    switch (position) {
+      case 'bottom-right':
+        return 'bottom-4 right-4';
+      case 'bottom-left':
+        return 'bottom-4 left-4';
+      case 'top-right':
+        return 'top-4 right-4';
+      case 'top-left':
+        return 'top-4 left-4';
+      default:
+        return 'bottom-4 right-4';
+    }
+  };
+
+  const handlePipMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingPip(true);
+    pipDragStartRef.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
+  const handlePipMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDraggingPip || !pipDragStartRef.current || !videoContainerRef.current) return;
+    
+    const container = videoContainerRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - container.left;
+    const mouseY = e.clientY - container.top;
+    
+    const centerX = container.width / 2;
+    const centerY = container.height / 2;
+    
+    // Determine position based on which quadrant the mouse is in
+    const isTop = mouseY < centerY;
+    const isLeft = mouseX < centerX;
+    
+    if (isTop && isLeft) setLocalVideoPipPosition('top-left');
+    else if (isTop && !isLeft) setLocalVideoPipPosition('top-right');
+    else if (!isTop && isLeft) setLocalVideoPipPosition('bottom-left');
+    else setLocalVideoPipPosition('bottom-right');
+  }, [isDraggingPip]);
+
+  const handlePipMouseUp = useCallback(() => {
+    setIsDraggingPip(false);
+    pipDragStartRef.current = null;
+  }, []);
+
+  // Add/remove global mouse listeners for PiP dragging
+  useEffect(() => {
+    if (isDraggingPip) {
+      window.addEventListener('mousemove', handlePipMouseMove);
+      window.addEventListener('mouseup', handlePipMouseUp);
+    } else {
+      window.removeEventListener('mousemove', handlePipMouseMove);
+      window.removeEventListener('mouseup', handlePipMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handlePipMouseMove);
+      window.removeEventListener('mouseup', handlePipMouseUp);
+    };
+  }, [isDraggingPip, handlePipMouseMove, handlePipMouseUp]);
+
   // ========== TRANSCRIPTION ==========
   const startTranscription = useCallback(async () => {
     const streams: MediaStream[] = [];
@@ -686,7 +756,7 @@ export const VideoCallModalV2 = ({
         </div>
 
         {/* Video Area */}
-        <div className="flex-1 relative bg-muted/50 overflow-hidden">
+        <div ref={videoContainerRef} className="flex-1 relative bg-muted/50 overflow-hidden">
           {/* Main Video Area - Shows screen share when active, otherwise remote video */}
           {isScreenSharing && screenStream ? (
             <>
@@ -698,9 +768,9 @@ export const VideoCallModalV2 = ({
                 className="absolute inset-0 w-full h-full object-contain bg-black"
               />
               
-              {/* Remote Video PiP (top right) */}
+              {/* Remote Video PiP (fixed top-right when screen sharing) */}
               {remoteStream && (
-                <div className="absolute top-4 right-4 w-40 h-28 rounded-lg overflow-hidden shadow-lg border border-border bg-black z-10">
+                <div className={`absolute ${localVideoPipPosition === 'top-right' ? 'top-4 left-4' : 'top-4 right-4'} w-40 h-28 rounded-lg overflow-hidden shadow-lg border border-border bg-black z-10`}>
                   <video
                     ref={remotePipVideoRef}
                     autoPlay
@@ -719,14 +789,18 @@ export const VideoCallModalV2 = ({
                 </div>
               )}
               
-              {/* Local Camera PiP (bottom right) */}
-              <div className="absolute bottom-4 right-4 w-32 h-24 rounded-lg overflow-hidden shadow-lg border border-border bg-background z-10">
+              {/* Local Camera PiP (draggable) */}
+              <div 
+                className={`absolute ${getPipPositionClasses(localVideoPipPosition)} w-32 h-24 rounded-lg overflow-hidden shadow-lg border-2 ${isDraggingPip ? 'border-primary' : 'border-border'} bg-background z-20 cursor-move transition-all duration-200`}
+                onMouseDown={handlePipMouseDown}
+                title="Arraste para mover a câmera"
+              >
                 <video
                   ref={localVideoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover pointer-events-none"
                   style={{ transform: 'scaleX(-1)' }}
                 />
                 {!localVideoReady && localStream && (
@@ -739,6 +813,10 @@ export const VideoCallModalV2 = ({
                     <VideoOff className="h-5 w-5 text-muted-foreground" />
                   </div>
                 )}
+                {/* Drag indicator */}
+                <div className="absolute top-1 right-1 bg-background/80 rounded p-0.5">
+                  <Move className="h-3 w-3 text-muted-foreground" />
+                </div>
               </div>
               
               {/* Screen Share Indicator */}
@@ -774,14 +852,18 @@ export const VideoCallModalV2 = ({
                 </div>
               )}
 
-              {/* Local Video (PiP) */}
-              <div className="absolute bottom-4 right-4 w-48 h-36 rounded-lg overflow-hidden shadow-lg border border-border bg-background">
+              {/* Local Video (PiP) - Draggable */}
+              <div 
+                className={`absolute ${getPipPositionClasses(localVideoPipPosition)} w-48 h-36 rounded-lg overflow-hidden shadow-lg border-2 ${isDraggingPip ? 'border-primary' : 'border-border'} bg-background z-20 cursor-move transition-all duration-200`}
+                onMouseDown={handlePipMouseDown}
+                title="Arraste para mover a câmera"
+              >
                 <video
                   ref={localVideoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover pointer-events-none"
                   style={{ transform: 'scaleX(-1)' }}
                 />
                 
@@ -797,6 +879,11 @@ export const VideoCallModalV2 = ({
                     <VideoOff className="h-8 w-8 text-muted-foreground" />
                   </div>
                 )}
+
+                {/* Drag indicator */}
+                <div className="absolute top-1 right-1 bg-background/80 rounded p-0.5">
+                  <Move className="h-3 w-3 text-muted-foreground" />
+                </div>
               </div>
             </>
           )}
