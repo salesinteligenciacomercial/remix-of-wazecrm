@@ -431,12 +431,26 @@ export const VideoCallModalV2 = ({
     }
   };
 
-  // ========== RECORDING ==========
+  // ========== RECORDING WITH CANVAS COMPOSITING ==========
   const audioContextRef = useRef<AudioContext | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   const startRecording = useCallback(async () => {
     try {
+      // Create a canvas for compositing all videos
+      const canvas = document.createElement('canvas');
+      canvas.width = 1280;
+      canvas.height = 720;
+      canvasRef.current = canvas;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        toast.error('Erro ao criar canvas para gravação');
+        return;
+      }
+
       // Create audio context for mixing audio streams
       const audioContext = new AudioContext();
       audioContextRef.current = audioContext;
@@ -460,41 +474,143 @@ export const VideoCallModalV2 = ({
         console.log('[Recording] Remote audio connected');
       }
 
-      // Get video track - prefer screen share if active
-      let videoTrack: MediaStreamTrack | null = null;
-      
-      if (isScreenSharing && screenStream) {
-        // Clone the screen stream video track to get live updates
-        const screenVideoTrack = screenStream.getVideoTracks()[0];
-        if (screenVideoTrack) {
-          videoTrack = screenVideoTrack;
-          console.log('[Recording] Using screen share video track');
+      // Get video elements for compositing
+      const getVideoElements = () => {
+        const mainVideo = isScreenSharing && screenVideoRef.current 
+          ? screenVideoRef.current 
+          : remoteVideoRef.current;
+        const localVideo = isScreenSharing ? localPipVideoRef.current : localVideoRef.current;
+        const remoteVideoPip = isScreenSharing ? remotePipVideoRef.current : null;
+        
+        return { mainVideo, localVideo, remoteVideoPip };
+      };
+
+      // Function to draw frame to canvas
+      const drawFrame = () => {
+        if (!ctx || !canvasRef.current) return;
+        
+        const { mainVideo, localVideo, remoteVideoPip } = getVideoElements();
+        
+        // Clear canvas with black background
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw main video (screen share or remote)
+        if (mainVideo && mainVideo.readyState >= 2) {
+          const videoAspect = mainVideo.videoWidth / mainVideo.videoHeight;
+          const canvasAspect = canvas.width / canvas.height;
+          
+          let drawWidth, drawHeight, drawX, drawY;
+          
+          if (videoAspect > canvasAspect) {
+            drawWidth = canvas.width;
+            drawHeight = canvas.width / videoAspect;
+            drawX = 0;
+            drawY = (canvas.height - drawHeight) / 2;
+          } else {
+            drawHeight = canvas.height;
+            drawWidth = canvas.height * videoAspect;
+            drawX = (canvas.width - drawWidth) / 2;
+            drawY = 0;
+          }
+          
+          ctx.drawImage(mainVideo, drawX, drawY, drawWidth, drawHeight);
         }
-      } else if (remoteStream?.getVideoTracks().length) {
-        videoTrack = remoteStream.getVideoTracks()[0];
-        console.log('[Recording] Using remote video track');
-      } else if (localStream?.getVideoTracks().length) {
-        videoTrack = localStream.getVideoTracks()[0];
-        console.log('[Recording] Using local video track');
-      }
+        
+        // Draw PIPs in top-right corner when screen sharing
+        if (isScreenSharing) {
+          const pipWidth = 160;
+          const pipHeight = 112;
+          const pipMargin = 16;
+          const pipGap = 8;
+          
+          // Draw remote PiP
+          if (remoteVideoPip && remoteVideoPip.readyState >= 2) {
+            const remotePipX = canvas.width - pipWidth - pipMargin;
+            const remotePipY = pipMargin;
+            
+            // Draw border
+            ctx.fillStyle = '#374151';
+            ctx.fillRect(remotePipX - 2, remotePipY - 2, pipWidth + 4, pipHeight + 4);
+            
+            ctx.drawImage(remoteVideoPip, remotePipX, remotePipY, pipWidth, pipHeight);
+            
+            // Draw label
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(remotePipX, remotePipY + pipHeight - 20, 60, 20);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '12px sans-serif';
+            ctx.fillText(remoteUserName.split(' ')[0].substring(0, 8), remotePipX + 4, remotePipY + pipHeight - 6);
+          }
+          
+          // Draw local PiP
+          if (localVideo && localVideo.readyState >= 2) {
+            const localPipX = canvas.width - pipWidth - pipMargin;
+            const localPipY = pipMargin + pipHeight + pipGap;
+            
+            // Draw border (primary color)
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(localPipX - 2, localPipY - 2, pipWidth + 4, pipHeight + 4);
+            
+            // Mirror local video
+            ctx.save();
+            ctx.translate(localPipX + pipWidth, localPipY);
+            ctx.scale(-1, 1);
+            ctx.drawImage(localVideo, 0, 0, pipWidth, pipHeight);
+            ctx.restore();
+            
+            // Draw label
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(localPipX, localPipY + pipHeight - 20, 40, 20);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '12px sans-serif';
+            ctx.fillText('Você', localPipX + 4, localPipY + pipHeight - 6);
+          }
+        } else {
+          // Normal mode - draw local PiP in corner
+          if (localVideo && localVideo.readyState >= 2) {
+            const pipWidth = 192;
+            const pipHeight = 144;
+            const pipMargin = 16;
+            const localPipX = canvas.width - pipWidth - pipMargin;
+            const localPipY = canvas.height - pipHeight - pipMargin;
+            
+            // Draw border
+            ctx.fillStyle = '#374151';
+            ctx.fillRect(localPipX - 2, localPipY - 2, pipWidth + 4, pipHeight + 4);
+            
+            // Mirror local video
+            ctx.save();
+            ctx.translate(localPipX + pipWidth, localPipY);
+            ctx.scale(-1, 1);
+            ctx.drawImage(localVideo, 0, 0, pipWidth, pipHeight);
+            ctx.restore();
+          }
+        }
+        
+        // Continue animation loop
+        animationFrameRef.current = requestAnimationFrame(drawFrame);
+      };
 
-      // Create combined stream for recording
-      const combinedTracks: MediaStreamTrack[] = [
+      // Start drawing loop
+      drawFrame();
+
+      // Get canvas stream
+      const canvasStream = canvas.captureStream(30); // 30 FPS
+      
+      // Combine canvas video with mixed audio
+      const combinedStream = new MediaStream([
+        ...canvasStream.getVideoTracks(),
         ...destination.stream.getAudioTracks(),
-      ];
-
-      if (videoTrack) {
-        combinedTracks.push(videoTrack);
-      }
-
-      const recordingStream = new MediaStream(combinedTracks);
-      recordingStreamRef.current = recordingStream;
+      ]);
+      
+      recordingStreamRef.current = combinedStream;
 
       // Setup MediaRecorder with optimal settings
       const mimeType = getSupportedMimeType();
-      const mediaRecorder = new MediaRecorder(recordingStream, { 
+      const mediaRecorder = new MediaRecorder(combinedStream, { 
         mimeType,
-        videoBitsPerSecond: 2500000, // 2.5 Mbps for good quality
+        videoBitsPerSecond: 3000000, // 3 Mbps for good quality
       });
       
       mediaRecorderRef.current = mediaRecorder;
@@ -514,11 +630,16 @@ export const VideoCallModalV2 = ({
 
       mediaRecorder.onstop = () => {
         console.log('[Recording] Stopped, downloading...');
+        // Stop animation loop
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
         downloadRecording();
       };
 
-      // Start recording with small timeslice for responsiveness
-      mediaRecorder.start(500); // Capture every 500ms for smoother updates
+      // Start recording
+      mediaRecorder.start(500);
       setIsRecording(true);
       setRecordingTime(0);
 
@@ -526,28 +647,13 @@ export const VideoCallModalV2 = ({
         setRecordingTime(prev => prev + 1);
       }, 1000);
 
-      toast.success('Gravação iniciada');
-      console.log('[Recording] Started successfully');
+      toast.success('Gravação iniciada - capturando toda a videoconferência');
+      console.log('[Recording] Canvas compositing started');
     } catch (error) {
       console.error('[VideoCall] Recording error:', error);
       toast.error('Erro ao iniciar gravação');
     }
-  }, [localStream, remoteStream, screenStream, isScreenSharing]);
-
-  // Update recording when screen share changes
-  useEffect(() => {
-    if (!isRecording || !mediaRecorderRef.current) return;
-    
-    // If screen sharing state changes while recording, we need to update the video track
-    if (isScreenSharing && screenStream) {
-      const currentRecorder = mediaRecorderRef.current;
-      if (currentRecorder.state === 'recording') {
-        console.log('[Recording] Screen share started during recording - video will update');
-        // Note: The screen share video track is already live, so it should update automatically
-        // If not, we might need to restart the recording
-      }
-    }
-  }, [isScreenSharing, screenStream, isRecording]);
+  }, [localStream, remoteStream, screenStream, isScreenSharing, remoteUserName]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
@@ -560,6 +666,12 @@ export const VideoCallModalV2 = ({
         recordingIntervalRef.current = null;
       }
 
+      // Stop animation loop
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+
       // Cleanup audio context
       if (audioContextRef.current) {
         audioContextRef.current.close();
@@ -570,6 +682,9 @@ export const VideoCallModalV2 = ({
       if (recordingStreamRef.current) {
         recordingStreamRef.current = null;
       }
+
+      // Cleanup canvas
+      canvasRef.current = null;
     }
   }, [isRecording]);
 
