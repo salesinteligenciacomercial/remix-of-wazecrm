@@ -88,7 +88,6 @@ export const GlobalCallListenerV2 = () => {
 
   // Refs para prevenir duplicação
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const publicMeetingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const processedMeetingsRef = useRef<Set<string>>(new Set());
   const processedGuestJoinsRef = useRef<Set<string>>(new Set());
   const isProcessingRef = useRef(false);
@@ -154,7 +153,64 @@ export const GlobalCallListenerV2 = () => {
     }
   }, [activeCall, incomingCall]);
 
-  // ========== SUBSCRIBE TO INTERNAL CALL SIGNALS ==========
+  // ========== HANDLE GUEST JOIN FOR PUBLIC MEETINGS ==========
+  const handleGuestJoinSignal = useCallback(async (signal: any) => {
+    const signalKey = `${signal.meeting_id}-${signal.from_user}`;
+    if (processedGuestJoinsRef.current.has(signalKey)) {
+      console.log('[CallListener] Guest join already processed:', signalKey);
+      return;
+    }
+    
+    console.log('[CallListener] Guest joined signal received for meeting:', signal.meeting_id);
+    
+    // Verify this is an external meeting where current user is host
+    const { data: meeting } = await supabase
+      .from('meetings')
+      .select('id, created_by, meeting_type')
+      .eq('id', signal.meeting_id)
+      .eq('created_by', currentUserId)
+      .eq('meeting_type', 'external')
+      .maybeSingle();
+    
+    if (!meeting) {
+      console.log('[CallListener] Not a public meeting or not the host, ignoring');
+      return;
+    }
+    
+    processedGuestJoinsRef.current.add(signalKey);
+    
+    const signalData = signal.signal_data as any;
+    const guestName = signalData?.guestName || 'Participante';
+    
+    console.log('[CallListener] Host notification - Guest joined:', guestName);
+    
+    // Play notification sound
+    playGuestJoinNotification();
+    
+    // Show toast with action to go to meeting
+    toast.success(
+      `${guestName} entrou na sua sala de reunião`,
+      {
+        duration: 10000,
+        icon: '👤',
+        action: {
+          label: 'Ir para sala',
+          onClick: () => {
+            navigate(`/meeting/${signal.meeting_id}`);
+          },
+        },
+      }
+    );
+    
+    // Also set state for potential modal
+    setPendingGuestJoin({
+      meetingId: signal.meeting_id,
+      guestName,
+      guestId: signalData?.guestId || signal.from_user,
+    });
+  }, [currentUserId, navigate]);
+
+  // ========== UNIFIED SIGNAL SUBSCRIPTION ==========
   useEffect(() => {
     if (!currentUserId) return;
 
@@ -165,10 +221,14 @@ export const GlobalCallListenerV2 = () => {
 
     // Reset state on user change
     processedMeetingsRef.current.clear();
+    processedGuestJoinsRef.current.clear();
     isProcessingRef.current = false;
 
-    const channelId = `global-calls-v2-${currentUserId}-${Date.now()}`;
-    console.log('[CallListener] Subscribing to internal calls:', channelId);
+    // Check if on public meeting page - skip guest-joined notifications there
+    const isOnMeetingPage = location.pathname.startsWith('/meeting/');
+
+    const channelId = `global-calls-unified-${currentUserId}-${Date.now()}`;
+    console.log('[CallListener] Subscribing to all signals for user:', channelId);
 
     const channel = supabase
       .channel(channelId)
@@ -185,12 +245,16 @@ export const GlobalCallListenerV2 = () => {
           console.log('[CallListener] Signal received:', signal.signal_type);
 
           if (signal.signal_type === 'call-request') {
+            // Internal call request
             await handleIncomingSignal(signal);
+          } else if (signal.signal_type === 'guest-joined' && !isOnMeetingPage) {
+            // Guest joined public meeting - only handle if not already on meeting page
+            await handleGuestJoinSignal(signal);
           }
         }
       )
       .subscribe((status) => {
-        console.log('[CallListener] Internal calls subscription:', status);
+        console.log('[CallListener] Unified subscription status:', status);
       });
 
     channelRef.current = channel;
@@ -201,113 +265,7 @@ export const GlobalCallListenerV2 = () => {
         channelRef.current = null;
       }
     };
-  }, [currentUserId, handleIncomingSignal]);
-
-  // ========== SUBSCRIBE TO PUBLIC MEETING GUEST-JOINED SIGNALS ==========
-  useEffect(() => {
-    if (!currentUserId) return;
-
-    // Don't listen if already on a public meeting page
-    if (location.pathname.startsWith('/meeting/')) {
-      console.log('[CallListener] Already on meeting page, skip public meeting listener');
-      return;
-    }
-
-    // Cleanup existing channel
-    if (publicMeetingChannelRef.current) {
-      supabase.removeChannel(publicMeetingChannelRef.current);
-    }
-
-    processedGuestJoinsRef.current.clear();
-
-    const channelId = `public-meeting-notifications-${currentUserId}-${Date.now()}`;
-    console.log('[CallListener] Subscribing to public meeting guests:', channelId);
-
-    // Listen for guest-joined signals sent TO the current user (who is the host)
-    const channel = supabase
-      .channel(channelId)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'meeting_signals',
-          filter: `to_user=eq.${currentUserId}`,
-        },
-        async (payload) => {
-          const signal = payload.new as any;
-          
-          // Only handle guest-joined signals for public meetings
-          if (signal.signal_type !== 'guest-joined') return;
-          
-          const signalKey = `${signal.meeting_id}-${signal.from_user}`;
-          if (processedGuestJoinsRef.current.has(signalKey)) {
-            console.log('[CallListener] Guest join already processed:', signalKey);
-            return;
-          }
-          
-          console.log('[CallListener] Guest joined signal received for meeting:', signal.meeting_id);
-          
-          // Verify this is an external meeting where current user is host
-          const { data: meeting } = await supabase
-            .from('meetings')
-            .select('id, created_by, meeting_type')
-            .eq('id', signal.meeting_id)
-            .eq('created_by', currentUserId)
-            .eq('meeting_type', 'external')
-            .maybeSingle();
-          
-          if (!meeting) {
-            console.log('[CallListener] Not a public meeting or not the host, ignoring');
-            return;
-          }
-          
-          processedGuestJoinsRef.current.add(signalKey);
-          
-          const signalData = signal.signal_data as any;
-          const guestName = signalData?.guestName || 'Participante';
-          
-          console.log('[CallListener] Host notification - Guest joined:', guestName);
-          
-          // Play notification sound
-          playGuestJoinNotification();
-          
-          // Show toast with action to go to meeting
-          toast.success(
-            `${guestName} entrou na sua sala de reunião`,
-            {
-              duration: 10000,
-              icon: '👤',
-              action: {
-                label: 'Ir para sala',
-                onClick: () => {
-                  navigate(`/meeting/${signal.meeting_id}`);
-                },
-              },
-            }
-          );
-          
-          // Also set state for potential modal
-          setPendingGuestJoin({
-            meetingId: signal.meeting_id,
-            guestName,
-            guestId: signalData?.guestId || signal.from_user,
-          });
-        }
-      )
-      .subscribe((status) => {
-        console.log('[CallListener] Public meeting subscription:', status);
-      });
-
-    publicMeetingChannelRef.current = channel;
-
-    return () => {
-      if (publicMeetingChannelRef.current) {
-        supabase.removeChannel(publicMeetingChannelRef.current);
-        publicMeetingChannelRef.current = null;
-      }
-    };
-  }, [currentUserId, location.pathname, navigate]);
+  }, [currentUserId, handleIncomingSignal, handleGuestJoinSignal, location.pathname]);
 
   // ========== ACCEPT CALL ==========
   const handleAccept = async () => {
