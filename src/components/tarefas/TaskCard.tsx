@@ -1650,68 +1650,151 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate,
         {/* Seção do lead movida para o CardHeader para aparecer sempre */}
         
         <div className="flex justify-end items-center gap-1 pt-2 flex-wrap" onPointerDown={(e) => e.stopPropagation()}>
-          {/* Adicionar comentário - apenas botão para não sair do card */}
-          {showCommentInput ? (
-            <div className="flex items-center gap-1 flex-1 min-w-0">
-              <Input
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    addComment();
-                    setShowCommentInput(false);
-                  } else if (e.key === 'Escape') {
-                    setShowCommentInput(false);
-                    setNewComment("");
-                  }
-                }}
-                placeholder="Comentário..."
-                className="h-7 text-xs flex-1 min-w-0"
-                autoFocus
-              />
+          {/* Adicionar comentário - usando Dialog popup */}
+          <Dialog open={showCommentInput} onOpenChange={setShowCommentInput}>
+            <DialogTrigger asChild>
               <Button 
                 type="button" 
                 size="sm" 
                 variant="ghost" 
-                className="h-7 w-7 p-0 flex-shrink-0" 
-                onClick={() => {
-                  addComment();
-                  setShowCommentInput(false);
-                }} 
-                title="Adicionar"
+                className="h-7 px-2 flex-shrink-0 gap-1"
+                onPointerDown={(e) => e.stopPropagation()}
+                title="Comentários"
               >
-                <Check className="h-3.5 w-3.5" />
+                <MessageSquare className="h-3.5 w-3.5" />
+                {Array.isArray(localComments) && localComments.length > 0 && (
+                  <span className="text-xs">({localComments.length})</span>
+                )}
               </Button>
-              <Button 
-                type="button" 
-                size="sm" 
-                variant="ghost" 
-                className="h-7 w-7 p-0 flex-shrink-0" 
-                onClick={() => {
-                  setShowCommentInput(false);
-                  setNewComment("");
-                }} 
-                title="Cancelar"
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ) : (
-            <Button 
-              type="button" 
-              size="sm" 
-              variant="ghost" 
-              className="h-7 w-7 p-0 flex-shrink-0"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowCommentInput(true);
-              }} 
-              title="Adicionar comentário"
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
-            </Button>
-          )}
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md bg-background" onPointerDown={(e) => e.stopPropagation()}>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Comentários da Tarefa
+                </DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        addComment();
+                      }
+                    }}
+                    placeholder="Digite seu comentário..."
+                    className="flex-1 text-foreground bg-background"
+                    autoFocus
+                  />
+                  <Button 
+                    type="button" 
+                    size="sm"
+                    onClick={addComment}
+                    disabled={!newComment.trim()}
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                  {(!Array.isArray(localComments) || localComments.length === 0) ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      Nenhum comentário ainda
+                    </p>
+                  ) : (
+                    localComments.map((c, idx) => {
+                      const commentId = c.id || `comment-${idx}`;
+                      const commentText = typeof c === 'string' ? c : (c.text || JSON.stringify(c));
+                      const isEditing = editingCommentId === commentId;
+                      
+                      return (
+                        <div key={commentId} className="bg-muted/30 p-3 rounded-md border border-border/30 group hover:bg-muted/40 transition-colors">
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <Input
+                                value={editingCommentText}
+                                onChange={(e) => setEditingCommentText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    editComment(commentId);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingCommentId(null);
+                                    setEditingCommentText("");
+                                  }
+                                }}
+                                className="text-sm text-foreground bg-background"
+                                autoFocus
+                              />
+                              <div className="flex gap-1">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-7"
+                                  onClick={() => editComment(commentId)}
+                                >
+                                  <Check className="h-3.5 w-3.5 mr-1" />
+                                  Salvar
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-7"
+                                  onClick={() => {
+                                    setEditingCommentId(null);
+                                    setEditingCommentText("");
+                                  }}
+                                >
+                                  <X className="h-3.5 w-3.5 mr-1" />
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm text-foreground whitespace-pre-wrap break-words">{commentText}</p>
+                              {c.created_at && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {new Date(c.created_at).toLocaleString('pt-BR')}
+                                </p>
+                              )}
+                              <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={() => {
+                                    setEditingCommentId(commentId);
+                                    setEditingCommentText(commentText);
+                                  }}
+                                >
+                                  <Pencil className="h-3 w-3 mr-1" />
+                                  Editar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-2 text-xs text-destructive hover:text-destructive"
+                                  onClick={() => deleteComment(commentId)}
+                                >
+                                  <Trash2 className="h-3 w-3 mr-1" />
+                                  Excluir
+                                </Button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           
           {/* ✅ NOVO: Botão de mover tarefa para outra coluna */}
           {columns && columns.length > 0 && (
@@ -1863,114 +1946,6 @@ export const TaskCard = React.memo(function TaskCard({ task, onDelete, onUpdate,
           </AlertDialog>
         </div>
 
-        {/* Lista de comentários abaixo do botão de comentário */}
-        {Array.isArray(localComments) && localComments.length > 0 && (
-          <div className="mt-3 space-y-2 pt-3 border-t border-border/50" onPointerDown={(e) => e.stopPropagation()}>
-            <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
-              <MessageSquare className="h-3 w-3" />
-              Comentários ({localComments.length})
-            </div>
-            {localComments.map((c, idx) => {
-              // Extrair texto do comentário, seja string ou objeto
-              const commentId = c.id || (typeof c === 'string' ? `comment-${idx}` : c.id || `comment-${idx}`);
-              const commentText = typeof c === 'string' ? c : (c.text || JSON.stringify(c));
-              const isEditing = editingCommentId === commentId;
-              
-              return (
-                <div key={commentId} className="bg-muted/30 p-2.5 rounded-md border border-border/30 group hover:bg-muted/40 transition-colors">
-                  {isEditing ? (
-                    <div className="space-y-2">
-                      <Input
-                        value={editingCommentText}
-                        onChange={(e) => setEditingCommentText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            editComment(commentId);
-                          } else if (e.key === 'Escape') {
-                            setEditingCommentId(null);
-                            setEditingCommentText("");
-                          }
-                        }}
-                        className="h-8 text-xs"
-                        autoFocus
-                      />
-                      <div className="flex items-center gap-1 justify-end">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 w-6 p-0"
-                          onClick={() => editComment(commentId)}
-                          title="Salvar"
-                        >
-                          <Check className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 w-6 p-0"
-                          onClick={() => {
-                            setEditingCommentId(null);
-                            setEditingCommentText("");
-                          }}
-                          title="Cancelar"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs text-foreground leading-relaxed break-words flex-1">
-                          {commentText}
-                        </p>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingCommentId(commentId);
-                              setEditingCommentText(commentText);
-                            }}
-                            title="Editar comentário"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (confirm("Tem certeza que deseja excluir este comentário?")) {
-                                deleteComment(commentId);
-                              }
-                            }}
-                            title="Excluir comentário"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      {c.created_at && (
-                        <span className="text-[10px] text-muted-foreground mt-1 block">
-                          {new Date(c.created_at).toLocaleString('pt-BR')}
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
       </CardContent>
       )}
 
