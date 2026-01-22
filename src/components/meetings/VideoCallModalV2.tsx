@@ -778,9 +778,10 @@ export const VideoCallModalV2 = ({
                 className="absolute inset-0 w-full h-full object-contain bg-black"
               />
               
-              {/* Remote Video PiP (fixed top-right when screen sharing) */}
-              {remoteStream && (
-                <div className={`absolute ${localVideoPipPosition === 'top-right' ? 'top-4 left-4' : 'top-4 right-4'} w-40 h-28 rounded-lg overflow-hidden shadow-lg border border-border bg-black z-10`}>
+              {/* Container for both camera PiPs in top-right corner */}
+              <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
+                {/* Remote Video PiP */}
+                <div className="w-40 h-28 rounded-lg overflow-hidden shadow-lg border border-border bg-black relative">
                   <video
                     ref={remotePipVideoRef}
                     autoPlay
@@ -796,36 +797,36 @@ export const VideoCallModalV2 = ({
                       </div>
                     </div>
                   )}
+                  {/* Remote label */}
+                  <div className="absolute bottom-1 left-1 bg-background/80 text-xs px-1.5 py-0.5 rounded">
+                    {remoteUserName.split(' ')[0]}
+                  </div>
                 </div>
-              )}
-              
-              {/* Local Camera PiP (draggable) */}
-              <div 
-                className={`absolute ${getPipPositionClasses(localVideoPipPosition)} w-32 h-24 rounded-lg overflow-hidden shadow-lg border-2 ${isDraggingPip ? 'border-primary' : 'border-border'} bg-background z-20 cursor-move transition-all duration-200`}
-                onMouseDown={handlePipMouseDown}
-                title="Arraste para mover a câmera"
-              >
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover pointer-events-none"
-                  style={{ transform: 'scaleX(-1)' }}
-                />
-                {!localVideoReady && localStream && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-muted/80">
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                
+                {/* Local Camera PiP */}
+                <div className="w-40 h-28 rounded-lg overflow-hidden shadow-lg border-2 border-primary/50 bg-background relative">
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                    style={{ transform: 'scaleX(-1)' }}
+                  />
+                  {!localVideoReady && localStream && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-muted/80">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    </div>
+                  )}
+                  {(!localStream || !isVideoEnabled) && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                      <VideoOff className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  )}
+                  {/* Local label */}
+                  <div className="absolute bottom-1 left-1 bg-background/80 text-xs px-1.5 py-0.5 rounded">
+                    Você
                   </div>
-                )}
-                {(!localStream || !isVideoEnabled) && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-muted">
-                    <VideoOff className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                )}
-                {/* Drag indicator */}
-                <div className="absolute top-1 right-1 bg-background/80 rounded p-0.5">
-                  <Move className="h-3 w-3 text-muted-foreground" />
                 </div>
               </div>
               
