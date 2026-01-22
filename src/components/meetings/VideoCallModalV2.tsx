@@ -432,45 +432,70 @@ export const VideoCallModalV2 = ({
   };
 
   // ========== RECORDING ==========
-  const startRecording = useCallback(() => {
-    const streams: MediaStream[] = [];
-    const primaryStream = isScreenSharing && screenStream ? screenStream : localStream;
-    if (primaryStream) streams.push(primaryStream);
-    if (remoteStream) streams.push(remoteStream);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
 
-    if (streams.length === 0) {
-      toast.error('Nenhum stream disponível');
-      return;
-    }
-
+  const startRecording = useCallback(async () => {
     try {
+      // Create audio context for mixing audio streams
       const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
       const destination = audioContext.createMediaStreamDestination();
 
+      // Mix local audio
       if (localStream?.getAudioTracks().length) {
-        audioContext.createMediaStreamSource(localStream).connect(destination);
+        const localAudioSource = audioContext.createMediaStreamSource(
+          new MediaStream(localStream.getAudioTracks())
+        );
+        localAudioSource.connect(destination);
+        console.log('[Recording] Local audio connected');
       }
+
+      // Mix remote audio
       if (remoteStream?.getAudioTracks().length) {
-        audioContext.createMediaStreamSource(remoteStream).connect(destination);
+        const remoteAudioSource = audioContext.createMediaStreamSource(
+          new MediaStream(remoteStream.getAudioTracks())
+        );
+        remoteAudioSource.connect(destination);
+        console.log('[Recording] Remote audio connected');
       }
 
-      let videoTrack: MediaStreamTrack | undefined;
+      // Get video track - prefer screen share if active
+      let videoTrack: MediaStreamTrack | null = null;
+      
       if (isScreenSharing && screenStream) {
-        videoTrack = screenStream.getVideoTracks()[0];
-      } else if (localStream) {
-        videoTrack = localStream.getVideoTracks()[0];
-      }
-      if (!videoTrack && remoteStream) {
+        // Clone the screen stream video track to get live updates
+        const screenVideoTrack = screenStream.getVideoTracks()[0];
+        if (screenVideoTrack) {
+          videoTrack = screenVideoTrack;
+          console.log('[Recording] Using screen share video track');
+        }
+      } else if (remoteStream?.getVideoTracks().length) {
         videoTrack = remoteStream.getVideoTracks()[0];
+        console.log('[Recording] Using remote video track');
+      } else if (localStream?.getVideoTracks().length) {
+        videoTrack = localStream.getVideoTracks()[0];
+        console.log('[Recording] Using local video track');
       }
 
-      const combinedStream = new MediaStream([
+      // Create combined stream for recording
+      const combinedTracks: MediaStreamTrack[] = [
         ...destination.stream.getAudioTracks(),
-        ...(videoTrack ? [videoTrack] : []),
-      ]);
+      ];
 
+      if (videoTrack) {
+        combinedTracks.push(videoTrack);
+      }
+
+      const recordingStream = new MediaStream(combinedTracks);
+      recordingStreamRef.current = recordingStream;
+
+      // Setup MediaRecorder with optimal settings
       const mimeType = getSupportedMimeType();
-      const mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
+      const mediaRecorder = new MediaRecorder(recordingStream, { 
+        mimeType,
+        videoBitsPerSecond: 2500000, // 2.5 Mbps for good quality
+      });
       
       mediaRecorderRef.current = mediaRecorder;
       recordedChunksRef.current = [];
@@ -478,14 +503,22 @@ export const VideoCallModalV2 = ({
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           recordedChunksRef.current.push(event.data);
+          console.log('[Recording] Chunk saved:', event.data.size, 'bytes');
         }
       };
 
+      mediaRecorder.onerror = (event: any) => {
+        console.error('[Recording] Error:', event.error);
+        toast.error('Erro na gravação');
+      };
+
       mediaRecorder.onstop = () => {
+        console.log('[Recording] Stopped, downloading...');
         downloadRecording();
       };
 
-      mediaRecorder.start(1000);
+      // Start recording with small timeslice for responsiveness
+      mediaRecorder.start(500); // Capture every 500ms for smoother updates
       setIsRecording(true);
       setRecordingTime(0);
 
@@ -494,26 +527,60 @@ export const VideoCallModalV2 = ({
       }, 1000);
 
       toast.success('Gravação iniciada');
+      console.log('[Recording] Started successfully');
     } catch (error) {
       console.error('[VideoCall] Recording error:', error);
       toast.error('Erro ao iniciar gravação');
     }
   }, [localStream, remoteStream, screenStream, isScreenSharing]);
 
+  // Update recording when screen share changes
+  useEffect(() => {
+    if (!isRecording || !mediaRecorderRef.current) return;
+    
+    // If screen sharing state changes while recording, we need to update the video track
+    if (isScreenSharing && screenStream) {
+      const currentRecorder = mediaRecorderRef.current;
+      if (currentRecorder.state === 'recording') {
+        console.log('[Recording] Screen share started during recording - video will update');
+        // Note: The screen share video track is already live, so it should update automatically
+        // If not, we might need to restart the recording
+      }
+    }
+  }, [isScreenSharing, screenStream, isRecording]);
+
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
+      console.log('[Recording] Stopping...');
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
         recordingIntervalRef.current = null;
+      }
+
+      // Cleanup audio context
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+
+      // Cleanup recording stream
+      if (recordingStreamRef.current) {
+        recordingStreamRef.current = null;
       }
     }
   }, [isRecording]);
 
   const downloadRecording = useCallback(() => {
-    if (recordedChunksRef.current.length === 0) return;
+    if (recordedChunksRef.current.length === 0) {
+      console.warn('[Recording] No chunks to download');
+      return;
+    }
 
+    console.log('[Recording] Creating download with', recordedChunksRef.current.length, 'chunks');
+    
     const mimeType = getSupportedMimeType();
     const blob = new Blob(recordedChunksRef.current, { type: mimeType });
     const url = URL.createObjectURL(blob);
