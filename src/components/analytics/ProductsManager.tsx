@@ -28,6 +28,13 @@ import {
 interface Category {
   nome: string;
   count: number;
+  subcategorias: Subcategory[];
+}
+
+interface Subcategory {
+  nome: string;
+  count: number;
+  parentCategory: string;
 }
 
 interface Product {
@@ -36,6 +43,7 @@ interface Product {
   descricao: string | null;
   preco_sugerido: number | null;
   categoria: string | null;
+  subcategoria: string | null;
   ativo: boolean;
 }
 
@@ -67,8 +75,14 @@ export default function ProductsManager({
     descricao: "",
     preco_sugerido: "",
     categoria: "",
+    subcategoria: "",
     ativo: true
   });
+
+  // Subcategory dialog
+  const [subcategoryDialogOpen, setSubcategoryDialogOpen] = useState(false);
+  const [subcategoryParent, setSubcategoryParent] = useState<string | null>(null);
+  const [subcategoryName, setSubcategoryName] = useState("");
 
   // Category dialog
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
@@ -98,17 +112,33 @@ export default function ProductsManager({
 
       setProducts(data || []);
 
-      // Extract unique categories with counts
-      const categoryMap = new Map<string, number>();
+      // Extract unique categories with counts and subcategories
+      const categoryMap = new Map<string, { count: number; subcategories: Map<string, number> }>();
       (data || []).forEach(p => {
         if (p.categoria) {
-          categoryMap.set(p.categoria, (categoryMap.get(p.categoria) || 0) + 1);
+          if (!categoryMap.has(p.categoria)) {
+            categoryMap.set(p.categoria, { count: 0, subcategories: new Map() });
+          }
+          const catData = categoryMap.get(p.categoria)!;
+          catData.count++;
+          
+          if (p.subcategoria) {
+            catData.subcategories.set(
+              p.subcategoria,
+              (catData.subcategories.get(p.subcategoria) || 0) + 1
+            );
+          }
         }
       });
 
-      const cats: Category[] = Array.from(categoryMap.entries()).map(([nome, count]) => ({
+      const cats: Category[] = Array.from(categoryMap.entries()).map(([nome, data]) => ({
         nome,
-        count
+        count: data.count,
+        subcategorias: Array.from(data.subcategories.entries()).map(([subNome, subCount]) => ({
+          nome: subNome,
+          count: subCount,
+          parentCategory: nome
+        })).sort((a, b) => a.nome.localeCompare(b.nome))
       })).sort((a, b) => a.nome.localeCompare(b.nome));
 
       setCategories(cats);
@@ -128,6 +158,7 @@ export default function ProductsManager({
         descricao: product.descricao || "",
         preco_sugerido: product.preco_sugerido?.toString() || "",
         categoria: product.categoria || "",
+        subcategoria: product.subcategoria || "",
         ativo: product.ativo
       });
     } else {
@@ -137,6 +168,7 @@ export default function ProductsManager({
         descricao: "",
         preco_sugerido: "",
         categoria: "",
+        subcategoria: "",
         ativo: true
       });
     }
@@ -156,6 +188,7 @@ export default function ProductsManager({
         descricao: productForm.descricao.trim() || null,
         preco_sugerido: productForm.preco_sugerido ? parseFloat(productForm.preco_sugerido) : null,
         categoria: productForm.categoria.trim() || null,
+        subcategoria: productForm.subcategoria.trim() || null,
         company_id: companyId,
         ativo: productForm.ativo
       };
@@ -274,17 +307,64 @@ export default function ProductsManager({
       
       // Add to categories list if not exists
       if (!categories.some(c => c.nome === newCategoryName)) {
-        setCategories([...categories, { nome: newCategoryName, count: 0 }]);
+        setCategories([...categories, { nome: newCategoryName, count: 0, subcategorias: [] }]);
       }
       
       // Set in product form if dialog is open
       if (productDialogOpen) {
-        setProductForm({ ...productForm, categoria: newCategoryName });
+        setProductForm({ ...productForm, categoria: newCategoryName, subcategoria: "" });
       }
       
       toast.success(`Categoria "${newCategoryName}" criada!`);
       setCategoryDialogOpen(false);
     }
+  };
+
+  const handleOpenSubcategoryDialog = (parentCategory: string) => {
+    setSubcategoryParent(parentCategory);
+    setSubcategoryName("");
+    setSubcategoryDialogOpen(true);
+  };
+
+  const handleSaveSubcategory = async () => {
+    if (!subcategoryName.trim()) {
+      toast.error("Nome da subcategoria é obrigatório");
+      return;
+    }
+
+    if (!subcategoryParent) {
+      toast.error("Categoria pai é obrigatória");
+      return;
+    }
+
+    const newSubcategoryName = subcategoryName.trim();
+    
+    // Add to local categories list
+    setCategories(categories.map(cat => {
+      if (cat.nome === subcategoryParent) {
+        // Check if subcategory already exists
+        if (cat.subcategorias.some(s => s.nome === newSubcategoryName)) {
+          toast.error("Subcategoria já existe");
+          return cat;
+        }
+        return {
+          ...cat,
+          subcategorias: [
+            ...cat.subcategorias,
+            { nome: newSubcategoryName, count: 0, parentCategory: subcategoryParent }
+          ].sort((a, b) => a.nome.localeCompare(b.nome))
+        };
+      }
+      return cat;
+    }));
+    
+    // Set in product form if dialog is open
+    if (productDialogOpen && productForm.categoria === subcategoryParent) {
+      setProductForm({ ...productForm, subcategoria: newSubcategoryName });
+    }
+    
+    toast.success(`Subcategoria "${newSubcategoryName}" criada!`);
+    setSubcategoryDialogOpen(false);
   };
 
   const formatCurrency = (value: number | null) => {
@@ -425,14 +505,24 @@ export default function ProductsManager({
                           </TableCell>
                           <TableCell>
                             {product.categoria ? (
-                              <Badge 
-                                variant="outline" 
-                                className="cursor-pointer hover:bg-muted"
-                                onClick={() => handleOpenCategoryDialog(product.categoria!)}
-                              >
-                                <Tag className="h-3 w-3 mr-1" />
-                                {product.categoria}
-                              </Badge>
+                              <div className="flex flex-col gap-1">
+                                <Badge 
+                                  variant="outline" 
+                                  className="cursor-pointer hover:bg-muted w-fit"
+                                  onClick={() => handleOpenCategoryDialog(product.categoria!)}
+                                >
+                                  <Tag className="h-3 w-3 mr-1" />
+                                  {product.categoria}
+                                </Badge>
+                                {product.subcategoria && (
+                                  <Badge 
+                                    variant="secondary" 
+                                    className="text-xs w-fit ml-2"
+                                  >
+                                    └ {product.subcategoria}
+                                  </Badge>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-muted-foreground text-sm">-</span>
                             )}
@@ -488,20 +578,46 @@ export default function ProductsManager({
                   <FolderOpen className="h-4 w-4" />
                   Categorias ({categories.length})
                 </h4>
-                <div className="flex flex-wrap gap-2">
+                <div className="space-y-2">
                   {categories.map(cat => (
-                    <Badge
-                      key={cat.nome}
-                      variant="secondary"
-                      className="cursor-pointer hover:bg-primary/20 py-1.5 px-3"
-                      onClick={() => handleOpenCategoryDialog(cat.nome)}
-                    >
-                      <Pencil className="h-3 w-3 mr-1" />
-                      {cat.nome}
-                      <span className="ml-2 text-xs bg-background/50 rounded px-1">
-                        {cat.count}
-                      </span>
-                    </Badge>
+                    <div key={cat.nome} className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="secondary"
+                          className="cursor-pointer hover:bg-primary/20 py-1.5 px-3"
+                          onClick={() => handleOpenCategoryDialog(cat.nome)}
+                        >
+                          <Pencil className="h-3 w-3 mr-1" />
+                          {cat.nome}
+                          <span className="ml-2 text-xs bg-background/50 rounded px-1">
+                            {cat.count}
+                          </span>
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenSubcategoryDialog(cat.nome)}
+                          className="h-7 text-xs"
+                        >
+                          <PlusCircle className="h-3 w-3 mr-1" />
+                          Subcategoria
+                        </Button>
+                      </div>
+                      {cat.subcategorias.length > 0 && (
+                        <div className="flex flex-wrap gap-1 ml-4">
+                          {cat.subcategorias.map(sub => (
+                            <Badge
+                              key={sub.nome}
+                              variant="outline"
+                              className="text-xs py-1 px-2"
+                            >
+                              └ {sub.nome}
+                              <span className="ml-1 text-muted-foreground">({sub.count})</span>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -547,18 +663,6 @@ export default function ProductsManager({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="product-preco">Preço Sugerido</Label>
-                <Input
-                  id="product-preco"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={productForm.preco_sugerido}
-                  onChange={(e) => setProductForm({ ...productForm, preco_sugerido: e.target.value })}
-                  placeholder="0,00"
-                />
-              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="product-categoria">Categoria</Label>
@@ -571,9 +675,9 @@ export default function ProductsManager({
                       setEditingCategory(null);
                       setCategoryName("");
                     } else if (value === "__none__") {
-                      setProductForm({ ...productForm, categoria: "" });
+                      setProductForm({ ...productForm, categoria: "", subcategoria: "" });
                     } else {
-                      setProductForm({ ...productForm, categoria: value });
+                      setProductForm({ ...productForm, categoria: value, subcategoria: "" });
                     }
                   }}
                 >
@@ -601,7 +705,65 @@ export default function ProductsManager({
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="product-preco">Preço Sugerido</Label>
+                <Input
+                  id="product-preco"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={productForm.preco_sugerido}
+                  onChange={(e) => setProductForm({ ...productForm, preco_sugerido: e.target.value })}
+                  placeholder="0,00"
+                />
+              </div>
             </div>
+
+            {/* Subcategory selector - only shows when category is selected */}
+            {productForm.categoria && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="product-subcategoria">Subcategoria</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleOpenSubcategoryDialog(productForm.categoria)}
+                    className="h-7 text-xs"
+                  >
+                    <PlusCircle className="h-3 w-3 mr-1" />
+                    Nova Subcategoria
+                  </Button>
+                </div>
+                <Select
+                  value={productForm.subcategoria || "__none__"}
+                  onValueChange={(value) => {
+                    if (value === "__none__") {
+                      setProductForm({ ...productForm, subcategoria: "" });
+                    } else {
+                      setProductForm({ ...productForm, subcategoria: value });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma subcategoria (opcional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">
+                      <span className="text-muted-foreground">Sem subcategoria</span>
+                    </SelectItem>
+                    {categories
+                      .find(c => c.nome === productForm.categoria)
+                      ?.subcategorias.map(sub => (
+                        <SelectItem key={sub.nome} value={sub.nome}>
+                          {sub.nome}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-2">
               <Label htmlFor="product-ativo">Produto ativo</Label>
@@ -664,6 +826,46 @@ export default function ProductsManager({
         </DialogContent>
       </Dialog>
 
+      {/* Subcategory Dialog */}
+      <Dialog open={subcategoryDialogOpen} onOpenChange={setSubcategoryDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Nova Subcategoria
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Categoria Pai</Label>
+              <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                <Tag className="h-4 w-4 text-primary" />
+                <span className="font-medium">{subcategoryParent}</span>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="subcategory-nome">Nome da Subcategoria *</Label>
+              <Input
+                id="subcategory-nome"
+                value={subcategoryName}
+                onChange={(e) => setSubcategoryName(e.target.value)}
+                placeholder="Ex: Premium, Básico, Especial"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubcategoryDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveSubcategory}>
+              Criar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
@@ -679,7 +881,7 @@ export default function ProductsManager({
             <AlertDialogAction
               onClick={handleDeleteProduct}
               disabled={saving}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive/90"
             >
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Excluir
