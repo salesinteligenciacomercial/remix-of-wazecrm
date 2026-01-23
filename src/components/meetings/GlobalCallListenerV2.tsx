@@ -14,6 +14,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { IncomingCallModal } from './IncomingCallModal';
 import { VideoCallModalV2 } from './VideoCallModalV2';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Users, X, ArrowRight } from 'lucide-react';
 
 interface IncomingCall {
   meetingId: string;
@@ -362,6 +365,18 @@ export const GlobalCallListenerV2 = () => {
     }
   };
 
+  // ========== HANDLE GO TO MEETING ==========
+  const handleGoToMeeting = () => {
+    if (pendingGuestJoin) {
+      navigate(`/meeting/${pendingGuestJoin.meetingId}`);
+      setPendingGuestJoin(null);
+    }
+  };
+
+  const handleDismissGuestNotification = () => {
+    setPendingGuestJoin(null);
+  };
+
   // ========== RENDER ==========
   return (
     <>
@@ -388,6 +403,50 @@ export const GlobalCallListenerV2 = () => {
           onCallEnded={handleEndCall}
         />
       )}
+
+      {/* Guest Joined Public Meeting Modal */}
+      <Dialog open={!!pendingGuestJoin} onOpenChange={(open) => !open && setPendingGuestJoin(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              Participante na Sala
+            </DialogTitle>
+            <DialogDescription>
+              <span className="font-semibold text-foreground">{pendingGuestJoin?.guestName}</span> entrou na sua sala de reunião e está aguardando.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex items-center justify-center py-6">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                <span className="text-2xl font-bold text-primary">
+                  {pendingGuestJoin?.guestName?.charAt(0).toUpperCase() || 'P'}
+                </span>
+              </div>
+              <span className="absolute bottom-0 right-0 w-5 h-5 bg-green-500 rounded-full border-2 border-background animate-pulse" />
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={handleDismissGuestNotification}
+              className="flex-1"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Ignorar
+            </Button>
+            <Button
+              onClick={handleGoToMeeting}
+              className="flex-1"
+            >
+              <ArrowRight className="h-4 w-4 mr-2" />
+              Ir para Sala
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
