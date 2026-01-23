@@ -350,67 +350,80 @@ export function UsuariosSubcontaDialog({ company, open, onOpenChange }: Usuarios
         throw new Error("Sessão expirada. Faça login novamente.");
       }
 
-      // 1. Atualizar profile (nome e email)
-      if (editFormData.full_name || editFormData.email) {
-        const profileUpdate: any = {};
-        if (editFormData.full_name) profileUpdate.full_name = editFormData.full_name;
-        if (editFormData.email) profileUpdate.email = editFormData.email.toLowerCase().trim();
-        profileUpdate.updated_at = new Date().toISOString();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .upsert({
-            id: editingUser.user_id,
-            ...profileUpdate,
-          }, {
-            onConflict: "id"
-          });
-
-        if (profileError) {
-          console.error("Erro ao atualizar profile:", profileError);
-          throw profileError;
-        }
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error("Configuração do Supabase não encontrada.");
       }
 
-      // 2. Atualizar role se mudou
+      // Usar a edge function editar-usuario para todas as atualizações
+      const functionUrl = `${supabaseUrl}/functions/v1/editar-usuario`;
+
+      const requestBody: any = {
+        userId: editingUser.user_id,
+        companyId: company.id,
+      };
+
+      // Adicionar campos que foram alterados
+      if (editFormData.full_name && editFormData.full_name !== editingUser.profiles?.full_name) {
+        requestBody.full_name = editFormData.full_name;
+      }
+      
+      if (editFormData.email) {
+        const newEmail = editFormData.email.toLowerCase().trim();
+        const currentEmail = editingUser.profiles?.email?.toLowerCase().trim();
+        if (newEmail !== currentEmail) {
+          requestBody.email = newEmail;
+        }
+      }
+      
       if (editFormData.role && editFormData.role !== editingUser.role) {
-        const { error: roleError } = await supabase
-          .from("user_roles")
-          .update({ role: editFormData.role as "company_admin" | "gestor" | "super_admin" | "suporte" | "vendedor" })
-          .eq("id", editingUser.id);
-
-        if (roleError) {
-          console.error("Erro ao atualizar role:", roleError);
-          throw roleError;
-        }
+        requestBody.role = editFormData.role;
       }
-
-      // 3. Atualizar senha se fornecida
+      
       if (editFormData.password && editFormData.password.length >= 6) {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-        const functionUrl = `${supabaseUrl}/functions/v1/redefinir-senha-subconta`;
-
-        const { error: passwordError } = await fetch(functionUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': supabaseKey || '',
-          },
-          body: JSON.stringify({
-            userId: editingUser.user_id,
-            novaSenha: editFormData.password,
-            notificar: false,
-          }),
-        }).then(res => res.json());
-
-        if (passwordError) {
-          console.error("Erro ao atualizar senha:", passwordError);
-          // Não bloquear se apenas a senha falhar
-        }
+        requestBody.password = editFormData.password;
       }
+
+      console.log("📤 [EDITAR-USUARIO] Enviando requisição:", { ...requestBody, password: requestBody.password ? '***' : undefined });
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': supabaseKey,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const responseText = await response.text();
+      let responseData: any;
+      
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        console.error("Erro ao parsear resposta:", e, "Resposta:", responseText);
+        throw new Error("Resposta inválida do servidor");
+      }
+
+      if (!response.ok) {
+        let errorMessage = responseData?.error || responseData?.message || `Erro ${response.status}`;
+        
+        // Mensagens de erro mais específicas
+        if (errorMessage.toLowerCase().includes('email') && 
+            (errorMessage.toLowerCase().includes('already') || 
+             errorMessage.toLowerCase().includes('já está') || 
+             errorMessage.toLowerCase().includes('em uso'))) {
+          errorMessage = `O e-mail ${editFormData.email} já está em uso por outro usuário.`;
+        }
+        
+        console.error("❌ [EDITAR-USUARIO] Erro:", responseData);
+        throw new Error(errorMessage);
+      }
+
+      console.log("✅ [EDITAR-USUARIO] Sucesso:", responseData);
 
       toast({
         title: "Usuário atualizado",
