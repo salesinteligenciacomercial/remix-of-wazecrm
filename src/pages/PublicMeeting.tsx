@@ -6,14 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { 
   Mic, MicOff, Video, VideoOff, PhoneOff, 
   Monitor, MonitorOff, Circle, Square, Loader2, Users, Copy, Check,
-  FileText, Download, X, MessageSquare, BookOpen
+  FileText, Download, X, MessageSquare, BookOpen, MessageCircle
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MeetingScriptPanel, MeetingScript } from '@/components/meetings/MeetingScriptPanel';
 import { SelectMeetingScriptDialog } from '@/components/meetings/SelectMeetingScriptDialog';
 import { CameraFiltersPanel } from '@/components/meetings/CameraFiltersPanel';
+import { MeetingChatPanel } from '@/components/meetings/MeetingChatPanel';
 import { useCameraFilters } from '@/hooks/useCameraFilters';
 import { useBackgroundBlur } from '@/hooks/useBackgroundBlur';
+import { useMeetingChat } from '@/hooks/useMeetingChat';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -128,7 +130,7 @@ const PublicMeeting = () => {
   // Script state
   const [showScriptDialog, setShowScriptDialog] = useState(false);
   const [activeScript, setActiveScript] = useState<MeetingScript | null>(null);
-  
+
   // Camera filters
   const {
     filters: cameraFilters,
@@ -173,6 +175,22 @@ const PublicMeeting = () => {
   const guestIdRef = useRef<string>(`guest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
   const processedGuestJoinsRef = useRef<Set<string>>(new Set());
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Chat state
+  const [showChat, setShowChat] = useState(false);
+  const currentChatUserId = isHost ? (hostId || 'host') : guestIdRef.current;
+  const currentChatUserName = isHost ? (guestName || 'Anfitrião') : guestName;
+  const { 
+    messages: chatMessages, 
+    unreadCount: chatUnreadCount, 
+    sendMessage: sendChatMessage,
+    markAsRead: markChatAsRead,
+    isLoading: isChatLoading
+  } = useMeetingChat(
+    hasJoined ? meetingId || null : null, 
+    currentChatUserId, 
+    currentChatUserName
+  );
 
   // ========== BACKGROUND BLUR PROCESSING ==========
   useEffect(() => {
@@ -1482,6 +1500,24 @@ const PublicMeeting = () => {
         </Button>
 
         <Button
+          variant={showChat ? 'default' : 'secondary'}
+          size="lg"
+          className="rounded-full h-14 w-14 relative"
+          onClick={() => {
+            setShowChat(!showChat);
+            if (!showChat) markChatAsRead();
+          }}
+          title={showChat ? 'Fechar chat' : 'Abrir chat'}
+        >
+          <MessageCircle className="h-6 w-6" />
+          {chatUnreadCount > 0 && !showChat && (
+            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center font-medium">
+              {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+            </span>
+          )}
+        </Button>
+
+        <Button
           variant="destructive"
           size="lg"
           className="rounded-full h-14 w-14"
@@ -1569,6 +1605,16 @@ const PublicMeeting = () => {
           onScriptUpdate={(updatedScript) => setActiveScript(updatedScript)}
         />
       )}
+
+      {/* Meeting Chat Panel */}
+      <MeetingChatPanel
+        isOpen={showChat}
+        onClose={() => setShowChat(false)}
+        messages={chatMessages}
+        currentUserId={currentChatUserId}
+        onSendMessage={sendChatMessage}
+        isLoading={isChatLoading}
+      />
     </div>
   );
 };

@@ -2322,6 +2322,36 @@ export type Database = {
           },
         ]
       }
+      meeting_chat_messages: {
+        Row: {
+          created_at: string
+          id: string
+          meeting_id: string
+          message: string
+          message_type: string
+          sender_id: string
+          sender_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meeting_id: string
+          message: string
+          message_type?: string
+          sender_id: string
+          sender_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meeting_id?: string
+          message?: string
+          message_type?: string
+          sender_id?: string
+          sender_name?: string
+        }
+        Relationships: []
+      }
       meeting_signals: {
         Row: {
           created_at: string

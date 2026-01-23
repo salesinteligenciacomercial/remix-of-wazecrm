@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { 
   Mic, MicOff, Video, VideoOff, PhoneOff, 
   Monitor, MonitorOff, Circle, Square,
-  Loader2, FileText, Download, X, MessageSquare, Move, BookOpen
+  Loader2, FileText, Download, X, MessageSquare, Move, BookOpen, MessageCircle
 } from 'lucide-react';
 import { useWebRTCSession, RoomState, ParticipantRole } from '@/hooks/useWebRTCSession';
 import { toast } from 'sonner';
@@ -20,8 +20,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { MeetingScriptPanel, MeetingScript } from './MeetingScriptPanel';
 import { SelectMeetingScriptDialog } from './SelectMeetingScriptDialog';
 import { CameraFiltersPanel } from './CameraFiltersPanel';
+import { MeetingChatPanel } from './MeetingChatPanel';
 import { useCameraFilters } from '@/hooks/useCameraFilters';
 import { useBackgroundBlur } from '@/hooks/useBackgroundBlur';
+import { useMeetingChat } from '@/hooks/useMeetingChat';
 
 interface VideoCallModalV2Props {
   open: boolean;
@@ -114,6 +116,20 @@ export const VideoCallModalV2 = ({
   const [showScriptSelector, setShowScriptSelector] = useState(false);
   const [activeScript, setActiveScript] = useState<MeetingScript | null>(null);
   const [showScriptPanel, setShowScriptPanel] = useState(false);
+
+  // Chat state
+  const [showChat, setShowChat] = useState(false);
+  const { 
+    messages: chatMessages, 
+    unreadCount: chatUnreadCount, 
+    sendMessage: sendChatMessage,
+    markAsRead: markChatAsRead,
+    isLoading: isChatLoading
+  } = useMeetingChat(
+    open ? meetingId : null, 
+    localUserId, 
+    'Você'
+  );
 
   // Camera filters
   const {
@@ -1261,6 +1277,24 @@ export const VideoCallModalV2 = ({
           </Button>
 
           <Button
+            variant={showChat ? 'default' : 'secondary'}
+            size="lg"
+            className="rounded-full h-14 w-14 relative"
+            onClick={() => {
+              setShowChat(!showChat);
+              if (!showChat) markChatAsRead();
+            }}
+            title={showChat ? 'Fechar chat' : 'Abrir chat'}
+          >
+            <MessageCircle className="h-6 w-6" />
+            {chatUnreadCount > 0 && !showChat && (
+              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center font-medium">
+                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+              </span>
+            )}
+          </Button>
+
+          <Button
             variant="destructive"
             size="lg"
             className="rounded-full h-14 w-14"
@@ -1321,6 +1355,16 @@ export const VideoCallModalV2 = ({
             onScriptUpdate={(updated) => setActiveScript(updated)}
           />
         )}
+
+        {/* Meeting Chat Panel */}
+        <MeetingChatPanel
+          isOpen={showChat}
+          onClose={() => setShowChat(false)}
+          messages={chatMessages}
+          currentUserId={localUserId}
+          onSendMessage={sendChatMessage}
+          isLoading={isChatLoading}
+        />
 
         {/* Script Selector Dialog */}
         <SelectMeetingScriptDialog
