@@ -960,13 +960,13 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
           </div>
         </div>
 
-        {/* Valor Estimado + Botões de ação - NA MESMA LINHA */}
+        {/* Valor Estimado + Data Prevista + Botões de ação */}
         <div 
-          className="flex items-center justify-between pt-2 border-t border-border/50"
+          className="flex items-center justify-between pt-2 border-t border-border/50 gap-2"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {/* Valor Estimado à esquerda - CLICÁVEL PARA EDITAR */}
+          {/* Valor Estimado à esquerda + Data Prevista abaixo - CLICÁVEL PARA EDITAR */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -976,13 +976,13 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
                     setValorInput(leadValue?.toString() || "");
                     setValorDialogOpen(true);
                   }}
-                  className="flex flex-col items-start hover:bg-muted/50 rounded-md p-1 -m-1 transition-colors group/valor cursor-pointer text-left"
+                  className="flex flex-col items-start hover:bg-muted/50 rounded-md p-1 -m-1 transition-colors group/valor cursor-pointer text-left min-w-0 flex-shrink"
                 >
                   <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
                     Valor Estimado
                     <Pencil className="h-2.5 w-2.5 opacity-0 group-hover/valor:opacity-100 transition-opacity" />
                   </span>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     {leadValue !== undefined && leadValue > 0 ? (
                       <Badge className="font-semibold bg-gradient-success text-success-foreground shadow-sm w-fit text-xs">
                         R$ {leadValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -1008,41 +1008,33 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
                       </Badge>
                     )}
                   </div>
+                  {/* Data Prevista de Fechamento - abaixo do valor */}
+                  {expectedCloseDate && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Badge 
+                        variant="outline" 
+                        className="text-[10px] bg-primary/10 border-primary/20 text-primary"
+                      >
+                        <Calendar className="h-2 w-2 mr-0.5" />
+                        {new Date(expectedCloseDate).toLocaleDateString('pt-BR')}
+                      </Badge>
+                    </div>
+                  )}
                 </button>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Clique para {leadValue ? 'editar' : 'adicionar'} o valor</p>
+                {expectedCloseDate && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Previsão: {new Date(expectedCloseDate).toLocaleDateString('pt-BR')}
+                  </p>
+                )}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
 
-          {/* Botões de ação à direita + Data Prevista */}
-          <div className="flex items-center gap-1">
-            {/* Data Prevista de Fechamento - ao lado do botão conversa */}
-            {expectedCloseDate && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge 
-                      variant="outline" 
-                      className="text-xs bg-primary/10 border-primary/20 text-primary cursor-pointer whitespace-nowrap"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setValorDialogOpen(true);
-                      }}
-                    >
-                      <Calendar className="h-2.5 w-2.5 mr-1" />
-                      {new Date(expectedCloseDate).toLocaleDateString('pt-BR')}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="font-medium">Previsão de fechamento</p>
-                    <p className="text-xs text-muted-foreground">Clique para editar</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-
+          {/* Botões de ação à direita */}
+          <div className="flex items-center gap-0.5 flex-shrink-0">
             {/* Botão Ver Conversas */}
             {lead.telefone && (
               <TooltipProvider>
