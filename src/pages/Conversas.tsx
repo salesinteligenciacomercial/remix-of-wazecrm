@@ -4734,10 +4734,26 @@ function Conversas() {
   // 📁 DRAG-AND-DROP: Handlers para arrastar e soltar arquivos
   const getFileType = (file: File): string => {
     const mimeType = file.type.toLowerCase();
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    
     if (mimeType.startsWith('image/')) return 'image';
     if (mimeType.startsWith('video/')) return 'video';
     if (mimeType.startsWith('audio/')) return 'audio';
-    if (mimeType === 'application/pdf') return 'pdf';
+    if (mimeType === 'application/pdf' || extension === 'pdf') return 'pdf';
+    
+    // Planilhas (Excel, CSV, ODS)
+    const spreadsheetMimes = [
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.oasis.opendocument.spreadsheet',
+      'text/csv',
+      'text/comma-separated-values'
+    ];
+    const spreadsheetExtensions = ['xlsx', 'xls', 'csv', 'ods'];
+    if (spreadsheetMimes.includes(mimeType) || spreadsheetExtensions.includes(extension || '')) {
+      return 'document'; // WhatsApp envia planilhas como documento
+    }
+    
     return 'document';
   };
 
