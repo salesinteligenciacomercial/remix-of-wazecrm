@@ -1100,6 +1100,170 @@ export type Database = {
           },
         ]
       }
+      customer_ltv_cache: {
+        Row: {
+          company_id: string
+          dias_como_cliente: number | null
+          frequencia_compra_dias: number | null
+          id: string
+          lead_id: string
+          primeira_compra: string | null
+          produtos_favoritos: Json | null
+          ticket_medio: number | null
+          total_avulsa: number | null
+          total_compras: number | null
+          total_cross_sell: number | null
+          total_gasto: number | null
+          total_recorrente: number | null
+          total_upsell: number | null
+          ultima_compra: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          dias_como_cliente?: number | null
+          frequencia_compra_dias?: number | null
+          id?: string
+          lead_id: string
+          primeira_compra?: string | null
+          produtos_favoritos?: Json | null
+          ticket_medio?: number | null
+          total_avulsa?: number | null
+          total_compras?: number | null
+          total_cross_sell?: number | null
+          total_gasto?: number | null
+          total_recorrente?: number | null
+          total_upsell?: number | null
+          ultima_compra?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          dias_como_cliente?: number | null
+          frequencia_compra_dias?: number | null
+          id?: string
+          lead_id?: string
+          primeira_compra?: string | null
+          produtos_favoritos?: Json | null
+          ticket_medio?: number | null
+          total_avulsa?: number | null
+          total_compras?: number | null
+          total_cross_sell?: number | null
+          total_gasto?: number | null
+          total_recorrente?: number | null
+          total_upsell?: number | null
+          ultima_compra?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_ltv_cache_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_ltv_cache_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_sales: {
+        Row: {
+          categoria: string | null
+          company_id: string
+          created_at: string | null
+          desconto: number | null
+          id: string
+          lead_id: string
+          notas: string | null
+          produto_id: string | null
+          produto_nome: string
+          quantidade: number
+          recorrencia: string | null
+          responsavel_id: string | null
+          subcategoria: string | null
+          tipo: string | null
+          updated_at: string | null
+          valor_final: number
+          valor_unitario: number
+          venda_origem_id: string | null
+        }
+        Insert: {
+          categoria?: string | null
+          company_id: string
+          created_at?: string | null
+          desconto?: number | null
+          id?: string
+          lead_id: string
+          notas?: string | null
+          produto_id?: string | null
+          produto_nome: string
+          quantidade?: number
+          recorrencia?: string | null
+          responsavel_id?: string | null
+          subcategoria?: string | null
+          tipo?: string | null
+          updated_at?: string | null
+          valor_final?: number
+          valor_unitario?: number
+          venda_origem_id?: string | null
+        }
+        Update: {
+          categoria?: string | null
+          company_id?: string
+          created_at?: string | null
+          desconto?: number | null
+          id?: string
+          lead_id?: string
+          notas?: string | null
+          produto_id?: string | null
+          produto_nome?: string
+          quantidade?: number
+          recorrencia?: string | null
+          responsavel_id?: string | null
+          subcategoria?: string | null
+          tipo?: string | null
+          updated_at?: string | null
+          valor_final?: number
+          valor_unitario?: number
+          venda_origem_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_sales_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_sales_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_sales_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produtos_servicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_sales_venda_origem_id_fkey"
+            columns: ["venda_origem_id"]
+            isOneToOne: false
+            referencedRelation: "customer_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       etapas: {
         Row: {
           atualizado_em: string | null

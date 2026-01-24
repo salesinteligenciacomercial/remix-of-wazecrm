@@ -146,38 +146,72 @@ export function FinalizarNegociacaoDialog({
 
     setLoading(true);
     try {
+      const { data: auth } = await supabase.auth.getUser();
+      
+      // Obter company_id
+      let companyId: string | null = null;
+      if (auth?.user?.id) {
+        const { data: role } = await supabase
+          .from('user_roles')
+          .select('company_id')
+          .eq('user_id', auth.user.id)
+          .maybeSingle();
+        companyId = role?.company_id || null;
+      }
+
+      const valorNumerico = parseFloat(valorFinal);
+      const produto = produtoSelecionado && produtoSelecionado !== 'custom' 
+        ? produtos.find(p => p.id === produtoSelecionado) 
+        : null;
+      const produtoNome = produto?.nome || produtoCustom.trim() || 'Produto não especificado';
+
+      // Atualizar lead
       const updateData: Record<string, any> = {
         status: 'ganho',
-        value: parseFloat(valorFinal),
+        value: valorNumerico,
         won_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      // Se selecionou um produto da lista, vincular pelo ID
-      if (produtoSelecionado && produtoSelecionado !== 'custom') {
-        updateData.produto_id = produtoSelecionado;
-        // Também salvar o nome no campo servico para compatibilidade
-        const produto = produtos.find(p => p.id === produtoSelecionado);
-        if (produto) {
-          updateData.servico = produto.nome;
-        }
-      } else if (produtoSelecionado === 'custom' && produtoCustom.trim()) {
-        // Se digitou um produto customizado, salvar apenas no campo texto
+      if (produto) {
+        updateData.produto_id = produto.id;
+        updateData.servico = produto.nome;
+      } else if (produtoCustom.trim()) {
         updateData.servico = produtoCustom.trim();
       }
 
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from('leads')
         .update(updateData)
         .eq('id', lead.id);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
-      const produtoNome = produtoSelecionado === 'custom' 
-        ? produtoCustom 
-        : produtos.find(p => p.id === produtoSelecionado)?.nome || '';
+      // Registrar na tabela de vendas (customer_sales) para LTV
+      if (companyId) {
+        const { error: saleError } = await supabase
+          .from('customer_sales')
+          .insert({
+            company_id: companyId,
+            lead_id: lead.id,
+            produto_id: produto?.id || null,
+            produto_nome: produtoNome,
+            valor_unitario: valorNumerico,
+            quantidade: 1,
+            desconto: 0,
+            valor_final: valorNumerico,
+            tipo: 'avulsa',
+            responsavel_id: auth?.user?.id || null,
+            categoria: produto?.categoria || null,
+          });
 
-      toast.success(`🎉 Venda ganha! ${formatCurrency(parseFloat(valorFinal))}${produtoNome ? ` - ${produtoNome}` : ''}`);
+        if (saleError) {
+          console.error('Erro ao registrar venda no histórico:', saleError);
+          // Não bloquear o fluxo, apenas logar
+        }
+      }
+
+      toast.success(`🎉 Venda ganha! ${formatCurrency(valorNumerico)}${produtoNome ? ` - ${produtoNome}` : ''}`);
       onOpenChange(false);
       onUpdated();
     } catch (error) {
