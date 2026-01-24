@@ -10,6 +10,7 @@ import LeadsDrilldownModal, { DrilldownFilterType } from "@/components/analytics
 import { PipelineFinanceiro } from "@/components/analytics/PipelineFinanceiro";
 import { LossReasonsReport } from "@/components/analytics/LossReasonsReport";
 import ProductsAnalytics from "@/components/analytics/ProductsAnalytics";
+import { CustomerLTVAnalytics } from "@/components/analytics/CustomerLTVAnalytics";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -1118,7 +1119,7 @@ export default function Analytics() {
       </Card>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-8 h-auto p-1">
+        <TabsList className="grid w-full grid-cols-9 h-auto p-1">
           <TabsTrigger value="overview" className="gap-2 py-3">
             <Eye className="h-4 w-4" />
             <span className="hidden sm:inline">Visão Geral</span>
@@ -1126,6 +1127,10 @@ export default function Analytics() {
           <TabsTrigger value="sales" className="gap-2 py-3">
             <TrendingUp className="h-4 w-4" />
             <span className="hidden sm:inline">Vendas</span>
+          </TabsTrigger>
+          <TabsTrigger value="customers" className="gap-2 py-3">
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Clientes</span>
           </TabsTrigger>
           <TabsTrigger value="products" className="gap-2 py-3">
             <Package className="h-4 w-4" />
@@ -1634,6 +1639,20 @@ export default function Analytics() {
 
           {/* Relatório de Motivos de Perda */}
           <LossReasonsReport userCompanyId={userCompanyId} globalFilters={globalFilters} />
+        </TabsContent>
+
+        {/* Clientes e LTV */}
+        <TabsContent value="customers" className="space-y-6">
+          {userCompanyId ? (
+            <CustomerLTVAnalytics 
+              companyId={userCompanyId} 
+              globalFilters={globalFilters} 
+            />
+          ) : (
+            <div className="flex items-center justify-center h-64 text-muted-foreground">
+              <p>Carregando dados de clientes...</p>
+            </div>
+          )}
         </TabsContent>
 
         {/* Produtos & Serviços */}
