@@ -4,9 +4,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Label } from "@/components/ui/label";
 import { 
   Package, Search, X, CheckCircle2, Loader2, 
-  ChevronDown, Filter, FolderTree 
+  ChevronDown, Filter, FolderTree, Plus 
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -54,6 +55,13 @@ export function ProdutoSelectorDialog({
   const [selectedCategoria, setSelectedCategoria] = useState<string>("all");
   const [selectedSubcategoria, setSelectedSubcategoria] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
+  
+  // State para criar novo produto
+  const [showNovoProduto, setShowNovoProduto] = useState(false);
+  const [novoProdutoNome, setNovoProdutoNome] = useState("");
+  const [novoProdutoPreco, setNovoProdutoPreco] = useState("");
+  const [novoProdutoCategoria, setNovoProdutoCategoria] = useState("");
+  const [salvandoNovo, setSalvandoNovo] = useState(false);
 
   // Carregar produtos ao abrir
   useEffect(() => {
@@ -162,6 +170,52 @@ export function ProdutoSelectorDialog({
 
   const hasActiveFilters = selectedCategoria !== "all" || selectedSubcategoria !== "all";
 
+  // Criar novo produto
+  const handleCriarNovoProduto = async () => {
+    if (!novoProdutoNome.trim()) {
+      toast.error("Informe o nome do produto");
+      return;
+    }
+    
+    setSalvandoNovo(true);
+    try {
+      const precoNum = novoProdutoPreco ? parseFloat(novoProdutoPreco.replace(",", ".")) : null;
+      
+      const { data, error } = await supabase
+        .from("produtos_servicos")
+        .insert({
+          company_id: companyId,
+          nome: novoProdutoNome.trim(),
+          preco_sugerido: precoNum,
+          categoria: novoProdutoCategoria.trim() || null,
+          ativo: true
+        })
+        .select("id, nome, preco_sugerido, categoria, subcategoria")
+        .single();
+      
+      if (error) throw error;
+      
+      toast.success("Produto criado com sucesso!");
+      
+      // Limpar form
+      setNovoProdutoNome("");
+      setNovoProdutoPreco("");
+      setNovoProdutoCategoria("");
+      setShowNovoProduto(false);
+      
+      // Recarregar lista e selecionar o novo
+      await carregarProdutos();
+      if (data) {
+        onSelectProduct(data.id, data);
+      }
+    } catch (error) {
+      console.error("Erro ao criar produto:", error);
+      toast.error("Erro ao criar produto");
+    } finally {
+      setSalvandoNovo(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
@@ -263,19 +317,99 @@ export function ProdutoSelectorDialog({
             </CollapsibleContent>
           </Collapsible>
 
+          {/* Botão adicionar novo produto */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-2 border-dashed border-primary text-primary hover:bg-primary/10"
+            onClick={() => setShowNovoProduto(!showNovoProduto)}
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar novo produto
+          </Button>
+
+          {/* Form para novo produto */}
+          {showNovoProduto && (
+            <div className="space-y-3 p-3 border rounded-lg bg-muted/50">
+              <div className="space-y-1">
+                <Label htmlFor="novo-nome" className="text-xs">Nome do produto *</Label>
+                <Input
+                  id="novo-nome"
+                  placeholder="Ex: Consultoria Premium"
+                  value={novoProdutoNome}
+                  onChange={(e) => setNovoProdutoNome(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="novo-preco" className="text-xs">Preço sugerido</Label>
+                  <Input
+                    id="novo-preco"
+                    placeholder="0,00"
+                    value={novoProdutoPreco}
+                    onChange={(e) => setNovoProdutoPreco(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="novo-categoria" className="text-xs">Categoria</Label>
+                  <Input
+                    id="novo-categoria"
+                    placeholder="Ex: Serviços"
+                    value={novoProdutoCategoria}
+                    onChange={(e) => setNovoProdutoCategoria(e.target.value)}
+                    list="categorias-existentes"
+                  />
+                  <datalist id="categorias-existentes">
+                    {categorias.map(cat => (
+                      <option key={cat} value={cat} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowNovoProduto(false);
+                    setNovoProdutoNome("");
+                    setNovoProdutoPreco("");
+                    setNovoProdutoCategoria("");
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  onClick={handleCriarNovoProduto}
+                  disabled={salvandoNovo || !novoProdutoNome.trim()}
+                >
+                  {salvandoNovo ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <Plus className="h-4 w-4 mr-1" />
+                  )}
+                  Criar
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Lista de produtos */}
           {loading ? (
             <div className="flex items-center justify-center py-8 flex-1">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : produtos.length === 0 ? (
+          ) : produtos.length === 0 && !showNovoProduto ? (
             <div className="text-center py-6 flex-1">
               <Package className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
               <p className="text-sm text-muted-foreground">
                 Nenhum produto cadastrado.
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Cadastre produtos em Analytics → Produtos
+                Clique em "Adicionar novo produto" acima
               </p>
             </div>
           ) : produtosFiltrados.length === 0 ? (
