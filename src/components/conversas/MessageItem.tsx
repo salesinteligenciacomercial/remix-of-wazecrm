@@ -22,7 +22,7 @@ import {
 import { MessageActions } from "./MessageActions";
 import { PDFPreview } from "./PDFPreview";
 import { PdfViewerDialog } from "./PdfViewerDialog";
-import { SpreadsheetViewerDialog } from "./SpreadsheetViewerDialog";
+
 import { toast } from "@/hooks/use-toast";
 import { getMediaUrl, isPermanentUrl, MediaExpiredError } from "@/utils/mediaLoader";
 import { TextWithLinks } from "./LinkPreview";
@@ -111,8 +111,6 @@ function MessageItemComponent({
   // Estado para PDF Viewer Dialog
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
   
-  // Estado para Spreadsheet Viewer Dialog
-  const [spreadsheetViewerOpen, setSpreadsheetViewerOpen] = useState(false);
 
   const repliedMessage = message.replyTo && allMessages
     ? allMessages.find(m => m.id === message.replyTo)
@@ -729,7 +727,7 @@ function MessageItemComponent({
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setSpreadsheetViewerOpen(true)}
+                          onClick={() => window.open(mediaUrl || message.mediaUrl, '_blank')}
                           className="flex-1"
                         >
                           <FileText className="h-3 w-3 mr-2" />
@@ -747,15 +745,6 @@ function MessageItemComponent({
                       </Button>
                     </div>
                     
-                    {/* Spreadsheet Viewer Dialog */}
-                    {isSpreadsheet && (
-                      <SpreadsheetViewerDialog
-                        open={spreadsheetViewerOpen}
-                        onOpenChange={setSpreadsheetViewerOpen}
-                        url={mediaUrl || message.mediaUrl || ''}
-                        fileName={message.fileName}
-                      />
-                    )}
                   </div>
                 );
               })()}
