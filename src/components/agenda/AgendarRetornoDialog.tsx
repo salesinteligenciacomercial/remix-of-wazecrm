@@ -231,7 +231,7 @@ export function AgendarRetornoDialog({
             `Por favor, anote o dia e horário!\n\n` +
             `_Este é um agendamento automático de retorno._`;
 
-          await supabase.functions.invoke('enviar-whatsapp', {
+          const { data: whatsappResult, error: whatsappError } = await supabase.functions.invoke('enviar-whatsapp', {
             body: {
               numero: telefoneNormalizado,
               mensagem,
@@ -239,29 +239,42 @@ export function AgendarRetornoDialog({
             }
           });
 
-          // Salvar mensagem no CRM
-          const { data: userProfile } = await supabase
-            .from('profiles')
-            .select('full_name, email')
-            .eq('id', user.id)
-            .single();
+          // Verificar se houve erro no envio do WhatsApp
+          if (whatsappError || whatsappResult?.error) {
+            const errorMsg = whatsappResult?.error || whatsappError?.message || 'Erro desconhecido';
+            console.error("Erro ao enviar WhatsApp:", errorMsg);
+            
+            // Verificar se é erro de conexão do WhatsApp
+            if (errorMsg.includes('Connection Closed') || errorMsg.includes('SEND_FAILED')) {
+              toast.warning("Retorno agendado! ⚠️ WhatsApp desconectado - reconecte sua instância.");
+            } else {
+              toast.warning(`Retorno agendado! (Falha no WhatsApp: ${errorMsg})`);
+            }
+          } else {
+            // Salvar mensagem no CRM apenas se o envio foi bem sucedido
+            const { data: userProfile } = await supabase
+              .from('profiles')
+              .select('full_name, email')
+              .eq('id', user.id)
+              .single();
 
-          await supabase.from('conversas').insert({
-            numero: telefoneNormalizado,
-            telefone_formatado: telefoneNormalizado,
-            mensagem,
-            origem: 'WhatsApp',
-            status: 'Enviada',
-            tipo_mensagem: 'text',
-            nome_contato: nomePaciente,
-            company_id: userRole.company_id,
-            owner_id: user.id,
-            sent_by: userProfile?.full_name || userProfile?.email || 'Sistema',
-            fromme: true,
-            created_at: new Date().toISOString()
-          });
+            await supabase.from('conversas').insert({
+              numero: telefoneNormalizado,
+              telefone_formatado: telefoneNormalizado,
+              mensagem,
+              origem: 'WhatsApp',
+              status: 'Enviada',
+              tipo_mensagem: 'text',
+              nome_contato: nomePaciente,
+              company_id: userRole.company_id,
+              owner_id: user.id,
+              sent_by: userProfile?.full_name || userProfile?.email || 'Sistema',
+              fromme: true,
+              created_at: new Date().toISOString()
+            });
 
-          toast.success("Retorno agendado e paciente notificado!");
+            toast.success("Retorno agendado e paciente notificado!");
+          }
         } catch (notifError) {
           console.error("Erro ao notificar paciente:", notifError);
           toast.success("Retorno agendado! (Falha ao enviar notificação)");
