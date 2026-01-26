@@ -1,359 +1,263 @@
 
-# Melhorias no Calculador de Custos
+# Melhorias para o Menu Financeiro
 
-## Visao Geral
+## Resumo Executivo
 
-Implementar tres novas funcionalidades no modulo de Custos do Financeiro:
-1. **Custo Historico Total** - Visualizacao do custo acumulado desde a ativacao de cada subconta
-2. **Comparativo Mensal** - Relatorio de evolucao de custos mes a mes
-3. **Alertas de Limite** - Notificacoes automaticas quando custos excedem limites configurados
+Apos analise completa do modulo Financeiro, identifiquei 6 areas principais de melhoria que aumentarao a eficiencia operacional, a experiencia do usuario e a tomada de decisoes estrategicas.
 
 ---
 
-## 1. Custo Historico Total
+## 1. Periodo de Trial com Gestao Automatizada
 
-### Alteracoes no Banco de Dados
+### Situacao Atual
+O sistema ja possui status "trial" para assinaturas, mas nao ha controle de vencimento ou conversao automatica.
 
-Criar nova funcao SQL para calcular custo historico desde a ativacao:
+### Melhorias Propostas
 
-```sql
-CREATE OR REPLACE FUNCTION get_subconta_historical_cost(
-  p_master_company_id UUID,
-  p_company_id UUID
-) RETURNS JSONB AS $$
-DECLARE
-  result JSONB;
-  v_activation_date DATE;
-BEGIN
-  -- Buscar data de ativacao da subconta
-  SELECT created_at::date INTO v_activation_date
-  FROM companies WHERE id = p_company_id;
-  
-  SELECT jsonb_build_object(
-    'activation_date', v_activation_date,
-    'months_active', EXTRACT(MONTH FROM age(current_date, v_activation_date)) + 
-                     EXTRACT(YEAR FROM age(current_date, v_activation_date)) * 12,
-    'total_messages_sent', (SELECT COUNT(*) FROM conversas WHERE company_id = p_company_id AND fromme = true),
-    'total_messages_received', (SELECT COUNT(*) FROM conversas WHERE company_id = p_company_id AND fromme = false),
-    'total_media_files', (SELECT COUNT(*) FROM conversas WHERE company_id = p_company_id 
-                          AND tipo_mensagem IN ('audio','video','image','document')),
-    'total_automations', (SELECT COUNT(*) FROM automation_flow_logs WHERE company_id = p_company_id)
-  ) INTO result;
-  
-  RETURN result;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
+**Campos novos na tabela `company_subscriptions`:**
+- `trial_end_date` - data de fim do trial
+- `trial_days` - duracao configuravel (7, 14, 30 dias)
+- `converted_from_trial` - flag de conversao
 
-### Alteracoes no Frontend
+**Funcionalidades:**
+- Contador de dias restantes no trial visivel na tabela
+- Alerta automatico quando trial esta prestes a vencer (3 dias antes)
+- Acao rapida para converter trial em assinatura paga
+- Relatorio de taxa de conversao trial para pago
 
-**Interface `CompanyCostBreakdown`** - Adicionar campos:
-```typescript
-// Em useCompanyCosts.ts
-export interface CompanyCostBreakdown {
-  // ... campos existentes ...
-  
-  // Novos campos para historico
-  activationDate?: string;
-  monthsActive?: number;
-  historicalTotalCost?: number;
-  historicalMessagesSent?: number;
-  historicalMessagesReceived?: number;
-  historicalMediaFiles?: number;
-  historicalAutomations?: number;
-}
-```
-
-**Novo componente `HistoricalCostCard.tsx`**:
-- Card mostrando custo total acumulado
-- Data de ativacao da subconta
-- Meses ativos
-- Grafico de linha com evolucao mensal
-- Custo medio mensal
-
-**Integracao na tabela principal**:
-- Nova coluna "Historico" com icone clicavel
-- Ao clicar, abre modal com detalhes historicos
-
----
-
-## 2. Comparativo Mensal de Custos
-
-### Alteracoes no Banco de Dados
-
-Criar funcao SQL para retornar dados mensais agregados:
-
-```sql
-CREATE OR REPLACE FUNCTION get_monthly_cost_comparison(
-  p_master_company_id UUID,
-  p_months INTEGER DEFAULT 6
-) RETURNS TABLE(
-  month_year TEXT,
-  month_date DATE,
-  company_id UUID,
-  company_name TEXT,
-  total_cost INTEGER,
-  messages_cost INTEGER,
-  leads_cost INTEGER,
-  media_cost INTEGER,
-  revenue INTEGER,
-  margin INTEGER
-) AS $$
-BEGIN
-  RETURN QUERY
-  WITH months AS (
-    SELECT generate_series(
-      date_trunc('month', current_date - (p_months || ' months')::interval),
-      date_trunc('month', current_date),
-      '1 month'::interval
-    )::date as month_start
-  )
-  -- Agregacao por mes e subconta
-  SELECT 
-    to_char(m.month_start, 'YYYY-MM') as month_year,
-    m.month_start as month_date,
-    c.id as company_id,
-    c.name as company_name,
-    -- Calculos de custo baseados em uso do mes
-    ...
-  FROM months m
-  CROSS JOIN companies c
-  WHERE c.parent_company_id = p_master_company_id
-  ORDER BY m.month_start, c.name;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
-
-### Novo Componente `MonthlyCostComparison.tsx`
-
-**Funcionalidades**:
-- Tabela pivotada com meses como colunas
-- Linhas por subconta
-- Cores indicando variacao (verde = reducao, vermelho = aumento)
-- Porcentagem de variacao entre meses
-- Grafico de area empilhada mostrando distribuicao de custos
-- Filtro para selecionar numero de meses (3, 6, 12)
-
-**Layout visual**:
+**Interface Visual:**
 ```text
 +--------------------------------------------------------------------+
-| COMPARATIVO MENSAL                           [3 meses] [6m] [12m]  |
+| ASSINATURAS                                                        |
 +--------------------------------------------------------------------+
-|              | Nov/25  | Dez/25  | Jan/26  | Variacao |            |
-|--------------|---------|---------|---------|----------|            |
-| AB CONECTA   | R$145   | R$161   | R$178   | +10.5%   |            |
-| WR CORRETORA | R$27    | R$31    | R$28    | -9.6%    |            |
-| jd promotora | R$45    | R$52    | R$48    | -7.7%    |            |
+| Empresa     | Plano    | Status     | Trial Restante | Acoes       |
+|-------------|----------|------------|----------------|-------------|
+| ABC Ltda    | Pro      | Trial      | 5 dias         | [Converter] |
+| XYZ SA      | Starter  | Trial      | 1 dia ⚠️       | [Converter] |
 +--------------------------------------------------------------------+
-| [Grafico de area empilhada - evolucao por categoria de custo]      |
-+--------------------------------------------------------------------+
-```
-
-### Hook `useMonthlyCostHistory.ts`
-
-```typescript
-interface MonthlyData {
-  monthYear: string;
-  monthDate: Date;
-  companies: {
-    companyId: string;
-    companyName: string;
-    totalCost: number;
-    messagesCost: number;
-    leadsCost: number;
-    mediaCost: number;
-    revenue: number;
-    margin: number;
-    percentChange: number;
-  }[];
-  totals: {
-    totalCost: number;
-    totalRevenue: number;
-  };
-}
 ```
 
 ---
 
-## 3. Alertas de Limite de Custo
+## 2. Dashboard Financeiro Aprimorado
 
-### Alteracoes no Banco de Dados
+### Situacao Atual
+O dashboard mostra 8 KPIs basicos mas falta contexto historico e projecoes.
 
-**Nova tabela `cost_alerts`**:
+### Melhorias Propostas
+
+**Novos KPIs:**
+- **ARR (Receita Anual Recorrente)**: MRR x 12
+- **ARPU (Receita Media por Usuario)**: MRR / clientes ativos
+- **Projecao 3 Meses**: estimativa baseada na tendencia
+- **NDR (Net Dollar Retention)**: retencao liquida de receita
+
+**Melhorias Visuais:**
+- Mini-graficos de tendencia (sparklines) em cada card
+- Comparativo com periodo anterior (variacao %)
+- Tooltips explicativos para cada metrica
+- Cores dinamicas baseadas em metas (verde/amarelo/vermelho)
+
+**Cards Interativos:**
+- Ao clicar em "Inadimplentes", abre lista de faturas em atraso
+- Ao clicar em "Clientes Ativos", abre lista de assinaturas
+
+---
+
+## 3. Fluxo de Caixa e Previsibilidade
+
+### Situacao Atual
+Nao existe visualizacao de fluxo de caixa ou projecoes futuras.
+
+### Melhorias Propostas
+
+**Novo Componente `FluxoCaixaChart.tsx`:**
+```text
++--------------------------------------------------------------------+
+| FLUXO DE CAIXA - PROXIMOS 3 MESES                                  |
++--------------------------------------------------------------------+
+|                                                                    |
+|  R$15k ┤                           ┌──────┐                        |
+|        │              ┌──────┐     │//////│                        |
+|  R$10k ┤    ┌──────┐  │//////│     │//////│                        |
+|        │    │//////│  │//////│     │//////│                        |
+|   R$5k ┤    │//////│  │//////│     │//////│                        |
+|        └────┴──────┴──┴──────┴─────┴──────┴─────                   |
+|              Fev        Mar          Abr                           |
+|                                                                    |
+|  Previsto: R$ 45.000   Recebido: R$ 12.500   A Receber: R$ 32.500  |
++--------------------------------------------------------------------+
+```
+
+**Funcionalidades:**
+- Calendario de recebimentos baseado em `next_billing_date`
+- Projecao de receita considerando churn estimado
+- Alertas de concentracao de vencimentos (muitas faturas no mesmo dia)
+
+---
+
+## 4. Automacao de Cobranças e Lembretes
+
+### Situacao Atual
+Geracao de faturas e cobranças e manual.
+
+### Melhorias Propostas
+
+**Cobranças Recorrentes:**
+- Opcao para gerar faturas automaticamente X dias antes do vencimento
+- Configuracao por subconta ou global
+- Integracao automatica com Asaas para emissao
+
+**Lembretes Automaticos:**
+- E-mail/WhatsApp X dias antes do vencimento
+- Lembrete no dia do vencimento
+- Cobrança apos Y dias de atraso
+
+**Painel de Configuracao:**
+```text
++--------------------------------------------------------------------+
+| CONFIGURACOES DE COBRANCA                                          |
++--------------------------------------------------------------------+
+| Geracao Automatica de Faturas                                      |
+| [x] Gerar fatura 5 dias antes do vencimento                        |
+|                                                                    |
+| Lembretes                                                          |
+| [x] 3 dias antes - E-mail                                          |
+| [x] No vencimento - WhatsApp                                       |
+| [x] 5 dias apos atraso - E-mail + WhatsApp                         |
++--------------------------------------------------------------------+
+```
+
+---
+
+## 5. Relatorios e Exportacoes Avancadas
+
+### Situacao Atual
+Existe apenas exportacao basica de custos em CSV.
+
+### Melhorias Propostas
+
+**Novos Relatorios:**
+1. **DRE Simplificado** - Receitas vs Custos por periodo
+2. **Aging Report** - Faturas por tempo de atraso (1-30, 31-60, 61-90, 90+)
+3. **Cohort Analysis** - Retencao de clientes por mes de aquisicao
+4. **Revenue por Segmento** - Receita por tipo de plano
+
+**Formatos de Exportacao:**
+- CSV (atual)
+- PDF com graficos
+- Excel com multiplas abas
+
+**Agendamento:**
+- Enviar relatorio semanal/mensal por e-mail
+
+---
+
+## 6. Melhorias de UX e Performance
+
+### Situacao Atual
+Interface funcional mas pode ser otimizada.
+
+### Melhorias Propostas
+
+**Navegacao Rapida:**
+- Breadcrumbs indicando contexto
+- Atalhos de teclado para acoes comuns
+- Busca global em faturas/assinaturas/transacoes
+
+**Filtros Avancados:**
+- Filtro por periodo personalizado (date picker)
+- Filtro por valor (faixa de valores)
+- Filtros salvos como "favoritos"
+
+**Performance:**
+- Paginacao nas tabelas (evitar carregar 100+ registros)
+- Virtual scrolling para listas grandes
+- Lazy loading de graficos
+
+**Feedback Visual:**
+- Skeleton loading consistente
+- Toast notifications para acoes
+- Indicadores de dados desatualizados
+
+---
+
+## Resumo Tecnico de Implementacao
+
+### Novas Tabelas/Campos
 
 ```sql
-CREATE TABLE public.cost_alerts (
+-- Campos em company_subscriptions
+ALTER TABLE company_subscriptions ADD COLUMN trial_end_date DATE;
+ALTER TABLE company_subscriptions ADD COLUMN trial_days INTEGER DEFAULT 14;
+ALTER TABLE company_subscriptions ADD COLUMN converted_from_trial BOOLEAN DEFAULT FALSE;
+
+-- Nova tabela para configuracao de cobrancas
+CREATE TABLE billing_automation_config (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  master_company_id UUID NOT NULL REFERENCES companies(id),
-  company_id UUID REFERENCES companies(id), -- NULL = todas subcontas
-  alert_name TEXT NOT NULL,
-  alert_type TEXT CHECK (alert_type IN ('total_cost', 'margin_percent', 'cost_category')),
-  threshold_value INTEGER NOT NULL, -- em centavos ou percentual x100
-  threshold_operator TEXT CHECK (threshold_operator IN ('>', '<', '>=', '<=')),
-  cost_category TEXT, -- para alertas de categoria especifica
-  is_active BOOLEAN DEFAULT true,
-  notify_email BOOLEAN DEFAULT true,
-  notify_in_app BOOLEAN DEFAULT true,
-  last_triggered_at TIMESTAMPTZ,
+  master_company_id UUID REFERENCES companies(id),
+  auto_generate_invoices BOOLEAN DEFAULT FALSE,
+  days_before_due INTEGER DEFAULT 5,
+  reminder_days_before INTEGER[] DEFAULT '{3, 0}',
+  reminder_days_after INTEGER[] DEFAULT '{5, 15, 30}',
+  reminder_channels TEXT[] DEFAULT '{email}',
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Tabela para historico de alertas disparados
-CREATE TABLE public.cost_alert_history (
+-- Nova tabela para lembretes enviados
+CREATE TABLE billing_reminders_sent (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  alert_id UUID REFERENCES cost_alerts(id) ON DELETE CASCADE,
-  company_id UUID REFERENCES companies(id),
-  triggered_value INTEGER NOT NULL,
-  threshold_value INTEGER NOT NULL,
-  message TEXT NOT NULL,
-  read_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT now()
+  invoice_id UUID REFERENCES billing_invoices(id),
+  reminder_type TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  sent_at TIMESTAMPTZ DEFAULT now()
 );
 ```
 
-### Novo Componente `CostAlertsManager.tsx`
+### Novos Componentes
 
-**Funcionalidades**:
-- Lista de alertas configurados
-- Botao para criar novo alerta
-- Dialog de configuracao com:
-  - Nome do alerta
-  - Tipo (custo total, margem, categoria)
-  - Subconta especifica ou todas
-  - Valor limite
-  - Operador (maior que, menor que)
-  - Opcoes de notificacao
-- Indicador visual de alertas ativos
-- Historico de alertas disparados
+| Componente | Descricao |
+|------------|-----------|
+| `TrialManager.tsx` | Gestao de trials com conversao |
+| `FluxoCaixaChart.tsx` | Projecao de fluxo de caixa |
+| `BillingAutomationConfig.tsx` | Configuracao de cobranças |
+| `AgingReport.tsx` | Relatorio de faturas por tempo |
+| `RevenueBySegment.tsx` | Grafico de receita por plano |
+| `AdvancedFilters.tsx` | Componente de filtros reutilizavel |
 
-**Layout visual**:
-```text
-+--------------------------------------------------------------------+
-| ALERTAS DE CUSTO                                    [+ Novo Alerta]|
-+--------------------------------------------------------------------+
-| Nome                | Tipo       | Limite    | Status  | Acoes    |
-|---------------------|------------|-----------|---------|----------|
-| Custo Alto AB       | Total      | > R$200   | Ativo   | [Ed][Del]|
-| Margem Critica      | Margem     | < 30%     | Ativo   | [Ed][Del]|
-| Msgs Excessivas     | Categoria  | > R$100   | Pausado | [Ed][Del]|
-+--------------------------------------------------------------------+
-```
+### Novos Hooks
 
-### Componente `CostAlertBadge.tsx`
-
-- Badge que aparece na tabela de custos quando subconta excede limite
-- Icone de alerta com tooltip explicativo
-- Clicavel para ver detalhes
-
-### Integracao com Hook `useCompanyCosts.ts`
-
-Adicionar funcao para verificar alertas:
-
-```typescript
-const checkCostAlerts = useCallback(async (breakdowns: CompanyCostBreakdown[]) => {
-  // Buscar alertas configurados
-  // Comparar com valores atuais
-  // Retornar lista de alertas disparados
-  // Salvar no historico se necessario
-}, []);
-```
+| Hook | Funcao |
+|------|--------|
+| `useTrialManagement` | Logica de trials e conversoes |
+| `useCashFlowProjection` | Calculo de projecoes |
+| `useBillingAutomation` | Gerenciamento de automacoes |
+| `useReportGenerator` | Geracao de relatorios PDF/Excel |
 
 ---
 
-## Integracao no CustoCalculator.tsx
+## Prioridade de Implementacao
 
-### Nova Estrutura de Tabs Internas
+### Fase 1 - Alto Impacto, Rapido (1-2 dias)
+1. Periodo de Trial com gestao
+2. KPIs aprimorados no dashboard
+3. Filtros avancados
 
-```typescript
-<Tabs defaultValue="overview">
-  <TabsList>
-    <TabsTrigger value="overview">Visao Geral</TabsTrigger>
-    <TabsTrigger value="monthly">Comparativo Mensal</TabsTrigger>
-    <TabsTrigger value="alerts">Alertas</TabsTrigger>
-  </TabsList>
-  
-  <TabsContent value="overview">
-    {/* Conteudo atual + coluna de historico */}
-  </TabsContent>
-  
-  <TabsContent value="monthly">
-    <MonthlyCostComparison />
-  </TabsContent>
-  
-  <TabsContent value="alerts">
-    <CostAlertsManager />
-  </TabsContent>
-</Tabs>
-```
+### Fase 2 - Medio Impacto (2-3 dias)
+4. Fluxo de Caixa e projecoes
+5. Relatorios de aging e cohort
 
-### Summary Cards Atualizados
-
-Adicionar novos cards:
-- **Custo Historico Total**: Soma de todos os custos desde ativacao
-- **Alertas Ativos**: Contador de subcontas em alerta
+### Fase 3 - Automacao (3-5 dias)
+6. Cobrancas e lembretes automaticos
+7. Integracao com WhatsApp para avisos
 
 ---
 
-## Arquivos a Criar
+## Beneficios Esperados
 
-| Arquivo | Descricao |
-|---------|-----------|
-| `src/components/financeiro/HistoricalCostCard.tsx` | Card de custo historico por subconta |
-| `src/components/financeiro/MonthlyCostComparison.tsx` | Comparativo mensal de custos |
-| `src/components/financeiro/CostAlertsManager.tsx` | Gerenciador de alertas |
-| `src/components/financeiro/CostAlertDialog.tsx` | Dialog para criar/editar alertas |
-| `src/components/financeiro/CostAlertBadge.tsx` | Badge de alerta na tabela |
-| `src/hooks/useMonthlyCostHistory.ts` | Hook para dados mensais |
-| `src/hooks/useCostAlerts.ts` | Hook para gerenciar alertas |
-
-## Arquivos a Editar
-
-| Arquivo | Alteracao |
-|---------|-----------|
-| `src/components/financeiro/CustoCalculator.tsx` | Adicionar tabs internas e integracao |
-| `src/hooks/useCompanyCosts.ts` | Adicionar campos historicos e funcao de alertas |
-
----
-
-## Resumo das Migrations
-
-```sql
--- 1. Funcao para custo historico
-CREATE OR REPLACE FUNCTION get_subconta_historical_cost(...);
-
--- 2. Funcao para comparativo mensal
-CREATE OR REPLACE FUNCTION get_monthly_cost_comparison(...);
-
--- 3. Tabela de alertas
-CREATE TABLE cost_alerts (...);
-CREATE TABLE cost_alert_history (...);
-
--- 4. RLS policies para as novas tabelas
-CREATE POLICY "Master can manage own alerts" ON cost_alerts ...;
-CREATE POLICY "Master can view own alert history" ON cost_alert_history ...;
-```
-
----
-
-## Fluxo de Usuario
-
-```text
-1. Admin acessa Financeiro > Custos
-2. Ve resumo com custo total historico e alertas ativos
-3. Na tabela, clica em subconta para ver historico detalhado
-4. Muda para aba "Comparativo Mensal" para analisar tendencias
-5. Identifica subconta com crescimento de custo
-6. Vai para aba "Alertas" e configura limite
-7. Recebe notificacao quando limite for ultrapassado
-```
-
----
-
-## Estimativas
-
-**Complexidade**: Alta
-**Migrations**: 2 funcoes SQL + 2 tabelas + RLS
-**Componentes novos**: 6
-**Hooks novos**: 2
-**Linhas de codigo estimadas**: ~800
+- **Reducao de inadimplencia**: Lembretes automaticos e visibilidade de atrasos
+- **Conversao de trials**: Acompanhamento proativo de clientes em teste
+- **Decisoes estrategicas**: Dados de projecao e tendencia
+- **Produtividade**: Automacao de tarefas manuais
+- **Experiencia do usuario**: Interface mais intuitiva e responsiva
