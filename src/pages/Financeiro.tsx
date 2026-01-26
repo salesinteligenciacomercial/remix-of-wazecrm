@@ -8,7 +8,8 @@ import {
   TrendingUp,
   ShieldAlert,
   Building2,
-  Zap
+  Zap,
+  Calculator
 } from 'lucide-react';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { FinanceiroDashboard } from '@/components/financeiro/FinanceiroDashboard';
@@ -18,6 +19,7 @@ import { TransacoesManager } from '@/components/financeiro/TransacoesManager';
 import { MRRChart } from '@/components/financeiro/MRRChart';
 import { SubcontasFinanceiroManager } from '@/components/financeiro/SubcontasFinanceiroManager';
 import { AsaasIntegration } from '@/components/financeiro/AsaasIntegration';
+import { CustoCalculator } from '@/components/financeiro/CustoCalculator';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function Financeiro() {
@@ -99,10 +101,14 @@ export default function Financeiro() {
       </div>
 
       <Tabs defaultValue="subcontas" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-4 md:grid-cols-8 lg:w-auto lg:inline-grid">
           <TabsTrigger value="subcontas" className="gap-2">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Subcontas</span>
+          </TabsTrigger>
+          <TabsTrigger value="custos" className="gap-2">
+            <Calculator className="h-4 w-4" />
+            <span className="hidden sm:inline">Custos</span>
           </TabsTrigger>
           <TabsTrigger value="asaas" className="gap-2">
             <Zap className="h-4 w-4" />
@@ -137,6 +143,10 @@ export default function Financeiro() {
             loading={loading}
             onCreateSubscription={createSubscription}
           />
+        </TabsContent>
+
+        <TabsContent value="custos">
+          <CustoCalculator />
         </TabsContent>
 
         <TabsContent value="asaas">

@@ -840,6 +840,99 @@ export type Database = {
           },
         ]
       }
+      company_usage_metrics: {
+        Row: {
+          automation_executions: number | null
+          calculated_at: string | null
+          company_id: string
+          created_at: string | null
+          database_cost: number | null
+          edge_function_calls: number | null
+          edge_functions_cost: number | null
+          ia_cost: number | null
+          ia_requests: number | null
+          id: string
+          master_company_id: string | null
+          media_files_count: number | null
+          messages_received: number | null
+          messages_sent: number | null
+          period_end: string
+          period_start: string
+          storage_bytes_used: number | null
+          storage_cost: number | null
+          total_cost: number | null
+          total_leads: number | null
+          total_messages: number | null
+          total_users: number | null
+          whatsapp_cost: number | null
+        }
+        Insert: {
+          automation_executions?: number | null
+          calculated_at?: string | null
+          company_id: string
+          created_at?: string | null
+          database_cost?: number | null
+          edge_function_calls?: number | null
+          edge_functions_cost?: number | null
+          ia_cost?: number | null
+          ia_requests?: number | null
+          id?: string
+          master_company_id?: string | null
+          media_files_count?: number | null
+          messages_received?: number | null
+          messages_sent?: number | null
+          period_end: string
+          period_start: string
+          storage_bytes_used?: number | null
+          storage_cost?: number | null
+          total_cost?: number | null
+          total_leads?: number | null
+          total_messages?: number | null
+          total_users?: number | null
+          whatsapp_cost?: number | null
+        }
+        Update: {
+          automation_executions?: number | null
+          calculated_at?: string | null
+          company_id?: string
+          created_at?: string | null
+          database_cost?: number | null
+          edge_function_calls?: number | null
+          edge_functions_cost?: number | null
+          ia_cost?: number | null
+          ia_requests?: number | null
+          id?: string
+          master_company_id?: string | null
+          media_files_count?: number | null
+          messages_received?: number | null
+          messages_sent?: number | null
+          period_end?: string
+          period_start?: string
+          storage_bytes_used?: number | null
+          storage_cost?: number | null
+          total_cost?: number | null
+          total_leads?: number | null
+          total_messages?: number | null
+          total_users?: number | null
+          whatsapp_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_usage_metrics_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_usage_metrics_master_company_id_fkey"
+            columns: ["master_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       compromissos: {
         Row: {
           agenda_id: string | null
@@ -1096,6 +1189,74 @@ export type Database = {
             columns: ["queue_id"]
             isOneToOne: false
             referencedRelation: "support_queues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cost_configuration: {
+        Row: {
+          base_monthly_cost: number | null
+          cost_per_automation: number | null
+          cost_per_edge_call: number | null
+          cost_per_gb_storage: number | null
+          cost_per_ia_request: number | null
+          cost_per_lead: number | null
+          cost_per_media_file: number | null
+          cost_per_message_received: number | null
+          cost_per_message_sent: number | null
+          cost_per_user: number | null
+          created_at: string | null
+          id: string
+          master_company_id: string
+          updated_at: string | null
+          whatsapp_auth_cost: number | null
+          whatsapp_marketing_cost: number | null
+          whatsapp_utility_cost: number | null
+        }
+        Insert: {
+          base_monthly_cost?: number | null
+          cost_per_automation?: number | null
+          cost_per_edge_call?: number | null
+          cost_per_gb_storage?: number | null
+          cost_per_ia_request?: number | null
+          cost_per_lead?: number | null
+          cost_per_media_file?: number | null
+          cost_per_message_received?: number | null
+          cost_per_message_sent?: number | null
+          cost_per_user?: number | null
+          created_at?: string | null
+          id?: string
+          master_company_id: string
+          updated_at?: string | null
+          whatsapp_auth_cost?: number | null
+          whatsapp_marketing_cost?: number | null
+          whatsapp_utility_cost?: number | null
+        }
+        Update: {
+          base_monthly_cost?: number | null
+          cost_per_automation?: number | null
+          cost_per_edge_call?: number | null
+          cost_per_gb_storage?: number | null
+          cost_per_ia_request?: number | null
+          cost_per_lead?: number | null
+          cost_per_media_file?: number | null
+          cost_per_message_received?: number | null
+          cost_per_message_sent?: number | null
+          cost_per_user?: number | null
+          created_at?: string | null
+          id?: string
+          master_company_id?: string
+          updated_at?: string | null
+          whatsapp_auth_cost?: number | null
+          whatsapp_marketing_cost?: number | null
+          whatsapp_utility_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_configuration_master_company_id_fkey"
+            columns: ["master_company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -4819,6 +4980,10 @@ export type Database = {
         Args: { p_funil_id: string }
         Returns: undefined
       }
+      calculate_company_usage: {
+        Args: { p_company_id: string; p_end_date: string; p_start_date: string }
+        Returns: Json
+      }
       elevate_self_to_super_admin: { Args: never; Returns: Json }
       formatar_telefone: { Args: { telefone: string }; Returns: string }
       get_my_company: {
@@ -4845,6 +5010,26 @@ export type Database = {
           company_id: string
           company_name: string
           role: Database["public"]["Enums"]["app_role"]
+        }[]
+      }
+      get_subcontas_with_usage: {
+        Args: {
+          p_end_date: string
+          p_master_company_id: string
+          p_start_date: string
+        }
+        Returns: {
+          automation_executions: number
+          company_id: string
+          company_name: string
+          company_status: string
+          media_files: number
+          messages_received: number
+          messages_sent: number
+          monthly_value: number
+          subscription_status: string
+          total_leads: number
+          total_users: number
         }[]
       }
       get_user_company_ids: {
