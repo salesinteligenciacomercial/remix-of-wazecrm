@@ -1193,6 +1193,120 @@ export type Database = {
           },
         ]
       }
+      cost_alert_history: {
+        Row: {
+          alert_id: string | null
+          company_id: string | null
+          created_at: string | null
+          id: string
+          message: string
+          read_at: string | null
+          threshold_value: number
+          triggered_value: number
+        }
+        Insert: {
+          alert_id?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          message: string
+          read_at?: string | null
+          threshold_value: number
+          triggered_value: number
+        }
+        Update: {
+          alert_id?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          message?: string
+          read_at?: string | null
+          threshold_value?: number
+          triggered_value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_alert_history_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "cost_alerts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cost_alert_history_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cost_alerts: {
+        Row: {
+          alert_name: string
+          alert_type: string
+          company_id: string | null
+          cost_category: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_triggered_at: string | null
+          master_company_id: string
+          notify_email: boolean | null
+          notify_in_app: boolean | null
+          threshold_operator: string
+          threshold_value: number
+          updated_at: string | null
+        }
+        Insert: {
+          alert_name: string
+          alert_type: string
+          company_id?: string | null
+          cost_category?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          master_company_id: string
+          notify_email?: boolean | null
+          notify_in_app?: boolean | null
+          threshold_operator: string
+          threshold_value: number
+          updated_at?: string | null
+        }
+        Update: {
+          alert_name?: string
+          alert_type?: string
+          company_id?: string | null
+          cost_category?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          master_company_id?: string
+          notify_email?: boolean | null
+          notify_in_app?: boolean | null
+          threshold_operator?: string
+          threshold_value?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_alerts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cost_alerts_master_company_id_fkey"
+            columns: ["master_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cost_configuration: {
         Row: {
           base_monthly_cost: number | null
@@ -4986,6 +5100,20 @@ export type Database = {
       }
       elevate_self_to_super_admin: { Args: never; Returns: Json }
       formatar_telefone: { Args: { telefone: string }; Returns: string }
+      get_monthly_cost_comparison: {
+        Args: { p_master_company_id: string; p_months?: number }
+        Returns: {
+          automation_executions: number
+          company_id: string
+          company_name: string
+          media_files: number
+          messages_received: number
+          messages_sent: number
+          month_date: string
+          month_year: string
+          monthly_value: number
+        }[]
+      }
       get_my_company: {
         Args: never
         Returns: {
@@ -5011,6 +5139,10 @@ export type Database = {
           company_name: string
           role: Database["public"]["Enums"]["app_role"]
         }[]
+      }
+      get_subconta_historical_cost: {
+        Args: { p_company_id: string; p_master_company_id: string }
+        Returns: Json
       }
       get_subcontas_with_usage: {
         Args: {
