@@ -37,6 +37,10 @@ export interface CompanySubscription {
   master_company_id: string | null;
   created_at: string;
   updated_at: string;
+  // Trial fields
+  trial_end_date: string | null;
+  trial_days: number | null;
+  converted_from_trial: boolean | null;
   // Joined data
   company?: {
     id: string;

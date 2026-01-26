@@ -9,10 +9,12 @@ import {
   ShieldAlert,
   Building2,
   Zap,
-  Calculator
+  Calculator,
+  Clock,
+  PieChart
 } from 'lucide-react';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
-import { FinanceiroDashboard } from '@/components/financeiro/FinanceiroDashboard';
+import { FinanceiroDashboardEnhanced } from '@/components/financeiro/FinanceiroDashboardEnhanced';
 import { AssinaturasManager } from '@/components/financeiro/AssinaturasManager';
 import { FaturasManager } from '@/components/financeiro/FaturasManager';
 import { TransacoesManager } from '@/components/financeiro/TransacoesManager';
@@ -20,6 +22,9 @@ import { MRRChart } from '@/components/financeiro/MRRChart';
 import { SubcontasFinanceiroManager } from '@/components/financeiro/SubcontasFinanceiroManager';
 import { AsaasIntegration } from '@/components/financeiro/AsaasIntegration';
 import { CustoCalculator } from '@/components/financeiro/CustoCalculator';
+import { TrialManager } from '@/components/financeiro/TrialManager';
+import { FluxoCaixaChart } from '@/components/financeiro/FluxoCaixaChart';
+import { AgingReport } from '@/components/financeiro/AgingReport';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function Financeiro() {
@@ -41,9 +46,23 @@ export default function Financeiro() {
   } = useFinanceiro();
 
   const refreshData = useCallback(() => {
-    // Trigger a re-fetch by reloading the page or calling load functions
     window.location.reload();
   }, []);
+
+  // Handle trial conversion
+  const handleConvertTrial = async (subscriptionId: string, data: { 
+    status: string; 
+    monthly_value: number;
+    billing_plan_id?: string;
+    converted_from_trial: boolean;
+  }) => {
+    return await updateSubscription(subscriptionId, data as any);
+  };
+
+  // Handle trial extension
+  const handleExtendTrial = async (subscriptionId: string, newEndDate: string) => {
+    return await updateSubscription(subscriptionId, { trial_end_date: newEndDate } as any);
+  };
 
   // Check if user has access (is master account)
   useEffect(() => {
@@ -100,8 +119,24 @@ export default function Financeiro() {
         </p>
       </div>
 
-      <Tabs defaultValue="subcontas" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 md:grid-cols-8 lg:w-auto lg:inline-grid">
+      <Tabs defaultValue="dashboard" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-5 md:grid-cols-10 lg:w-auto lg:inline-grid">
+          <TabsTrigger value="dashboard" className="gap-2">
+            <LayoutDashboard className="h-4 w-4" />
+            <span className="hidden sm:inline">Dashboard</span>
+          </TabsTrigger>
+          <TabsTrigger value="trials" className="gap-2">
+            <Clock className="h-4 w-4" />
+            <span className="hidden sm:inline">Trials</span>
+          </TabsTrigger>
+          <TabsTrigger value="fluxo" className="gap-2">
+            <TrendingUp className="h-4 w-4" />
+            <span className="hidden sm:inline">Fluxo</span>
+          </TabsTrigger>
+          <TabsTrigger value="aging" className="gap-2">
+            <PieChart className="h-4 w-4" />
+            <span className="hidden sm:inline">Aging</span>
+          </TabsTrigger>
           <TabsTrigger value="subcontas" className="gap-2">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Subcontas</span>
@@ -113,10 +148,6 @@ export default function Financeiro() {
           <TabsTrigger value="asaas" className="gap-2">
             <Zap className="h-4 w-4" />
             <span className="hidden sm:inline">Asaas</span>
-          </TabsTrigger>
-          <TabsTrigger value="dashboard" className="gap-2">
-            <LayoutDashboard className="h-4 w-4" />
-            <span className="hidden sm:inline">Dashboard</span>
           </TabsTrigger>
           <TabsTrigger value="assinaturas" className="gap-2">
             <CreditCard className="h-4 w-4" />
@@ -130,11 +161,51 @@ export default function Financeiro() {
             <ArrowLeftRight className="h-4 w-4" />
             <span className="hidden sm:inline">Transações</span>
           </TabsTrigger>
-          <TabsTrigger value="relatorios" className="gap-2">
-            <TrendingUp className="h-4 w-4" />
-            <span className="hidden sm:inline">Relatórios</span>
-          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="dashboard" className="space-y-6">
+          <FinanceiroDashboardEnhanced 
+            kpis={kpis} 
+            subscriptions={subscriptions}
+            invoices={invoices}
+            loading={loading} 
+          />
+          <FluxoCaixaChart 
+            subscriptions={subscriptions}
+            invoices={invoices}
+            loading={loading}
+          />
+          <MRRChart 
+            subscriptions={subscriptions} 
+            transactions={transactions} 
+            loading={loading} 
+          />
+        </TabsContent>
+
+        <TabsContent value="trials">
+          <TrialManager
+            subscriptions={subscriptions}
+            plans={plans}
+            loading={loading}
+            onConvertTrial={handleConvertTrial}
+            onExtendTrial={handleExtendTrial}
+          />
+        </TabsContent>
+
+        <TabsContent value="fluxo">
+          <FluxoCaixaChart 
+            subscriptions={subscriptions}
+            invoices={invoices}
+            loading={loading}
+          />
+        </TabsContent>
+
+        <TabsContent value="aging">
+          <AgingReport 
+            invoices={invoices}
+            loading={loading}
+          />
+        </TabsContent>
 
         <TabsContent value="subcontas">
           <SubcontasFinanceiroManager
@@ -154,15 +225,6 @@ export default function Financeiro() {
             subscriptions={subscriptions}
             invoices={invoices}
             onRefresh={refreshData}
-          />
-        </TabsContent>
-
-        <TabsContent value="dashboard" className="space-y-6">
-          <FinanceiroDashboard kpis={kpis} loading={loading} />
-          <MRRChart 
-            subscriptions={subscriptions} 
-            transactions={transactions} 
-            loading={loading} 
           />
         </TabsContent>
 
@@ -192,14 +254,6 @@ export default function Financeiro() {
           <TransacoesManager
             transactions={transactions}
             loading={loading}
-          />
-        </TabsContent>
-
-        <TabsContent value="relatorios" className="space-y-6">
-          <MRRChart 
-            subscriptions={subscriptions} 
-            transactions={transactions} 
-            loading={loading} 
           />
         </TabsContent>
       </Tabs>
