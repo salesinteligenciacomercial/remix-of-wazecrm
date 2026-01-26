@@ -321,6 +321,50 @@ export type Database = {
         }
         Relationships: []
       }
+      billing_automation_config: {
+        Row: {
+          auto_generate_invoices: boolean | null
+          created_at: string | null
+          days_before_due: number | null
+          id: string
+          master_company_id: string
+          reminder_channels: string[] | null
+          reminder_days_after: number[] | null
+          reminder_days_before: number[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          auto_generate_invoices?: boolean | null
+          created_at?: string | null
+          days_before_due?: number | null
+          id?: string
+          master_company_id: string
+          reminder_channels?: string[] | null
+          reminder_days_after?: number[] | null
+          reminder_days_before?: number[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          auto_generate_invoices?: boolean | null
+          created_at?: string | null
+          days_before_due?: number | null
+          id?: string
+          master_company_id?: string
+          reminder_channels?: string[] | null
+          reminder_days_after?: number[] | null
+          reminder_days_before?: number[] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_automation_config_master_company_id_fkey"
+            columns: ["master_company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_invoices: {
         Row: {
           amount: number
@@ -455,6 +499,48 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_reminders_sent: {
+        Row: {
+          channel: string
+          company_id: string | null
+          id: string
+          invoice_id: string | null
+          reminder_type: string
+          sent_at: string | null
+        }
+        Insert: {
+          channel: string
+          company_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          reminder_type: string
+          sent_at?: string | null
+        }
+        Update: {
+          channel?: string
+          company_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          reminder_type?: string
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_reminders_sent_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_reminders_sent_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "billing_invoices"
             referencedColumns: ["id"]
           },
         ]
@@ -763,6 +849,7 @@ export type Database = {
           billing_cycle: string
           billing_plan_id: string | null
           company_id: string
+          converted_from_trial: boolean | null
           created_at: string
           external_customer_id: string | null
           external_subscription_id: string | null
@@ -776,12 +863,15 @@ export type Database = {
           setup_fee_value: number | null
           start_date: string
           status: string
+          trial_days: number | null
+          trial_end_date: string | null
           updated_at: string
         }
         Insert: {
           billing_cycle?: string
           billing_plan_id?: string | null
           company_id: string
+          converted_from_trial?: boolean | null
           created_at?: string
           external_customer_id?: string | null
           external_subscription_id?: string | null
@@ -795,12 +885,15 @@ export type Database = {
           setup_fee_value?: number | null
           start_date?: string
           status?: string
+          trial_days?: number | null
+          trial_end_date?: string | null
           updated_at?: string
         }
         Update: {
           billing_cycle?: string
           billing_plan_id?: string | null
           company_id?: string
+          converted_from_trial?: boolean | null
           created_at?: string
           external_customer_id?: string | null
           external_subscription_id?: string | null
@@ -814,6 +907,8 @@ export type Database = {
           setup_fee_value?: number | null
           start_date?: string
           status?: string
+          trial_days?: number | null
+          trial_end_date?: string | null
           updated_at?: string
         }
         Relationships: [
