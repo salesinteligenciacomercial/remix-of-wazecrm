@@ -57,7 +57,7 @@ export function EditarAssinaturaDialog({
         monthly_value: subscription.monthly_value?.toString() || '',
         setup_fee_value: subscription.setup_fee_value?.toString() || '',
         setup_fee_paid: subscription.setup_fee_paid,
-        payment_method: subscription.payment_method,
+        payment_method: subscription.payment_method || 'manual',
         status: subscription.status,
         next_billing_date: subscription.next_billing_date || '',
         notes: subscription.notes || ''
@@ -80,7 +80,7 @@ export function EditarAssinaturaDialog({
     setLoading(true);
     try {
       const success = await onSubmit({
-        billing_plan_id: formData.billing_plan_id || null,
+        billing_plan_id: formData.billing_plan_id === 'custom' ? null : (formData.billing_plan_id || null),
         billing_cycle: formData.billing_cycle,
         monthly_value: parseFloat(formData.monthly_value) || 0,
         setup_fee_value: parseFloat(formData.setup_fee_value) || 0,
@@ -119,7 +119,7 @@ export function EditarAssinaturaDialog({
                 <SelectValue placeholder="Selecione um plano (opcional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Personalizado</SelectItem>
+                <SelectItem value="custom">Personalizado</SelectItem>
                 {plans.filter(p => p.is_active).map(plan => (
                   <SelectItem key={plan.id} value={plan.id}>
                     {plan.name} - R$ {plan.monthly_price}/mês
