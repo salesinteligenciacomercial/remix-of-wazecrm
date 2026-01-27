@@ -372,17 +372,27 @@ export default function Analytics() {
       }
 
       // Leads - com filtro de período e responsável
-      let leadsQuery = supabase.from("leads").select("value, status, etapa_id, created_at, expected_close_date, responsaveis, responsavel_id");
+      // ✅ CORREÇÃO: Usar count: 'exact' para obter contagem precisa além do limite de 1000
+      let leadsCountQuery = supabase.from("leads").select("*", { count: 'exact', head: true });
+      let leadsDataQuery = supabase.from("leads").select("value, status, etapa_id, created_at, expected_close_date, responsaveis, responsavel_id");
+      
       if (startDate) {
-        leadsQuery = leadsQuery.gte('created_at', startDate.toISOString());
+        leadsCountQuery = leadsCountQuery.gte('created_at', startDate.toISOString());
+        leadsDataQuery = leadsDataQuery.gte('created_at', startDate.toISOString());
       }
       // Aplicar filtro de responsável - buscar onde o usuário está no array responsaveis OU é o responsavel_id
       if (globalFilters.responsible) {
-        leadsQuery = leadsQuery.or(`responsaveis.cs.["${globalFilters.responsible}"],responsavel_id.eq.${globalFilters.responsible}`);
+        leadsCountQuery = leadsCountQuery.or(`responsaveis.cs.["${globalFilters.responsible}"],responsavel_id.eq.${globalFilters.responsible}`);
+        leadsDataQuery = leadsDataQuery.or(`responsaveis.cs.["${globalFilters.responsible}"],responsavel_id.eq.${globalFilters.responsible}`);
       }
-      const { data: leads } = await leadsQuery;
+      
+      // Executar ambas as queries em paralelo
+      const [{ count: totalLeadsCount }, { data: leads }] = await Promise.all([
+        leadsCountQuery,
+        leadsDataQuery
+      ]);
 
-      const totalLeads = leads?.length || 0;
+      const totalLeads = totalLeadsCount || 0;
       const totalValue = leads?.reduce((sum, lead) => sum + (Number(lead.value) || 0), 0) || 0;
       const wonDeals = leads?.filter(l => l.status === "ganho").length || 0;
       const conversionRate = totalLeads > 0 ? wonDeals / totalLeads * 100 : 0;

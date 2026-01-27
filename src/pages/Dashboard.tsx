@@ -93,9 +93,13 @@ export default function Dashboard() {
     try {
       setLoading(true);
 
-      // Leads
-      const { data: leads } = await supabase.from("leads").select("value, status, etapa_id");
-      const totalLeads = leads?.length || 0;
+      // Leads - usar count: 'exact' para contagem precisa além do limite de 1000
+      const [{ count: totalLeadsCount }, { data: leads }] = await Promise.all([
+        supabase.from("leads").select("*", { count: 'exact', head: true }),
+        supabase.from("leads").select("value, status, etapa_id")
+      ]);
+      
+      const totalLeads = totalLeadsCount || 0;
       const totalValue = leads?.reduce((sum, lead) => sum + (Number(lead.value) || 0), 0) || 0;
       const activeDeals = leads?.filter((l) => l.status !== "perdido" && l.status !== "ganho").length || 0;
       const wonDeals = leads?.filter((l) => l.status === "ganho").length || 0;
