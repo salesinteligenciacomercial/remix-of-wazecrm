@@ -484,6 +484,60 @@ serve(async (req) => {
     // Detectar origem do payload
     const isEvolutionAPI = isEvolutionAPIPayload(body);
     
+    // ⚡ NOVO: Processar eventos de conexão/desconexão da Evolution API
+    if (body.event === 'connection.update') {
+      console.log('🔌 [WEBHOOK] Evento de conexão recebido:', {
+        event: body.event,
+        instance: body.instance,
+        state: body.data?.state || body.state
+      });
+      
+      try {
+        const instanceName = body.instance;
+        const connectionState = body.data?.state || body.state || 'unknown';
+        
+        // Mapear estado para status do banco
+        let newStatus: string;
+        if (connectionState === 'open' || connectionState === 'connected') {
+          newStatus = 'connected';
+        } else if (connectionState === 'close' || connectionState === 'closed' || connectionState === 'disconnected') {
+          newStatus = 'disconnected';
+        } else if (connectionState === 'connecting') {
+          newStatus = 'connecting';
+        } else {
+          newStatus = 'disconnected'; // Default para desconectado se estado desconhecido
+        }
+        
+        console.log(`🔄 [WEBHOOK] Atualizando status da instância ${instanceName}: ${connectionState} -> ${newStatus}`);
+        
+        // Atualizar status no banco
+        const { data: updateResult, error: updateError } = await supabase
+          .from('whatsapp_connections')
+          .update({ 
+            status: newStatus,
+            updated_at: new Date().toISOString()
+          })
+          .eq('instance_name', instanceName);
+        
+        if (updateError) {
+          console.error('❌ [WEBHOOK] Erro ao atualizar status:', updateError);
+        } else {
+          console.log(`✅ [WEBHOOK] Status da instância ${instanceName} atualizado para: ${newStatus}`);
+        }
+        
+        return new Response(
+          JSON.stringify({ success: true, message: 'Connection status updated', newStatus }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (error) {
+        console.error('❌ [WEBHOOK] Erro ao processar connection.update:', error);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Erro ao processar atualização de conexão' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+    
     // ⚡ CORREÇÃO: Processar eventos de status (delivered, read) da Evolution API
     if (body.event === 'messages.update') {
       console.log('📊 [WEBHOOK] Evento de atualização de status recebido:', {
