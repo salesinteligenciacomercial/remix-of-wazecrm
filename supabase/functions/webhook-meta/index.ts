@@ -499,14 +499,22 @@ serve(async (req) => {
           const messages = transformWhatsAppPayload(entry);
           
           for (const msg of messages) {
+            // Buscar conexão com api_provider para verificar se Meta está ativa
             const { data: connection } = await supabase
               .from('whatsapp_connections')
-              .select('company_id, meta_access_token')
+              .select('company_id, meta_access_token, api_provider')
               .eq('meta_phone_number_id', msg.phone_number_id)
               .single();
             
             if (!connection) {
               console.warn('❌ Conexão não encontrada para phone_number_id:', msg.phone_number_id);
+              continue;
+            }
+
+            // 🔒 IMPORTANTE: Ignorar webhooks Meta se api_provider = 'evolution' (apenas API não oficial)
+            if (connection.api_provider === 'evolution') {
+              console.log('⚠️ [WEBHOOK-META] Ignorando mensagem - api_provider configurado como "evolution" apenas');
+              console.log('📋 Company com Meta desativada, use Evolution API para este número');
               continue;
             }
 
