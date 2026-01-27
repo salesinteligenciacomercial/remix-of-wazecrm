@@ -632,19 +632,69 @@ serve(async (req) => {
           );
         }
       } else {
-        // Tentar Evolution primeiro
-        result = await sendEvolutionMessage(
-          baseUrl.replace(/\/$/, ''),
-          connection.instance_name,
-          apiKey,
-          validatedData.numero,
-          false,
-          validatedData
-        );
+        // 🔍 VERIFICAR STATUS DA INSTÂNCIA ANTES DE ENVIAR
+        let evolutionConnected = true;
+        try {
+          console.log("🔍 Verificando status da instância Evolution antes de enviar...");
+          const statusUrl = `${baseUrl.replace(/\/$/, '')}/instance/connectionState/${connection.instance_name}`;
+          const statusResponse = await fetch(statusUrl, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': apiKey
+            }
+          });
+          
+          if (statusResponse.ok) {
+            const statusData = await statusResponse.json();
+            const instanceState = statusData.instance?.state || statusData.state;
+            console.log("📊 Estado da instância Evolution:", instanceState);
+            
+            if (instanceState !== 'open' && instanceState !== 'connected') {
+              console.log("⚠️ Instância Evolution não conectada, marcando como desconectada...");
+              evolutionConnected = false;
+              
+              // Atualizar status no banco para refletir a realidade
+              await supabase
+                .from('whatsapp_connections')
+                .update({ status: 'disconnected', updated_at: new Date().toISOString() })
+                .eq('id', connection.id);
+            }
+          }
+        } catch (statusError) {
+          console.error("⚠️ Erro ao verificar status da Evolution:", statusError);
+          // Se não conseguir verificar, tentar enviar mesmo assim
+        }
         
-        // Se Evolution falhar e temos Meta, tentar Meta como fallback
+        // Se Evolution está conectada, tentar enviar
+        if (evolutionConnected) {
+          result = await sendEvolutionMessage(
+            baseUrl.replace(/\/$/, ''),
+            connection.instance_name,
+            apiKey,
+            validatedData.numero,
+            false,
+            validatedData
+          );
+          
+          // Se Evolution falhou com "Connection Closed", atualizar status e tentar Meta
+          if (!result.success && result.error?.includes('Connection Closed')) {
+            console.log("🔴 Evolution retornou 'Connection Closed', atualizando status...");
+            await supabase
+              .from('whatsapp_connections')
+              .update({ status: 'disconnected', updated_at: new Date().toISOString() })
+              .eq('id', connection.id);
+            
+            evolutionConnected = false;
+          }
+        } else {
+          // Evolution não conectada - inicializar result com erro
+          result = { success: false, provider: 'evolution', error: 'Instância Evolution desconectada' };
+        }
+        
+        // Se Evolution falhou ou não está conectada, tentar Meta como fallback
         if (!result.success && hasMetaCredentials && validatedData.mensagem) {
-          console.log("🔄 Evolution falhou, tentando Meta como fallback...");
+          console.log("🔄 Evolution falhou/desconectada, tentando Meta como fallback...");
           result = await sendMetaTextMessage(
             connection.meta_phone_number_id,
             connection.meta_access_token,
@@ -675,6 +725,15 @@ serve(async (req) => {
         false,
         validatedData
       );
+      
+      // Se Evolution falhou com "Connection Closed", atualizar status
+      if (!result.success && result.error?.includes('Connection Closed')) {
+        console.log("🔴 Evolution retornou 'Connection Closed', atualizando status...");
+        await supabase
+          .from('whatsapp_connections')
+          .update({ status: 'disconnected', updated_at: new Date().toISOString() })
+          .eq('id', connection.id);
+      }
     }
 
     // ============= RESPOSTA =============
