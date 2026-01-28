@@ -6,14 +6,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter, Trophy, XCircle, DollarSign, FileText, Cake, CalendarIcon, Loader2, User, UserPlus } from "lucide-react";
+import { Filter, Trophy, XCircle, DollarSign, FileText, Cake, CalendarIcon, Loader2, User, UserPlus, Tag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
-type FilterType = "novos" | "ganhos" | "perdidos" | "valores" | "prontuarios" | "aniversariantes" | null;
+type FilterType = "novos" | "ganhos" | "perdidos" | "valores" | "prontuarios" | "aniversariantes" | "tags" | null;
 type DatePeriod = "today" | "week" | "month" | "custom";
 
 interface FilteredLead {
@@ -30,6 +30,15 @@ interface FilteredLead {
   tags: string[] | null;
   attachmentsCount?: number;
   created_at?: string;
+  assignedTags?: { tag: string; assignedAt: string }[];
+}
+
+interface TagHistory {
+  id: string;
+  lead_id: string;
+  tag_name: string;
+  action: string;
+  created_at: string;
 }
 
 interface LeadsAdvancedFilterProps {
@@ -210,6 +219,52 @@ export function LeadsAdvancedFilter({ onApplyFilter, activeFilter }: LeadsAdvanc
             return false;
           });
           break;
+
+        case "tags":
+          // Buscar histórico de tags atribuídas no período
+          const { data: tagHistory, error: erroTags } = await supabase
+            .from("lead_tag_history")
+            .select("id, lead_id, tag_name, action, created_at")
+            .eq("company_id", companyId)
+            .eq("action", "added")
+            .gte("created_at", start.toISOString())
+            .lte("created_at", end.toISOString())
+            .order("created_at", { ascending: false });
+
+          if (erroTags) throw erroTags;
+
+          const tagHistoryData = tagHistory as TagHistory[] || [];
+          
+          // Agrupar por lead_id
+          const leadTagsMap: Record<string, { tag: string; assignedAt: string }[]> = {};
+          tagHistoryData.forEach(th => {
+            if (!th.lead_id) return;
+            if (!leadTagsMap[th.lead_id]) {
+              leadTagsMap[th.lead_id] = [];
+            }
+            leadTagsMap[th.lead_id].push({
+              tag: th.tag_name,
+              assignedAt: th.created_at
+            });
+          });
+
+          const leadIdsWithTags = Object.keys(leadTagsMap);
+          
+          if (leadIdsWithTags.length > 0) {
+            const { data: leadsComTags, error: erroLeadsTags } = await supabase
+              .from("leads")
+              .select("id, name, phone, telefone, value, status, won_at, lost_at, data_nascimento, profile_picture_url, tags, created_at")
+              .eq("company_id", companyId)
+              .in("id", leadIdsWithTags);
+            
+            if (erroLeadsTags) throw erroLeadsTags;
+
+            data = (leadsComTags || []).map(l => ({
+              ...l,
+              assignedTags: leadTagsMap[l.id] || []
+            }));
+          }
+          break;
       }
 
       setResults(data);
@@ -285,6 +340,7 @@ export function LeadsAdvancedFilter({ onApplyFilter, activeFilter }: LeadsAdvanc
     { type: "valores" as FilterType, label: "Valores", icon: DollarSign, color: "text-yellow-600" },
     { type: "prontuarios" as FilterType, label: "Prontuários", icon: FileText, color: "text-blue-600" },
     { type: "aniversariantes" as FilterType, label: "Aniversário", icon: Cake, color: "text-pink-600" },
+    { type: "tags" as FilterType, label: "Tags", icon: Tag, color: "text-purple-600" },
   ];
 
   return (
@@ -329,7 +385,7 @@ export function LeadsAdvancedFilter({ onApplyFilter, activeFilter }: LeadsAdvanc
           </div>
 
           {/* Seletor de Período (não mostrar para "valores" e "prontuários") */}
-          {filterType && !["valores", "prontuarios"].includes(filterType) && (
+          {filterType && !["valores", "prontuarios"].includes(filterType) && filterType !== null && (
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">Período:</p>
               <div className="flex flex-wrap gap-2">
@@ -438,7 +494,24 @@ export function LeadsAdvancedFilter({ onApplyFilter, activeFilter }: LeadsAdvanc
                             {filterType === "aniversariantes" && lead.data_nascimento && (
                               <>{format(new Date(lead.data_nascimento), "dd/MM")} - {calculateAge(lead.data_nascimento)} anos</>
                             )}
+                            {filterType === "tags" && lead.assignedTags && lead.assignedTags.length > 0 && (
+                              <>{lead.assignedTags.length} tag(s) atribuída(s)</>
+                            )}
                           </p>
+                          {/* Mostrar tags atribuídas */}
+                          {filterType === "tags" && lead.assignedTags && lead.assignedTags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {lead.assignedTags.map((tagInfo, idx) => (
+                                <Badge 
+                                  key={idx} 
+                                  variant="secondary" 
+                                  className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                                >
+                                  {tagInfo.tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         {(filterType === "ganhos" || filterType === "perdidos" || filterType === "valores") && (
                           <Badge variant="outline" className="shrink-0">
