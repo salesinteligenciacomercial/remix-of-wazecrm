@@ -1,52 +1,120 @@
 
-
-## Plano: Filtro por Data no Gerenciamento de Tags
+## Plano: Filtros Avançados no Menu Leads
 
 ### Resumo do Pedido
-Adicionar funcionalidade de filtro por data no diálogo de gerenciamento de tags para:
-1. **Filtrar contatos por data de atribuição de tags** - ver quais contatos receberam tags em uma data específica (hoje, esta semana, data customizada)
-2. **Filtrar contatos que mandaram mensagem** - ver contatos que enviaram mensagens em uma data específica
+Criar um novo botão no menu de Leads que abre um painel/diálogo com filtros avançados, permitindo filtrar leads por:
+1. **Ganhos** - Leads com status "ganho" (com filtro por data de fechamento)
+2. **Perdidos** - Leads com status "perdido" (com filtro por data de perda)
+3. **Com Valores** - Leads que possuem valor > 0 (com faixa de valores)
+4. **Prontuários** - Leads que possuem arquivos/anexos no prontuário
+5. **Aniversariantes** - Leads com aniversário na data selecionada
+
+Todos os filtros podem ser combinados com seleção de data (hoje, esta semana, período personalizado).
 
 ---
 
-### Desafio Técnico Identificado
+### Arquitetura da Solução
 
-Atualmente, o banco de dados **não registra quando uma tag foi adicionada a um lead**. A tabela `leads` apenas armazena as tags atuais em um array (`tags`), sem histórico temporal. Isso significa que não é possível filtrar "quais tags foram adicionadas hoje" sem primeiro implementar o rastreamento.
+#### Novo Componente: `LeadsAdvancedFilter.tsx`
+Um botão que abre um diálogo modal com:
+- Seletor de tipo de filtro (Ganhos, Perdidos, Valores, Prontuários, Aniversariantes)
+- Seletor de período de data
+- Preview dos resultados filtrados
+- Botão para aplicar filtros à lista principal
 
 ---
 
-### Solução Proposta
-
-#### Parte 1: Nova Tabela para Histórico de Tags
-Criar uma tabela `lead_tag_history` para registrar quando tags são adicionadas/removidas:
+### Interface Proposta
 
 ```text
-lead_tag_history
-├── id (uuid)
-├── lead_id (uuid) → referência a leads
-├── company_id (uuid)
-├── tag_name (text)
-├── action (text) → 'added' ou 'removed'
-├── created_at (timestamptz)
-└── created_by (uuid) → usuário que fez a alteração
+┌─────────────────────────────────────────────────────────────────┐
+│ 🔍 Filtros Avançados                                            │
+├─────────────────────────────────────────────────────────────────┤
+│ Filtrar por:                                                    │
+│ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌───────────┐ ┌────────────┐│
+│ │🏆 Ganhos│ │❌Perdidos│ │💰Valores│ │📋Prontuário│ │🎂Aniversário││
+│ └─────────┘ └─────────┘ └─────────┘ └───────────┘ └────────────┘│
+├─────────────────────────────────────────────────────────────────┤
+│ Período:                                                        │
+│ [Hoje] [Esta Semana] [Este Mês] [📅 Personalizado]             │
+├─────────────────────────────────────────────────────────────────┤
+│ 📊 Encontrados: 45 leads                                        │
+├─────────────────────────────────────────────────────────────────┤
+│ Leads encontrados:                                              │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ 👤 João Silva - R$ 5.000 - Ganho em 25/01/2026              │ │
+│ │ 👤 Maria Santos - R$ 3.200 - Ganho em 24/01/2026            │ │
+│ │ 👤 Pedro Costa - R$ 8.500 - Ganho em 23/01/2026             │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────────┤
+│                         [Limpar] [Aplicar Filtro]               │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-#### Parte 2: Atualizar Hook de Tags
-Modificar o `useTagsManager` para registrar no histórico sempre que uma tag for adicionada ou removida de um lead.
+---
 
-#### Parte 3: Interface Aprimorada do TagsManager
-Adicionar ao diálogo de gerenciamento de tags:
+### Detalhes Técnicos
 
-1. **Seletor de Período** - Botões rápidos:
-   - "Hoje"
-   - "Esta Semana"  
-   - "Personalizado" (abre calendário)
+#### Campos do Banco de Dados Utilizados
 
-2. **Tabs de Visualização**:
-   - **Tags Atribuídas**: Contatos que receberam tags na data selecionada
-   - **Mensagens Recebidas**: Contatos que enviaram mensagens na data selecionada
+| Filtro | Campos | Lógica |
+|--------|--------|--------|
+| Ganhos | `status = 'ganho'`, `won_at` | Filtra por `won_at` no período |
+| Perdidos | `status = 'perdido'`, `lost_at` | Filtra por `lost_at` no período |
+| Com Valores | `value > 0` | Opção de faixa min/max |
+| Prontuários | JOIN com `lead_attachments` | Leads que têm anexos |
+| Aniversariantes | `data_nascimento` | Comparar mês/dia no período |
 
-3. **Lista de Resultados**: Mostrar contatos com suas informações (nome, telefone, tags, data/hora)
+#### Consultas SQL
+
+**Ganhos por período:**
+```typescript
+supabase.from("leads")
+  .select("*")
+  .eq("status", "ganho")
+  .eq("company_id", companyId)
+  .gte("won_at", startDate.toISOString())
+  .lte("won_at", endDate.toISOString())
+```
+
+**Perdidos por período:**
+```typescript
+supabase.from("leads")
+  .select("*")
+  .eq("status", "perdido")
+  .eq("company_id", companyId)
+  .gte("lost_at", startDate.toISOString())
+  .lte("lost_at", endDate.toISOString())
+```
+
+**Leads com prontuário:**
+```typescript
+// Primeiro buscar IDs dos leads com anexos
+const { data: attachments } = await supabase
+  .from("lead_attachments")
+  .select("lead_id")
+  .eq("company_id", companyId);
+
+const leadIds = [...new Set(attachments.map(a => a.lead_id))];
+
+// Depois buscar leads
+supabase.from("leads")
+  .select("*")
+  .in("id", leadIds)
+```
+
+**Aniversariantes:**
+```typescript
+// Buscar leads com data_nascimento e filtrar no frontend
+// pelo dia/mês correspondente ao período selecionado
+const hoje = new Date();
+const aniversariantes = leads.filter(lead => {
+  if (!lead.data_nascimento) return false;
+  const nascimento = new Date(lead.data_nascimento);
+  return nascimento.getDate() === hoje.getDate() 
+      && nascimento.getMonth() === hoje.getMonth();
+});
+```
 
 ---
 
@@ -54,122 +122,47 @@ Adicionar ao diálogo de gerenciamento de tags:
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| Migração SQL | Criar | Criar tabela `lead_tag_history` com RLS |
-| `src/hooks/useTagsManager.ts` | Modificar | Registrar alterações no histórico |
-| `src/components/leads/TagsManager.tsx` | Modificar | Adicionar filtros de data e tabs |
+| `src/components/leads/LeadsAdvancedFilter.tsx` | Criar | Componente principal do filtro |
+| `src/pages/Leads.tsx` | Modificar | Adicionar botão e integrar filtros |
 
 ---
 
-### Fluxo da Interface
+### Fluxo de Uso
 
-```text
-┌─────────────────────────────────────────────────────────┐
-│ Gerenciamento de Tags                                   │
-├─────────────────────────────────────────────────────────┤
-│ [Criar Tag]  [Input para nova tag...]  [+]              │
-├─────────────────────────────────────────────────────────┤
-│ Filtrar por Data:                                       │
-│ [Hoje] [Esta Semana] [📅 Selecionar Data]              │
-├─────────────────────────────────────────────────────────┤
-│ [Tags Atribuídas]  [Mensagens Recebidas]  ← Tabs       │
-├─────────────────────────────────────────────────────────┤
-│ Data selecionada: 28/01/2026                           │
-│ ┌─────────────────────────────────────────────────────┐│
-│ │ 🏷 Tag: "Cliente VIP"                              ││
-│ │ 👤 João Silva - (11) 99999-1234                    ││
-│ │ 📅 Atribuída em: 28/01/2026 às 14:30               ││
-│ ├─────────────────────────────────────────────────────┤│
-│ │ 🏷 Tag: "Interessado"                              ││
-│ │ 👤 Maria Santos - (11) 99999-5678                  ││
-│ │ 📅 Atribuída em: 28/01/2026 às 10:15               ││
-│ └─────────────────────────────────────────────────────┘│
-│                                                         │
-│ Estatísticas: 5 tags atribuídas | 12 mensagens hoje    │
-└─────────────────────────────────────────────────────────┘
-```
+1. Usuário clica no botão "Filtros Avançados" no header da página Leads
+2. Modal abre com as opções de filtro
+3. Usuário seleciona o tipo de filtro (ex: "Ganhos")
+4. Usuário seleciona o período (ex: "Esta Semana")
+5. Sistema exibe preview dos leads encontrados
+6. Usuário clica em "Aplicar Filtro"
+7. Lista principal de leads é atualizada com os resultados
+8. Badge indica filtro ativo na página
 
 ---
 
-### Detalhes Técnicos
+### Comportamento por Tipo de Filtro
 
-#### Migração SQL
-```sql
--- Tabela para histórico de tags
-CREATE TABLE IF NOT EXISTS public.lead_tag_history (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  lead_id UUID NOT NULL REFERENCES public.leads(id) ON DELETE CASCADE,
-  company_id UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-  tag_name TEXT NOT NULL,
-  action TEXT NOT NULL CHECK (action IN ('added', 'removed')),
-  created_by UUID REFERENCES auth.users(id),
-  created_at TIMESTAMPTZ DEFAULT now()
-);
+**Ganhos:**
+- Mostra leads com status "ganho"
+- Filtra pela data de fechamento (`won_at`)
+- Exibe: nome, valor ganho, data de fechamento
 
--- Índices para performance
-CREATE INDEX idx_lead_tag_history_lead_id ON public.lead_tag_history(lead_id);
-CREATE INDEX idx_lead_tag_history_company_id ON public.lead_tag_history(company_id);
-CREATE INDEX idx_lead_tag_history_created_at ON public.lead_tag_history(created_at);
-CREATE INDEX idx_lead_tag_history_tag_name ON public.lead_tag_history(tag_name);
+**Perdidos:**
+- Mostra leads com status "perdido"
+- Filtra pela data de perda (`lost_at`)
+- Exibe: nome, motivo da perda (se disponível), data
 
--- RLS Policies
-ALTER TABLE public.lead_tag_history ENABLE ROW LEVEL SECURITY;
+**Com Valores:**
+- Mostra leads onde `value > 0`
+- Opção de filtrar por faixa de valores
+- Exibe: nome, valor, status
 
-CREATE POLICY "Users can view tag history of their company"
-  ON public.lead_tag_history FOR SELECT
-  USING (company_id IN (SELECT company_id FROM public.user_roles WHERE user_id = auth.uid()));
+**Prontuários:**
+- Mostra leads que possuem anexos em `lead_attachments`
+- Clique abre o prontuário do lead
+- Exibe: nome, quantidade de arquivos
 
-CREATE POLICY "Users can insert tag history for their company"
-  ON public.lead_tag_history FOR INSERT
-  WITH CHECK (company_id IN (SELECT company_id FROM public.user_roles WHERE user_id = auth.uid()));
-
--- Habilitar realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.lead_tag_history;
-```
-
-#### Consulta para Tags por Data
-```typescript
-// Buscar tags atribuídas hoje
-const { data } = await supabase
-  .from("lead_tag_history")
-  .select(`
-    id,
-    tag_name,
-    action,
-    created_at,
-    lead:leads(id, name, phone, telefone, profile_picture_url)
-  `)
-  .eq("action", "added")
-  .gte("created_at", startOfDay.toISOString())
-  .lte("created_at", endOfDay.toISOString())
-  .order("created_at", { ascending: false });
-```
-
-#### Consulta para Mensagens por Data
-```typescript
-// Buscar contatos que mandaram mensagem hoje
-const { data } = await supabase
-  .from("conversas")
-  .select(`
-    id,
-    mensagem,
-    created_at,
-    nome_contato,
-    telefone_formatado,
-    lead:leads(id, name, tags)
-  `)
-  .eq("fromme", false) // Mensagens recebidas
-  .gte("created_at", startOfDay.toISOString())
-  .lte("created_at", endOfDay.toISOString())
-  .order("created_at", { ascending: false });
-```
-
----
-
-### Comportamento Esperado
-
-1. **Sem data selecionada**: Mostra a lista normal de tags como atualmente
-2. **Com data selecionada**: Filtra para mostrar apenas atividade daquela data
-3. **Tab "Tags Atribuídas"**: Lista contatos que receberam tags na data
-4. **Tab "Mensagens Recebidas"**: Lista contatos que enviaram mensagens na data
-5. **Estatísticas atualizadas**: Contadores refletem a data selecionada
-
+**Aniversariantes:**
+- Mostra leads com aniversário no período
+- Similar ao AniversariantesManager mas integrado
+- Exibe: nome, data de nascimento, idade
