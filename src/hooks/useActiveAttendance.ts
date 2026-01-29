@@ -242,10 +242,14 @@ export const useActiveAttendance = (companyId: string | null) => {
   // 🆕 NOVO: Verificar se o USUÁRIO ATUAL está atendendo este contato
   const isCurrentUserAttending = useCallback((telefoneFormatado: string): boolean => {
     const attendance = getActiveAttendance(telefoneFormatado);
-    if (!attendance) return false;
+    if (!attendance) {
+      return false;
+    }
     
     // Verificar se o attending_user_id é o usuário atual
-    return attendance.attending_user_id === currentUserIdRef.current;
+    const isAttending = attendance.attending_user_id === currentUserIdRef.current;
+    console.log(`🔍 [RESPONSIBLE-CHECK] telefone=${telefoneFormatado}, attending_user_id=${attendance.attending_user_id}, currentUser=${currentUserIdRef.current}, isAttending=${isAttending}`);
+    return isAttending;
   }, [getActiveAttendance]);
 
   // Obter usuário que está atendendo
