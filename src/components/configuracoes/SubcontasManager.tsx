@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Building2, Plus, Pencil, Trash2, Users, RefreshCw, CheckCircle2, AlertCircle, UsersRound, Bot, MessageSquare, Video, Phone, Target, Workflow, KeyRound } from "lucide-react";
+import { Building2, Plus, Pencil, Trash2, Users, RefreshCw, CheckCircle2, AlertCircle, UsersRound, Bot, MessageSquare, Video, Phone, Target, Workflow, KeyRound, Megaphone } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -10,6 +10,7 @@ import { NovaSubcontaDialog } from "./NovaSubcontaDialog";
 import { EditarSubcontaDialog } from "./EditarSubcontaDialog";
 import { UsuariosSubcontaDialog } from "./UsuariosSubcontaDialog";
 import { CredenciaisSubcontaDialog } from "./CredenciaisSubcontaDialog";
+import { SystemUpdatesManager } from "./SystemUpdatesManager";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -418,7 +419,10 @@ export function SubcontasManager() {
   }
 
   return (
-    <>
+    <div className="space-y-6">
+      {/* Sistema de Atualizações para Subcontas */}
+      <SystemUpdatesManager />
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -781,6 +785,6 @@ export function SubcontasManager() {
           />
         </>
       )}
-    </>
+    </div>
   );
 }

@@ -9,7 +9,9 @@ import {
   Check,
   X,
   Loader2,
-  Brain
+  Brain,
+  Megaphone,
+  Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +23,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useNotifications, AggregatedNotification } from "@/hooks/useNotifications";
+import { useSystemUpdates } from "@/hooks/useSystemUpdates";
 import { cn } from "@/lib/utils";
 
 const getNotificationIcon = (tipo: string) => {
@@ -39,6 +42,8 @@ const getNotificationIcon = (tipo: string) => {
       return <MessageSquare className="h-4 w-4 text-cyan-500" />;
     case 'ia_insight':
       return <Brain className="h-4 w-4 text-orange-500" />;
+    case 'system_update':
+      return <Sparkles className="h-4 w-4 text-primary" />;
     default:
       return <Bell className="h-4 w-4 text-muted-foreground" />;
   }
@@ -60,6 +65,8 @@ const getNotificationLabel = (tipo: string) => {
       return 'Nova mensagem';
     case 'ia_insight':
       return 'Insight da IA';
+    case 'system_update':
+      return 'Atualização do Sistema';
     default:
       return 'Notificação';
   }
@@ -67,6 +74,7 @@ const getNotificationLabel = (tipo: string) => {
 
 const groupNotifications = (notifications: AggregatedNotification[]) => {
   const groups: Record<string, AggregatedNotification[]> = {
+    system: [],
     ia: [],
     tarefas: [],
     compromissos: [],
@@ -76,7 +84,9 @@ const groupNotifications = (notifications: AggregatedNotification[]) => {
   };
 
   notifications.forEach(n => {
-    if (n.tipo === 'ia_insight') {
+    if (n.tipo === 'system_update') {
+      groups.system.push(n);
+    } else if (n.tipo === 'ia_insight') {
       groups.ia.push(n);
     } else if (n.tipo.startsWith('tarefa')) {
       groups.tarefas.push(n);
@@ -202,9 +212,39 @@ export function NotificationCenter() {
     deleteNotification,
     refresh 
   } = useNotifications();
+  
+  const { unreadUpdates, unreadCount: systemUpdatesCount, markAsRead: markUpdateAsRead } = useSystemUpdates();
 
-  const groups = groupNotifications(notifications);
-  const hasNotifications = notifications.length > 0;
+  // Combinar notificações normais com atualizações do sistema
+  const systemUpdateNotifications: AggregatedNotification[] = unreadUpdates.map(update => ({
+    id: `update-${update.id}`,
+    tipo: 'system_update',
+    titulo: `v${update.version}: ${update.title}`,
+    mensagem: update.description || 'Nova atualização do sistema',
+    created_at: update.published_at,
+    lida: false,
+  }));
+
+  const allNotifications = [...systemUpdateNotifications, ...notifications];
+  const totalUnreadCount = unreadCount + systemUpdatesCount;
+
+  const groups = groupNotifications(allNotifications);
+  const hasNotifications = allNotifications.length > 0;
+
+  const handleMarkAsRead = (id: string) => {
+    if (id.startsWith('update-')) {
+      const updateId = id.replace('update-', '');
+      markUpdateAsRead(updateId);
+    } else {
+      markAsRead(id);
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    if (!id.startsWith('update-')) {
+      deleteNotification(id);
+    }
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -218,12 +258,12 @@ export function NotificationCenter() {
           }}
         >
           <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
+          {totalUnreadCount > 0 && (
             <Badge 
               variant="destructive" 
               className="absolute -top-1 -right-1 h-5 min-w-[20px] px-1.5 text-xs font-bold"
             >
-              {unreadCount > 99 ? '99+' : unreadCount}
+              {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
             </Badge>
           )}
         </Button>
@@ -238,7 +278,7 @@ export function NotificationCenter() {
             <Bell className="h-5 w-5 text-primary" />
             <h3 className="font-semibold">Notificações do Dia</h3>
           </div>
-          {unreadCount > 0 && (
+          {totalUnreadCount > 0 && (
             <Button 
               variant="ghost" 
               size="sm"
@@ -257,13 +297,27 @@ export function NotificationCenter() {
             </div>
           ) : hasNotifications ? (
             <div className="p-2 space-y-2">
-              {/* IA Insights first */}
+              {/* System Updates first */}
+              {groups.system.length > 0 && (
+                <>
+                  <NotificationGroup
+                    title="Atualizações do Sistema"
+                    icon={<Megaphone className="h-4 w-4 text-primary" />}
+                    notifications={groups.system}
+                    onMarkAsRead={handleMarkAsRead}
+                    onDelete={handleDelete}
+                  />
+                  <Separator className="my-2" />
+                </>
+              )}
+              
+              {/* IA Insights */}
               <NotificationGroup
                 title="Insights da IA"
                 icon={<Brain className="h-4 w-4 text-orange-500" />}
                 notifications={groups.ia}
-                onMarkAsRead={markAsRead}
-                onDelete={deleteNotification}
+                onMarkAsRead={handleMarkAsRead}
+                onDelete={handleDelete}
               />
               
               {groups.ia.length > 0 && groups.tarefas.length > 0 && (
@@ -274,8 +328,8 @@ export function NotificationCenter() {
                 title="Tarefas"
                 icon={<CheckSquare className="h-4 w-4 text-blue-500" />}
                 notifications={groups.tarefas}
-                onMarkAsRead={markAsRead}
-                onDelete={deleteNotification}
+                onMarkAsRead={handleMarkAsRead}
+                onDelete={handleDelete}
               />
               
               {groups.tarefas.length > 0 && groups.compromissos.length > 0 && (
@@ -286,8 +340,8 @@ export function NotificationCenter() {
                 title="Compromissos"
                 icon={<Calendar className="h-4 w-4 text-green-500" />}
                 notifications={groups.compromissos}
-                onMarkAsRead={markAsRead}
-                onDelete={deleteNotification}
+                onMarkAsRead={handleMarkAsRead}
+                onDelete={handleDelete}
               />
               
               {(groups.tarefas.length > 0 || groups.compromissos.length > 0) && groups.lembretes.length > 0 && (
@@ -298,8 +352,8 @@ export function NotificationCenter() {
                 title="Lembretes"
                 icon={<Bell className="h-4 w-4 text-purple-500" />}
                 notifications={groups.lembretes}
-                onMarkAsRead={markAsRead}
-                onDelete={deleteNotification}
+                onMarkAsRead={handleMarkAsRead}
+                onDelete={handleDelete}
               />
               
               {groups.mensagens.length > 0 && (
@@ -309,8 +363,8 @@ export function NotificationCenter() {
                     title="Mensagens"
                     icon={<MessageSquare className="h-4 w-4 text-cyan-500" />}
                     notifications={groups.mensagens}
-                    onMarkAsRead={markAsRead}
-                    onDelete={deleteNotification}
+                    onMarkAsRead={handleMarkAsRead}
+                    onDelete={handleDelete}
                   />
                 </>
               )}
@@ -322,8 +376,8 @@ export function NotificationCenter() {
                     title="Outros"
                     icon={<Bell className="h-4 w-4 text-muted-foreground" />}
                     notifications={groups.outros}
-                    onMarkAsRead={markAsRead}
-                    onDelete={deleteNotification}
+                    onMarkAsRead={handleMarkAsRead}
+                    onDelete={handleDelete}
                   />
                 </>
               )}

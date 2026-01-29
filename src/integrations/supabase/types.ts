@@ -4393,6 +4393,92 @@ export type Database = {
         }
         Relationships: []
       }
+      system_update_reads: {
+        Row: {
+          company_id: string | null
+          id: string
+          read_at: string | null
+          update_id: string
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          id?: string
+          read_at?: string | null
+          update_id: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          id?: string
+          read_at?: string | null
+          update_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_update_reads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_update_reads_update_id_fkey"
+            columns: ["update_id"]
+            isOneToOne: false
+            referencedRelation: "system_updates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_updates: {
+        Row: {
+          changes: Json | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          master_company_id: string
+          published_at: string | null
+          tipo: string | null
+          title: string
+          version: string
+        }
+        Insert: {
+          changes?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          master_company_id: string
+          published_at?: string | null
+          tipo?: string | null
+          title: string
+          version: string
+        }
+        Update: {
+          changes?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          master_company_id?: string
+          published_at?: string | null
+          tipo?: string | null
+          title?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_updates_master_company_id_fkey"
+            columns: ["master_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_boards: {
         Row: {
           atualizado_em: string | null
@@ -5370,7 +5456,12 @@ export type Database = {
           company_id: string
         }[]
       }
+      get_user_parent_company_id: { Args: never; Returns: string }
       has_role: { Args: { _role: string; _user_id: string }; Returns: boolean }
+      is_master_admin_of: {
+        Args: { p_master_company_id: string }
+        Returns: boolean
+      }
       is_super_admin: { Args: never; Returns: boolean }
       reorder_etapas: {
         Args: { p_funil_id: string; p_order: string[] }
