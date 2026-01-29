@@ -1,273 +1,159 @@
 
 
-## Plano: Ajuste de Tempo de Atendimento e Fluxo Esperando/Em Atendimento
+## Plano: Ajuste do Filtro "Responsável" para Incluir Atendimentos Ativos
 
 ### Resumo do Pedido
-Ajustar a lógica dos filtros "Esperando" e "Em Atendimento" no menu Conversas com as seguintes regras:
 
-1. **Tempo de atendimento**: Aumentar de 10 minutos para **5 minutos**
-2. **Quando usuário responde**: Conversa fica em "Em Atendimento" mostrando **qual usuário está atendendo**
-3. **Se não houver interação por 5 minutos** (nem do usuário, nem do contato): Conversa fica "disponível" para outros atenderem
-4. **Quando contato enviar nova mensagem** após expirar tempo: Conversa volta para "Esperando" para que **outro usuário possa atender**
+O usuário quer aprimorar o filtro **"Responsável"** para que funcione como um atalho para o usuário visualizar rapidamente os contatos que **ele está atendendo ativamente** (dentro dos 5 minutos de atendimento ativo).
 
----
+**Comportamento atual:**
+- **Em Atendimento**: Mostra todos os contatos com atendimento ativo de qualquer usuário (funcionando corretamente ✅)
+- **Responsável**: Mostra apenas contatos onde o campo `responsavel` ou `assignedUser` está vinculado ao usuário
 
-### Lógica Atual (Problema)
-
-O sistema atual usa uma constante `TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000` (10 minutos) nos arquivos:
-- `src/hooks/useConversationsCache.ts` (linha 363)
-- `src/hooks/useConversationsLoader.ts` (linha 349)
-
-A lógica atual verifica apenas se o usuário respondeu recentemente, mas:
-- Não identifica **quem** está atendendo
-- Não considera o tempo de inatividade **bidirecional** (usuário E contato)
-- Não "libera" o atendimento após expirar o tempo
+**Comportamento desejado:**
+- **Em Atendimento**: Continua mostrando todos os contatos com atendimento ativo (para que todos vejam quem está atendendo quem) ✅
+- **Responsável**: Mostrar contatos que o **usuário atual** está atendendo ativamente (filtro individual por usuário)
+  - Quando o usuário responder um contato, esse contato aparece no filtro "Responsável" dele
+  - Se passar 5 minutos sem interação, o contato sai do filtro "Responsável"
+  - Contatos onde o usuário é responsável legado também continuam aparecendo
 
 ---
 
-### Arquitetura da Solução
+### Lógica da Solução
 
-#### 1. Criar tabela para rastrear atendimentos ativos (Migration)
+O filtro "Responsável" passará a considerar:
 
-Precisamos de uma tabela para registrar quem está atendendo cada conversa e quando começou:
-
-```sql
-CREATE TABLE IF NOT EXISTS public.active_attendances (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  company_id uuid NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-  telefone_formatado text NOT NULL,
-  attending_user_id uuid NOT NULL REFERENCES auth.users(id),
-  started_at timestamp with time zone DEFAULT now(),
-  last_activity_at timestamp with time zone DEFAULT now(),
-  expires_at timestamp with time zone DEFAULT (now() + interval '5 minutes'),
-  UNIQUE(company_id, telefone_formatado)
-);
-
--- Índices para performance
-CREATE INDEX IF NOT EXISTS idx_active_attendances_company ON public.active_attendances(company_id);
-CREATE INDEX IF NOT EXISTS idx_active_attendances_expires ON public.active_attendances(expires_at);
-
--- RLS
-ALTER TABLE public.active_attendances ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view active attendances from their company" 
-  ON public.active_attendances FOR SELECT 
-  USING (company_id IN (
-    SELECT company_id FROM user_roles WHERE user_id = auth.uid()
-  ));
-
-CREATE POLICY "Users can insert/update active attendances for their company" 
-  ON public.active_attendances FOR ALL 
-  USING (company_id IN (
-    SELECT company_id FROM user_roles WHERE user_id = auth.uid()
-  ));
-
--- Habilitar realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.active_attendances;
-```
-
----
-
-#### 2. Modificar Constantes de Tempo
-
-Alterar `TEMPO_CONVERSA_AO_VIVO` de 10 minutos para 5 minutos:
-
-**Arquivos afetados:**
-- `src/hooks/useConversationsCache.ts`
-- `src/hooks/useConversationsLoader.ts`
-
-```typescript
-// ANTES
-const TEMPO_CONVERSA_AO_VIVO = 10 * 60 * 1000; // 10 minutos
-
-// DEPOIS
-const TEMPO_ATENDIMENTO_ATIVO = 5 * 60 * 1000; // 5 minutos
-```
-
----
-
-#### 3. Criar Hook para Gerenciar Atendimentos Ativos
-
-Novo arquivo: `src/hooks/useActiveAttendance.ts`
-
-```typescript
-// Funcionalidades:
-// - startAttendance(telefone): Registra que o usuário atual está atendendo
-// - refreshAttendance(telefone): Atualiza last_activity_at e expires_at
-// - getActiveAttendance(telefone): Retorna quem está atendendo (se houver)
-// - isAttendanceExpired(telefone): Verifica se o atendimento expirou
-// - releaseAttendance(telefone): Libera o atendimento manualmente
-```
-
----
-
-#### 4. Modificar Lógica de Filtros
-
-**Arquivo:** `src/pages/Conversas.tsx`
-
-Nova lógica para filtros "Esperando" e "Em Atendimento":
+1. **Atendimentos ativos do usuário atual**: Contatos onde `attending_user_id === currentUserId` E atendimento não expirado
+2. **Responsáveis legados**: Contatos onde `responsavel === currentUserId` OU `assignedUser.id === currentUserId`
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    FLUXO DE ATENDIMENTO                             │
+│                  FILTRO "RESPONSÁVEL" ATUALIZADO                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  CONTATO ENVIA MENSAGEM                                             │
-│           │                                                         │
-│           ▼                                                         │
-│  ┌─────────────────────────────────────────┐                       │
-│  │ Existe atendimento ativo não expirado?  │                       │
-│  └─────────────────────────────────────────┘                       │
-│           │                                                         │
-│     ┌─────┴─────┐                                                   │
-│     │           │                                                   │
-│   SIM          NÃO                                                  │
-│     │           │                                                   │
-│     ▼           ▼                                                   │
-│ ┌─────────┐ ┌─────────────────────────────┐                        │
-│ │ MANTER  │ │ Vai para "ESPERANDO"        │                        │
-│ │EM ATEND.│ │ (disponível para qualquer   │                        │
-│ │ com o   │ │  usuário atender)           │                        │
-│ │ usuário │ └─────────────────────────────┘                        │
-│ │ atual   │                                                        │
-│ └─────────┘                                                        │
+│  Contato aparece no filtro "Responsável" do Usuário X se:           │
+│                                                                     │
+│  1. Usuário X tem atendimento ativo não expirado para este contato  │
+│     (attending_user_id === X && expires_at > agora)                 │
+│                                                                     │
+│  OU                                                                 │
+│                                                                     │
+│  2. Campo responsavel === X                                         │
+│  OU                                                                 │
+│  3. Campo assignedUser.id === X                                     │
 │                                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  USUÁRIO RESPONDE                                                   │
-│           │                                                         │
-│           ▼                                                         │
-│  ┌─────────────────────────────────────────┐                       │
-│  │ Registrar/Atualizar atendimento ativo   │                       │
-│  │ - attending_user_id = usuário atual     │                       │
-│  │ - last_activity_at = agora              │                       │
-│  │ - expires_at = agora + 5 minutos        │                       │
-│  └─────────────────────────────────────────┘                       │
-│           │                                                         │
-│           ▼                                                         │
-│  ┌─────────────────────────────────────────┐                       │
-│  │ Conversa fica "EM ATENDIMENTO"          │                       │
-│  │ mostrando nome do usuário               │                       │
-│  └─────────────────────────────────────────┘                       │
+│  REGRA DOS 5 MINUTOS:                                               │
 │                                                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  TEMPO EXPIROU (5 min sem interação)                               │
-│           │                                                         │
-│           ▼                                                         │
-│  ┌─────────────────────────────────────────┐                       │
-│  │ Atendimento considerado expirado        │                       │
-│  │ Próxima mensagem do contato vai para    │                       │
-│  │ "ESPERANDO" (outro usuário pode atender)│                       │
-│  └─────────────────────────────────────────┘                       │
+│  - Se 5 min sem interação, atendimento expira                       │
+│  - Contato sai do filtro "Responsável" (via atendimento ativo)      │
+│  - Próxima mensagem do contato vai para "Esperando"                 │
+│  - Outro usuário pode assumir                                       │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-#### 5. Modificar Contagem dos Badges
+### Visão Comparativa dos Filtros
 
-**Arquivos:** `src/pages/Conversas.tsx`
-
-```typescript
-// waitingCount: Conversas onde:
-// - Última mensagem é do contato
-// - NÃO existe atendimento ativo válido (ou expirou)
-
-// answeredCount: Conversas onde:
-// - Existe atendimento ativo NÃO expirado
-// - OU última mensagem é do usuário E está dentro dos 5 minutos
-```
+| Filtro | O que mostra | Visibilidade |
+|--------|--------------|--------------|
+| **Em Atendimento** | Todos os contatos com atendimento ativo (qualquer usuário) | Todos veem |
+| **Responsável** | Contatos que **EU** estou atendendo + meus responsáveis legados | Individual por usuário |
+| **Esperando** | Contatos sem atendimento ativo que aguardam resposta | Todos veem |
 
 ---
 
-#### 6. Mostrar Usuário Atendendo na Lista
-
-**Arquivo:** `src/components/conversas/ConversationListItem.tsx`
-
-Exibir badge com nome do usuário que está atendendo:
-
-```typescript
-// Se existe atendimento ativo para esta conversa
-{attendingUser && (
-  <Badge variant="secondary" className="text-xs">
-    👤 {attendingUser.name}
-  </Badge>
-)}
-```
-
----
-
-### Arquivos a Criar/Modificar
+### Arquivos a Modificar
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| **Migração SQL** | Criar | Tabela `active_attendances` com RLS e realtime |
-| `src/hooks/useActiveAttendance.ts` | Criar | Hook para gerenciar atendimentos ativos |
-| `src/hooks/useConversationsCache.ts` | Modificar | Alterar tempo de 10 para 5 minutos, integrar atendimentos |
-| `src/hooks/useConversationsLoader.ts` | Modificar | Mesma alteração de tempo |
-| `src/pages/Conversas.tsx` | Modificar | Integrar hook, ajustar filtros e contagens |
-| `src/components/conversas/ConversationListItem.tsx` | Modificar | Mostrar usuário atendendo |
+| `src/hooks/useActiveAttendance.ts` | Modificar | Adicionar função para verificar se **usuário atual** está atendendo |
+| `src/pages/Conversas.tsx` | Modificar | Atualizar lógica do filtro "Responsável" e badge de contagem |
 
 ---
 
-### Regras de Negócio Detalhadas
+### Detalhes Técnicos
 
-1. **Usuário responde ao contato:**
-   - Cria/atualiza registro em `active_attendances`
-   - `expires_at` = agora + 5 minutos
-   - Conversa aparece em "Em Atendimento" com nome do usuário
+#### 1. Nova função no Hook `useActiveAttendance.ts`
 
-2. **Contato responde durante atendimento ativo:**
-   - Atualiza `last_activity_at` e `expires_at`
-   - Conversa continua em "Em Atendimento" com mesmo usuário
+Adicionar uma função para verificar se o usuário atual está atendendo um contato específico:
 
-3. **5 minutos sem interação (de nenhum lado):**
-   - Atendimento considerado expirado
-   - Próxima mensagem do contato vai para "Esperando"
-   - Qualquer usuário pode "pegar" o atendimento
-
-4. **Novo usuário responde após expiração:**
-   - Substitui o registro em `active_attendances`
-   - Novo usuário assume o atendimento
-
----
-
-### Interface Visual
-
-**Lista de Conversas - Badge de Atendimento:**
-```text
-┌─────────────────────────────────────────────────────┐
-│ 👤 João Silva                          15:30       │
-│ Olá, preciso de ajuda...               👤 Maria   │
-│                                        [Em Atend.] │
-└─────────────────────────────────────────────────────┘
+```typescript
+// Verificar se o USUÁRIO ATUAL está atendendo este contato
+const isCurrentUserAttending = useCallback((telefoneFormatado: string): boolean => {
+  const attendance = getActiveAttendance(telefoneFormatado);
+  if (!attendance) return false;
+  
+  // Verificar se o attending_user_id é o usuário atual
+  return attendance.attending_user_id === currentUserIdRef.current;
+}, [getActiveAttendance]);
 ```
 
-**Filtro "Em Atendimento":**
-- Mostra apenas conversas com atendimento ativo não expirado
-- Cada item mostra qual usuário está atendendo
+#### 2. Atualizar Filtro "Responsável" em `Conversas.tsx`
 
-**Filtro "Esperando":**
-- Mostra conversas onde contato enviou mensagem E:
-  - Não existe atendimento ativo, OU
-  - Atendimento expirou (mais de 5 min sem interação)
+```typescript
+} else if (filter === "responsible") {
+  // ✅ Filtro "Responsável" ATUALIZADO
+  filtered = filtered.filter(conv => {
+    if (conv.isGroup === true) return false;
+    
+    const telefone = (conv.phoneNumber || conv.id).replace(/[^0-9]/g, '');
+    
+    // 🆕 NOVO: Verificar se o usuário atual está atendendo ativamente este contato
+    if (isCurrentUserAttending(telefone)) return true;
+    
+    // Manter lógica legada: responsável ou transferido para mim
+    return conv.responsavel === currentUserId || conv.assignedUser?.id === currentUserId;
+  });
+}
+```
+
+#### 3. Atualizar Badge de Contagem do Filtro "Responsável"
+
+```typescript
+// Badge do filtro "Responsável"
+{conversations.filter(c => {
+  if (c.isGroup) return false;
+  const telefone = (c.phoneNumber || c.id).replace(/[^0-9]/g, '');
+  
+  // Incluir: atendimentos ativos do usuário atual OU responsáveis legados
+  return isCurrentUserAttending(telefone) || 
+         c.responsavel === currentUserId || 
+         c.assignedUser?.id === currentUserId;
+}).length}
+```
 
 ---
 
-### Considerações de Performance
+### Fluxo Completo de Exemplo
 
-1. **Limpeza automática:** Registros expirados podem ser limpos via cron job ou ao carregar conversas
-2. **Cache local:** Estados de atendimento podem ser cacheados para evitar queries frequentes
-3. **Realtime:** Usar subscription para atualizar UI quando atendimento muda
+1. **Usuário Maria responde ao contato João**
+   - Sistema registra atendimento ativo: `attending_user_id = Maria`
+   - João aparece em "Em Atendimento" (todos veem, com badge "Maria")
+   - João aparece em "Responsável" de Maria (apenas Maria vê neste filtro)
+
+2. **Usuário Pedro também logado**
+   - Pedro vê João em "Em Atendimento" com badge "Maria atendendo"
+   - Pedro NÃO vê João em seu filtro "Responsável"
+
+3. **5 minutos sem interação**
+   - Atendimento de Maria expira
+   - João sai de "Em Atendimento"
+   - João sai de "Responsável" de Maria
+
+4. **João envia nova mensagem**
+   - João aparece em "Esperando"
+   - Pedro ou qualquer outro usuário pode assumir o atendimento
 
 ---
 
 ### Benefícios da Implementação
 
-1. **Controle de atendimento:** Saber exatamente quem está atendendo cada contato
-2. **Distribuição justa:** Após 5 minutos de inatividade, outro usuário pode assumir
-3. **Visibilidade:** Equipe vê claramente quais conversas estão sendo atendidas e por quem
-4. **Evita conflitos:** Previne que dois usuários respondam ao mesmo contato simultaneamente
+1. **Acesso rápido**: Usuário não precisa ir em "Em Atendimento" e procurar seus contatos
+2. **Filtro individual**: Cada usuário vê apenas os contatos que ELE está atendendo
+3. **Visibilidade coletiva mantida**: "Em Atendimento" continua mostrando todos para a equipe
+4. **Regra de 5 minutos respeitada**: Ao expirar, contato sai automaticamente do filtro
 
