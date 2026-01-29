@@ -6,6 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { GlobalCallListenerV2 } from "@/components/meetings/GlobalCallListenerV2";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { SystemUpdatesModal } from "@/components/updates/SystemUpdatesModal";
+import { useSystemUpdates } from "@/hooks/useSystemUpdates";
 
 export function MainLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -27,6 +29,23 @@ export function MainLayout() {
   
   // Controle de sidebar aberta em mobile (drawer)
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Sistema de atualizações
+  const { unreadUpdates, isSuperAdmin } = useSystemUpdates();
+  const [showUpdatesModal, setShowUpdatesModal] = useState(false);
+  
+  // Mostrar modal de atualizações automaticamente para subcontas
+  useEffect(() => {
+    // Só mostra automaticamente se não for super admin e tiver atualizações não lidas
+    if (!loading && session && !isSuperAdmin && unreadUpdates.length > 0) {
+      // Verificar se já mostrou o modal nesta sessão
+      const shownUpdates = sessionStorage.getItem('shown_updates_modal');
+      if (!shownUpdates) {
+        setShowUpdatesModal(true);
+        sessionStorage.setItem('shown_updates_modal', 'true');
+      }
+    }
+  }, [loading, session, isSuperAdmin, unreadUpdates.length]);
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout | undefined;
@@ -196,6 +215,12 @@ export function MainLayout() {
       
       {/* Global call listener V2 - works on any page */}
       <GlobalCallListenerV2 />
+      
+      {/* Modal de atualizações do sistema */}
+      <SystemUpdatesModal 
+        open={showUpdatesModal} 
+        onOpenChange={setShowUpdatesModal} 
+      />
     </div>
   );
 }
