@@ -20,6 +20,7 @@ import Reunioes from "./pages/Reunioes";
 import PublicMeeting from "./pages/PublicMeeting";
 import Discador from "./pages/Discador";
 import ProcessosComerciais from "./pages/ProcessosComerciais";
+import Treinamento from "./pages/Treinamento";
 import Financeiro from "./pages/Financeiro";
 import OAuthCallback from "./pages/OAuthCallback";
 import GmailCallback from "./pages/GmailCallback";
@@ -89,6 +90,7 @@ const App = () => (
               <Route path="discador" element={<Discador />} />
               <Route path="processos" element={<ProcessosComerciais />} />
               <Route path="financeiro" element={<Financeiro />} />
+              <Route path="treinamento" element={<Treinamento />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
