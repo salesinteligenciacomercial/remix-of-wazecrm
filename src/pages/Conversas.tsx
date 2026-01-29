@@ -288,6 +288,7 @@ function Conversas() {
   const isMobile = useIsMobile();
   const {
     isAdmin,
+    isSuperAdmin,
     userRoles
   } = usePermissions();
   const {
@@ -979,10 +980,22 @@ function Conversas() {
     // Aplicar filtro de status conforme especificação
     if (filter === "all") {
       // ✅ Filtro "Todos": Mostrar TODAS as conversas EXCETO grupos bloqueados
-      filtered = filtered.filter(conv => !conv.isGroup || !blockedGroups.has(conv.phoneNumber || conv.id));
+      // 🔐 Para não super admins, esconder TODOS os grupos
+      filtered = filtered.filter(conv => {
+        if (conv.isGroup) {
+          // Super admin vê grupos não bloqueados
+          if (isSuperAdmin) {
+            return !blockedGroups.has(conv.phoneNumber || conv.id);
+          }
+          // Não super admin não vê grupos
+          return false;
+        }
+        return true;
+      });
     } else if (filter === "group") {
       // ✅ Filtro "Grupos": Mostrar APENAS grupos (bloqueados e não bloqueados aparecem aqui)
-      filtered = filtered.filter(conv => conv.isGroup === true);
+      // 🔐 APENAS SUPER ADMIN pode ver este filtro
+      filtered = isSuperAdmin ? filtered.filter(conv => conv.isGroup === true) : [];
     } else if (filter === "waiting") {
       // ✅ Filtro "Aguardando": Contatos que enviaram mensagem E NÃO tem atendimento ativo
       filtered = filtered.filter(conv => {
@@ -1081,7 +1094,7 @@ function Conversas() {
       return bTime - aTime;
     });
     return filtered;
-  }, [conversations, filter, debouncedSearchTerm, currentUserId, blockedGroups, hasSearched, searchResults, pinnedConversations, hasActiveAttendance, isCurrentUserAttending, activeAttendances]);
+  }, [conversations, filter, debouncedSearchTerm, currentUserId, blockedGroups, hasSearched, searchResults, pinnedConversations, hasActiveAttendance, isCurrentUserAttending, activeAttendances, isSuperAdmin]);
 
   // Mensagens exibidas: sempre refletir state atual da conversa selecionada (evitar cache obsoleto)
   // ⚡ CORREÇÃO: Não limitar mensagens exibidas - mostrar todas para preservar histórico
@@ -8059,12 +8072,15 @@ function Conversas() {
               </Badge>
               <span className="text-xs">Finalizados</span>
             </Button>
-            <Button variant={filter === "group" ? "default" : "ghost"} size="sm" onClick={() => setFilter("group")} className="relative flex flex-col items-center gap-0.5 h-auto py-1 px-2">
-              <Badge variant="secondary" className="min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
-                {conversations.filter(c => c.isGroup === true).length}
-              </Badge>
-              <span className="text-xs">Grupos</span>
-            </Button>
+            {/* 🔐 Filtro de Grupos - APENAS SUPER ADMIN */}
+            {isSuperAdmin && (
+              <Button variant={filter === "group" ? "default" : "ghost"} size="sm" onClick={() => setFilter("group")} className="relative flex flex-col items-center gap-0.5 h-auto py-1 px-2">
+                <Badge variant="secondary" className="min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
+                  {conversations.filter(c => c.isGroup === true).length}
+                </Badge>
+                <span className="text-xs">Grupos</span>
+              </Button>
+            )}
             <Button variant={filter === "responsible" ? "default" : "ghost"} size="sm" onClick={() => setFilter("responsible")} className="relative flex flex-col items-center gap-0.5 h-auto py-1 px-2">
               <Badge variant="secondary" className="bg-green-500 hover:bg-green-600 text-white min-w-[20px] h-5 px-1.5 flex items-center justify-center text-xs">
                 {responsibleCount}
