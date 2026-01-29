@@ -239,6 +239,15 @@ export const useActiveAttendance = (companyId: string | null) => {
     return getActiveAttendance(telefoneFormatado) !== null;
   }, [getActiveAttendance]);
 
+  // 🆕 NOVO: Verificar se o USUÁRIO ATUAL está atendendo este contato
+  const isCurrentUserAttending = useCallback((telefoneFormatado: string): boolean => {
+    const attendance = getActiveAttendance(telefoneFormatado);
+    if (!attendance) return false;
+    
+    // Verificar se o attending_user_id é o usuário atual
+    return attendance.attending_user_id === currentUserIdRef.current;
+  }, [getActiveAttendance]);
+
   // Obter usuário que está atendendo
   const getAttendingUser = useCallback((telefoneFormatado: string): AttendingUser | null => {
     const attendance = getActiveAttendance(telefoneFormatado);
@@ -323,5 +332,6 @@ export const useActiveAttendance = (companyId: string | null) => {
     getAttendingUser,
     releaseAttendance,
     loadActiveAttendances,
+    isCurrentUserAttending, // 🆕 NOVO: Verificar se usuário atual está atendendo
   };
 };

@@ -343,6 +343,7 @@ function Conversas() {
     getAttendingUser,
     hasActiveAttendance,
     activeAttendances,
+    isCurrentUserAttending, // 🆕 NOVO: Verificar se usuário atual está atendendo
   } = useActiveAttendance(userCompanyId);
 
   // ⚡ DESATIVADO: Carregamento de avatares movido para lazy loading
@@ -1015,9 +1016,17 @@ function Conversas() {
         return conv.status === 'resolved';
       });
     } else if (filter === "responsible") {
-      // ✅ Filtro "Responsável"
+      // ✅ Filtro "Responsável" ATUALIZADO
+      // 🆕 Agora inclui: atendimentos ativos do usuário atual + responsáveis legados
       filtered = filtered.filter(conv => {
         if (conv.isGroup === true) return false;
+        
+        const telefone = (conv.phoneNumber || conv.id).replace(/[^0-9]/g, '');
+        
+        // 🆕 NOVO: Verificar se o usuário atual está atendendo ativamente este contato
+        if (isCurrentUserAttending(telefone)) return true;
+        
+        // Manter lógica legada: responsável ou transferido para mim
         return conv.responsavel === currentUserId || conv.assignedUser?.id === currentUserId;
       });
     } else if (filter === "transferred") {
@@ -1055,7 +1064,7 @@ function Conversas() {
       return bTime - aTime;
     });
     return filtered;
-  }, [conversations, filter, debouncedSearchTerm, currentUserId, blockedGroups, hasSearched, searchResults, pinnedConversations]);
+  }, [conversations, filter, debouncedSearchTerm, currentUserId, blockedGroups, hasSearched, searchResults, pinnedConversations, hasActiveAttendance, isCurrentUserAttending, activeAttendances]);
 
   // Mensagens exibidas: sempre refletir state atual da conversa selecionada (evitar cache obsoleto)
   // ⚡ CORREÇÃO: Não limitar mensagens exibidas - mostrar todas para preservar histórico
