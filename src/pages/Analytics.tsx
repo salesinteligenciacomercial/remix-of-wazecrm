@@ -1317,10 +1317,7 @@ export default function Analytics() {
           <Card className="border-0 shadow-card overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-primary opacity-5 rounded-full blur-3xl" />
             <CardHeader className="relative">
-              <CardTitle className="text-2xl font-bold flex items-center gap-2">
-                <Activity className="h-6 w-6 text-primary" />
-                 Waze Platform - Sistema Operacional e Comercial de Atendimento e Vendas                                          
-              </CardTitle>
+              
               <p className="text-muted-foreground mt-2">
                 Plataforma completa de gestão comercial com IA integrada
               </p>
