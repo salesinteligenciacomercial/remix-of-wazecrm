@@ -200,49 +200,41 @@ const SortableColumn = React.memo(function SortableColumn({
       <SortableContext id={column.id} items={(tasksByColumn[column.id] || []).slice(0, tasksPerColumn[column.id] || TASKS_PER_PAGE).map(t => t.id)} strategy={verticalListSortingStrategy}>
         <DroppableColumnContainer columnId={column.id}>
           <NovaTarefaDialog columnId={column.id} boardId={selectedBoard} onTaskCreated={() => {
-            // ✅ OTIMIZADO: Não recarregar - Realtime cuida da atualização
-            console.log('✅ [Tarefas] Tarefa criada - Realtime irá atualizar automaticamente');
-          }} />
-          {(tasksByColumn[column.id] || []).slice(0, tasksPerColumn[column.id] || TASKS_PER_PAGE).map(task => <TaskCard 
-            key={task.id} 
-            task={task} 
-            columns={allColumns}
-            onMove={onMoveTask}
-            onDelete={async id => {
-              const taskToDelete = tasks.find(t => t.id === id);
-              // ✅ OTIMIZADO: Remover otimisticamente antes da chamada API
-              setTasks(prev => prev.filter(t => t.id !== id));
-              
-              try {
-                await supabase.functions.invoke("api-tarefas", {
-                  body: {
-                    action: "deletar_tarefa",
-                    data: {
-                      task_id: id
-                    }
-                  }
-                });
-                if (taskToDelete) {
-                  emitGlobalEvent({
-                    type: 'task-deleted',
-                    data: taskToDelete,
-                    source: 'Tarefas'
-                  });
+          // ✅ OTIMIZADO: Não recarregar - Realtime cuida da atualização
+          console.log('✅ [Tarefas] Tarefa criada - Realtime irá atualizar automaticamente');
+        }} />
+          {(tasksByColumn[column.id] || []).slice(0, tasksPerColumn[column.id] || TASKS_PER_PAGE).map(task => <TaskCard key={task.id} task={task} columns={allColumns} onMove={onMoveTask} onDelete={async id => {
+          const taskToDelete = tasks.find(t => t.id === id);
+          // ✅ OTIMIZADO: Remover otimisticamente antes da chamada API
+          setTasks(prev => prev.filter(t => t.id !== id));
+          try {
+            await supabase.functions.invoke("api-tarefas", {
+              body: {
+                action: "deletar_tarefa",
+                data: {
+                  task_id: id
                 }
-              } catch (error) {
-                console.error('Erro ao deletar tarefa:', error);
-                // Reverter se falhar
-                if (taskToDelete) {
-                  setTasks(prev => [...prev, taskToDelete]);
-                }
-                toast.error('Erro ao excluir tarefa');
               }
-            }} 
-            onUpdate={() => {
-              // ✅ OTIMIZADO: Não recarregar - Realtime cuida da atualização
-              console.log('✅ [Tarefas] Tarefa atualizada - Realtime irá atualizar automaticamente');
-            }} 
-          />)}
+            });
+            if (taskToDelete) {
+              emitGlobalEvent({
+                type: 'task-deleted',
+                data: taskToDelete,
+                source: 'Tarefas'
+              });
+            }
+          } catch (error) {
+            console.error('Erro ao deletar tarefa:', error);
+            // Reverter se falhar
+            if (taskToDelete) {
+              setTasks(prev => [...prev, taskToDelete]);
+            }
+            toast.error('Erro ao excluir tarefa');
+          }
+        }} onUpdate={() => {
+          // ✅ OTIMIZADO: Não recarregar - Realtime cuida da atualização
+          console.log('✅ [Tarefas] Tarefa atualizada - Realtime irá atualizar automaticamente');
+        }} />)}
 
           {(() => {
           const totalTasksInColumn = taskCountsByColumn[column.id] || 0;
@@ -301,7 +293,10 @@ export default function Tarefas() {
   const lastOverColumnRef = useRef<string | null>(null); // ✅ NOVO: Rastrear última coluna sobre a qual passou
   const lastDragOverTimeRef = useRef<number>(0); // ✅ NOVO: Timestamp para evitar atualizações incorretas
   const confirmedTargetColumnRef = useRef<string | null>(null); // ✅ NOVO: Coluna destino confirmada
-  const mousePositionRef = useRef<{ x: number; y: number } | null>(null); // ✅ NOVO: Posição do mouse
+  const mousePositionRef = useRef<{
+    x: number;
+    y: number;
+  } | null>(null); // ✅ NOVO: Posição do mouse
   const scrollContainerRef = useRef<HTMLDivElement>(null); // 🎯 Ref para navegação horizontal
 
   const TASKS_PER_PAGE = 20; // ✅ OTIMIZAÇÃO: Aumentado de 10 para 20
@@ -475,35 +470,31 @@ export default function Tarefas() {
     // ✅ CORRIGIDO: Buscar apenas usuários da empresa atual (não de subcontas)
     (async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: {
+            session
+          }
+        } = await supabase.auth.getSession();
         if (!session) return;
 
         // Buscar company_id do usuário atual
-        const { data: userRole } = await supabase
-          .from("user_roles")
-          .select("company_id")
-          .eq("user_id", session.user.id)
-          .maybeSingle();
-
+        const {
+          data: userRole
+        } = await supabase.from("user_roles").select("company_id").eq("user_id", session.user.id).maybeSingle();
         if (!userRole?.company_id) {
           console.warn("[Tarefas] Company ID não encontrado");
           return;
         }
 
         // Buscar apenas usuários vinculados à mesma empresa
-        const { data: companyUserRoles } = await supabase
-          .from("user_roles")
-          .select("user_id")
-          .eq("company_id", userRole.company_id);
-
+        const {
+          data: companyUserRoles
+        } = await supabase.from("user_roles").select("user_id").eq("company_id", userRole.company_id);
         const userIds = (companyUserRoles || []).map((ur: any) => ur.user_id);
-
         if (userIds.length > 0) {
-          const { data } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in("id", userIds)
-            .order('full_name');
+          const {
+            data
+          } = await supabase.from('profiles').select('id, full_name').in("id", userIds).order('full_name');
           setAllUsers(data as any || []);
         }
       } catch (error) {
@@ -518,41 +509,32 @@ export default function Tarefas() {
       let responsaveis_names: string[] = [];
       let assignee_name = (task as any).assignee?.full_name;
       let lead_name = (task as any).lead?.nome || (task as any).lead?.name || task.lead_name;
-      
+
       // Buscar nomes dos responsáveis se houver IDs
       if (Array.isArray(task.responsaveis) && task.responsaveis.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', task.responsaveis);
-        
+        const {
+          data: profiles
+        } = await supabase.from('profiles').select('id, full_name').in('id', task.responsaveis);
         if (profiles) {
-          responsaveis_names = task.responsaveis
-            .map((id: string) => profiles.find(p => p.id === id)?.full_name)
-            .filter(Boolean);
+          responsaveis_names = task.responsaveis.map((id: string) => profiles.find(p => p.id === id)?.full_name).filter(Boolean);
         }
       }
-      
+
       // Buscar nome do assignee se não veio no relacionamento
       if (!assignee_name && task.assignee_id) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', task.assignee_id)
-          .maybeSingle();
+        const {
+          data: profile
+        } = await supabase.from('profiles').select('full_name').eq('id', task.assignee_id).maybeSingle();
         assignee_name = profile?.full_name;
       }
-      
+
       // Buscar nome do lead se não veio no relacionamento
       if (!lead_name && task.lead_id) {
-        const { data: lead } = await supabase
-          .from('leads')
-          .select('name')
-          .eq('id', task.lead_id)
-          .maybeSingle();
+        const {
+          data: lead
+        } = await supabase.from('leads').select('name').eq('id', task.lead_id).maybeSingle();
         lead_name = lead?.name;
       }
-      
       return {
         ...task,
         checklist: task.checklist ?? [],
@@ -578,7 +560,6 @@ export default function Tarefas() {
         lead_name: existingTask?.lead_name
       } as Task;
     };
-
     const tasksChannel = supabase.channel('tasks_board_realtime').on('postgres_changes', {
       event: '*',
       schema: 'public',
@@ -590,7 +571,6 @@ export default function Tarefas() {
         console.log('[REALTIME] 🔒 Ignorando UPDATE de tarefa durante drag:', payload.new.id);
         return;
       }
-
       if (payload.eventType === 'INSERT') {
         // Para INSERT, buscar nomes dos responsáveis
         const formattedTask = await formatTaskWithResponsaveis(payload.new);
@@ -615,9 +595,7 @@ export default function Tarefas() {
         }));
         // Buscar nomes atualizados em background
         formatTaskWithResponsaveis(payload.new).then(formattedTask => {
-          setTasks(prev => prev.map(t => 
-            t.id === formattedTask.id ? formattedTask : t
-          ));
+          setTasks(prev => prev.map(t => t.id === formattedTask.id ? formattedTask : t));
         });
       } else if (payload.eventType === 'DELETE') {
         setTasks(prev => prev.filter(t => t.id !== payload.old.id));
@@ -731,37 +709,28 @@ export default function Tarefas() {
       const {
         data: columnsData
       } = await columnsQuery;
-      
+
       // ✅ NOVO: Garantir que existe coluna "Ganho" em cada board
       if (selectedBoard && columnsData) {
-        const hasGanhoColumn = columnsData.some(col => 
-          col.nome?.toLowerCase().includes('ganho') || 
-          col.nome?.toLowerCase().includes('concluído') ||
-          col.nome?.toLowerCase().includes('concluido') ||
-          col.nome?.includes('✅')
-        );
-        
+        const hasGanhoColumn = columnsData.some(col => col.nome?.toLowerCase().includes('ganho') || col.nome?.toLowerCase().includes('concluído') || col.nome?.toLowerCase().includes('concluido') || col.nome?.includes('✅'));
         if (!hasGanhoColumn) {
           console.log('📦 [Tarefas] Criando coluna fixa "Ganho" para o board...');
           const maxPosition = columnsData.reduce((max, col) => Math.max(max, col.posicao || 0), 0);
-          const { data: newColumn, error: createError } = await supabase
-            .from("task_columns")
-            .insert([{
-              nome: '✅ Ganho',
-              board_id: selectedBoard,
-              posicao: maxPosition + 1,
-              cor: '#22c55e'
-            }])
-            .select()
-            .single();
-          
+          const {
+            data: newColumn,
+            error: createError
+          } = await supabase.from("task_columns").insert([{
+            nome: '✅ Ganho',
+            board_id: selectedBoard,
+            posicao: maxPosition + 1,
+            cor: '#22c55e'
+          }]).select().single();
           if (!createError && newColumn) {
             console.log('✅ [Tarefas] Coluna "Ganho" criada com sucesso');
             columnsData.push(newColumn);
           }
         }
       }
-      
       setColumns(columnsData || []);
 
       // ✅ OTIMIZAÇÃO: Limitar query inicial - só carregar tarefas do board selecionado e limitar quantidade
@@ -1135,20 +1104,18 @@ export default function Tarefas() {
     // ✅ CORRIGIDO V3: Abordagem robusta baseada em posição do mouse
     // Calcular a coluna correta usando a posição REAL do mouse no momento do drop
     let newColumnId: string | null = null;
-    
+
     // 🎯 MÉTODO PRINCIPAL: Encontrar coluna via posição do mouse
     const findColumnByMousePosition = (): string | null => {
       const mousePos = mousePositionRef.current;
       if (!mousePos) return null;
-      
+
       // Buscar todas as colunas visíveis no DOM
       const columnElements = document.querySelectorAll('[data-column-id][data-droppable="true"]');
-      
       for (const colEl of Array.from(columnElements)) {
         const rect = colEl.getBoundingClientRect();
         // Verificar se o mouse está dentro dos limites da coluna
-        if (mousePos.x >= rect.left && mousePos.x <= rect.right &&
-            mousePos.y >= rect.top && mousePos.y <= rect.bottom) {
+        if (mousePos.x >= rect.left && mousePos.x <= rect.right && mousePos.y >= rect.top && mousePos.y <= rect.bottom) {
           const colId = colEl.getAttribute('data-column-id');
           if (colId && columnsFiltradas.some(c => c.id === colId)) {
             console.log('[Drag&Drop] ✅ Coluna encontrada via posição do mouse:', colId);
@@ -1156,43 +1123,45 @@ export default function Tarefas() {
           }
         }
       }
-      
+
       // Se não encontrou exatamente, buscar a coluna mais próxima horizontalmente
-      let closestColumn: { id: string; distance: number } | null = null;
+      let closestColumn: {
+        id: string;
+        distance: number;
+      } | null = null;
       for (const colEl of Array.from(columnElements)) {
         const rect = colEl.getBoundingClientRect();
         const colId = colEl.getAttribute('data-column-id');
         if (!colId || !columnsFiltradas.some(c => c.id === colId)) continue;
-        
+
         // Verificar se o mouse está na mesma faixa vertical da coluna
         if (mousePos.y >= rect.top && mousePos.y <= rect.bottom) {
           const centerX = rect.left + rect.width / 2;
           const distance = Math.abs(mousePos.x - centerX);
           if (!closestColumn || distance < closestColumn.distance) {
-            closestColumn = { id: colId, distance };
+            closestColumn = {
+              id: colId,
+              distance
+            };
           }
         }
       }
-      
       if (closestColumn) {
         console.log('[Drag&Drop] ✅ Coluna mais próxima via posição do mouse:', closestColumn.id);
         return closestColumn.id;
       }
-      
       return null;
     };
-    
+
     // Prioridade 1: Posição do mouse (mais confiável)
     newColumnId = findColumnByMousePosition();
-    
+
     // Prioridade 2: Coluna confirmada pelo handleDragOver
-    if (!newColumnId && confirmedTargetColumnRef.current && 
-        confirmedTargetColumnRef.current !== task.column_id &&
-        columnsFiltradas.some(c => c.id === confirmedTargetColumnRef.current)) {
+    if (!newColumnId && confirmedTargetColumnRef.current && confirmedTargetColumnRef.current !== task.column_id && columnsFiltradas.some(c => c.id === confirmedTargetColumnRef.current)) {
       newColumnId = confirmedTargetColumnRef.current;
       console.log('[Drag&Drop] ✅ Usando confirmedTargetColumnRef:', newColumnId);
     }
-    
+
     // Prioridade 3: Se over.id é o ID de uma coluna válida
     if (!newColumnId) {
       const isValidColumnId = columnsFiltradas.some(c => c.id === overId);
@@ -1201,14 +1170,13 @@ export default function Tarefas() {
         console.log('[Drag&Drop] ✅ Usando over.id como columnId:', newColumnId);
       }
     }
-    
+
     // Prioridade 4: lastOverColumnRef
-    if (!newColumnId && lastOverColumnRef.current && 
-        columnsFiltradas.some(c => c.id === lastOverColumnRef.current)) {
+    if (!newColumnId && lastOverColumnRef.current && columnsFiltradas.some(c => c.id === lastOverColumnRef.current)) {
       newColumnId = lastOverColumnRef.current;
       console.log('[Drag&Drop] ✅ Usando lastOverColumnRef:', newColumnId);
     }
-    
+
     // Prioridade 5: containerId do sortable
     if (!newColumnId && overData?.sortable?.containerId) {
       const containerId = overData.sortable.containerId;
@@ -1217,7 +1185,7 @@ export default function Tarefas() {
         console.log('[Drag&Drop] ✅ Usando containerId:', newColumnId);
       }
     }
-    
+
     // Prioridade 6: Coluna da tarefa sobre a qual soltou
     if (!newColumnId) {
       const overTask = tasks.find(t => t.id === overId);
@@ -1230,7 +1198,8 @@ export default function Tarefas() {
     // Validação final
     if (!newColumnId) {
       console.error('[Drag&Drop] Não foi possível identificar coluna destino', {
-        overId, mousePos: mousePositionRef.current,
+        overId,
+        mousePos: mousePositionRef.current,
         confirmedTarget: confirmedTargetColumnRef.current,
         lastOver: lastOverColumnRef.current
       });
@@ -1271,10 +1240,7 @@ export default function Tarefas() {
     });
 
     // ✅ NOVO: Verificar se a coluna destino é "Ganho" para marcar como concluída
-    const isGanhoColumn = targetColumn.nome?.toLowerCase().includes('ganho') || 
-                          targetColumn.nome?.toLowerCase().includes('concluído') ||
-                          targetColumn.nome?.toLowerCase().includes('concluido') ||
-                          targetColumn.nome?.includes('✅');
+    const isGanhoColumn = targetColumn.nome?.toLowerCase().includes('ganho') || targetColumn.nome?.toLowerCase().includes('concluído') || targetColumn.nome?.toLowerCase().includes('concluido') || targetColumn.nome?.includes('✅');
 
     // 🔒 CRÍTICO: Bloquear realtime durante a operação para evitar race condition
     console.log('[Drag&Drop] 🔒 Bloqueando realtime durante movimentação de tarefa...');
@@ -1284,10 +1250,10 @@ export default function Tarefas() {
     setTasks(prev => prev.map(t => {
       if (t.id === taskId) {
         // Se for coluna Ganho, marcar todos os checklists como concluídos
-        const updatedChecklist = isGanhoColumn && t.checklist 
-          ? t.checklist.map(item => ({ ...item, done: true }))
-          : t.checklist;
-        
+        const updatedChecklist = isGanhoColumn && t.checklist ? t.checklist.map(item => ({
+          ...item,
+          done: true
+        })) : t.checklist;
         return {
           ...t,
           column_id: newColumnId!,
@@ -1324,20 +1290,18 @@ export default function Tarefas() {
           }
         }
       });
-      
       console.log('[Drag&Drop] Resposta da API:', response);
-      
       if (response.error) {
         console.error('[Drag&Drop] Erro da edge function:', response.error);
         throw response.error;
       }
-      
+
       // Verificar se houve erro no corpo da resposta
       if (response.data?.error) {
         console.error('[Drag&Drop] Erro no corpo da resposta:', response.data);
         throw new Error(response.data.error);
       }
-      
+
       // ✅ Mostrar mensagem apropriada
       if (isGanhoColumn) {
         toast.success(`🏆 Tarefa concluída com sucesso!`);
@@ -1389,37 +1353,39 @@ export default function Tarefas() {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (activeTaskId) {
-        mousePositionRef.current = { x: e.clientX, y: e.clientY };
+        mousePositionRef.current = {
+          x: e.clientX,
+          y: e.clientY
+        };
       }
     };
-    
     if (activeTaskId) {
-      document.addEventListener('mousemove', handleMouseMove, { passive: true });
+      document.addEventListener('mousemove', handleMouseMove, {
+        passive: true
+      });
     }
-    
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
     };
   }, [activeTaskId]);
-
   const handleDragStart = useCallback((event: any) => {
     const activeId = event.active?.id;
     setActiveTaskId(activeId ?? null);
-    
+
     // ✅ CRÍTICO: Resetar refs de rastreamento
     confirmedTargetColumnRef.current = null;
     lastDragOverTimeRef.current = 0;
     mousePositionRef.current = null;
-    
+
     // ✅ Capturar posição inicial do mouse
     const pointerEvent = event.activatorEvent as PointerEvent | MouseEvent;
     if (pointerEvent) {
-      mousePositionRef.current = { 
-        x: pointerEvent.clientX, 
-        y: pointerEvent.clientY 
+      mousePositionRef.current = {
+        x: pointerEvent.clientX,
+        y: pointerEvent.clientY
       };
     }
-    
+
     // ✅ CRÍTICO: Inicializar lastOverColumnRef com a coluna da tarefa sendo arrastada
     if (activeId) {
       const activeTask = tasks.find(t => t.id === activeId);
@@ -1429,7 +1395,6 @@ export default function Tarefas() {
       }
     }
   }, [tasks]);
-  
   const handleDragCancel = useCallback(() => {
     setActiveTaskId(null);
     lastOverColumnRef.current = null;
@@ -1441,20 +1406,22 @@ export default function Tarefas() {
   // ✅ CORRIGIDO: Handler para rastrear a última coluna sobre a qual passou
   // Usa timestamp para evitar atualizações incorretas perto do momento do drop
   const handleDragOver = useCallback((event: any) => {
-    const { over, active } = event;
+    const {
+      over,
+      active
+    } = event;
     if (!over || !active) return;
-    
     const overId = String(over.id);
     const overData = over.data?.current || {};
     const activeId = String(active.id);
-    
+
     // Obter a coluna atual da tarefa sendo arrastada
     const activeTask = tasks.find(t => t.id === activeId);
     const activeTaskColumnId = activeTask?.column_id;
-    
+
     // Tentar identificar a coluna destino visualmente correta
     let columnId: string | null = null;
-    
+
     // Prioridade 1: Se over.id é uma coluna válida (passou sobre área vazia da coluna)
     if (columnsFiltradas.some(c => c.id === overId)) {
       columnId = overId;
@@ -1471,15 +1438,15 @@ export default function Tarefas() {
     // Isso é mais confiável que usar over.rect que pode estar desatualizado
     else if (typeof document !== 'undefined') {
       // Usar posição do pointer do dnd-kit se disponível
-      const pointerPosition = (event as any).activatorEvent?.clientX !== undefined
-        ? { x: (event as any).activatorEvent.clientX, y: (event as any).activatorEvent.clientY }
-        : null;
-      
+      const pointerPosition = (event as any).activatorEvent?.clientX !== undefined ? {
+        x: (event as any).activatorEvent.clientX,
+        y: (event as any).activatorEvent.clientY
+      } : null;
+
       // Fallback: usar centro do over.rect
       const rect = over.rect;
       const x = pointerPosition?.x ?? (rect ? rect.left + rect.width / 2 : null);
       const y = pointerPosition?.y ?? (rect ? rect.top + rect.height / 2 : null);
-      
       if (x !== null && y !== null) {
         const element = document.elementFromPoint(x, y);
         if (element) {
@@ -1493,28 +1460,25 @@ export default function Tarefas() {
         }
       }
     }
-    
+
     // ✅ CRÍTICO: Atualizar ref apenas se:
     // 1. Encontramos uma coluna válida E
     // 2. A coluna é DIFERENTE da coluna original da tarefa OU
     // 3. Ainda não temos uma coluna confirmada diferente da original
     if (columnId) {
       const now = Date.now();
-      
+
       // Se a coluna detectada é diferente da coluna original, confirmar como destino
       if (columnId !== activeTaskColumnId) {
         confirmedTargetColumnRef.current = columnId;
         lastOverColumnRef.current = columnId;
         lastDragOverTimeRef.current = now;
         console.log('[Drag&Drop] 📍 onDragOver CONFIRMOU coluna destino:', columnId);
-      } 
+      }
       // Se voltou para a coluna original MAS já temos um destino confirmado recentemente (< 500ms)
       // Ignorar para evitar flicker
-      else if (confirmedTargetColumnRef.current && 
-               confirmedTargetColumnRef.current !== activeTaskColumnId &&
-               now - lastDragOverTimeRef.current < 500) {
-        console.log('[Drag&Drop] 📍 onDragOver ignorando retorno à coluna original (destino confirmado recentemente):', 
-                    confirmedTargetColumnRef.current);
+      else if (confirmedTargetColumnRef.current && confirmedTargetColumnRef.current !== activeTaskColumnId && now - lastDragOverTimeRef.current < 500) {
+        console.log('[Drag&Drop] 📍 onDragOver ignorando retorno à coluna original (destino confirmado recentemente):', confirmedTargetColumnRef.current);
         // Manter o lastOverColumnRef no destino confirmado
         lastOverColumnRef.current = confirmedTargetColumnRef.current;
       }
@@ -1701,12 +1665,7 @@ export default function Tarefas() {
         <div>
           <h1 className="text-3xl font-bold">Tarefas Estilo Trello</h1>
           <p className="text-muted-foreground">Gerencie suas tarefas em quadros Kanban</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            💡 Atalhos: <kbd className="px-1 py-0.5 bg-muted rounded text-xs">N</kbd> Nova tarefa •
-            <kbd className="px-1 py-0.5 bg-muted rounded text-xs">B</kbd> Quadro •
-            <kbd className="px-1 py-0.5 bg-muted rounded text-xs">C</kbd> Calendário •
-            <kbd className="px-1 py-0.5 bg-muted rounded text-xs">D</kbd> Dashboard
-          </p>
+          
         </div>
         <div className="flex gap-2 items-center">
           <div className="flex items-center gap-1 rounded-md border p-1">
@@ -1983,36 +1942,39 @@ export default function Tarefas() {
           <SortableContext items={columnsFiltradas.map(c => c.id)} strategy={horizontalListSortingStrategy}>
             <div ref={scrollContainerRef} className="flex overflow-x-auto gap-4 pb-4 min-h-[500px] scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-muted/20 hover:scrollbar-thumb-primary/50 scroll-smooth">
               {columnsFiltradas.map(column => <SortableColumn key={column.id} column={column} tasksByColumn={tasksByColumn} tasksPerColumn={tasksPerColumn} taskCountsByColumn={taskCountsByColumn} TASKS_PER_PAGE={TASKS_PER_PAGE} tasks={tasks} loadingMore={loadingMore} carregarDados={carregarDados} loadMoreTasks={loadMoreTasks} selectedBoard={selectedBoard} emitGlobalEvent={emitGlobalEvent} allColumns={columnsFiltradas} setTasks={setTasks} onMoveTask={async (taskId, newColumnId) => {
-                // 🔒 CRÍTICO: Bloquear realtime durante a operação para evitar race condition
-                console.log('[onMoveTask] 🔒 Bloqueando realtime durante movimentação manual...');
-                isMovingRef.current = true;
-                try {
-                  // Atualização otimista
-                  setTasks(prev => prev.map(t => t.id === taskId ? { ...t, column_id: newColumnId } : t));
-                  
-                  const response = await supabase.functions.invoke("api-tarefas", {
-                    body: {
-                      action: "mover_tarefa",
-                      data: { task_id: taskId, nova_coluna_id: newColumnId }
+              // 🔒 CRÍTICO: Bloquear realtime durante a operação para evitar race condition
+              console.log('[onMoveTask] 🔒 Bloqueando realtime durante movimentação manual...');
+              isMovingRef.current = true;
+              try {
+                // Atualização otimista
+                setTasks(prev => prev.map(t => t.id === taskId ? {
+                  ...t,
+                  column_id: newColumnId
+                } : t));
+                const response = await supabase.functions.invoke("api-tarefas", {
+                  body: {
+                    action: "mover_tarefa",
+                    data: {
+                      task_id: taskId,
+                      nova_coluna_id: newColumnId
                     }
-                  });
-                  
-                  if (response.error || response.data?.error) {
-                    throw new Error(response.data?.error || response.error?.message);
                   }
-                  
-                  const targetColumn = columnsFiltradas.find(c => c.id === newColumnId);
-                  toast.success(`Tarefa movida para "${targetColumn?.nome || 'coluna'}"`);
-                } catch (error: any) {
-                  console.error("Erro ao mover tarefa:", error);
-                  toast.error(error?.message || "Erro ao mover tarefa");
-                  carregarDados(); // Recarregar para reverter
-                } finally {
-                  // 🔓 CRÍTICO: Sempre desbloquear realtime no finally
-                  console.log('[onMoveTask] 🔓 Desbloqueando realtime após movimentação manual');
-                  isMovingRef.current = false;
+                });
+                if (response.error || response.data?.error) {
+                  throw new Error(response.data?.error || response.error?.message);
                 }
-              }} />)}
+                const targetColumn = columnsFiltradas.find(c => c.id === newColumnId);
+                toast.success(`Tarefa movida para "${targetColumn?.nome || 'coluna'}"`);
+              } catch (error: any) {
+                console.error("Erro ao mover tarefa:", error);
+                toast.error(error?.message || "Erro ao mover tarefa");
+                carregarDados(); // Recarregar para reverter
+              } finally {
+                // 🔓 CRÍTICO: Sempre desbloquear realtime no finally
+                console.log('[onMoveTask] 🔓 Desbloqueando realtime após movimentação manual');
+                isMovingRef.current = false;
+              }
+            }} />)}
             {/* Botão para adicionar nova coluna - apenas admin pode criar colunas */}
             {(isAdmin || canManageTaskStructure) && <div className="min-w-[380px] flex-shrink-0">
                 <AdicionarColunaDialog boardId={selectedBoard} currentColumnsCount={columnsFiltradas.length} onColumnAdded={carregarDados} />
