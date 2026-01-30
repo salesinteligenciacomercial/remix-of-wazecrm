@@ -7477,8 +7477,26 @@ function Conversas() {
       } = await (isGroup ? query.eq('numero', conv.id) : query.eq('telefone_formatado', numeroNormalizado!));
       if (error) throw error;
 
-      // ⚡ CORREÇÃO: Atualizar também o lead se existir um vinculado
-      const leadId = leadsVinculados[conversationId] || leadsVinculados[safeFormatPhoneNumber(conversationId)];
+      // ⚡ CORREÇÃO: Atualizar também o lead - primeiro por ID vinculado, depois por telefone
+      let leadId = leadsVinculados[conversationId] || leadsVinculados[safeFormatPhoneNumber(conversationId)];
+      
+      // Se não encontrou lead vinculado, buscar pelo telefone
+      if (!leadId && numeroNormalizado) {
+        console.log('🔍 Buscando lead pelo telefone:', numeroNormalizado);
+        const { data: leadByPhone } = await supabase
+          .from('leads')
+          .select('id')
+          .eq('company_id', userCompanyId)
+          .or(`phone.eq.${numeroNormalizado},telefone.eq.${numeroNormalizado}`)
+          .limit(1)
+          .maybeSingle();
+        
+        if (leadByPhone) {
+          leadId = leadByPhone.id;
+          console.log('✅ Lead encontrado pelo telefone:', leadId);
+        }
+      }
+      
       if (leadId) {
         console.log('🔄 Atualizando nome do lead vinculado:', leadId);
         const {
@@ -7492,6 +7510,8 @@ function Conversas() {
         } else {
           console.log('✅ Nome do lead atualizado com sucesso');
         }
+      } else {
+        console.log('ℹ️ Nenhum lead encontrado para atualizar - nome salvo apenas na conversa');
       }
 
       // Atualizar localmente
