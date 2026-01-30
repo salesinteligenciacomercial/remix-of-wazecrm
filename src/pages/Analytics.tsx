@@ -330,7 +330,6 @@ export default function Analytics() {
   if (!permissionsLoading && !canAccess('analytics') && !isAdmin) {
     return <Navigate to="/leads" replace />;
   }
-
   const fetchAllStats = async () => {
     setLoading(true);
     try {
@@ -373,9 +372,11 @@ export default function Analytics() {
 
       // Leads - com filtro de período e responsável
       // ✅ CORREÇÃO: Usar count: 'exact' para obter contagem precisa além do limite de 1000
-      let leadsCountQuery = supabase.from("leads").select("*", { count: 'exact', head: true });
+      let leadsCountQuery = supabase.from("leads").select("*", {
+        count: 'exact',
+        head: true
+      });
       let leadsDataQuery = supabase.from("leads").select("value, status, etapa_id, created_at, expected_close_date, responsaveis, responsavel_id");
-      
       if (startDate) {
         leadsCountQuery = leadsCountQuery.gte('created_at', startDate.toISOString());
         leadsDataQuery = leadsDataQuery.gte('created_at', startDate.toISOString());
@@ -385,24 +386,23 @@ export default function Analytics() {
         leadsCountQuery = leadsCountQuery.or(`responsaveis.cs.["${globalFilters.responsible}"],responsavel_id.eq.${globalFilters.responsible}`);
         leadsDataQuery = leadsDataQuery.or(`responsaveis.cs.["${globalFilters.responsible}"],responsavel_id.eq.${globalFilters.responsible}`);
       }
-      
-      // Executar ambas as queries em paralelo
-      const [{ count: totalLeadsCount }, { data: leads }] = await Promise.all([
-        leadsCountQuery,
-        leadsDataQuery
-      ]);
 
+      // Executar ambas as queries em paralelo
+      const [{
+        count: totalLeadsCount
+      }, {
+        data: leads
+      }] = await Promise.all([leadsCountQuery, leadsDataQuery]);
       const totalLeads = totalLeadsCount || 0;
       const totalValue = leads?.reduce((sum, lead) => sum + (Number(lead.value) || 0), 0) || 0;
       const wonDeals = leads?.filter(l => l.status === "ganho").length || 0;
       const conversionRate = totalLeads > 0 ? wonDeals / totalLeads * 100 : 0;
-      
+
       // Próximos a fechar - leads ativos com data de fechamento nos próximos 7 dias
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const nextWeek = new Date(today);
       nextWeek.setDate(nextWeek.getDate() + 7);
-      
       const leadsProximosAFechar = leads?.filter(l => {
         if (l.status === 'ganho' || l.status === 'perdido') return false;
         if (!l.expected_close_date) return false;
@@ -424,8 +424,9 @@ export default function Analytics() {
       if (userCompanyId) {
         conversasQuery = conversasQuery.eq('company_id', userCompanyId);
       }
-      const { data: conversasData } = await conversasQuery;
-
+      const {
+        data: conversasData
+      } = await conversasQuery;
       const numerosUnicos = new Set<string>();
       conversasData?.forEach((c: any) => {
         // Incluir grupos também na contagem
@@ -438,25 +439,40 @@ export default function Analytics() {
       const conversasCount = numerosUnicos.size;
 
       // Compromissos - com filtro de período
-      let compromissosQuery = supabase.from("compromissos").select("*", { count: 'exact', head: true });
+      let compromissosQuery = supabase.from("compromissos").select("*", {
+        count: 'exact',
+        head: true
+      });
       if (startDate) {
         compromissosQuery = compromissosQuery.gte('data_hora_inicio', startDate.toISOString());
       }
-      const { count: compromissosCount } = await compromissosQuery;
+      const {
+        count: compromissosCount
+      } = await compromissosQuery;
 
       // Tarefas - com filtro de período
-      let tarefasQuery = supabase.from("tasks").select("*", { count: 'exact', head: true });
+      let tarefasQuery = supabase.from("tasks").select("*", {
+        count: 'exact',
+        head: true
+      });
       if (startDate) {
         tarefasQuery = tarefasQuery.gte('created_at', startDate.toISOString());
       }
-      const { count: tarefasCount } = await tarefasQuery;
+      const {
+        count: tarefasCount
+      } = await tarefasQuery;
 
       // Mensagens IA - com filtro de período
-      let iaQuery = supabase.from("ia_training_data").select("*", { count: 'exact', head: true });
+      let iaQuery = supabase.from("ia_training_data").select("*", {
+        count: 'exact',
+        head: true
+      });
       if (startDate) {
         iaQuery = iaQuery.gte('created_at', startDate.toISOString());
       }
-      const { count: iaCount } = await iaQuery;
+      const {
+        count: iaCount
+      } = await iaQuery;
 
       // Carregar funis disponíveis (sem filtro de período)
       let funisData: any[] | null = null;
@@ -478,9 +494,7 @@ export default function Analytics() {
       } else if (selectedFunil && !funisData.some((f: any) => f.id === selectedFunil)) {
         setSelectedFunil(null);
       }
-
       console.log(`📊 [Analytics] Stats carregados - Período: ${globalFilters.period}, Leads: ${totalLeads}, Valor: ${totalValue}`);
-      
       setStats({
         totalLeads,
         totalValue,
@@ -500,15 +514,17 @@ export default function Analytics() {
     try {
       // Buscar leads com campos de responsável para aplicar filtro
       let leadsQuery = supabase.from("leads").select("value, status, etapa_id, funil_id, responsaveis, responsavel_id");
-      
+
       // Aplicar filtro de responsável se definido
       if (globalFilters.responsible) {
         leadsQuery = leadsQuery.or(`responsaveis.cs.["${globalFilters.responsible}"],responsavel_id.eq.${globalFilters.responsible}`);
       }
-      
-      const { data: leads } = await leadsQuery;
-      const { data: etapasData } = await supabase.from("etapas").select("id, nome, cor, funil_id").eq("funil_id", funilId).order("posicao");
-      
+      const {
+        data: leads
+      } = await leadsQuery;
+      const {
+        data: etapasData
+      } = await supabase.from("etapas").select("id, nome, cor, funil_id").eq("funil_id", funilId).order("posicao");
       const leadsDoFunil = leads?.filter(l => l.funil_id === funilId) || [];
       const etapasComContagem = await Promise.all((etapasData || []).map(async etapa => {
         const leadsNaEtapa = leadsDoFunil.filter(l => l.etapa_id === etapa.id) || [];
@@ -629,8 +645,9 @@ export default function Analytics() {
       if (userCompanyId) {
         conversasQuery = conversasQuery.eq('company_id', userCompanyId);
       }
-
-      const { data: conversasData } = await conversasQuery;
+      const {
+        data: conversasData
+      } = await conversasQuery;
 
       // ✅ CORREÇÃO: Contar CONVERSAS ÚNICAS (números únicos), não mensagens
       const numerosUnicos = new Set<string>();
@@ -753,8 +770,9 @@ export default function Analytics() {
       if (startDate) {
         tarefasQuery = tarefasQuery.gte('created_at', startDate.toISOString());
       }
-      const { data: tarefasData } = await tarefasQuery;
-
+      const {
+        data: tarefasData
+      } = await tarefasQuery;
       const tarefasCriadas = tarefasData?.length || 0;
       const tarefasConcluidas = tarefasData?.filter((t: any) => t.status === "completed" || t.status === "done").length || 0;
       const tarefasEmAndamento = tarefasData?.filter((t: any) => t.status === "in_progress" || t.status === "doing").length || 0;
@@ -786,8 +804,9 @@ export default function Analytics() {
       if (startDate) {
         compromissosQuery = compromissosQuery.gte('data_hora_inicio', startDate.toISOString());
       }
-      const { data: compromissosData } = await compromissosQuery;
-
+      const {
+        data: compromissosData
+      } = await compromissosQuery;
       const compromissosAgendados = compromissosData?.length || 0;
       const compromissosRealizados = compromissosData?.filter((c: any) => c.status === "realizado" || c.status === "concluido").length || 0;
       const taxaComparecimento = compromissosAgendados > 0 ? compromissosRealizados / compromissosAgendados * 100 : 0;
@@ -810,16 +829,13 @@ export default function Analytics() {
       setProductivityLoading(false);
     }
   };
-
   const fetchBirthdayStats = async () => {
     try {
-      const { data: leadsData, error } = await supabase
-        .from('leads')
-        .select('id, name, data_nascimento')
-        .not('data_nascimento', 'is', null);
-
+      const {
+        data: leadsData,
+        error
+      } = await supabase.from('leads').select('id, name, data_nascimento').not('data_nascimento', 'is', null);
       console.log('🎂 [Analytics] Leads com data_nascimento:', leadsData?.length, error);
-
       if (!leadsData || leadsData.length === 0) {
         setBirthdayStats({
           aniversariantesHoje: 0,
@@ -829,11 +845,9 @@ export default function Analytics() {
         });
         return;
       }
-
       const hoje = new Date();
       const hojeD = hoje.getDate();
       const hojeM = hoje.getMonth();
-
       console.log('🎂 [Analytics] Hoje:', hojeD, '/', hojeM + 1);
 
       // Filtrar aniversariantes
@@ -842,7 +856,6 @@ export default function Analytics() {
         const nascimento = new Date(lead.data_nascimento + 'T00:00:00');
         return nascimento.getDate() === hojeD && nascimento.getMonth() === hojeM;
       }).length;
-
       const aniversariantesSemana = leadsData.filter((lead: any) => {
         if (!lead.data_nascimento) return false;
         const nascimento = new Date(lead.data_nascimento + 'T00:00:00');
@@ -855,7 +868,6 @@ export default function Analytics() {
         }
         return false;
       }).length;
-
       const aniversariantesMes = leadsData.filter((lead: any) => {
         if (!lead.data_nascimento) return false;
         const nascimento = new Date(lead.data_nascimento + 'T00:00:00');
@@ -863,43 +875,33 @@ export default function Analytics() {
       }).length;
 
       // Próximos aniversariantes (próximos 90 dias para garantir visibilidade)
-      const proximosAniversariantes = leadsData
-        .map((lead: any) => {
-          if (!lead.data_nascimento) return null;
-          const nascimento = new Date(lead.data_nascimento + 'T00:00:00');
-          
-          // Calcular próximo aniversário
-          let proximoAniversario = new Date(hoje.getFullYear(), nascimento.getMonth(), nascimento.getDate());
-          
-          // Resetar horas para comparação precisa
-          const hojeZero = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-          
-          if (proximoAniversario < hojeZero) {
-            proximoAniversario.setFullYear(proximoAniversario.getFullYear() + 1);
-          }
-          
-          const diasFaltando = Math.ceil((proximoAniversario.getTime() - hojeZero.getTime()) / (1000 * 60 * 60 * 24));
-          
-          console.log(`🎂 Lead ${lead.name}: nasc ${nascimento.getDate()}/${nascimento.getMonth()+1}, próx aniv: ${proximoAniversario.toLocaleDateString()}, dias: ${diasFaltando}`);
-          
-          return {
-            id: lead.id,
-            nome: lead.name || 'Sem nome',
-            data: `${nascimento.getDate().toString().padStart(2, '0')}/${(nascimento.getMonth() + 1).toString().padStart(2, '0')}`,
-            diasFaltando
-          };
-        })
-        .filter((l: any) => l !== null && l.diasFaltando <= 90)
-        .sort((a: any, b: any) => a.diasFaltando - b.diasFaltando)
-        .slice(0, 10);
+      const proximosAniversariantes = leadsData.map((lead: any) => {
+        if (!lead.data_nascimento) return null;
+        const nascimento = new Date(lead.data_nascimento + 'T00:00:00');
 
+        // Calcular próximo aniversário
+        let proximoAniversario = new Date(hoje.getFullYear(), nascimento.getMonth(), nascimento.getDate());
+
+        // Resetar horas para comparação precisa
+        const hojeZero = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+        if (proximoAniversario < hojeZero) {
+          proximoAniversario.setFullYear(proximoAniversario.getFullYear() + 1);
+        }
+        const diasFaltando = Math.ceil((proximoAniversario.getTime() - hojeZero.getTime()) / (1000 * 60 * 60 * 24));
+        console.log(`🎂 Lead ${lead.name}: nasc ${nascimento.getDate()}/${nascimento.getMonth() + 1}, próx aniv: ${proximoAniversario.toLocaleDateString()}, dias: ${diasFaltando}`);
+        return {
+          id: lead.id,
+          nome: lead.name || 'Sem nome',
+          data: `${nascimento.getDate().toString().padStart(2, '0')}/${(nascimento.getMonth() + 1).toString().padStart(2, '0')}`,
+          diasFaltando
+        };
+      }).filter((l: any) => l !== null && l.diasFaltando <= 90).sort((a: any, b: any) => a.diasFaltando - b.diasFaltando).slice(0, 10);
       setBirthdayStats({
         aniversariantesHoje,
         aniversariantesSemana,
         aniversariantesMes,
         proximosAniversariantes
       });
-
       console.log(`🎂 [Analytics] Aniversariantes: ${aniversariantesHoje} hoje, ${aniversariantesSemana} semana, ${aniversariantesMes} mês, ${proximosAniversariantes.length} próximos`);
     } catch (error) {
       console.error('Erro ao carregar estatísticas de aniversariantes:', error);
@@ -946,7 +948,6 @@ export default function Analytics() {
     filterType: 'active' as DrilldownFilterType,
     clickable: true
   }];
-
   const operacionalCards = [{
     title: "Conversas Ativas",
     value: stats.conversas,
@@ -992,18 +993,43 @@ export default function Analytics() {
   // Handler para abrir drill-down
   const handleCardClick = (stat: typeof statCards[0]) => {
     if (!stat.clickable || !stat.filterType) return;
-    
-    const filterDescriptions: Record<DrilldownFilterType, { title: string; description: string }> = {
-      'total': { title: 'Todos os Leads', description: 'Lista completa de leads do período selecionado' },
-      'pipeline': { title: 'Leads em Pipeline', description: 'Leads com valor em negociação (não ganhos/perdidos)' },
-      'active': { title: 'Negócios Ativos', description: 'Leads em andamento que não foram fechados' },
-      'won': { title: 'Leads Convertidos', description: 'Leads que foram ganhos no período' },
-      'lost': { title: 'Leads Perdidos', description: 'Leads marcados como perdidos' },
-      'conversations': { title: 'Conversas', description: 'Conversas ativas' },
-      'appointments': { title: 'Agendamentos', description: 'Compromissos marcados' },
-      'tasks': { title: 'Tarefas', description: 'Tarefas criadas' }
+    const filterDescriptions: Record<DrilldownFilterType, {
+      title: string;
+      description: string;
+    }> = {
+      'total': {
+        title: 'Todos os Leads',
+        description: 'Lista completa de leads do período selecionado'
+      },
+      'pipeline': {
+        title: 'Leads em Pipeline',
+        description: 'Leads com valor em negociação (não ganhos/perdidos)'
+      },
+      'active': {
+        title: 'Negócios Ativos',
+        description: 'Leads em andamento que não foram fechados'
+      },
+      'won': {
+        title: 'Leads Convertidos',
+        description: 'Leads que foram ganhos no período'
+      },
+      'lost': {
+        title: 'Leads Perdidos',
+        description: 'Leads marcados como perdidos'
+      },
+      'conversations': {
+        title: 'Conversas',
+        description: 'Conversas ativas'
+      },
+      'appointments': {
+        title: 'Agendamentos',
+        description: 'Compromissos marcados'
+      },
+      'tasks': {
+        title: 'Tarefas',
+        description: 'Tarefas criadas'
+      }
     };
-    
     const config = filterDescriptions[stat.filterType];
     setDrilldownFilter({
       type: stat.filterType,
@@ -1026,7 +1052,7 @@ export default function Analytics() {
   return <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div className="space-y-2">
-        <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent">Dados e Relatórios de Performance Comercial</h1>
+        <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent">Dados e Relatórios </h1>
         <p className="text-muted-foreground text-lg">Visão completa e análises detalhadas do seu CRM</p>
         </div>
         
@@ -1172,13 +1198,9 @@ export default function Analytics() {
         <TabsContent value="overview" className="space-y-6">
           {/* KPIs Principais */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {statCards.map((stat, index) => (
-              <Card 
-                key={stat.title} 
-                className={`group relative overflow-hidden border-0 shadow-card transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${stat.clickable ? 'cursor-pointer' : ''}`} 
-                style={{ animationDelay: `${index * 100}ms` }}
-                onClick={() => stat.clickable && handleCardClick(stat)}
-              >
+            {statCards.map((stat, index) => <Card key={stat.title} className={`group relative overflow-hidden border-0 shadow-card transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${stat.clickable ? 'cursor-pointer' : ''}`} style={{
+            animationDelay: `${index * 100}ms`
+          }} onClick={() => stat.clickable && handleCardClick(stat)}>
                 <div className="absolute inset-0 bg-gradient-card opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
@@ -1193,17 +1215,14 @@ export default function Analytics() {
                   <div className="flex items-center justify-between mt-1">
                     <p className="text-xs text-muted-foreground">{stat.description}</p>
                     <div className="flex items-center gap-2">
-                      {stat.clickable && (
-                        <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
+                      {stat.clickable && <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />}
                       <Badge variant="secondary" className={`${stat.trendColor} text-xs`}>
                         {stat.trend}
                       </Badge>
                     </div>
                   </div>
                 </CardContent>
-              </Card>
-            ))}
+              </Card>)}
           </div>
 
           {/* Métricas Operacionais */}
@@ -1653,16 +1672,9 @@ export default function Analytics() {
 
         {/* Clientes e LTV */}
         <TabsContent value="customers" className="space-y-6">
-          {userCompanyId ? (
-            <CustomerLTVAnalytics 
-              companyId={userCompanyId} 
-              globalFilters={globalFilters} 
-            />
-          ) : (
-            <div className="flex items-center justify-center h-64 text-muted-foreground">
+          {userCompanyId ? <CustomerLTVAnalytics companyId={userCompanyId} globalFilters={globalFilters} /> : <div className="flex items-center justify-center h-64 text-muted-foreground">
               <p>Carregando dados de clientes...</p>
-            </div>
-          )}
+            </div>}
         </TabsContent>
 
         {/* Produtos & Serviços */}
@@ -1672,10 +1684,7 @@ export default function Analytics() {
 
         {/* Campanhas de Tráfego Pago */}
         <TabsContent value="campaigns" className="space-y-6">
-          <CampaignAnalytics 
-            userCompanyId={userCompanyId} 
-            globalFilters={globalFilters} 
-          />
+          <CampaignAnalytics userCompanyId={userCompanyId} globalFilters={globalFilters} />
         </TabsContent>
 
         <TabsContent value="communication" className="space-y-6">
@@ -2912,11 +2921,9 @@ export default function Analytics() {
                     <Gift className="h-8 w-8 text-pink-600" />
                   </div>
                 </div>
-                {birthdayStats.aniversariantesHoje > 0 && (
-                  <div className="mt-4">
+                {birthdayStats.aniversariantesHoje > 0 && <div className="mt-4">
                     <Badge className="bg-pink-500 text-white text-sm px-3 py-1">🎉 Hora de Celebrar!</Badge>
-                  </div>
-                )}
+                  </div>}
               </CardContent>
             </Card>
 
@@ -2965,25 +2972,10 @@ export default function Analytics() {
               </p>
             </CardHeader>
             <CardContent>
-              {birthdayStats.proximosAniversariantes.length > 0 ? (
-                <div className="space-y-3">
-                  {birthdayStats.proximosAniversariantes.map((lead) => (
-                    <div 
-                      key={lead.id} 
-                      className={`flex items-center justify-between p-4 rounded-lg border transition-all ${
-                        lead.diasFaltando === 0 
-                          ? 'bg-gradient-to-r from-pink-50 to-pink-100 border-pink-300 dark:from-pink-900/20 dark:to-pink-800/20 dark:border-pink-700 shadow-md' 
-                          : 'bg-muted/30 hover:bg-muted/50'
-                      }`}
-                    >
+              {birthdayStats.proximosAniversariantes.length > 0 ? <div className="space-y-3">
+                  {birthdayStats.proximosAniversariantes.map(lead => <div key={lead.id} className={`flex items-center justify-between p-4 rounded-lg border transition-all ${lead.diasFaltando === 0 ? 'bg-gradient-to-r from-pink-50 to-pink-100 border-pink-300 dark:from-pink-900/20 dark:to-pink-800/20 dark:border-pink-700 shadow-md' : 'bg-muted/30 hover:bg-muted/50'}`}>
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl ${
-                          lead.diasFaltando === 0 
-                            ? 'bg-pink-500 text-white shadow-lg' 
-                            : lead.diasFaltando <= 7 
-                              ? 'bg-purple-100 dark:bg-purple-900/30' 
-                              : 'bg-muted'
-                        }`}>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl ${lead.diasFaltando === 0 ? 'bg-pink-500 text-white shadow-lg' : lead.diasFaltando <= 7 ? 'bg-purple-100 dark:bg-purple-900/30' : 'bg-muted'}`}>
                           🎂
                         </div>
                         <div>
@@ -2992,23 +2984,16 @@ export default function Analytics() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <Badge 
-                          variant={lead.diasFaltando === 0 ? 'default' : 'secondary'}
-                          className={lead.diasFaltando === 0 ? 'bg-pink-500 text-white px-4 py-1' : ''}
-                        >
+                        <Badge variant={lead.diasFaltando === 0 ? 'default' : 'secondary'} className={lead.diasFaltando === 0 ? 'bg-pink-500 text-white px-4 py-1' : ''}>
                           {lead.diasFaltando === 0 ? '🎉 HOJE!' : `Em ${lead.diasFaltando} dias`}
                         </Badge>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12 text-muted-foreground">
+                    </div>)}
+                </div> : <div className="text-center py-12 text-muted-foreground">
                   <Cake className="h-16 w-16 mx-auto mb-4 opacity-20" />
                   <p className="text-lg font-medium">Nenhum aniversariante nos próximos 30 dias</p>
                   <p className="text-sm mt-1">Adicione datas de nascimento nos contatos (Menu Leads)</p>
-                </div>
-              )}
+                </div>}
             </CardContent>
           </Card>
 
@@ -3077,16 +3062,6 @@ export default function Analytics() {
       </Tabs>
 
       {/* Modal de Drill-Down */}
-      {drilldownFilter && (
-        <LeadsDrilldownModal
-          open={drilldownOpen}
-          onOpenChange={setDrilldownOpen}
-          title={drilldownFilter.title}
-          description={drilldownFilter.description}
-          filterType={drilldownFilter.type}
-          userCompanyId={userCompanyId}
-          globalFilters={globalFilters}
-        />
-      )}
+      {drilldownFilter && <LeadsDrilldownModal open={drilldownOpen} onOpenChange={setDrilldownOpen} title={drilldownFilter.title} description={drilldownFilter.description} filterType={drilldownFilter.type} userCompanyId={userCompanyId} globalFilters={globalFilters} />}
     </div>;
 }
