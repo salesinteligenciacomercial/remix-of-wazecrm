@@ -1322,46 +1322,7 @@ export default function Analytics() {
                 Plataforma completa de gestão comercial com IA integrada
               </p>
             </CardHeader>
-            <CardContent className="relative">
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                  <div className="mt-0.5 p-1.5 rounded-md bg-primary/10">
-                    <Users className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">Gestão de Leads e Funil</p>
-                    <p className="text-sm text-muted-foreground">Kanban visual com drag & drop</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                  <div className="mt-0.5 p-1.5 rounded-md bg-success/10">
-                    <MessageSquare className="h-4 w-4 text-success" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">Conversas Unificadas</p>
-                    <p className="text-sm text-muted-foreground">WhatsApp, Instagram, Facebook</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                  <div className="mt-0.5 p-1.5 rounded-md bg-purple-500/10">
-                    <Calendar className="h-4 w-4 text-purple-500" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">Agenda e Compromissos</p>
-                    <p className="text-sm text-muted-foreground">Lembretes automáticos via WhatsApp</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                  <div className="mt-0.5 p-1.5 rounded-md bg-cyan-500/10">
-                    <Bot className="h-4 w-4 text-cyan-500" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">IAs Autônomas</p>
-                    <p className="text-sm text-muted-foreground">Atendimento, Vendas e Suporte</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
+            
           </Card>
         </TabsContent>
 
