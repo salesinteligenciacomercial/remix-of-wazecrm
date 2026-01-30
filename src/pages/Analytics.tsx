@@ -1316,12 +1316,7 @@ export default function Analytics() {
           {/* Sistema CEUSIA */}
           <Card className="border-0 shadow-card overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-primary opacity-5 rounded-full blur-3xl" />
-            <CardHeader className="relative">
-              
-              <p className="text-muted-foreground mt-2">
-                Plataforma completa de gestão comercial com IA integrada
-              </p>
-            </CardHeader>
+            
             
           </Card>
         </TabsContent>
