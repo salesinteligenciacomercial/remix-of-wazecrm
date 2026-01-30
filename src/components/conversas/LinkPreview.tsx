@@ -185,6 +185,48 @@ function LinkPreviewComponent({ url, className = "" }: LinkPreviewProps) {
 
 export const LinkPreview = memo(LinkPreviewComponent);
 
+// Regex para formatação WhatsApp (negrito com asteriscos)
+const BOLD_REGEX = /\*([^*]+)\*/g;
+
+// Função para aplicar formatação de negrito (asteriscos) no texto
+function applyWhatsAppFormatting(text: string, keyPrefix: string = ""): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  
+  const matches = [...text.matchAll(BOLD_REGEX)];
+  
+  if (matches.length === 0) {
+    return [<span key={`${keyPrefix}-plain`}>{text}</span>];
+  }
+  
+  matches.forEach((match, index) => {
+    const fullMatch = match[0]; // *texto*
+    const boldText = match[1]; // texto (sem asteriscos)
+    const startIndex = match.index!;
+    
+    // Adicionar texto antes do negrito
+    if (startIndex > lastIndex) {
+      parts.push(<span key={`${keyPrefix}-text-${index}`}>{text.slice(lastIndex, startIndex)}</span>);
+    }
+    
+    // Adicionar texto em negrito
+    parts.push(
+      <strong key={`${keyPrefix}-bold-${index}`} className="font-semibold">
+        {boldText}
+      </strong>
+    );
+    
+    lastIndex = startIndex + fullMatch.length;
+  });
+  
+  // Adicionar texto restante
+  if (lastIndex < text.length) {
+    parts.push(<span key={`${keyPrefix}-text-end`}>{text.slice(lastIndex)}</span>);
+  }
+  
+  return parts;
+}
+
 // Componente para renderizar texto com links clicáveis
 interface TextWithLinksProps {
   text: string;
@@ -194,10 +236,11 @@ interface TextWithLinksProps {
 function TextWithLinksComponent({ text, className = "" }: TextWithLinksProps) {
   const urls = extractUrls(text);
   
-  // Renderizar texto com links clicáveis
+  // Renderizar texto com links clicáveis e formatação WhatsApp
   const renderTextWithLinks = () => {
     if (urls.length === 0) {
-      return <span>{text}</span>;
+      // Sem URLs, aplicar apenas formatação de negrito
+      return <>{applyWhatsAppFormatting(text, "root")}</>;
     }
 
     const parts: React.ReactNode[] = [];
@@ -210,9 +253,10 @@ function TextWithLinksComponent({ text, className = "" }: TextWithLinksProps) {
       const url = match[0];
       const startIndex = match.index!;
       
-      // Adicionar texto antes da URL
+      // Adicionar texto antes da URL (com formatação de negrito)
       if (startIndex > lastIndex) {
-        parts.push(<span key={`text-${index}`}>{text.slice(lastIndex, startIndex)}</span>);
+        const textBefore = text.slice(lastIndex, startIndex);
+        parts.push(...applyWhatsAppFormatting(textBefore, `before-${index}`));
       }
       
       // Adicionar link clicável
@@ -232,9 +276,10 @@ function TextWithLinksComponent({ text, className = "" }: TextWithLinksProps) {
       lastIndex = startIndex + url.length;
     });
     
-    // Adicionar texto restante
+    // Adicionar texto restante (com formatação de negrito)
     if (lastIndex < text.length) {
-      parts.push(<span key="text-end">{text.slice(lastIndex)}</span>);
+      const textAfter = text.slice(lastIndex);
+      parts.push(...applyWhatsAppFormatting(textAfter, "end"));
     }
     
     return <>{parts}</>;
