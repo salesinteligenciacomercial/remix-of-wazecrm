@@ -432,8 +432,16 @@ serve(async (req) => {
     });
 
     // Determinar provider a usar
+    // 🔥 CORREÇÃO CRÍTICA: Quando 'both', respeitar force_provider para manter consistência do canal
+    // Se force_provider foi passado (origemApi da conversa), usar essa API específica
     const apiProvider = validatedData.force_provider || connection.api_provider || 'evolution';
     const isGroup = /@g\.us$/.test(validatedData.numero);
+    
+    console.log("🎯 Provider selecionado:", { 
+      force_provider: validatedData.force_provider, 
+      connection_api_provider: connection.api_provider,
+      final_provider: apiProvider 
+    });
     
     // Formatar número para Meta API (adicionar código do país se necessário)
     let formattedNumber = validatedData.numero.replace(/[^0-9]/g, '');
@@ -657,9 +665,11 @@ serve(async (req) => {
         result = { success: false, provider: 'meta', error: 'Mensagem, mídia, template ou Evolution API é obrigatória' };
       }
     }
-    // Both APIs - Usar Evolution como principal (se conectado), Meta como fallback
+    // Both APIs - NOVA LÓGICA: Respeitar canal de origem para manter consistência
+    // Se force_provider está definido (vem da origemApi da conversa), já foi tratado acima
+    // Se chegou aqui com 'both', usar Evolution como principal (se conectado), Meta como fallback
     else if (apiProvider === 'both') {
-      console.log("📗📘 Provider 'both'");
+      console.log("📗📘 Provider 'both' - Usando lógica de fallback (sem force_provider)");
       const rawBaseUrl = connection.evolution_api_url || EVOLUTION_API_URL;
       const baseUrl = rawBaseUrl.replace(/\/(manager|api|v1|v2)?\/?$/i, '');
       const apiKey = connection.evolution_api_key || EVOLUTION_API_KEY;
