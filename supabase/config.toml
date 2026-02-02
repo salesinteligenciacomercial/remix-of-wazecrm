@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.asaas-api]
 verify_jwt = false
+
+[functions.meta-marketing-insights]
+verify_jwt = false

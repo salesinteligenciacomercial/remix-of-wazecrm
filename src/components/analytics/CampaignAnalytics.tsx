@@ -1,27 +1,79 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Megaphone, MousePointerClick, Users, TrendingUp, DollarSign, Target } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Megaphone, MousePointerClick, TrendingUp, DollarSign, Eye, Target, Users, Building2, RefreshCw, ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Doughnut, Bar } from "react-chartjs-2";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-interface CampaignStats {
-  totalLeadsPagos: number;
-  leadsLeadAds: number;
-  leadsCTWA: number;
-  leadsOrganicos: number;
-  taxaConversaoPago: number;
-  valorGeradoPorAds: number;
-  leadsPorCampanha: {
-    campanha: string;
-    origem: string;
-    total: number;
-    qualificados: number;
-    convertidos: number;
-    valor: number;
-  }[];
-  leadsPorOrigem: { origem: string; total: number }[];
+interface MetaCampaign {
+  id: string;
+  name: string;
+  status: string;
+  objective: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  reach: number;
+  cpm: number;
+  cpc: number;
+  ctr: number;
+  leads: number;
+  messages: number;
+}
+
+interface MetaAdset {
+  id: string;
+  name: string;
+  campaign_id: string;
+  status: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  leads: number;
+}
+
+interface MetaAd {
+  id: string;
+  name: string;
+  adset_id: string;
+  status: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  leads: number;
+}
+
+interface MetaInsightsResponse {
+  account_info: {
+    id: string;
+    name: string;
+    currency: string;
+    status: number;
+    business_name: string;
+    business_id: string | null;
+  };
+  campaigns: MetaCampaign[];
+  adsets: MetaAdset[];
+  ads: MetaAd[];
+  summary: {
+    total_spend: number;
+    total_impressions: number;
+    total_clicks: number;
+    total_reach: number;
+    total_leads: number;
+    total_messages: number;
+    active_campaigns: number;
+    paused_campaigns: number;
+    cpl: number;
+    ctr: number;
+  };
+  date_preset: string;
+  fetched_at: string;
 }
 
 interface CampaignAnalyticsProps {
@@ -31,183 +83,116 @@ interface CampaignAnalyticsProps {
   };
 }
 
-export default function CampaignAnalytics({ userCompanyId, globalFilters }: CampaignAnalyticsProps) {
-  const [stats, setStats] = useState<CampaignStats>({
-    totalLeadsPagos: 0,
-    leadsLeadAds: 0,
-    leadsCTWA: 0,
-    leadsOrganicos: 0,
-    taxaConversaoPago: 0,
-    valorGeradoPorAds: 0,
-    leadsPorCampanha: [],
-    leadsPorOrigem: []
-  });
-  const [loading, setLoading] = useState(true);
+const DATE_PRESETS = [
+  { value: 'today', label: 'Hoje' },
+  { value: 'yesterday', label: 'Ontem' },
+  { value: 'last_7d', label: 'Últimos 7 dias' },
+  { value: 'last_14d', label: 'Últimos 14 dias' },
+  { value: 'last_30d', label: 'Últimos 30 dias' },
+  { value: 'last_90d', label: 'Últimos 90 dias' },
+  { value: 'this_month', label: 'Este mês' },
+  { value: 'last_month', label: 'Mês passado' },
+];
 
-  const fetchCampaignStats = useCallback(async () => {
+export default function CampaignAnalytics({ userCompanyId }: CampaignAnalyticsProps) {
+  const [metaData, setMetaData] = useState<MetaInsightsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState('last_30d');
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
+
+  const fetchMetaInsights = useCallback(async () => {
     if (!userCompanyId) return;
     
     try {
       setLoading(true);
+      setError(null);
       
-      let query = supabase
-        .from('leads')
-        .select('id, lead_source_type, utm_source, utm_campaign, utm_medium, ad_creative_name, status, value, tags, created_at')
-        .eq('company_id', userCompanyId);
-
-      // Aplicar filtros de período
-      if (globalFilters.period !== 'all') {
-        const now = new Date();
-        let startDate: Date;
-        
-        switch (globalFilters.period) {
-          case 'today':
-            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            break;
-          case 'week':
-            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            break;
-          case 'month':
-            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-            break;
-          case 'quarter':
-            const quarterStart = Math.floor(now.getMonth() / 3) * 3;
-            startDate = new Date(now.getFullYear(), quarterStart, 1);
-            break;
-          case 'year':
-            startDate = new Date(now.getFullYear(), 0, 1);
-            break;
-          default:
-            startDate = new Date(0);
-        }
-        
-        query = query.gte('created_at', startDate.toISOString());
-      }
-
-      const { data: leadsData, error } = await query;
-
-      if (error) {
-        console.error('[CampaignAnalytics] Erro ao buscar leads:', error);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError('Sessão não encontrada');
         return;
       }
 
-      const leads = leadsData || [];
+      // Call edge function with query params
+      const funcUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-marketing-insights?company_id=${userCompanyId}&date_preset=${datePreset}`;
       
-      // Classificar leads
-      const leadsPagos = leads.filter(l => l.lead_source_type);
-      const leadsLeadAds = leads.filter(l => l.lead_source_type === 'leadgen');
-      const leadsCTWA = leads.filter(l => l.lead_source_type === 'ctwa');
-      const leadsOrganicos = leads.filter(l => !l.lead_source_type);
-
-      // Calcular conversões
-      const leadsPagosGanhos = leadsPagos.filter(l => l.status === 'ganho');
-      const taxaConversaoPago = leadsPagos.length > 0 
-        ? (leadsPagosGanhos.length / leadsPagos.length) * 100 
-        : 0;
-      
-      const valorGeradoPorAds = leadsPagosGanhos.reduce((sum, l) => sum + (l.value || 0), 0);
-
-      // Agrupar por campanha
-      const campanhasMap = new Map<string, {
-        origem: string;
-        total: number;
-        qualificados: number;
-        convertidos: number;
-        valor: number;
-      }>();
-
-      leadsPagos.forEach(lead => {
-        const campanha = lead.utm_campaign || lead.ad_creative_name || 'Sem campanha';
-        const origem = lead.lead_source_type === 'leadgen' ? 'Lead Ads' : 'Click-to-WhatsApp';
-        
-        if (!campanhasMap.has(campanha)) {
-          campanhasMap.set(campanha, { origem, total: 0, qualificados: 0, convertidos: 0, valor: 0 });
-        }
-        
-        const stats = campanhasMap.get(campanha)!;
-        stats.total++;
-        
-        if (lead.tags?.includes('Qualificado')) {
-          stats.qualificados++;
-        }
-        
-        if (lead.status === 'ganho') {
-          stats.convertidos++;
-          stats.valor += lead.value || 0;
+      const fetchResponse = await fetch(funcUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
         }
       });
 
-      const leadsPorCampanha = Array.from(campanhasMap.entries())
-        .map(([campanha, data]) => ({ campanha, ...data }))
-        .sort((a, b) => b.total - a.total);
+      const data = await fetchResponse.json();
 
-      setStats({
-        totalLeadsPagos: leadsPagos.length,
-        leadsLeadAds: leadsLeadAds.length,
-        leadsCTWA: leadsCTWA.length,
-        leadsOrganicos: leadsOrganicos.length,
-        taxaConversaoPago: Math.round(taxaConversaoPago * 10) / 10,
-        valorGeradoPorAds,
-        leadsPorCampanha,
-        leadsPorOrigem: [
-          { origem: 'Lead Ads', total: leadsLeadAds.length },
-          { origem: 'Click-to-WhatsApp', total: leadsCTWA.length },
-          { origem: 'Orgânico', total: leadsOrganicos.length }
-        ]
-      });
-    } catch (error) {
-      console.error('[CampaignAnalytics] Erro:', error);
+      if (!fetchResponse.ok) {
+        setError(data.details || data.error || 'Erro ao buscar dados do Meta');
+        return;
+      }
+
+      setMetaData(data);
+      console.log('[CampaignAnalytics] Meta data fetched:', data);
+    } catch (err) {
+      console.error('[CampaignAnalytics] Error:', err);
+      setError('Erro ao conectar com a API do Meta');
     } finally {
       setLoading(false);
     }
-  }, [userCompanyId, globalFilters]);
+  }, [userCompanyId, datePreset]);
 
   useEffect(() => {
-    fetchCampaignStats();
-  }, [fetchCampaignStats]);
-
-  // Dados para gráfico de pizza
-  const doughnutData = {
-    labels: ['Lead Ads', 'Click-to-WhatsApp', 'Orgânico'],
-    datasets: [{
-      data: [stats.leadsLeadAds, stats.leadsCTWA, stats.leadsOrganicos],
-      backgroundColor: [
-        'hsl(217, 91%, 60%)',
-        'hsl(142, 71%, 45%)',
-        'hsl(45, 93%, 47%)'
-      ],
-      borderWidth: 0
-    }]
-  };
-
-  // Dados para gráfico de barras
-  const barData = {
-    labels: stats.leadsPorCampanha.slice(0, 8).map(c => 
-      c.campanha.length > 15 ? c.campanha.substring(0, 15) + '...' : c.campanha
-    ),
-    datasets: [{
-      label: 'Leads',
-      data: stats.leadsPorCampanha.slice(0, 8).map(c => c.total),
-      backgroundColor: 'hsl(217, 91%, 60%)',
-      borderRadius: 6
-    }]
-  };
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false
-      }
-    }
-  };
+    fetchMetaInsights();
+  }, [fetchMetaInsights]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
     }).format(value);
+  };
+
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat('pt-BR').format(value);
+  };
+
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+      'ACTIVE': { label: 'Ativo', variant: 'default' },
+      'PAUSED': { label: 'Pausado', variant: 'secondary' },
+      'DELETED': { label: 'Deletado', variant: 'destructive' },
+      'ARCHIVED': { label: 'Arquivado', variant: 'outline' }
+    };
+    const config = statusMap[status] || { label: status, variant: 'outline' as const };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  const getObjectiveLabel = (objective: string) => {
+    const objectiveMap: Record<string, string> = {
+      'OUTCOME_LEADS': 'Geração de Leads',
+      'OUTCOME_ENGAGEMENT': 'Engajamento',
+      'OUTCOME_AWARENESS': 'Reconhecimento',
+      'OUTCOME_TRAFFIC': 'Tráfego',
+      'OUTCOME_SALES': 'Vendas',
+      'LEAD_GENERATION': 'Lead Ads',
+      'MESSAGES': 'Mensagens',
+      'CONVERSIONS': 'Conversões',
+      'LINK_CLICKS': 'Cliques no Link'
+    };
+    return objectiveMap[objective] || objective;
+  };
+
+  const toggleCampaignExpand = (campaignId: string) => {
+    setExpandedCampaigns(prev => {
+      const next = new Set(prev);
+      if (next.has(campaignId)) {
+        next.delete(campaignId);
+      } else {
+        next.add(campaignId);
+      }
+      return next;
+    });
   };
 
   if (loading) {
@@ -218,108 +203,123 @@ export default function CampaignAnalytics({ userCompanyId, globalFilters }: Camp
     );
   }
 
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Card className="border-0 shadow-card">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Não foi possível carregar dados do Meta Ads</h3>
+              <p className="text-muted-foreground mb-4 max-w-md">{error}</p>
+              <Button onClick={fetchMetaInsights} variant="outline">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Tentar Novamente
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!metaData) {
+    return null;
+  }
+
+  const { account_info, campaigns, adsets, ads, summary } = metaData;
+
   return (
     <div className="space-y-6">
-      {/* KPIs */}
+      {/* Header com Info da Conta e Filtros */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-3">
+          <Building2 className="h-5 w-5 text-primary" />
+          <div>
+            <h3 className="font-semibold">{account_info.name}</h3>
+            <p className="text-sm text-muted-foreground">
+              {account_info.business_name} • {account_info.currency}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={datePreset} onValueChange={setDatePreset}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Período" />
+            </SelectTrigger>
+            <SelectContent>
+              {DATE_PRESETS.map(preset => (
+                <SelectItem key={preset.value} value={preset.value}>
+                  {preset.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="icon" onClick={fetchMetaInsights}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* KPIs Principais */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-0 shadow-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Lead Ads
+              Gasto Total
             </CardTitle>
-            <Megaphone className="h-4 w-4 text-blue-500" />
+            <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.leadsLeadAds}</div>
-            <p className="text-xs text-muted-foreground">Formulários Meta</p>
+            <div className="text-2xl font-bold">{formatCurrency(summary.total_spend)}</div>
+            <p className="text-xs text-muted-foreground">
+              {summary.active_campaigns} campanhas ativas
+            </p>
           </CardContent>
         </Card>
 
         <Card className="border-0 shadow-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Click-to-WhatsApp
+              Impressões
             </CardTitle>
-            <MousePointerClick className="h-4 w-4 text-green-500" />
+            <Eye className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.leadsCTWA}</div>
-            <p className="text-xs text-muted-foreground">Anúncios CTWA</p>
+            <div className="text-2xl font-bold">{formatNumber(summary.total_impressions)}</div>
+            <p className="text-xs text-muted-foreground">
+              Alcance: {formatNumber(summary.total_reach)}
+            </p>
           </CardContent>
         </Card>
 
         <Card className="border-0 shadow-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Taxa Conversão Pago
+              Cliques
             </CardTitle>
-            <TrendingUp className="h-4 w-4 text-purple-500" />
+            <MousePointerClick className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.taxaConversaoPago}%</div>
-            <p className="text-xs text-muted-foreground">Leads pagos convertidos</p>
+            <div className="text-2xl font-bold">{formatNumber(summary.total_clicks)}</div>
+            <p className="text-xs text-muted-foreground">
+              CTR: {summary.ctr.toFixed(2)}%
+            </p>
           </CardContent>
         </Card>
 
         <Card className="border-0 shadow-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Valor Gerado
+              CPL (Custo/Lead)
             </CardTitle>
-            <DollarSign className="h-4 w-4 text-emerald-500" />
+            <Target className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats.valorGeradoPorAds)}</div>
-            <p className="text-xs text-muted-foreground">De tráfego pago</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Gráficos */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card className="border-0 shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Target className="h-4 w-4 text-primary" />
-              Distribuição por Origem
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[250px] flex items-center justify-center">
-              {stats.totalLeadsPagos > 0 || stats.leadsOrganicos > 0 ? (
-                <Doughnut data={doughnutData} options={{
-                  ...chartOptions,
-                  plugins: {
-                    legend: {
-                      display: true,
-                      position: 'bottom' as const
-                    }
-                  }
-                }} />
-              ) : (
-                <p className="text-muted-foreground">Nenhum dado disponível</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Users className="h-4 w-4 text-primary" />
-              Leads por Campanha
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[250px]">
-              {stats.leadsPorCampanha.length > 0 ? (
-                <Bar data={barData} options={chartOptions} />
-              ) : (
-                <div className="h-full flex items-center justify-center">
-                  <p className="text-muted-foreground">Nenhuma campanha registrada</p>
-                </div>
-              )}
-            </div>
+            <div className="text-2xl font-bold">{formatCurrency(summary.cpl)}</div>
+            <p className="text-xs text-muted-foreground">
+              {summary.total_leads + summary.total_messages} leads gerados
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -329,59 +329,142 @@ export default function CampaignAnalytics({ userCompanyId, globalFilters }: Camp
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Megaphone className="h-4 w-4 text-primary" />
-            Detalhamento por Campanha
+            Campanhas ({campaigns.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {stats.leadsPorCampanha.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Campanha</TableHead>
-                  <TableHead>Origem</TableHead>
-                  <TableHead className="text-center">Total</TableHead>
-                  <TableHead className="text-center">Qualificados</TableHead>
-                  <TableHead className="text-center">Convertidos</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-center">Taxa Conv.</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stats.leadsPorCampanha.map((campanha, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium max-w-[200px] truncate">
-                      {campanha.campanha}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={campanha.origem === 'Lead Ads' ? 'default' : 'secondary'}>
-                        {campanha.origem}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">{campanha.total}</TableCell>
-                    <TableCell className="text-center">{campanha.qualificados}</TableCell>
-                    <TableCell className="text-center">{campanha.convertidos}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(campanha.valor)}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={campanha.convertidos > 0 ? 'default' : 'secondary'}>
-                        {campanha.total > 0 
-                          ? `${Math.round((campanha.convertidos / campanha.total) * 100)}%`
-                          : '0%'
-                        }
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          {campaigns.length > 0 ? (
+            <div className="space-y-2">
+              {campaigns.map((campaign) => {
+                const campaignAdsets = adsets.filter(a => a.campaign_id === campaign.id);
+                const isExpanded = expandedCampaigns.has(campaign.id);
+
+                return (
+                  <Collapsible key={campaign.id} open={isExpanded} onOpenChange={() => toggleCampaignExpand(campaign.id)}>
+                    <div className="border rounded-lg">
+                      <CollapsibleTrigger asChild>
+                        <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50">
+                          <div className="flex items-center gap-3">
+                            {campaignAdsets.length > 0 ? (
+                              isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+                            ) : (
+                              <div className="w-4" />
+                            )}
+                            <div>
+                              <p className="font-medium">{campaign.name}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                {getStatusBadge(campaign.status)}
+                                <span className="text-xs text-muted-foreground">
+                                  {getObjectiveLabel(campaign.objective)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-6 text-sm">
+                            <div className="text-right">
+                              <p className="font-semibold">{formatCurrency(campaign.spend)}</p>
+                              <p className="text-xs text-muted-foreground">Gasto</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">{formatNumber(campaign.impressions)}</p>
+                              <p className="text-xs text-muted-foreground">Impressões</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">{formatNumber(campaign.clicks)}</p>
+                              <p className="text-xs text-muted-foreground">Cliques</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">{campaign.ctr.toFixed(2)}%</p>
+                              <p className="text-xs text-muted-foreground">CTR</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">{campaign.leads + campaign.messages}</p>
+                              <p className="text-xs text-muted-foreground">Leads</p>
+                            </div>
+                          </div>
+                        </div>
+                      </CollapsibleTrigger>
+
+                      <CollapsibleContent>
+                        {campaignAdsets.length > 0 && (
+                          <div className="border-t bg-muted/30">
+                            {campaignAdsets.map((adset) => {
+                              const adsetAds = ads.filter(a => a.adset_id === adset.id);
+                              
+                              return (
+                                <div key={adset.id} className="border-b last:border-b-0">
+                                  <div className="flex items-center justify-between p-3 pl-12">
+                                    <div className="flex items-center gap-2">
+                                      <Users className="h-4 w-4 text-muted-foreground" />
+                                      <div>
+                                        <p className="font-medium text-sm">{adset.name}</p>
+                                        {getStatusBadge(adset.status)}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-6 text-sm">
+                                      <div className="text-right">
+                                        <p className="font-medium">{formatCurrency(adset.spend)}</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="font-medium">{formatNumber(adset.impressions)}</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="font-medium">{formatNumber(adset.clicks)}</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="font-medium">{adset.ctr.toFixed(2)}%</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="font-medium">{adset.leads}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Anúncios */}
+                                  {adsetAds.length > 0 && (
+                                    <div className="bg-background/50">
+                                      {adsetAds.map((ad) => (
+                                        <div key={ad.id} className="flex items-center justify-between p-2 pl-20 text-sm border-t border-dashed">
+                                          <div className="flex items-center gap-2">
+                                            <TrendingUp className="h-3 w-3 text-muted-foreground" />
+                                            <span className="text-muted-foreground">{ad.name}</span>
+                                            {getStatusBadge(ad.status)}
+                                          </div>
+                                          <div className="flex items-center gap-6">
+                                            <span>{formatCurrency(ad.spend)}</span>
+                                            <span>{formatNumber(ad.impressions)}</span>
+                                            <span>{formatNumber(ad.clicks)}</span>
+                                            <span>{ad.ctr.toFixed(2)}%</span>
+                                            <span>{ad.leads}</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </CollapsibleContent>
+                    </div>
+                  </Collapsible>
+                );
+              })}
+            </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               <Megaphone className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>Nenhum lead de campanha encontrado</p>
-              <p className="text-sm mt-1">Os leads vindos de anúncios aparecerão aqui</p>
+              <p>Nenhuma campanha encontrada para o período selecionado</p>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Última atualização */}
+      <p className="text-xs text-muted-foreground text-center">
+        Última atualização: {new Date(metaData.fetched_at).toLocaleString('pt-BR')}
+      </p>
     </div>
   );
 }
