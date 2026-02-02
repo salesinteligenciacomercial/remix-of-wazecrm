@@ -204,18 +204,48 @@ export default function CampaignAnalytics({ userCompanyId }: CampaignAnalyticsPr
   }
 
   if (error) {
+    const isTokenError = error.includes('OAuth') || error.includes('access token') || error.includes('190');
+    
     return (
       <div className="space-y-6">
         <Card className="border-0 shadow-card">
           <CardContent className="pt-6">
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Não foi possível carregar dados do Meta Ads</h3>
-              <p className="text-muted-foreground mb-4 max-w-md">{error}</p>
-              <Button onClick={fetchMetaInsights} variant="outline">
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Tentar Novamente
-              </Button>
+              <AlertCircle className="h-12 w-12 text-destructive/70 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">
+                {isTokenError ? 'Token de Acesso Inválido' : 'Não foi possível carregar dados do Meta Ads'}
+              </h3>
+              <p className="text-muted-foreground mb-4 max-w-lg">
+                {isTokenError 
+                  ? 'O Access Token do Meta Ads configurado expirou ou está incorreto. É necessário gerar um novo token com as permissões corretas.'
+                  : error
+                }
+              </p>
+              
+              {isTokenError && (
+                <div className="bg-muted/50 rounded-lg p-4 mb-4 text-left max-w-lg">
+                  <p className="font-medium mb-2">Como obter um token válido:</p>
+                  <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                    <li>Acesse o <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Graph API Explorer</a></li>
+                    <li>Selecione seu App e obtenha um token de usuário</li>
+                    <li>Adicione as permissões: <code className="bg-background px-1 rounded">ads_read</code>, <code className="bg-background px-1 rounded">ads_management</code></li>
+                    <li>Copie o token gerado (começa com "EA...")</li>
+                    <li>Vá em <strong>Integrações → Marketing</strong> e atualize o token</li>
+                  </ol>
+                </div>
+              )}
+              
+              <div className="flex gap-2">
+                <Button onClick={fetchMetaInsights} variant="outline">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Tentar Novamente
+                </Button>
+                {isTokenError && (
+                  <Button variant="default" onClick={() => window.location.href = '/integracoes'}>
+                    Configurar Token
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
