@@ -5193,6 +5193,11 @@ function Conversas() {
         userCompanyId,
         telefoneOriginal: selectedConv.phoneNumber || selectedConv.id
       });
+      // 🔥 CORREÇÃO: Passar force_provider para manter consistência do canal de comunicação
+      // Se a conversa foi iniciada pelo Meta, responder pelo Meta. Se foi pela Evolution, responder pela Evolution.
+      const forceProvider = selectedConv.origemApi;
+      console.log('🎯 [ENVIO] Canal de origem:', forceProvider || 'não definido (usar padrão)');
+      
       const {
         data,
         error
@@ -5200,7 +5205,8 @@ function Conversas() {
         numero: numeroNormalizado,
         ...mensagemParaEnviar,
         quotedMessageId: replyingTo || undefined,
-        tipo_mensagem: type
+        tipo_mensagem: type,
+        force_provider: forceProvider
       });
       console.log('📥 [ENVIO] Resposta do enviarWhatsApp:', {
         data,
