@@ -263,11 +263,29 @@ export function MetaIntegrationsConfig({ companyId }: MetaIntegrationsConfigProp
     try {
       setSaving(true);
       
+      // Validar que o token foi informado
+      if (!marketingToken && !integration?.meta_access_token) {
+        toast({ 
+          variant: 'destructive', 
+          title: 'Token obrigatório', 
+          description: 'Informe o Marketing Access Token para conectar' 
+        });
+        setSaving(false);
+        return;
+      }
+      
       const updateData = {
         ad_account_id: adAccountId || null,
+        meta_access_token: marketingToken || integration?.meta_access_token || null,
         marketing_status: adAccountId ? 'connected' : 'disconnected',
         updated_at: new Date().toISOString()
       };
+
+      console.log('[Marketing] Saving config:', { 
+        ad_account_id: updateData.ad_account_id, 
+        has_token: !!updateData.meta_access_token,
+        token_length: updateData.meta_access_token?.length 
+      });
 
       if (integration) {
         const { error } = await supabase
@@ -283,8 +301,10 @@ export function MetaIntegrationsConfig({ companyId }: MetaIntegrationsConfigProp
       }
 
       toast({ title: 'Marketing API configurada com sucesso!' });
+      setMarketingToken(''); // Limpar campo após salvar
       await loadIntegration();
     } catch (error: any) {
+      console.error('[Marketing] Error saving:', error);
       toast({ variant: 'destructive', title: 'Erro', description: error.message });
     } finally {
       setSaving(false);
