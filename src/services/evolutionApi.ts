@@ -149,43 +149,93 @@ export async function saveMessagesToDatabase(
   messages: EvolutionMessage[],
   companyId: string,
   leadId?: string
-): Promise<void> {
+): Promise<number> {
   try {
+    console.log(`📥 Processando ${messages.length} mensagens para salvar...`);
+    
     const conversasToInsert = messages.map((msg) => {
-      const phoneNumber = msg.key.remoteJid.replace("@s.whatsapp.net", "");
-      const messageText = msg.message?.conversation || 
-                          msg.message?.extendedTextMessage?.text || 
-                          msg.message?.imageMessage?.caption || 
-                          "[Mídia]";
+      const phoneNumber = msg.key.remoteJid.replace("@s.whatsapp.net", "").replace("@g.us", "");
+      
+      // Extrair texto da mensagem - suportar múltiplos formatos
+      let messageText = "[Mídia]";
+      if ((msg as any)._messageContent) {
+        // Se já foi normalizado pela edge function
+        messageText = (msg as any)._messageContent;
+      } else if (msg.message?.conversation) {
+        messageText = msg.message.conversation;
+      } else if (msg.message?.extendedTextMessage?.text) {
+        messageText = msg.message.extendedTextMessage.text;
+      } else if (msg.message?.imageMessage?.caption) {
+        messageText = msg.message.imageMessage.caption || "[Imagem]";
+      } else if (msg.message?.videoMessage?.caption) {
+        messageText = msg.message.videoMessage.caption || "[Vídeo]";
+      } else if (msg.message?.audioMessage) {
+        messageText = "[Áudio]";
+      } else if (msg.message?.documentMessage?.fileName) {
+        messageText = `[Documento: ${msg.message.documentMessage.fileName}]`;
+      } else if (msg.message?.stickerMessage) {
+        messageText = "[Sticker]";
+      }
+      
+      // Determinar tipo de mensagem
+      let tipoMensagem = "text";
+      if (msg.message?.imageMessage) tipoMensagem = "image";
+      else if (msg.message?.videoMessage) tipoMensagem = "video";
+      else if (msg.message?.audioMessage) tipoMensagem = "audio";
+      else if (msg.message?.documentMessage) tipoMensagem = "document";
+      else if (msg.message?.stickerMessage) tipoMensagem = "sticker";
+      else if (msg.message?.contactMessage) tipoMensagem = "contact";
+      else if (msg.message?.locationMessage) tipoMensagem = "location";
+      
+      // Verificar se é mensagem enviada ou recebida
+      // O campo fromMe é crucial - usar o valor normalizado
+      const isFromMe = msg.key.fromMe === true || (msg as any)._originalFromMe === true;
+      
+      // Criar timestamp válido
+      const timestamp = msg.messageTimestamp 
+        ? new Date(msg.messageTimestamp * 1000).toISOString()
+        : new Date().toISOString();
       
       return {
         numero: phoneNumber,
         telefone_formatado: phoneNumber.replace(/[^0-9]/g, ""),
         mensagem: messageText,
-        fromme: msg.key.fromMe,
+        fromme: isFromMe,
         nome_contato: msg.pushName || phoneNumber,
         origem: "WhatsApp",
-        status: msg.key.fromMe ? "Enviada" : "Recebida",
-        tipo_mensagem: msg.message?.imageMessage ? "image" : 
-                       msg.message?.videoMessage ? "video" : 
-                       msg.message?.audioMessage ? "audio" : 
-                       msg.message?.documentMessage ? "document" : "text",
+        origem_api: "evolution", // Indicar que veio da Evolution API
+        status: isFromMe ? "Enviada" : "Recebida",
+        tipo_mensagem: tipoMensagem,
         company_id: companyId,
-        lead_id: leadId,
-        created_at: new Date(msg.messageTimestamp * 1000).toISOString(),
+        lead_id: leadId || null,
+        created_at: timestamp,
       };
     });
 
-    const { error } = await supabase
+    // Log para debug
+    const enviadas = conversasToInsert.filter(c => c.fromme === true).length;
+    const recebidas = conversasToInsert.filter(c => c.fromme === false).length;
+    console.log(`📊 Mensagens a salvar: ${enviadas} enviadas, ${recebidas} recebidas`);
+
+    if (conversasToInsert.length === 0) {
+      console.log("⚠️ Nenhuma mensagem válida para salvar");
+      return 0;
+    }
+
+    // Usar upsert para evitar duplicatas (baseado em timestamp e numero)
+    const { error, data } = await supabase
       .from("conversas")
       .insert(conversasToInsert);
 
     if (error) {
       console.error("❌ Erro ao salvar mensagens no banco:", error);
-    } else {
-      console.log("✅ Mensagens restauradas com sucesso:", conversasToInsert.length);
+      return 0;
     }
+    
+    console.log(`✅ ${conversasToInsert.length} mensagens restauradas com sucesso! (${enviadas} enviadas, ${recebidas} recebidas)`);
+    return conversasToInsert.length;
   } catch (error) {
     console.error("❌ Erro ao salvar mensagens:", error);
+    return 0;
   }
 }
