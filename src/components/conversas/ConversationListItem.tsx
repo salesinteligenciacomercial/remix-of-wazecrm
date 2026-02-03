@@ -211,16 +211,42 @@ function ConversationListItemComponent({
           
           {/* Informações do Lead */}
           <div className="mt-2 space-y-1.5">
+            {/* 🏷️ TAGS - SEMPRE VISÍVEIS E FIXAS */}
             {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {tags.slice(0, 2).map((tag, index) => (
-                  <Badge key={index} variant="secondary" className="text-xs px-1.5 py-0 h-5">
+              <div 
+                className="flex flex-wrap gap-1"
+                style={{
+                  display: 'flex',
+                  opacity: 1,
+                  visibility: 'visible',
+                  pointerEvents: 'auto',
+                }}
+              >
+                {tags.slice(0, 3).map((tag, index) => (
+                  <Badge 
+                    key={index} 
+                    variant="secondary" 
+                    className="text-xs px-1.5 py-0 h-5 !opacity-100 !visible"
+                    style={{
+                      opacity: 1,
+                      visibility: 'visible',
+                      display: 'inline-flex',
+                    }}
+                  >
                     {tag}
                   </Badge>
                 ))}
-                {tags.length > 2 && (
-                  <Badge variant="outline" className="text-xs px-1.5 py-0 h-5">
-                    +{tags.length - 2}
+                {tags.length > 3 && (
+                  <Badge 
+                    variant="outline" 
+                    className="text-xs px-1.5 py-0 h-5 !opacity-100 !visible"
+                    style={{
+                      opacity: 1,
+                      visibility: 'visible',
+                      display: 'inline-flex',
+                    }}
+                  >
+                    +{tags.length - 3}
                   </Badge>
                 )}
               </div>
