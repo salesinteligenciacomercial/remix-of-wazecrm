@@ -102,6 +102,67 @@ button[data-conversation-menu="true"] * {
   mask: none !important;
 }
 
+/* 🏷️ REGRA ANTI-DESAPARECIMENTO PARA TAGS - PROTEÇÃO MÁXIMA */
+/* Container das tags - NUNCA esconder */
+.conversation-tags-protected,
+[data-conversation-tags="true"] {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  z-index: 10 !important;
+  position: relative !important;
+  overflow: visible !important;
+  transform: none !important;
+  clip: auto !important;
+  clip-path: none !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+}
+
+/* Cada badge/tag individual - NUNCA esconder */
+.conversation-tags-protected > *,
+[data-conversation-tags="true"] > *,
+.conversation-tag-badge,
+[data-conversation-tag="true"] {
+  display: inline-flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: none !important;
+  clip: auto !important;
+  clip-path: none !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+  flex-shrink: 0 !important;
+}
+
+/* Garantir que tags não sejam escondidas por hover/focus */
+.conversation-tags-protected:hover,
+.conversation-tags-protected:focus,
+[data-conversation-tags="true"]:hover,
+[data-conversation-tags="true"]:focus,
+.conversation-tag-badge:hover,
+.conversation-tag-badge:focus,
+[data-conversation-tag="true"]:hover,
+[data-conversation-tag="true"]:focus {
+  display: inline-flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Garantir visibilidade dentro de scroll areas */
+[data-radix-scroll-area-viewport] .conversation-tags-protected,
+[data-radix-scroll-area-viewport] [data-conversation-tags="true"],
+[data-radix-scroll-area-viewport] .conversation-tag-badge,
+[data-radix-scroll-area-viewport] [data-conversation-tag="true"] {
+  display: inline-flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
 @layer base {
   :root {
     /* Base colors */
