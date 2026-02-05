@@ -457,7 +457,9 @@ export default function Leads() {
       const to = from + PAGE_SIZE - 1;
 
       // Query base com filtro de company_id e campos otimizados
-      let query = supabase.from("leads").select("id, name, email, phone, telefone, company, company_id, source, status, stage, value, created_at, tags, cpf, notes, funil_id, etapa_id, responsavel_id").eq('company_id', companyIdRef.current).order("created_at", {
+      // IMPORTANTE: Filtrar leads que NÃO são duplicações (lead_origem_id IS NULL)
+      // Leads duplicados são cartões de negociação vinculados ao contato original
+      let query = supabase.from("leads").select("id, name, email, phone, telefone, company, company_id, source, status, stage, value, created_at, tags, cpf, notes, funil_id, etapa_id, responsavel_id").eq('company_id', companyIdRef.current).is('lead_origem_id', null).order("created_at", {
         ascending: false
       });
 
