@@ -3053,6 +3053,7 @@ export type Database = {
           govbr_login: string | null
           govbr_senha: string | null
           id: string
+          lead_origem_id: string | null
           lead_source_type: string | null
           loss_reason: string | null
           lost_at: string | null
@@ -3108,6 +3109,7 @@ export type Database = {
           govbr_login?: string | null
           govbr_senha?: string | null
           id?: string
+          lead_origem_id?: string | null
           lead_source_type?: string | null
           loss_reason?: string | null
           lost_at?: string | null
@@ -3163,6 +3165,7 @@ export type Database = {
           govbr_login?: string | null
           govbr_senha?: string | null
           id?: string
+          lead_origem_id?: string | null
           lead_source_type?: string | null
           loss_reason?: string | null
           lost_at?: string | null
@@ -3212,6 +3215,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_lead_origem_id_fkey"
+            columns: ["lead_origem_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
           {

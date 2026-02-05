@@ -191,6 +191,8 @@ export function DuplicarLeadDialog({
         expected_close_date: lead.expected_close_date,
         produto_id: lead.produto_id,
         status: 'ativo',
+        // IMPORTANTE: Vincular ao lead original para não criar contato duplicado
+        lead_origem_id: lead.id,
         // Campos de endereço (usando any para evitar erros de tipo)
         endereco: (leadOriginal as any).endereco,
         bairro: (leadOriginal as any).bairro,
