@@ -3283,16 +3283,20 @@ export type Database = {
           data_envio: string | null
           data_hora_envio: string | null
           destinatario: string
+          dias_antecedencia: number | null
           horas_antecedencia: number
           id: string
+          lembrete_principal_id: string | null
           mensagem: string | null
           midia_url: string | null
           proxima_data_envio: string | null
           proxima_tentativa: string | null
           recorrencia: string | null
+          sequencia_envio: number | null
           status_envio: string | null
           telefone_responsavel: string | null
           tentativas: number | null
+          tipo_lembrete: string | null
         }
         Insert: {
           ativo?: boolean | null
@@ -3304,16 +3308,20 @@ export type Database = {
           data_envio?: string | null
           data_hora_envio?: string | null
           destinatario?: string
+          dias_antecedencia?: number | null
           horas_antecedencia?: number
           id?: string
+          lembrete_principal_id?: string | null
           mensagem?: string | null
           midia_url?: string | null
           proxima_data_envio?: string | null
           proxima_tentativa?: string | null
           recorrencia?: string | null
+          sequencia_envio?: number | null
           status_envio?: string | null
           telefone_responsavel?: string | null
           tentativas?: number | null
+          tipo_lembrete?: string | null
         }
         Update: {
           ativo?: boolean | null
@@ -3325,16 +3333,20 @@ export type Database = {
           data_envio?: string | null
           data_hora_envio?: string | null
           destinatario?: string
+          dias_antecedencia?: number | null
           horas_antecedencia?: number
           id?: string
+          lembrete_principal_id?: string | null
           mensagem?: string | null
           midia_url?: string | null
           proxima_data_envio?: string | null
           proxima_tentativa?: string | null
           recorrencia?: string | null
+          sequencia_envio?: number | null
           status_envio?: string | null
           telefone_responsavel?: string | null
           tentativas?: number | null
+          tipo_lembrete?: string | null
         }
         Relationships: [
           {
@@ -3349,6 +3361,13 @@ export type Database = {
             columns: ["compromisso_id"]
             isOneToOne: false
             referencedRelation: "compromissos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lembretes_lembrete_principal_id_fkey"
+            columns: ["lembrete_principal_id"]
+            isOneToOne: false
+            referencedRelation: "lembretes"
             referencedColumns: ["id"]
           },
         ]

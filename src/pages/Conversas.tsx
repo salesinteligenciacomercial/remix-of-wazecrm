@@ -41,6 +41,7 @@ import { LeadAttachments } from "@/components/leads/LeadAttachments";
 import { ProdutoSelectorDialog } from "@/components/conversas/ProdutoSelectorDialog";
 import { VendasLeadPanel } from "@/components/conversas/VendasLeadPanel";
 import { PropostasBancariasPanel } from "@/components/conversas/PropostasBancariasPanel";
+import { LembretesAntecipados, LembreteAntecipado } from "@/components/conversas/LembretesAntecipados";
 import { ProductivityPanel } from "@/components/conversas/ProductivityPanel";
 import { formatPhoneNumber, safeFormatPhoneNumber, normalizePhoneForComparison } from "@/utils/phoneFormatter";
 import { cleanAllConversationsHistory } from "@/utils/cleanConversationsHistory";
@@ -1798,6 +1799,7 @@ function Conversas() {
   const [reminderRecorrencia, setReminderRecorrencia] = useState<"" | "semanal" | "quinzenal" | "mensal">(""); // Recorrência
   const [reminderMediaFile, setReminderMediaFile] = useState<File | null>(null);
   const [reminderMediaPreview, setReminderMediaPreview] = useState<string | null>(null);
+  const [reminderLembretesAntecipados, setReminderLembretesAntecipados] = useState<LembreteAntecipado[]>([]);
   const [scheduledContent, setScheduledContent] = useState("");
   const [scheduledDatetime, setScheduledDatetime] = useState("");
   const [meetingTitle, setMeetingTitle] = useState("");
@@ -5844,14 +5846,55 @@ function Conversas() {
           }
         }
 
-        // Inserir lembretes
+        // Inserir lembretes principais
         if (lembretesCriar.length > 0) {
           const {
+            data: lembretePrincipal,
             error: lembreteError
-          } = await supabase.from('lembretes').insert(lembretesCriar);
+          } = await supabase.from('lembretes').insert(lembretesCriar).select();
+          
           if (lembreteError) {
             console.error('Erro ao criar lembrete:', lembreteError);
             toast.warning("Compromisso criado, mas houve erro ao criar lembrete de envio");
+          } else if (lembretePrincipal && lembretePrincipal.length > 0) {
+            // Criar lembretes antecipados se configurados
+            const lembretesAntecipados = reminderLembretesAntecipados.filter(la => la.ativo);
+            
+            if (lembretesAntecipados.length > 0) {
+              const lembretesAntecipCriar = lembretesAntecipados.map((la, index) => {
+                const dataEnvioAntecipado = new Date(reminderDatetime);
+                dataEnvioAntecipado.setDate(dataEnvioAntecipado.getDate() - la.dias);
+                
+                return {
+                  compromisso_id: compromisso.id,
+                  canal: 'whatsapp',
+                  horas_antecedencia: la.dias * 24,
+                  data_envio: dataEnvioAntecipado.toISOString(),
+                  data_hora_envio: dataEnvioAntecipado.toISOString(),
+                  proxima_data_envio: dataEnvioAntecipado.toISOString(),
+                  mensagem: la.mensagem,
+                  midia_url: null,
+                  status_envio: 'pendente',
+                  destinatario: reminderDestinatario,
+                  telefone_responsavel: lembretesCriar[0].telefone_responsavel,
+                  company_id: companyId,
+                  recorrencia: null,
+                  ativo: true,
+                  lembrete_principal_id: lembretePrincipal[0].id,
+                  dias_antecedencia: la.dias,
+                  sequencia_envio: index + 1,
+                  tipo_lembrete: 'antecipado'
+                };
+              });
+
+              const { error: antecipError } = await supabase.from('lembretes').insert(lembretesAntecipCriar);
+              if (antecipError) {
+                console.error('Erro ao criar lembretes antecipados:', antecipError);
+                toast.warning("Lembrete principal criado, mas houve erro nos lembretes antecipados");
+              } else {
+                console.log(`✅ ${lembretesAntecipados.length} lembretes antecipados criados`);
+              }
+            }
           }
         }
       }
@@ -5866,7 +5909,12 @@ function Conversas() {
       setReminderRecorrencia("");
       setReminderMediaFile(null);
       setReminderMediaPreview(null);
-      const mensagemSucesso = reminderEnviar ? "Lembrete criado! Mensagem será enviada na data/hora programada." : "Lembrete criado! (sem envio de mensagem)";
+      setReminderLembretesAntecipados([]);
+      
+      const totalLembretes = 1 + reminderLembretesAntecipados.filter(la => la.ativo).length;
+      const mensagemSucesso = reminderEnviar 
+        ? `Lembrete criado! ${totalLembretes > 1 ? `${totalLembretes} mensagens serão enviadas` : 'Mensagem será enviada'} na(s) data(s) programada(s).` 
+        : "Lembrete criado! (sem envio de mensagem)";
       toast.success(mensagemSucesso);
       loadReminders();
     } catch (error) {
@@ -9918,6 +9966,14 @@ function Conversas() {
                                         </p>
                                       </div>
                                     </>}
+                                    
+                                    {/* Componente de Lembretes Antecipados */}
+                                    <LembretesAntecipados
+                                      lembretes={reminderLembretesAntecipados}
+                                      onChange={setReminderLembretesAntecipados}
+                                      dataCompromisso={reminderDatetime}
+                                      nomeCliente={leadVinculado?.name || "Cliente"}
+                                    />
                                 </div>
                                 
                                 <Button onClick={async () => {
