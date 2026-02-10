@@ -163,6 +163,7 @@ export default function Analytics() {
   }[]>([]);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
   const [companySegmento, setCompanySegmento] = useState<string | null>(null);
+  const [isMasterAccount, setIsMasterAccount] = useState(false);
   // Ref para evitar múltiplas atualizações simultâneas
   const isUpdatingRef = useRef(false);
   const updateDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -280,13 +281,14 @@ export default function Analytics() {
         }
         setUserCompanyId(userRole.company_id);
 
-        // Buscar segmento da empresa
+        // Buscar segmento e tipo da empresa
         const { data: companyData } = await supabase
           .from('companies')
-          .select('segmento')
+          .select('segmento, is_master_account')
           .eq('id', userRole.company_id)
           .maybeSingle();
         setCompanySegmento(companyData?.segmento || null);
+        setIsMasterAccount(companyData?.is_master_account || false);
 
         // Buscar todos os usuários da empresa
         const {
@@ -1165,7 +1167,7 @@ export default function Analytics() {
       </Card>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className={`grid w-full h-auto p-1 ${isSegmentoFinanceiro(companySegmento) ? 'grid-cols-10' : 'grid-cols-9'}`}>
+        <TabsList className={`grid w-full h-auto p-1 ${(isMasterAccount || isSegmentoFinanceiro(companySegmento)) ? 'grid-cols-10' : 'grid-cols-9'}`}>
           <TabsTrigger value="overview" className="gap-2 py-3">
             <Eye className="h-4 w-4" />
             <span className="hidden sm:inline">Visão Geral</span>
@@ -1182,7 +1184,7 @@ export default function Analytics() {
             <Package className="h-4 w-4" />
             <span className="hidden sm:inline">Produtos</span>
           </TabsTrigger>
-          {isSegmentoFinanceiro(companySegmento) && (
+          {(isMasterAccount || isSegmentoFinanceiro(companySegmento)) && (
             <TabsTrigger value="propostas" className="gap-2 py-3">
               <Building2 className="h-4 w-4" />
               <span className="hidden sm:inline">Propostas</span>
@@ -1652,7 +1654,7 @@ export default function Analytics() {
         </TabsContent>
 
         {/* Propostas Bancárias - Apenas para segmentos financeiros */}
-        {isSegmentoFinanceiro(companySegmento) && (
+        {(isMasterAccount || isSegmentoFinanceiro(companySegmento)) && (
           <TabsContent value="propostas" className="space-y-6">
             <PropostasAnalytics />
           </TabsContent>
