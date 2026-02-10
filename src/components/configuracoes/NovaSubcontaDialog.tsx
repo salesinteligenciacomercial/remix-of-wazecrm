@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle2, MessageSquare, Video, Phone, Target, Workflow } from "lucide-react";
 
+import { SEGMENTOS_EMPRESA } from "@/lib/segmentos";
+
 interface NovaSubcontaDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -25,6 +27,7 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
     email: "",
     telefone: "",
     responsavel: "",
+    segmento: "",
     plan: "basic",
     max_users: 5,
     max_leads: 1000,
@@ -94,9 +97,10 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
           full_name: formData.responsavel, // Nome completo do administrador
           telefone: formData.telefone,
           responsavel: formData.responsavel,
-          plan: formData.plan,
-          max_users: formData.max_users,
-          max_leads: formData.max_leads,
+           plan: formData.plan,
+           max_users: formData.max_users,
+           max_leads: formData.max_leads,
+           segmento: formData.segmento || null,
           // Módulos premium
           allow_chat_equipe: modulosPremium.allow_chat_equipe,
           allow_reunioes: modulosPremium.allow_reunioes,
@@ -161,6 +165,7 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
         email: "",
         telefone: "",
         responsavel: "",
+        segmento: "",
         plan: "basic",
         max_users: 5,
         max_leads: 1000,
@@ -290,6 +295,25 @@ export function NovaSubcontaDialog({ open, onOpenChange, onSuccess }: NovaSubcon
                   required
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="segmento">Segmento de Atuação</Label>
+              <Select
+                value={formData.segmento}
+                onValueChange={(value) => setFormData({ ...formData, segmento: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o segmento" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SEGMENTOS_EMPRESA.map((seg) => (
+                    <SelectItem key={seg.value} value={seg.value}>
+                      {seg.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid grid-cols-3 gap-4">

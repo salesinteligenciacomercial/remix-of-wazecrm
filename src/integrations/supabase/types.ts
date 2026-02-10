@@ -859,6 +859,7 @@ export type Database = {
           owner_user_id: string | null
           parent_company_id: string | null
           plan: string | null
+          segmento: string | null
           settings: Json | null
           status: string | null
           updated_at: string | null
@@ -884,6 +885,7 @@ export type Database = {
           owner_user_id?: string | null
           parent_company_id?: string | null
           plan?: string | null
+          segmento?: string | null
           settings?: Json | null
           status?: string | null
           updated_at?: string | null
@@ -909,6 +911,7 @@ export type Database = {
           owner_user_id?: string | null
           parent_company_id?: string | null
           plan?: string | null
+          segmento?: string | null
           settings?: Json | null
           status?: string | null
           updated_at?: string | null
