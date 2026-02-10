@@ -12,6 +12,7 @@ import { LossReasonsReport } from "@/components/analytics/LossReasonsReport";
 import ProductsAnalytics from "@/components/analytics/ProductsAnalytics";
 import { CustomerLTVAnalytics } from "@/components/analytics/CustomerLTVAnalytics";
 import PropostasAnalytics from "@/components/analytics/PropostasAnalytics";
+import { isSegmentoFinanceiro } from "@/lib/segmentos";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -161,7 +162,7 @@ export default function Analytics() {
     name: string;
   }[]>([]);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
-
+  const [companySegmento, setCompanySegmento] = useState<string | null>(null);
   // Ref para evitar múltiplas atualizações simultâneas
   const isUpdatingRef = useRef(false);
   const updateDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -278,6 +279,14 @@ export default function Analytics() {
           return;
         }
         setUserCompanyId(userRole.company_id);
+
+        // Buscar segmento da empresa
+        const { data: companyData } = await supabase
+          .from('companies')
+          .select('segmento')
+          .eq('id', userRole.company_id)
+          .maybeSingle();
+        setCompanySegmento(companyData?.segmento || null);
 
         // Buscar todos os usuários da empresa
         const {
@@ -1156,7 +1165,7 @@ export default function Analytics() {
       </Card>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-10 h-auto p-1">
+        <TabsList className={`grid w-full h-auto p-1 ${isSegmentoFinanceiro(companySegmento) ? 'grid-cols-10' : 'grid-cols-9'}`}>
           <TabsTrigger value="overview" className="gap-2 py-3">
             <Eye className="h-4 w-4" />
             <span className="hidden sm:inline">Visão Geral</span>
@@ -1173,10 +1182,12 @@ export default function Analytics() {
             <Package className="h-4 w-4" />
             <span className="hidden sm:inline">Produtos</span>
           </TabsTrigger>
-          <TabsTrigger value="propostas" className="gap-2 py-3">
-            <Building2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Propostas</span>
-          </TabsTrigger>
+          {isSegmentoFinanceiro(companySegmento) && (
+            <TabsTrigger value="propostas" className="gap-2 py-3">
+              <Building2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Propostas</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="campaigns" className="gap-2 py-3">
             <Megaphone className="h-4 w-4" />
             <span className="hidden sm:inline">Campanhas</span>
@@ -1640,10 +1651,12 @@ export default function Analytics() {
           <ProductsAnalytics userCompanyId={userCompanyId} globalFilters={globalFilters} />
         </TabsContent>
 
-        {/* Propostas Bancárias */}
-        <TabsContent value="propostas" className="space-y-6">
-          <PropostasAnalytics />
-        </TabsContent>
+        {/* Propostas Bancárias - Apenas para segmentos financeiros */}
+        {isSegmentoFinanceiro(companySegmento) && (
+          <TabsContent value="propostas" className="space-y-6">
+            <PropostasAnalytics />
+          </TabsContent>
+        )}
 
         {/* Campanhas de Tráfego Pago */}
         <TabsContent value="campaigns" className="space-y-6">

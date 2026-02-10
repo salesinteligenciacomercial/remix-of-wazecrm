@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { MessageSquare, Video, Phone, Target, Workflow } from "lucide-react";
+import { SEGMENTOS_EMPRESA } from "@/lib/segmentos";
 
 interface Company {
   id: string;
@@ -17,6 +18,7 @@ interface Company {
   max_users: number;
   max_leads: number;
   settings: any;
+  segmento?: string | null;
   allow_chat_equipe?: boolean;
   allow_reunioes?: boolean;
   allow_discador?: boolean;
@@ -42,6 +44,7 @@ export function EditarSubcontaDialog({ company, open, onOpenChange, onSuccess }:
     email: "",
     telefone: "",
     responsavel: "",
+    segmento: "",
     plan: "basic",
     max_users: 5,
     max_leads: 1000,
@@ -63,6 +66,7 @@ export function EditarSubcontaDialog({ company, open, onOpenChange, onSuccess }:
         email: company.settings?.email || "",
         telefone: company.settings?.telefone || "",
         responsavel: company.settings?.responsavel || "",
+        segmento: company.segmento || "",
         plan: company.plan,
         max_users: company.max_users,
         max_leads: company.max_leads,
@@ -122,6 +126,7 @@ export function EditarSubcontaDialog({ company, open, onOpenChange, onSuccess }:
           plan: formData.plan,
           max_users: formData.max_users,
           max_leads: formData.max_leads,
+          segmento: formData.segmento || null,
           settings: {
             email: formData.email,
             telefone: formData.telefone,
@@ -284,6 +289,25 @@ export function EditarSubcontaDialog({ company, open, onOpenChange, onSuccess }:
               onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit_segmento">Segmento de Atuação</Label>
+            <Select
+              value={formData.segmento}
+              onValueChange={(value) => setFormData({ ...formData, segmento: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o segmento" />
+              </SelectTrigger>
+              <SelectContent>
+                {SEGMENTOS_EMPRESA.map((seg) => (
+                  <SelectItem key={seg.value} value={seg.value}>
+                    {seg.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid grid-cols-3 gap-4">

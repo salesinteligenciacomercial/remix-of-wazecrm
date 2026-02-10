@@ -23,6 +23,7 @@ interface CriarUsuarioRequest {
   plan?: string;
   max_users?: number;
   max_leads?: number;
+  segmento?: string;
 }
 
 serve(async (req) => {
@@ -45,7 +46,7 @@ serve(async (req) => {
     const body: CriarUsuarioRequest = await req.json();
     console.log('📦 [CRIAR-USUARIO] Dados recebidos:', JSON.stringify(body, null, 2));
     
-    const { companyId, email, full_name, password, role, parentCompanyId, companyName, cnpj, telefone, responsavel, plan, max_users, max_leads } = body;
+    const { companyId, email, full_name, password, role, parentCompanyId, companyName, cnpj, telefone, responsavel, plan, max_users, max_leads, segmento } = body;
 
     if (!email || !full_name) {
       return new Response(JSON.stringify({ error: 'Email e nome completo são obrigatórios' }), { 
@@ -204,6 +205,7 @@ serve(async (req) => {
           plan: plan || 'basic',
           max_users: max_users || 5,
           max_leads: max_leads || 1000,
+          segmento: segmento || null,
           status: 'active',
           created_by: me.id,
           settings: {
