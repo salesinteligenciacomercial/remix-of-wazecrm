@@ -81,6 +81,45 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // ✅ Buscar nome do usuário que agendou ANTES de enviar, para garantir assinatura
+        let sentBy = 'Equipe';
+        if ((message as any).owner_id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', (message as any).owner_id)
+            .maybeSingle();
+          
+          if (profile?.full_name) {
+            sentBy = profile.full_name;
+          }
+        }
+
+        // ✅ CORREÇÃO: Inserir conversa no CRM ANTES de enviar via WhatsApp
+        // Isso garante que o webhook detecte a duplicata e não sobrescreva o sent_by
+        const { error: conversaError } = await supabase
+          .from('conversas')
+          .insert({
+            numero: message.phone_number,
+            telefone_formatado: message.phone_number,
+            mensagem: message.message_content,
+            origem: 'WhatsApp',
+            status: 'Enviada',
+            tipo_mensagem: 'text',
+            nome_contato: (message as any).contact_name || message.phone_number,
+            owner_id: (message as any).owner_id,
+            company_id: message.company_id,
+            fromme: true,
+            sent_by: sentBy, // ✅ Assinatura do usuário que agendou
+            created_at: new Date().toISOString()
+          });
+
+        if (conversaError) {
+          console.error(`⚠️ Erro ao salvar conversa no CRM:`, conversaError);
+        } else {
+          console.log(`💬 Mensagem salva no CRM com assinatura "${sentBy}" para ${message.phone_number}`);
+        }
+
         // Chamar edge function de envio de WhatsApp
         const { data: sendResult, error: sendError } = await supabase.functions.invoke(
           'enviar-whatsapp',
@@ -122,44 +161,6 @@ Deno.serve(async (req) => {
               updated_at: new Date().toISOString()
             })
             .eq('id', message.id);
-
-          // Buscar nome do usuário que agendou a mensagem para assinatura
-          let sentBy = 'Equipe';
-          if ((message as any).owner_id) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('full_name')
-              .eq('id', (message as any).owner_id)
-              .maybeSingle();
-            
-            if (profile?.full_name) {
-              sentBy = profile.full_name;
-            }
-          }
-          
-          // Criar registro na tabela conversas para exibir a mensagem enviada no CRM
-          const { error: conversaError } = await supabase
-            .from('conversas')
-            .insert({
-              numero: message.phone_number,
-              telefone_formatado: message.phone_number,
-              mensagem: message.message_content,
-              origem: 'WhatsApp',
-              status: 'Enviada',
-              tipo_mensagem: 'text',
-              nome_contato: (message as any).contact_name || message.phone_number,
-              owner_id: (message as any).owner_id,
-              company_id: message.company_id,
-              fromme: true,
-              sent_by: sentBy, // ✅ Assinatura do usuário que agendou
-              created_at: new Date().toISOString()
-            });
-
-          if (conversaError) {
-            console.error(`⚠️ Erro ao salvar conversa no CRM:`, conversaError);
-          } else {
-            console.log(`💬 Mensagem salva no CRM para conversa ${message.phone_number}`);
-          }
 
           results.push({ id: message.id, status: 'sent' });
         }
