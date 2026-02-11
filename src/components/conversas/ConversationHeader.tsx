@@ -301,22 +301,7 @@ import { useEffect, useState } from "react";
                   </DialogContent>
                 </Dialog>
               )}
-              <Button 
-                variant="ghost" 
-                size="icon"
-                className="hover:bg-primary/10"
-                title="Ligar"
-              >
-                <Phone className="h-5 w-5" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon"
-                className="hover:bg-primary/10"
-                title="Videochamada"
-              >
-                <Video className="h-5 w-5" />
-              </Button>
+              
               <Button 
                 variant="ghost" 
                 size="icon"
