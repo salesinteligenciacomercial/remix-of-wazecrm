@@ -504,7 +504,9 @@ serve(async (req) => {
         }
       }
       
-      // For Evolution API: try sending as native buttons via /message/sendButtons/
+      // For Evolution API: send interactive buttons/lists as text with numbered options
+      // NOTE: /message/sendButtons/ in Evolution API v2.x wraps in viewOnceMessage which is broken
+      // Using formatted text with numbered options as reliable fallback
       if ((apiProvider === 'evolution' || apiProvider === 'both') && hasEvolutionConfig) {
         try {
           const rawBaseUrl = connection.evolution_api_url || EVOLUTION_API_URL;
@@ -514,86 +516,59 @@ serve(async (req) => {
           
           const bodyText = interactive?.body?.text || validatedData.mensagem || '';
           
+          // Build a well-formatted text message with numbered options
+          let formattedMessage = bodyText;
+          
           if (interactive?.type === 'button' && interactive?.action?.buttons) {
-            // Use Evolution sendButtons endpoint
-            const evolutionButtons = interactive.action.buttons.map((btn: any) => ({
-              type: 'reply',
-              displayText: btn.reply?.title || 'Opção',
-              id: btn.reply?.id || `btn_${Math.random().toString(36).substring(7)}`,
-            }));
-            
-            const buttonsPayload = {
-              number: targetNumber,
-              title: '',
-              description: bodyText,
-              footer: '',
-              buttons: evolutionButtons,
-            };
-            
-            const sendButtonsUrl = `${baseUrl}/message/sendButtons/${connection.instance_name}`;
-            console.log("📱 Evolution API - Enviando botões interativos:", sendButtonsUrl);
-            
-            const response = await fetch(sendButtonsUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'apikey': apiKey,
-              },
-              body: JSON.stringify(buttonsPayload),
+            const buttons = interactive.action.buttons;
+            formattedMessage += '\n';
+            buttons.forEach((btn: any, i: number) => {
+              const label = btn.reply?.title || `Opção ${i + 1}`;
+              formattedMessage += `\n${i + 1}️⃣ ${label}`;
             });
-            
-            const data = await response.json();
-            if (response.ok) {
-              console.log("✅ Evolution API - Botões interativos enviados com sucesso!");
-              return new Response(
-                JSON.stringify({ success: true, provider: 'evolution', data }),
-                { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-              );
-            } else {
-              console.error("❌ Evolution API sendButtons Error:", data);
-              // Fall through to text fallback
-            }
           } else if (interactive?.type === 'list' && interactive?.action?.sections) {
-            // Use Evolution sendList endpoint
-            const listPayload = {
-              number: targetNumber,
-              title: '',
-              description: bodyText,
-              buttonText: interactive.action.button || 'Ver opções',
-              footerText: '',
-              sections: interactive.action.sections.map((section: any) => ({
-                title: section.title || 'Opções',
-                rows: (section.rows || []).map((row: any) => ({
-                  title: row.title || 'Opção',
-                  description: row.description || '',
-                  rowId: row.id || `row_${Math.random().toString(36).substring(7)}`,
-                })),
-              })),
-            };
-            
-            const sendListUrl = `${baseUrl}/message/sendList/${connection.instance_name}`;
-            console.log("📱 Evolution API - Enviando lista interativa:", sendListUrl);
-            
-            const response = await fetch(sendListUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'apikey': apiKey,
-              },
-              body: JSON.stringify(listPayload),
-            });
-            
-            const data = await response.json();
-            if (response.ok) {
-              console.log("✅ Evolution API - Lista interativa enviada com sucesso!");
-              return new Response(
-                JSON.stringify({ success: true, provider: 'evolution', data }),
-                { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-              );
-            } else {
-              console.error("❌ Evolution API sendList Error:", data);
-              // Fall through to text fallback
+            formattedMessage += '\n';
+            let optionIndex = 1;
+            for (const section of interactive.action.sections) {
+              if (section.title) {
+                formattedMessage += `\n*${section.title}*`;
+              }
+              for (const row of (section.rows || [])) {
+                const label = row.title || `Opção ${optionIndex}`;
+                formattedMessage += `\n${optionIndex}️⃣ ${label}`;
+                if (row.description) {
+                  formattedMessage += ` - ${row.description}`;
+                }
+                optionIndex++;
+              }
             }
+          }
+          
+          const sendTextUrl = `${baseUrl}/message/sendText/${connection.instance_name}`;
+          console.log("📱 Evolution API - Enviando menu como texto formatado:", sendTextUrl);
+          
+          const response = await fetch(sendTextUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': apiKey,
+            },
+            body: JSON.stringify({
+              number: targetNumber,
+              text: formattedMessage,
+            }),
+          });
+          
+          const data = await response.json();
+          if (response.ok) {
+            console.log("✅ Evolution API - Menu interativo enviado como texto!");
+            return new Response(
+              JSON.stringify({ success: true, provider: 'evolution', data }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else {
+            console.error("❌ Evolution API sendText (interactive fallback) Error:", data);
+            // Fall through to text fallback below
           }
         } catch (e) {
           console.error("❌ Evolution API Interactive Exception:", e);
