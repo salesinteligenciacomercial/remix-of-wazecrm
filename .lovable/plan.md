@@ -1,69 +1,111 @@
 
-# Plano: Corrigir exibição de fotos de perfil para todos os contatos
+# Relatorio e Plano: Chatbot Inteligente no Fluxo de Automacao
 
-## Problema Identificado
+## Nota de Funcionalidade Atual: 4/10
 
-Atualmente, ~550 dos 901 leads (61%) nao possuem `profile_picture_url` salva no banco de dados. O sistema tenta buscar via Evolution API, mas muitos contatos tem foto de perfil privada no WhatsApp ou a busca falha por timeout/rate limiting.
+### O que funciona hoje
+- O **editor visual** (drag-and-drop) permite montar fluxos com gatilhos, acoes, condicoes e nos de IA
+- Os fluxos sao salvos no banco (`automation_flows`) com nodes/edges
+- A Edge Function `executar-fluxo` executa nodes sequencialmente
+- O `ia-orchestrator` ja detecta intencao (agendamento vs atendimento) e chama agentes IA
+- O webhook (`webhook-conversas`) ja chama o orchestrator automaticamente para mensagens recebidas
 
-Alem disso, o frontend faz cache permanente do placeholder (iniciais), nunca retentando buscar a foto real posteriormente.
+### O que NAO funciona / esta incompleto
+1. **O fluxo visual NAO e conectado ao webhook** - quando uma mensagem chega, o webhook chama diretamente o `ia-orchestrator`, NUNCA executa os fluxos visuais criados no builder
+2. **Execucao sequencial burra** - o `executar-fluxo` percorre TODOS os nodes em sequencia, ignorando as conexoes (edges) entre eles. Nao segue o grafo
+3. **Sem suporte a menus interativos** - nao tem node para enviar botoes ou listas clicaveis do WhatsApp
+4. **Sem roteamento por departamento** - nao existe logica para direcionar conversa a um usuario/setor especifico
+5. **Sem suporte a audio** - o fluxo nao transcreve audios recebidos antes de processar
+6. **Sem estado de conversa** - o chatbot nao lembra em que ponto do fluxo o contato esta
 
-## Solucao em 3 Partes
+---
 
-### 1. Criar Edge Function de Batch para buscar fotos em massa
+## Proposta: Chatbot Inteligente Hibrido
 
-Nova Edge Function `batch-profile-pictures` que:
-- Busca todos os leads sem `profile_picture_url` da empresa
-- Tenta buscar foto de cada um via Evolution API com throttling (evitar rate limit)
-- Salva as fotos encontradas no banco de dados
-- Pode ser chamada manualmente ou via botao na interface
+A ideia e combinar o melhor dos dois mundos:
+- **Menu estruturado** (botoes clicaveis) para navegacao rapida por departamentos
+- **IA conversacional** que entende texto livre E audios, sem depender de "digite 1 ou 2"
 
-### 2. Melhorar a Edge Function `get-profile-picture`
+### Como vai funcionar na pratica
 
-- Adicionar suporte a **Meta Cloud API** para buscar fotos (a empresa do usuario usa `api_provider: meta` com token valido)
-- A Meta Cloud API permite buscar foto via endpoint `GET /{phone_number_id}/contacts` ou similar
-- Se Evolution falhar, tentar Meta API como fallback adicional
-- Aumentar o cache de resultados nulos para 30 minutos (evitar chamadas repetidas para contatos sem foto publica)
+```text
+[Cliente envia mensagem] 
+    |
+    v
+[Webhook recebe] --> [Verifica se tem fluxo ativo]
+    |
+    v
+[Envia menu com botoes clicaveis]:
+  "Bem-vindo a Empresa X! Como posso ajudar?"
+  [Financeiro] [Suporte] [Vendas] [Falar com Atendente]
+    |
+    v
+[Cliente clica OU digita texto livre OU envia audio]
+    |
+    v
+[IA identifica intencao] --> [Roteia para departamento/usuario]
+    |
+    v
+[Agente IA do departamento responde OU transfere para humano]
+```
 
-### 3. Corrigir o carregamento no frontend (`Conversas.tsx`)
+### Recursos do chatbot inteligente
+- Botoes clicaveis via WhatsApp Interactive Messages (API oficial suporta ate 3 botoes ou listas com ate 10 opcoes)
+- Se o cliente digitar texto livre ao inves de clicar, a IA entende e roteia corretamente
+- Audios sao transcritos automaticamente (ja existe `transcrever-audio`) e processados como texto
+- O fluxo lembra o estado da conversa (em qual etapa o cliente esta)
 
-- Remover o cache permanente de fallbacks `ui-avatars.com` no `avatarCacheRef` - permitir retentativas
-- Melhorar o throttling do lazy loading: usar batches de 5 com intervalo de 500ms entre batches
-- Priorizar contatos visiveis na tela (primeiros da lista)
-- Quando um lead ja tem `profile_picture_url` no banco, usar direto sem chamar Edge Function
+---
 
 ## Detalhes Tecnicos
 
-### Edge Function `batch-profile-pictures/index.ts` (NOVA)
+### 1. Novo node "Menu Interativo" no builder visual
+- Tipo: `interactive_menu`
+- Permite configurar: mensagem de boas-vindas, botoes (label + departamento/usuario destino)
+- Cada botao gera uma saida diferente no grafo (edge com label)
 
-```text
-POST /batch-profile-pictures
-Body: { company_id: string }
+### 2. Novo node "Roteamento por Departamento"
+- Tipo: `route_department`
+- Configura departamentos disponiveis e usuario responsavel por cada um
+- Quando acionado, atribui a conversa ao usuario correto e notifica
 
-1. Buscar leads SEM profile_picture_url (limit 100)
-2. Buscar credenciais Evolution/Meta da empresa
-3. Para cada lead (com delay de 500ms entre cada):
-   a. Tentar Evolution API
-   b. Se falhar, tentar Meta API (se disponivel)
-   c. Se encontrou foto, UPDATE no lead
-4. Retornar { updated: N, failed: N, total: N }
-```
+### 3. Tabela `conversation_flow_state` (nova)
+Armazena em que ponto do fluxo cada conversa esta:
+- `conversation_number` (telefone)
+- `flow_id` (qual fluxo)
+- `current_node_id` (em qual node esta)
+- `context_data` (dados coletados ate o momento)
+- `expires_at` (expira apos X minutos de inatividade)
 
-### Alteracoes em `get-profile-picture/index.ts`
+### 4. Atualizar `webhook-conversas`
+Antes de chamar o `ia-orchestrator`, verificar:
+1. A empresa tem fluxo ativo?
+2. Ja existe um `conversation_flow_state` para este numero?
+   - Se sim: continuar de onde parou (enviar para o proximo node)
+   - Se nao: iniciar o fluxo do primeiro node (gatilho "nova_mensagem")
 
-- Adicionar busca via Meta Cloud API (`GET https://graph.facebook.com/v21.0/{phone_number_id}` com contact lookup)
-- Aumentar cache de null para 30 minutos
-- Melhor logging para debug
+### 5. Atualizar `executar-fluxo`
+- Seguir as **edges** (conexoes) em vez de executar todos os nodes
+- Suportar novos tipos: `interactive_menu`, `route_department`
+- Suportar transcricao de audio antes de processar IA
+- Salvar estado da conversa no `conversation_flow_state`
 
-### Alteracoes em `src/pages/Conversas.tsx`
+### 6. Enviar mensagens interativas via WhatsApp
+- Atualizar `enviar-whatsapp` para suportar mensagens com botoes (Interactive Messages)
+- Formato: `{ tipo_mensagem: "interactive", buttons: [...] }`
 
-- Na funcao `getProfilePictureWithFallback`: nao cachear URLs de `ui-avatars.com` no `avatarCacheRef`
-- No carregamento inicial: usar `profilePictureUrl` do lead diretamente (ja implementado), e so chamar Edge Function para quem nao tem
-- Melhorar batching: 5 simultaneos, 500ms entre batches
-- Adicionar botao "Atualizar Fotos" no menu de conversas para disparar o batch manualmente
+### Sequencia de implementacao
 
-### Sequencia de execucao
+1. Criar tabela `conversation_flow_state`
+2. Adicionar nodes "Menu Interativo" e "Roteamento" no builder visual
+3. Atualizar `executar-fluxo` para seguir o grafo e suportar novos nodes
+4. Atualizar `enviar-whatsapp` para suportar mensagens interativas com botoes
+5. Atualizar `webhook-conversas` para verificar fluxos ativos e gerenciar estado
+6. Integrar transcricao de audio no fluxo (ja existe a funcao)
 
-1. Atualizar `get-profile-picture` com suporte Meta API
-2. Criar `batch-profile-pictures` Edge Function
-3. Corrigir frontend para nao cachear placeholders e melhorar batching
-4. Adicionar botao para atualizar fotos em massa
+### Beneficios
+- Chatbot que NAO e "programado" rigidamente - a IA entende qualquer mensagem
+- Botoes clicaveis para navegacao rapida (melhor UX)
+- Roteamento automatico para departamentos/usuarios
+- Suporte a audio (transcricao automatica)
+- Estado persistente (o chatbot lembra onde o cliente parou)
