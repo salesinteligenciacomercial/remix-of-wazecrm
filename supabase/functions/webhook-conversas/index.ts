@@ -1450,6 +1450,7 @@ serve(async (req) => {
       // ⚡ CORREÇÃO: Inicializar campos de status de entrega/leitura
       delivered: validatedData.fromMe === true ? true : false, // Mensagens enviadas começam como entregues
       read: false, // Mensagens começam como não lidas
+      whatsapp_message_id: body?.data?.key?.id || null, // 🔥 Salvar ID da mensagem do WhatsApp para edição/exclusão
     };
     
     // ⚡ CORREÇÃO DEFINITIVA: Se mensagem foi enviada (fromMe = true), verificar se já existe no banco
@@ -1469,12 +1470,20 @@ serve(async (req) => {
         .maybeSingle();
       
       if (mensagemExistente) {
-        console.log('⚠️ [WEBHOOK] Mensagem enviada já existe no banco (salva pelo CRM), ignorando duplicata:', {
+        console.log('⚠️ [WEBHOOK] Mensagem enviada já existe no banco (salva pelo CRM), atualizando whatsapp_message_id:', {
           id: mensagemExistente.id,
-          sent_by: mensagemExistente.sent_by
+          sent_by: mensagemExistente.sent_by,
+          whatsapp_message_id: body?.data?.key?.id
         });
+        // 🔥 Atualizar whatsapp_message_id para permitir edição futura
+        if (body?.data?.key?.id) {
+          await supabase
+            .from('conversas')
+            .update({ whatsapp_message_id: body.data.key.id })
+            .eq('id', mensagemExistente.id);
+        }
         return new Response(
-          JSON.stringify({ success: true, message: 'Mensagem já existe, ignorando duplicata' }),
+          JSON.stringify({ success: true, message: 'Mensagem já existe, whatsapp_message_id atualizado' }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

@@ -1251,6 +1251,7 @@ export type Database = {
           telefone_formatado: string | null
           tipo_mensagem: string | null
           updated_at: string | null
+          whatsapp_message_id: string | null
         }
         Insert: {
           ad_headline?: string | null
@@ -1284,6 +1285,7 @@ export type Database = {
           telefone_formatado?: string | null
           tipo_mensagem?: string | null
           updated_at?: string | null
+          whatsapp_message_id?: string | null
         }
         Update: {
           ad_headline?: string | null
@@ -1317,6 +1319,7 @@ export type Database = {
           telefone_formatado?: string | null
           tipo_mensagem?: string | null
           updated_at?: string | null
+          whatsapp_message_id?: string | null
         }
         Relationships: [
           {
