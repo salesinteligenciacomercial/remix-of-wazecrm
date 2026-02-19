@@ -1,83 +1,62 @@
 
-
-# Envio de Templates via Ações Rápidas na Conversa
-
-## Objetivo
-Adicionar uma nova opção "Enviar Template" dentro do menu **Ações Rápidas** na tela de Conversas, permitindo selecionar e enviar templates aprovados da API Oficial da Meta diretamente para o contato da conversa ativa -- sem precisar ir ao Disparo em Massa.
+# Aumentar Limite e Adicionar Indicador de Progresso no Puxar Histórico
 
 ## O que muda para o usuario
 
-1. No painel lateral da conversa, dentro de **Ações Rápidas**, aparece um novo botão: **"Enviar Template"**
-2. Ao clicar, abre um Dialog com:
-   - Seletor de templates aprovados (reutiliza o componente `TemplateSelector` ja existente)
-   - Preview do template selecionado
-   - Campos para preencher variaveis dinamicas (nome do lead, etc.)
-   - Campo de URL de midia (quando o template exige video/imagem/documento no cabecalho)
-   - Botao "Enviar Template" que envia para o contato da conversa atual
-3. A mensagem enviada aparece no historico da conversa com o conteudo legivel do template
-4. O envio usa a mesma Edge Function `enviar-whatsapp` ja existente, passando `template_name`, `template_language` e `template_components`
+Ao clicar em **"Puxar Histórico"** na conversa, o usuario verá:
+1. Uma **barra de progresso animada** abaixo do header com etapas visuais (ex: "Conectando ao WhatsApp... Buscando mensagens... Salvando no banco...")
+2. O botão mostrará o texto dinâmico conforme a etapa atual
+3. Ao concluir, um toast de sucesso informará quantas mensagens foram trazidas (com separação de enviadas e recebidas)
+4. O limite de busca passa de **50 para 200 mensagens**
+
+## Arquivos que serão alterados
+
+| Arquivo | Ação | Motivo |
+|---------|------|--------|
+| `supabase/functions/fetch-whatsapp-messages/index.ts` | Editar | Aumentar limite padrão de 50 para 200 e o fallback da estratégia 3 proporcional |
+| `src/services/evolutionApi.ts` | Editar | Aumentar `limit` padrão de 50 para 200 na função `getMessages` |
+| `src/pages/Conversas.tsx` | Editar | Adicionar estado `restoreProgress` com etapas e atualizar `handleRestoreConversation` |
+| `src/components/conversas/ConversationHeader.tsx` | Editar | Receber e exibir o progresso como barra visual com texto de etapa |
 
 ## Detalhes Tecnicos
 
-### 1. Extrair funcoes auxiliares para reutilizacao
+### 1. Novos estados em `Conversas.tsx`
 
-As funcoes `buildTemplateComponents` e `buildTemplateTextContent` que hoje estao dentro de `DisparoEmMassa.tsx` serao extraidas para um arquivo utilitario compartilhado:
-
-**Novo arquivo:** `src/utils/templateHelpers.ts`
-- `buildTemplateComponents(template, lead, templateVariables, templateMediaUrl)` 
-- `buildTemplateTextContent(template, lead, templateVariables)`
-
-Isso permite reutilizar em ambos DisparoEmMassa e Conversas sem duplicacao de codigo.
-
-### 2. Novo componente: `ConversaTemplateSender`
-
-**Novo arquivo:** `src/components/conversas/ConversaTemplateSender.tsx`
-
-Componente Dialog que:
-- Recebe `companyId`, `contactName`, `contactPhone`, `origemApi` e callback `onSend`
-- Usa o `TemplateSelector` existente para selecionar template
-- Mostra preview e campos de variaveis
-- Ao clicar "Enviar", chama a funcao de envio com os dados do template
-- Preenche automaticamente `{{nome}}` com o nome do contato da conversa
-
-### 3. Integracao em `Conversas.tsx`
-
-No bloco de **Ações Rápidas** (linha ~9456), adicionar o botao que abre o `ConversaTemplateSender`. A logica de envio:
-
-1. Monta o payload com `template_name`, `template_language`, `template_components`
-2. Salva a mensagem no banco (tabela `conversas`) com `tipo_mensagem: 'template'` e o texto legivel reconstruido
-3. Envia via `enviar-whatsapp` Edge Function (que ja suporta templates)
-4. Respeita o `force_provider` (origem da conversa) para manter consistencia do canal
-
-### 4. Estados necessarios em Conversas.tsx
-
-Adicionar estados para controlar o dialog de template:
-- `templateDialogOpen` (boolean)
-- `selectedConvTemplate` (Template | null)
-- `convTemplateVariables` (Record<string, string>)
-- `convTemplateMediaUrl` (string)
-- `sendingTemplate` (boolean)
-
-### 5. Fluxo de envio
-
-```text
-Usuario clica "Enviar Template"
-  -> Abre Dialog com TemplateSelector
-  -> Seleciona template aprovado
-  -> Preenche variaveis (nome auto-preenchido)
-  -> Clica "Enviar"
-  -> Salva no banco com tipo_mensagem='template' e texto legivel
-  -> Envia via enviar-whatsapp com template_name/language/components
-  -> Fecha Dialog e mostra toast de sucesso
-  -> Mensagem aparece no chat via realtime
+```typescript
+const [restoringConversation, setRestoringConversation] = useState(false); // já existe
+const [restoreProgress, setRestoreProgress] = useState<{
+  step: number;         // 0-100 para a barra
+  label: string;        // texto exibido na etapa
+} | null>(null);
 ```
 
-### Arquivos afetados
+### 2. Fluxo de progresso em `handleRestoreConversation`
 
-| Arquivo | Acao |
-|---------|------|
-| `src/utils/templateHelpers.ts` | Criar (extrair funcoes de DisparoEmMassa) |
-| `src/components/conversas/ConversaTemplateSender.tsx` | Criar (novo componente) |
-| `src/components/campanhas/DisparoEmMassa.tsx` | Modificar (importar funcoes do utilitario) |
-| `src/pages/Conversas.tsx` | Modificar (adicionar botao + logica de envio) |
+```text
+Etapa 1 (10%) → "Conectando ao WhatsApp..."
+Etapa 2 (35%) → "Buscando 200 mensagens..."
+Etapa 3 (70%) → "Processando X mensagens encontradas..."
+Etapa 4 (90%) → "Salvando no banco de dados..."
+Etapa 5 (100%) → Sucesso → fecha barra
+```
 
+### 3. Indicador visual em `ConversationHeader.tsx`
+
+Adicionar uma `<div>` logo abaixo do header (ainda dentro do container fixo) com:
+- A barra de progresso usando o componente `<Progress>` do Radix já disponível no projeto
+- Texto da etapa atual
+- Aparece apenas quando `restoreProgress !== null`
+
+### 4. Ajuste de limites
+
+- **Edge Function** (`fetch-whatsapp-messages`): `limit = 50` → `limit = 200`; estratégia 3 fallback: `Math.min(limit * 10, 500)` → `Math.min(limit * 5, 1000)` para manter proporcional
+- **`evolutionApi.ts`**: parâmetro padrão `limit = 50` → `limit = 200`
+- **`handleRestoreConversation`**: chamada `getMessages(..., 50)` → `getMessages(..., 200)`
+
+### 5. Props adicionadas ao `ConversationHeader`
+
+```typescript
+restoreProgress?: { step: number; label: string } | null;
+```
+
+O indicador de progresso será renderizado dentro do próprio header, como uma faixa abaixo dos botões, para não deslocar o layout da conversa.
