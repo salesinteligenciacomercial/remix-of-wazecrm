@@ -4319,6 +4319,8 @@ function Conversas() {
   };
   const handleEdit = async (messageId: string, newContent: string) => {
     if (!selectedConv) return;
+    
+    // Atualização otimista na UI
     const updated = conversations.map(conv => conv.id === selectedConv.id ? {
       ...conv,
       messages: conv.messages.map(msg => msg.id === messageId ? {
@@ -4337,13 +4339,36 @@ function Conversas() {
       } : msg)
     });
 
-    // Atualizar no banco de dados
+    // Enviar edição para o WhatsApp E atualizar no banco via edge function
     try {
-      await supabase
-        .from('conversas')
-        .update({ mensagem: newContent })
-        .eq('id', messageId);
-      toast.success("Mensagem editada com sucesso!");
+      const companyId = userCompanyId || (await getCompanyId());
+      if (!companyId) {
+        toast.error('Company ID não encontrado');
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('editar-mensagem-whatsapp', {
+        body: {
+          message_id: messageId,
+          new_content: newContent,
+          company_id: companyId,
+        }
+      });
+
+      if (error) {
+        console.error('❌ Erro ao editar mensagem:', error);
+        toast.error('Erro ao editar mensagem');
+        return;
+      }
+
+      if (data?.edited_on_whatsapp) {
+        toast.success("✅ Mensagem editada no WhatsApp e no CRM!");
+      } else {
+        toast.success("Mensagem editada no CRM");
+        if (data?.error) {
+          console.warn('⚠️ Não foi possível editar no WhatsApp:', data.error);
+        }
+      }
     } catch (error) {
       console.error('Erro ao salvar edição:', error);
       toast.error('Erro ao salvar edição');
@@ -5141,6 +5166,7 @@ function Conversas() {
     console.log('💾 [ENVIO] Salvando mensagem no banco PRIMEIRO...');
     const numeroNormalizado = normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
     let mensagemSalva = false;
+    let insertedMsgId: string | null = null;
     try {
       const {
         data: {
@@ -5162,6 +5188,7 @@ function Conversas() {
           // ✅ CORREÇÃO: Usar número ORIGINAL do lead (não normalizado) para manter consistência com webhook
           const numeroOriginal = selectedConv.phoneNumber || selectedConv.id;
           const {
+            data: insertedMsg,
             error: dbError
           } = await supabase.from('conversas').insert([{
             numero: numeroOriginal,
@@ -5180,12 +5207,11 @@ function Conversas() {
             replied_to_message: repliedMessage || null,
             delivered: true,
             read: false
-          }]);
-          if (!dbError) {
+          }]).select('id').single();
+          if (!dbError && insertedMsg) {
             mensagemSalva = true;
-            console.log('✅ [ENVIO] Mensagem salva no banco com sucesso (antes do envio)');
-            // ⚡ CORREÇÃO: Não recarregar conversas manualmente - o realtime vai atualizar automaticamente
-            // Isso evita duplicação de mensagens
+            insertedMsgId = insertedMsg.id;
+            console.log('✅ [ENVIO] Mensagem salva no banco com sucesso (antes do envio), id:', insertedMsgId);
           } else {
             console.error('❌ [ENVIO] Erro ao salvar mensagem no banco:', dbError);
           }
@@ -5224,7 +5250,18 @@ function Conversas() {
         error
       });
       // ⚡ CORREÇÃO: Mensagem já foi salva antes do envio, não salvar novamente aqui
-      // Isso evita duplicação de mensagens no banco
+      // Salvar whatsapp_message_id retornado pela API para permitir edição futura
+      const whatsappMsgId = (data as any)?.message_id || (data as any)?.data?.messages?.[0]?.id || (data as any)?.data?.key?.id;
+      if (whatsappMsgId && insertedMsgId) {
+        console.log('📝 [ENVIO] Salvando whatsapp_message_id:', whatsappMsgId, 'para msg:', insertedMsgId);
+        supabase.from('conversas')
+          .update({ whatsapp_message_id: whatsappMsgId })
+          .eq('id', insertedMsgId)
+          .then(({ error: updateErr }) => {
+            if (updateErr) console.error('❌ Erro ao salvar whatsapp_message_id:', updateErr);
+            else console.log('✅ whatsapp_message_id salvo com sucesso');
+          });
+      }
 
       if (error) {
         console.error('❌ [ENVIO] Erro ao enviar mensagem via WhatsApp:', error);
