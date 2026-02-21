@@ -1699,9 +1699,9 @@ serve(async (req) => {
           }
         }
 
-        // Buscar fluxos ativos da company atual E da company mãe (se for subconta)
+        // REGRA: Cada empresa usa SOMENTE seus próprios fluxos (individual e isolado)
+        // NÃO herdar fluxos da empresa mãe - cada conta deve criar seus próprios fluxos
         const companyIdsToSearch = [companyId];
-        if (parentCompanyId) companyIdsToSearch.push(parentCompanyId);
 
         let keywordOverride = false;
         if (flowState) {
