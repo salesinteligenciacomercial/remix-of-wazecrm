@@ -41,6 +41,7 @@ import { LeadAttachments } from "@/components/leads/LeadAttachments";
 import { ProdutoSelectorDialog } from "@/components/conversas/ProdutoSelectorDialog";
 import { VendasLeadPanel } from "@/components/conversas/VendasLeadPanel";
 import { PropostasBancariasPanel } from "@/components/conversas/PropostasBancariasPanel";
+import { isSegmentoFinanceiro } from "@/lib/segmentos";
 import { LembretesAntecipados, LembreteAntecipado } from "@/components/conversas/LembretesAntecipados";
 import { ProductivityPanel } from "@/components/conversas/ProductivityPanel";
 import { formatPhoneNumber, safeFormatPhoneNumber, normalizePhoneForComparison } from "@/utils/phoneFormatter";
@@ -323,6 +324,8 @@ function Conversas() {
   const [productivityPanelOpen, setProductivityPanelOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null); // Declarar primeiro
+  const [companySegmento, setCompanySegmento] = useState<string | null>(null);
+  const [isMasterAccount, setIsMasterAccount] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
 
   // Estado para encaminhamento de mensagens
@@ -2599,6 +2602,17 @@ function Conversas() {
           return;
         }
         const currentCompanyId = userRole.company_id;
+
+        // Buscar segmento e is_master_account da empresa
+        const { data: companyData } = await supabase
+          .from('companies')
+          .select('segmento, is_master_account')
+          .eq('id', currentCompanyId)
+          .maybeSingle();
+        if (companyData) {
+          setCompanySegmento(companyData.segmento);
+          setIsMasterAccount(!!companyData.is_master_account);
+        }
 
         // ⚡ CORREÇÃO CRÍTICA: Verificar se o cache é da MESMA empresa
         const cachedCompanyId = sessionStorage.getItem(CONVERSATIONS_CACHE_COMPANY_KEY);
@@ -9242,13 +9256,13 @@ function Conversas() {
                               />
                             </div>
 
-                            {/* ✅ Painel de Propostas Bancárias - Promotora/Correspondente */}
+                            {/* ✅ Painel de Propostas Bancárias - Apenas segmentos financeiros */}
+                            {(isMasterAccount || isSegmentoFinanceiro(companySegmento)) && (
                             <div className="mt-3">
                               <PropostasBancariasPanel
                                 leadId={leadVinculado.id}
                                 companyId={userCompanyId || ""}
                                 onPropostaUpdated={async () => {
-                                  // Recarregar lead após atualização de proposta
                                   if (selectedConv && (selectedConv.phoneNumber || selectedConv.id)) {
                                     const telefoneFormatado = safeFormatPhoneNumber(selectedConv.phoneNumber || selectedConv.id);
                                     const { data: leadAtualizado } = await supabase
@@ -9263,6 +9277,7 @@ function Conversas() {
                                 }}
                               />
                             </div>
+                            )}
                           </> : <div className="space-y-2">
                             <Badge variant="outline" className="w-full justify-center gap-2 py-2 bg-amber-500/10 text-amber-600 border-amber-500/20">
                               <AlertCircle className="h-3 w-3" />
