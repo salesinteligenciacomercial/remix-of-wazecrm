@@ -223,6 +223,18 @@ const PublicMeeting = () => {
     return entries.length > 0 ? entries[0].stream : null;
   }, [remoteParticipants]);
 
+  // ========== KEEP LOCAL VIDEO IN SYNC ==========
+  // When the view switches between "alone" and "grid", the <video> element
+  // is remounted and loses its srcObject. This effect re-applies it.
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      if (localVideoRef.current.srcObject !== localStream) {
+        localVideoRef.current.srcObject = localStream;
+        localVideoRef.current.play().catch(console.warn);
+      }
+    }
+  }, [localStream, remoteParticipants]);
+
   // ========== BACKGROUND BLUR PROCESSING ==========
   useEffect(() => {
     if (isBlurEnabled && localStream && localVideoRef.current && blurCanvasRef.current) {
