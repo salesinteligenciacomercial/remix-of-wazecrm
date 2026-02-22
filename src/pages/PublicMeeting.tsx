@@ -3,10 +3,12 @@ import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { 
   Mic, MicOff, Video, VideoOff, PhoneOff, 
   Monitor, MonitorOff, Circle, Square, Loader2, Users, Copy, Check,
-  FileText, Download, X, MessageSquare, BookOpen, MessageCircle
+  FileText, Download, X, MessageSquare, BookOpen, MessageCircle,
+  UserCheck, UserX, Bell
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MeetingScriptPanel, MeetingScript } from '@/components/meetings/MeetingScriptPanel';
@@ -97,6 +99,12 @@ const playJoinNotification = () => {
   }
 };
 
+interface PendingJoinRequest {
+  guestId: string;
+  guestName: string;
+  timestamp: number;
+}
+
 const PublicMeeting = () => {
   const { meetingId } = useParams<{ meetingId: string }>();
   const [guestName, setGuestName] = useState('');
@@ -121,6 +129,13 @@ const PublicMeeting = () => {
   const [callDuration, setCallDuration] = useState(0);
   const [isConnecting, setIsConnecting] = useState(true);
   const [waitingForGuests, setWaitingForGuests] = useState(false);
+  
+  // Participant admission state
+  const [pendingJoinRequests, setPendingJoinRequests] = useState<PendingJoinRequest[]>([]);
+  const [showPendingRequests, setShowPendingRequests] = useState(false);
+  const [waitingForAdmission, setWaitingForAdmission] = useState(false);
+  const [admissionRejected, setAdmissionRejected] = useState(false);
+  const processedJoinRequestsRef = useRef<Set<string>>(new Set());
   
   // Transcription state
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -473,14 +488,31 @@ const PublicMeeting = () => {
               }
             } else if (signal.signal_type === 'guest-joined') {
               console.log('[Host Realtime] Guest joined:', signal.signal_data);
-              // Play notification sound
               playJoinNotification();
-              // Show toast notification
               toast.success(`${signal.signal_data?.guestName || 'Participante'} entrou na reunião`, {
                 duration: 5000,
                 icon: '👤',
               });
               setWaitingForGuests(false);
+            } else if (signal.signal_type === 'join-request') {
+              // New admission request from guest
+              const reqData = signal.signal_data as any;
+              const guestReqId = reqData?.guestId || signal.from_user;
+              if (!processedJoinRequestsRef.current.has(guestReqId)) {
+                processedJoinRequestsRef.current.add(guestReqId);
+                console.log('[Host Realtime] Join request from:', reqData?.guestName);
+                playJoinNotification();
+                setPendingJoinRequests(prev => [...prev, {
+                  guestId: guestReqId,
+                  guestName: reqData?.guestName || 'Participante',
+                  timestamp: Date.now(),
+                }]);
+                setShowPendingRequests(true);
+                toast.info(`${reqData?.guestName || 'Participante'} quer entrar na reunião`, {
+                  duration: 10000,
+                  icon: '🔔',
+                });
+              }
             } else if (signal.signal_type === 'call-end') {
               handleEndCall();
             } else if (signal.signal_type === 'screen-share-status') {
@@ -740,61 +772,163 @@ const PublicMeeting = () => {
       // Wait for subscription to be ready
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Notify host that guest joined - use actual host UUID for global notification
+      // Instead of immediately connecting, send a join-request and wait for host approval
       if (hostId) {
         await supabase.from('meeting_signals').insert([{
           meeting_id: meetingId!,
           from_user: guestIdRef.current,
-          to_user: hostId,  // Use actual host UUID instead of 'host' string
-          signal_type: 'guest-joined',
+          to_user: 'host',
+          signal_type: 'join-request',
           signal_data: { guestName, guestId: guestIdRef.current },
         }]);
-        console.log('[Guest] Sent guest-joined signal to host:', hostId);
+        // Also send to host's UUID for global listener
+        await supabase.from('meeting_signals').insert([{
+          meeting_id: meetingId!,
+          from_user: guestIdRef.current,
+          to_user: hostId,
+          signal_type: 'join-request',
+          signal_data: { guestName, guestId: guestIdRef.current },
+        }]);
+        console.log('[Guest] Sent join-request to host, waiting for approval...');
+        setWaitingForAdmission(true);
       }
 
-      // Create and send offer
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true,
-      });
-      await pc.setLocalDescription(offer);
-      
-      await supabase.from('meeting_signals').insert([{
-        meeting_id: meetingId!,
-        from_user: guestIdRef.current,
-        to_user: 'host',
-        signal_type: 'offer',
-        signal_data: JSON.parse(JSON.stringify({ sdp: offer })),
-      }]);
+      // Listen for join-accepted or join-rejected signals
+      const admissionChannel = supabase
+        .channel(`admission-${meetingId}-${guestIdRef.current}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'meeting_signals',
+            filter: `meeting_id=eq.${meetingId}`,
+          },
+          async (payload) => {
+            const signal = payload.new as any;
+            if (signal.to_user !== guestIdRef.current) return;
 
-      console.log('Guest offer sent');
-      
-      // Poll for answer in case realtime misses it
-      const pollForAnswer = async () => {
-        if (hasRemoteDescriptionRef.current) return;
-        
-        const { data: answers } = await supabase
+            if (signal.signal_type === 'join-accepted') {
+              console.log('[Guest] Admission accepted by host!');
+              setWaitingForAdmission(false);
+              supabase.removeChannel(admissionChannel);
+
+              // Now proceed with WebRTC offer
+              const offer = await pc.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true,
+              });
+              await pc.setLocalDescription(offer);
+              
+              await supabase.from('meeting_signals').insert([{
+                meeting_id: meetingId!,
+                from_user: guestIdRef.current,
+                to_user: 'host',
+                signal_type: 'offer',
+                signal_data: JSON.parse(JSON.stringify({ sdp: offer })),
+              }]);
+
+              // Also notify host that guest joined
+              if (hostId) {
+                await supabase.from('meeting_signals').insert([{
+                  meeting_id: meetingId!,
+                  from_user: guestIdRef.current,
+                  to_user: hostId,
+                  signal_type: 'guest-joined',
+                  signal_data: { guestName, guestId: guestIdRef.current },
+                }]);
+              }
+
+              console.log('[Guest] Offer sent after admission');
+              
+              // Poll for answer
+              const pollForAnswer = async () => {
+                if (hasRemoteDescriptionRef.current) return;
+                
+                const { data: answers } = await supabase
+                  .from('meeting_signals')
+                  .select('*')
+                  .eq('meeting_id', meetingId!)
+                  .eq('to_user', guestIdRef.current)
+                  .eq('signal_type', 'answer')
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+                
+                if (answers && answers.length > 0 && pc.signalingState === 'have-local-offer') {
+                  const answerData = answers[0].signal_data as any;
+                  console.log('Found pending answer from host');
+                  await pc.setRemoteDescription(new RTCSessionDescription(answerData.sdp));
+                  hasRemoteDescriptionRef.current = true;
+                  await processIceCandidateQueue();
+                }
+              };
+              
+              setTimeout(pollForAnswer, 1000);
+              setTimeout(pollForAnswer, 3000);
+              setTimeout(pollForAnswer, 5000);
+
+            } else if (signal.signal_type === 'join-rejected') {
+              console.log('[Guest] Admission rejected by host');
+              setWaitingForAdmission(false);
+              setAdmissionRejected(true);
+              supabase.removeChannel(admissionChannel);
+              toast.error('O anfitrião recusou sua entrada na reunião');
+            }
+          }
+        )
+        .subscribe();
+
+      // Also poll for admission response
+      const pollAdmission = setInterval(async () => {
+        const { data: responses } = await supabase
           .from('meeting_signals')
           .select('*')
           .eq('meeting_id', meetingId!)
           .eq('to_user', guestIdRef.current)
-          .eq('signal_type', 'answer')
+          .in('signal_type', ['join-accepted', 'join-rejected'])
           .order('created_at', { ascending: false })
           .limit(1);
         
-        if (answers && answers.length > 0 && pc.signalingState === 'have-local-offer') {
-          const answerData = answers[0].signal_data as any;
-          console.log('Found pending answer from host');
-          await pc.setRemoteDescription(new RTCSessionDescription(answerData.sdp));
-          hasRemoteDescriptionRef.current = true;
-          await processIceCandidateQueue();
+        if (responses && responses.length > 0) {
+          const resp = responses[0];
+          if (resp.signal_type === 'join-accepted') {
+            clearInterval(pollAdmission);
+            // Trigger the same logic as realtime
+            setWaitingForAdmission(false);
+            supabase.removeChannel(admissionChannel);
+
+            const offer = await pc.createOffer({
+              offerToReceiveAudio: true,
+              offerToReceiveVideo: true,
+            });
+            await pc.setLocalDescription(offer);
+            
+            await supabase.from('meeting_signals').insert([{
+              meeting_id: meetingId!,
+              from_user: guestIdRef.current,
+              to_user: 'host',
+              signal_type: 'offer',
+              signal_data: JSON.parse(JSON.stringify({ sdp: offer })),
+            }]);
+
+            if (hostId) {
+              await supabase.from('meeting_signals').insert([{
+                meeting_id: meetingId!,
+                from_user: guestIdRef.current,
+                to_user: hostId,
+                signal_type: 'guest-joined',
+                signal_data: { guestName, guestId: guestIdRef.current },
+              }]);
+            }
+          } else if (resp.signal_type === 'join-rejected') {
+            clearInterval(pollAdmission);
+            setWaitingForAdmission(false);
+            setAdmissionRejected(true);
+            supabase.removeChannel(admissionChannel);
+            toast.error('O anfitrião recusou sua entrada na reunião');
+          }
         }
-      };
-      
-      // Poll a few times in case realtime is slow
-      setTimeout(pollForAnswer, 1000);
-      setTimeout(pollForAnswer, 3000);
-      setTimeout(pollForAnswer, 5000);
+      }, 2000);
 
     } catch (error) {
       console.error('Error initializing WebRTC as guest:', error);
@@ -822,6 +956,45 @@ const PublicMeeting = () => {
       initializeWebRTCAsHost();
     } else {
       initializeWebRTCAsGuest();
+    }
+  };
+
+  // ========== HOST: ACCEPT/REJECT GUEST ==========
+  const handleAcceptGuest = async (guest: PendingJoinRequest) => {
+    console.log('[Host] Accepting guest:', guest.guestName, guest.guestId);
+    
+    // Send join-accepted signal to the guest
+    await supabase.from('meeting_signals').insert([{
+      meeting_id: meetingId!,
+      from_user: 'host',
+      to_user: guest.guestId,
+      signal_type: 'join-accepted',
+      signal_data: { guestName: guest.guestName },
+    }]);
+
+    // Remove from pending list
+    setPendingJoinRequests(prev => prev.filter(r => r.guestId !== guest.guestId));
+    toast.success(`${guest.guestName} foi aceito na reunião`);
+  };
+
+  const handleRejectGuest = async (guest: PendingJoinRequest) => {
+    console.log('[Host] Rejecting guest:', guest.guestName, guest.guestId);
+    
+    await supabase.from('meeting_signals').insert([{
+      meeting_id: meetingId!,
+      from_user: 'host',
+      to_user: guest.guestId,
+      signal_type: 'join-rejected',
+      signal_data: { guestName: guest.guestName },
+    }]);
+
+    setPendingJoinRequests(prev => prev.filter(r => r.guestId !== guest.guestId));
+    toast.info(`${guest.guestName} foi recusado`);
+  };
+
+  const handleAcceptAllGuests = async () => {
+    for (const guest of pendingJoinRequests) {
+      await handleAcceptGuest(guest);
     }
   };
 
@@ -1228,6 +1401,51 @@ const PublicMeeting = () => {
     );
   }
 
+  // Guest waiting for admission
+  if (waitingForAdmission) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
+              <Loader2 className="h-8 w-8 text-primary animate-spin" />
+            </div>
+            <CardTitle>Aguardando aprovação</CardTitle>
+            <CardDescription>
+              O anfitrião precisa aceitar sua entrada na reunião. Por favor, aguarde...
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Guest admission rejected
+  if (admissionRejected) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="h-16 w-16 rounded-full bg-destructive/20 flex items-center justify-center mx-auto mb-4">
+              <UserX className="h-8 w-8 text-destructive" />
+            </div>
+            <CardTitle>Entrada recusada</CardTitle>
+            <CardDescription>
+              O anfitrião recusou sua entrada nesta reunião.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
   // Join screen
   if (!hasJoined) {
     return (
@@ -1317,24 +1535,97 @@ const PublicMeeting = () => {
           </div>
         </div>
 
-        {isHost && waitingForGuests && (
-          <Button variant="outline" size="sm" onClick={copyLink} className="mr-2">
-            {copied ? (
-              <Check className="h-4 w-4 mr-2 text-green-500" />
-            ) : (
-              <Copy className="h-4 w-4 mr-2" />
-            )}
-            Copiar Link
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Pending join requests button for host */}
+          {isHost && pendingJoinRequests.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPendingRequests(!showPendingRequests)}
+              className="relative"
+            >
+              <Bell className="h-4 w-4 mr-2" />
+              Solicitações
+              <Badge variant="destructive" className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                {pendingJoinRequests.length}
+              </Badge>
+            </Button>
+          )}
 
-        {isRecording && (
-          <div className="flex items-center gap-2 text-destructive">
-            <Circle className="h-3 w-3 fill-current animate-pulse" />
-            <span className="text-sm font-medium">REC {formatTime(recordingTime)}</span>
-          </div>
-        )}
+          {isHost && waitingForGuests && (
+            <Button variant="outline" size="sm" onClick={copyLink}>
+              {copied ? (
+                <Check className="h-4 w-4 mr-2 text-green-500" />
+              ) : (
+                <Copy className="h-4 w-4 mr-2" />
+              )}
+              Copiar Link
+            </Button>
+          )}
+
+          {isRecording && (
+            <div className="flex items-center gap-2 text-destructive">
+              <Circle className="h-3 w-3 fill-current animate-pulse" />
+              <span className="text-sm font-medium">REC {formatTime(recordingTime)}</span>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Pending Join Requests Panel */}
+      {isHost && showPendingRequests && pendingJoinRequests.length > 0 && (
+        <div className="absolute top-16 right-4 z-50 w-80 bg-background border rounded-lg shadow-xl">
+          <div className="flex items-center justify-between p-3 border-b">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="font-medium text-sm">Solicitações de Entrada</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" onClick={handleAcceptAllGuests} className="text-xs h-7">
+                <UserCheck className="h-3 w-3 mr-1" />
+                Aceitar todos
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowPendingRequests(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="max-h-60 overflow-y-auto">
+            {pendingJoinRequests.map((req) => (
+              <div key={req.guestId} className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-muted/50">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
+                    <span className="text-sm font-semibold text-primary">
+                      {req.guestName.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <span className="text-sm font-medium">{req.guestName}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                    onClick={() => handleAcceptGuest(req)}
+                    title="Aceitar"
+                  >
+                    <UserCheck className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                    onClick={() => handleRejectGuest(req)}
+                    title="Recusar"
+                  >
+                    <UserX className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Video area */}
       <div className="flex-1 relative bg-muted/50 overflow-hidden">
