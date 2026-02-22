@@ -59,7 +59,7 @@ const navigation = [{
   menuKey: "chat-equipe",
   showBadge: true
 }, {
-  name: "Reuniões",
+  name: "Sala de Reunião",
   href: "/reunioes",
   icon: Video,
   menuKey: "reunioes"
