@@ -398,22 +398,40 @@ const PublicMeeting = () => {
 
   // ========== UNIVERSAL: Process an offer from a peer ==========
   const processOffer = useCallback(async (fromPeerId: string, sdpData: any, stream: MediaStream) => {
-    const offerKey = `${fromPeerId}-offer`;
-    if (processedOffersRef.current.has(offerKey)) {
-      console.log(`[${myPeerId}] Already processed offer from ${fromPeerId}, skipping`);
-      return;
-    }
-    processedOffersRef.current.add(offerKey);
-
     const peerName = peerNamesRef.current.get(fromPeerId) || 'Participante';
-    
-    // Always create a fresh peer connection for incoming offers to avoid glare
+
+    // Check existing connection - if already connected and working, skip
     let pc = peerConnectionsRef.current.get(fromPeerId);
     if (pc) {
-      // Close existing connection to avoid conflicts
-      pc.close();
-      peerConnectionsRef.current.delete(fromPeerId);
-      hasRemoteDescriptionsRef.current.delete(fromPeerId);
+      if (pc.connectionState === 'connected') {
+        console.log(`[${myPeerId}] Already connected to ${peerName}, skipping offer`);
+        return;
+      }
+      // Handle glare: both sides sent offers simultaneously
+      // Use lexicographic comparison to decide who yields
+      if (pc.signalingState === 'have-local-offer') {
+        if (myPeerId > fromPeerId) {
+          // We yield: close our outgoing offer PC and accept theirs
+          console.log(`[${myPeerId}] Glare with ${peerName}: we yield and accept their offer`);
+          pc.close();
+          peerConnectionsRef.current.delete(fromPeerId);
+          hasRemoteDescriptionsRef.current.delete(fromPeerId);
+        } else {
+          // They should yield: ignore their offer, keep ours
+          console.log(`[${myPeerId}] Glare with ${peerName}: they should yield, ignoring their offer`);
+          return;
+        }
+      } else if (pc.signalingState !== 'stable' && pc.signalingState !== 'closed') {
+        console.log(`[${myPeerId}] PC for ${peerName} in state ${pc.signalingState}, closing and recreating`);
+        pc.close();
+        peerConnectionsRef.current.delete(fromPeerId);
+        hasRemoteDescriptionsRef.current.delete(fromPeerId);
+      } else {
+        // Stable or closed - recreate
+        pc.close();
+        peerConnectionsRef.current.delete(fromPeerId);
+        hasRemoteDescriptionsRef.current.delete(fromPeerId);
+      }
     }
     
     pc = createPeerConnection(fromPeerId, peerName, stream);
@@ -447,7 +465,6 @@ const PublicMeeting = () => {
       setIsConnecting(false);
     } catch (error) {
       console.error(`[${myPeerId}] Error processing offer from ${peerName}:`, error);
-      processedOffersRef.current.delete(offerKey);
     }
   }, [meetingId, myPeerId, createPeerConnection]);
 
@@ -656,7 +673,8 @@ const PublicMeeting = () => {
         
         for (const offer of pendingOffers) {
           const fromPeerId = offer.from_user;
-          if (processedOffersRef.current.has(`${fromPeerId}-offer`)) continue;
+          const existingPc = peerConnectionsRef.current.get(fromPeerId);
+          if (existingPc?.connectionState === 'connected') continue;
           if (peerNamesRef.current.has(fromPeerId)) {
             await processOffer(fromPeerId, (offer.signal_data as any).sdp, currentStream);
           }
@@ -825,14 +843,18 @@ const PublicMeeting = () => {
             const currentStream = localStreamRef.current;
             if (!currentStream) return;
 
-            // Connect to host only - existing guests will send offers to us
+            // Connect to host first
             peerNamesRef.current.set('host', hostName || 'Anfitrião');
             await sendOfferToPeer('host', hostName || 'Anfitrião', currentStream);
 
-            // Register names of existing peers so we can label them when they connect
+            // Also send offers to all existing guests for redundancy
+            // Glare is handled in processOffer using lexicographic ID comparison
             for (const peer of existingPeers) {
               if (peer.peerId !== guestIdRef.current) {
                 peerNamesRef.current.set(peer.peerId, peer.peerName);
+                // Small delay to avoid overwhelming signaling
+                await new Promise(r => setTimeout(r, 500));
+                await sendOfferToPeer(peer.peerId, peer.peerName, currentStream);
               }
             }
 
@@ -874,11 +896,11 @@ const PublicMeeting = () => {
         if (offers) {
           for (const offer of offers) {
             const fromPeerId = offer.from_user;
-            if (!processedOffersRef.current.has(`${fromPeerId}-offer`)) {
-              const pName = peerNamesRef.current.get(fromPeerId) || 'Participante';
-              peerNamesRef.current.set(fromPeerId, pName);
-              await processOffer(fromPeerId, (offer.signal_data as any).sdp, currentStream);
-            }
+            const existingPc = peerConnectionsRef.current.get(fromPeerId);
+            if (existingPc?.connectionState === 'connected') continue;
+            const pName = peerNamesRef.current.get(fromPeerId) || 'Participante';
+            peerNamesRef.current.set(fromPeerId, pName);
+            await processOffer(fromPeerId, (offer.signal_data as any).sdp, currentStream);
           }
         }
       }, 3000);
