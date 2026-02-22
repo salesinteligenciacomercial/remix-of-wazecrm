@@ -778,12 +778,18 @@ const PublicMeeting = () => {
               const newPeerData = signal.signal_data as any;
               const newPeerId = newPeerData.peerId;
               const newPeerName = newPeerData.peerName;
-              console.log(`[Guest] New peer notification: ${newPeerName} (${newPeerId})`);
+              console.log(`[Guest ${guestIdRef.current}] New peer notification: ${newPeerName} (${newPeerId})`);
               
               const currentStream = localStreamRef.current;
-              if (currentStream && !peerConnectionsRef.current.has(newPeerId)) {
-                peerNamesRef.current.set(newPeerId, newPeerName);
-                await sendOfferToPeer(newPeerId, newPeerName, currentStream);
+              if (currentStream && newPeerId !== guestIdRef.current) {
+                const existingPc = peerConnectionsRef.current.get(newPeerId);
+                if (!existingPc || existingPc.connectionState === 'failed' || existingPc.connectionState === 'closed') {
+                  peerNamesRef.current.set(newPeerId, newPeerName);
+                  // Small delay to let the new guest finish setting up their realtime channel
+                  await new Promise(r => setTimeout(r, 1500));
+                  console.log(`[Guest ${guestIdRef.current}] Sending offer to new peer: ${newPeerName}`);
+                  await sendOfferToPeer(newPeerId, newPeerName, currentStream);
+                }
               }
             } else if (signal.signal_type === 'join-accepted') {
               console.log('[Guest] Admission accepted!');
@@ -847,14 +853,12 @@ const PublicMeeting = () => {
             peerNamesRef.current.set('host', hostName || 'Anfitrião');
             await sendOfferToPeer('host', hostName || 'Anfitrião', currentStream);
 
-            // Also send offers to all existing guests for redundancy
-            // Glare is handled in processOffer using lexicographic ID comparison
+            // Register existing peers names but do NOT send offers to them.
+            // Existing guests will send offers to us via the 'new-peer-joined' signal.
+            // This avoids glare (both sides sending offers simultaneously).
             for (const peer of existingPeers) {
               if (peer.peerId !== guestIdRef.current) {
                 peerNamesRef.current.set(peer.peerId, peer.peerName);
-                // Small delay to avoid overwhelming signaling
-                await new Promise(r => setTimeout(r, 500));
-                await sendOfferToPeer(peer.peerId, peer.peerName, currentStream);
               }
             }
 
