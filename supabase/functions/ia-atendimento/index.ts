@@ -50,7 +50,7 @@ serve(async (req) => {
       
       if (config?.custom_prompts) {
         const customPrompts = config.custom_prompts as any;
-        const prompt = customPrompts.atendimento?.prompt || customPrompts.atendimento || customPrompts.default || null;
+        const prompt = customPrompts.atendimento?.custom_prompt || customPrompts.atendimento?.prompt || customPrompts.default || null;
         promptPersonalizado = typeof prompt === 'string' ? prompt : null;
         
         // Extrair base de conhecimento
