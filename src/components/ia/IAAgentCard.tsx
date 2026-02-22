@@ -198,9 +198,9 @@ export function IAAgentCard({
   
   const { updateAgentConfig, testAgent, loading } = useAIAgents();
   
-  // Carregar funis e etapas disponíveis
+  // Carregar configurações salvas e funis/etapas disponíveis
   useEffect(() => {
-    const loadFunnelsAndStages = async () => {
+    const loadAllConfig = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
@@ -212,6 +212,59 @@ export function IAAgentCard({
           .single();
           
         if (!userRole?.company_id) return;
+        
+        // Carregar configurações salvas da IA
+        const { data: iaConfig } = await supabase
+          .from('ia_configurations')
+          .select('custom_prompts')
+          .eq('company_id', userRole.company_id)
+          .maybeSingle();
+        
+        if (iaConfig?.custom_prompts) {
+          const prompts = iaConfig.custom_prompts as any;
+          const agentData = prompts[id];
+          if (agentData) {
+            if (agentData.custom_prompt) setCustomPrompt(agentData.custom_prompt);
+            if (agentData.auto_response !== undefined) setAutoResponse(agentData.auto_response);
+            if (agentData.transfer_on_unknown !== undefined) setTransferOnUnknown(agentData.transfer_on_unknown);
+            if (agentData.max_responses_per_conversation) setMaxResponses(agentData.max_responses_per_conversation);
+            if (agentData.response_delay !== undefined) setResponseDelay(agentData.response_delay);
+            if (agentData.pause_on_human_response !== undefined) setPauseOnHumanResponse(agentData.pause_on_human_response);
+            if (agentData.follow_up_enabled !== undefined) setFollowUpEnabled(agentData.follow_up_enabled);
+            if (agentData.follow_up_time) setFollowUpTime(agentData.follow_up_time);
+            if (agentData.follow_up_time_unit) setFollowUpTimeUnit(agentData.follow_up_time_unit);
+            if (agentData.follow_up_message) setFollowUpMessage(agentData.follow_up_message);
+            if (agentData.max_follow_ups) setMaxFollowUps(agentData.max_follow_ups);
+            if (agentData.use_lead_phone_auto !== undefined) setUseLeadPhoneAuto(agentData.use_lead_phone_auto);
+            if (agentData.block_by_tags !== undefined) setBlockByTags(agentData.block_by_tags);
+            if (agentData.blocked_tags) setBlockedTags(agentData.blocked_tags);
+            if (agentData.read_conversation_history !== undefined) setReadConversationHistory(agentData.read_conversation_history);
+            if (agentData.history_messages_count) setHistoryMessagesCount(agentData.history_messages_count);
+            if (agentData.block_by_funnel !== undefined) setBlockByFunnel(agentData.block_by_funnel);
+            if (agentData.blocked_funnels) setBlockedFunnels(agentData.blocked_funnels);
+            if (agentData.blocked_stages) setBlockedStages(agentData.blocked_stages);
+            // Base de Conhecimento
+            const kb = agentData.knowledge_base;
+            if (kb) {
+              if (kb.empresa) {
+                setEmpresaNome(kb.empresa.nome || '');
+                setEmpresaDescricao(kb.empresa.descricao || '');
+                setEmpresaSegmento(kb.empresa.segmento || '');
+                setEmpresaHorario(kb.empresa.horario || '');
+                setEmpresaEndereco(kb.empresa.endereco || '');
+                setEmpresaContato(kb.empresa.contato || '');
+              }
+              if (kb.produtos) setProdutos(kb.produtos);
+              if (kb.faqs) setFaqs(kb.faqs);
+              if (kb.informacoes_extras) setInformacoesExtras(kb.informacoes_extras);
+              if (kb.arquivos) setArquivos(kb.arquivos.map((a: any) => ({ ...a, status: 'pronto', tamanho: 0, dataUpload: new Date() })));
+              if (kb.casos_antes_depois) setCasosAntesDepois(kb.casos_antes_depois.map((c: any) => ({ ...c, dataCadastro: new Date() })));
+              if (kb.agendas_selecionadas) setSelectedAgendas(kb.agendas_selecionadas);
+            }
+            // Treinamentos
+            if (agentData.training_data) setTreinamentos(agentData.training_data);
+          }
+        }
         
         // Carregar funis
         const { data: funis } = await supabase
@@ -249,14 +302,14 @@ export function IAAgentCard({
           })));
         }
       } catch (error) {
-        console.error('Erro ao carregar funis/etapas:', error);
+        console.error('Erro ao carregar configurações:', error);
       }
     };
     
     if (configOpen) {
-      loadFunnelsAndStages();
+      loadAllConfig();
     }
-  }, [configOpen]);
+  }, [configOpen, id]);
 
   // Auto-scroll para o fim do chat
   useEffect(() => {
@@ -2176,53 +2229,23 @@ export function IAAgentCard({
                   </TabsContent>
                   
                   <TabsContent value="prompt" className="space-y-4 mt-4">
-                    {customPrompt && !promptEditing ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-base">Prompt Personalizado</Label>
-                          <Badge variant="outline" className="gap-1">
-                            <CheckCircle className="h-3 w-3 text-green-500" />
-                            Salvo
-                          </Badge>
-                        </div>
-                        <div 
-                          className="p-4 border rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors group"
-                          onClick={() => setPromptEditing(true)}
-                        >
-                          <p className="text-sm text-muted-foreground line-clamp-3 font-mono">{customPrompt}</p>
-                          <p className="text-xs text-primary mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                            <Settings className="h-3 w-3" />
-                            Clique para editar
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <Label>Prompt Personalizado</Label>
-                          {customPrompt && (
-                            <Button variant="ghost" size="sm" onClick={() => setPromptEditing(false)}>
-                              <Eye className="h-4 w-4 mr-1" />
-                              Minimizar
-                            </Button>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Adicione instruções específicas para personalizar o comportamento da IA.
-                          Deixe em branco para usar o prompt padrão.
-                        </p>
-                        <Textarea
-                          placeholder={`Exemplo: 
+                    <div className="space-y-2">
+                      <Label>Prompt Personalizado</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Adicione instruções específicas para personalizar o comportamento da IA.
+                        Deixe em branco para usar o prompt padrão.
+                      </p>
+                      <Textarea
+                        placeholder={`Exemplo: 
 - Sempre mencione que oferecemos 30% de desconto para novos clientes
 - Foque em destacar os benefícios do nosso serviço
 - Se o cliente perguntar sobre preço, sugira uma consulta gratuita`}
-                          value={customPrompt}
-                          onChange={(e) => setCustomPrompt(e.target.value)}
-                          rows={10}
-                          className="font-mono text-sm"
-                        />
-                      </div>
-                    )}
+                        value={customPrompt}
+                        onChange={(e) => setCustomPrompt(e.target.value)}
+                        rows={10}
+                        className="font-mono text-sm"
+                      />
+                    </div>
                     
                     <div className="p-4 bg-muted/50 rounded-lg">
                       <h4 className="font-semibold mb-2">Variáveis disponíveis:</h4>
