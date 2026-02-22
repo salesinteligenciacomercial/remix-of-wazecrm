@@ -803,11 +803,6 @@ const PublicMeeting = () => {
                   await sendOfferToPeer(newPeerId, newPeerName, currentStream);
                 }
               }
-            } else if (signal.signal_type === 'kick-participant') {
-              // Host kicked this guest
-              console.log('[Guest] Kicked by host!');
-              toast.error('Você foi removido da reunião pelo anfitrião');
-              handleEndCall();
             } else if (signal.signal_type === 'join-accepted') {
               console.log('[Guest] Admission accepted!');
               setWaitingForAdmission(false);
@@ -1002,39 +997,6 @@ const PublicMeeting = () => {
 
     setPendingJoinRequests(prev => prev.filter(r => r.guestId !== guest.guestId));
     toast.success(`${guest.guestName} foi aceito na reunião`);
-  };
-
-  // ========== HOST: KICK PARTICIPANT ==========
-  const handleKickParticipant = async (peerId: string, peerName: string) => {
-    console.log('[Host] Kicking participant:', peerName, peerId);
-    
-    // Send kick signal
-    await supabase.from('meeting_signals').insert([{
-      meeting_id: meetingId!,
-      from_user: 'host',
-      to_user: peerId,
-      signal_type: 'kick-participant',
-      signal_data: {},
-    }]);
-
-    // Close the peer connection
-    const pc = peerConnectionsRef.current.get(peerId);
-    if (pc) {
-      pc.close();
-      peerConnectionsRef.current.delete(peerId);
-    }
-    
-    // Remove from remote participants
-    setRemoteParticipants(prev => {
-      const newMap = new Map(prev);
-      newMap.delete(peerId);
-      return newMap;
-    });
-    peerNamesRef.current.delete(peerId);
-    hasRemoteDescriptionsRef.current.delete(peerId);
-    iceCandidateQueuesRef.current.delete(peerId);
-
-    toast.success(`${peerName} foi removido da reunião`);
   };
 
   const handleRejectGuest = async (guest: PendingJoinRequest) => {
@@ -1749,20 +1711,7 @@ const PublicMeeting = () => {
                   <span className="text-sm font-medium">{participant.name}</span>
                   {peerId === 'host' && <span className="text-xs text-muted-foreground ml-1">(Anfitrião)</span>}
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-green-500" />
-                  {isHost && peerId !== 'host' && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                      onClick={() => handleKickParticipant(peerId, participant.name)}
-                      title="Remover participante"
-                    >
-                      <UserX className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
+                <span className="h-2 w-2 rounded-full bg-green-500" />
               </div>
             ))}
           </div>
@@ -1795,13 +1744,7 @@ const PublicMeeting = () => {
             {/* Local video in grid */}
             <div className="relative bg-muted/80 overflow-hidden rounded-sm min-h-0 min-w-0">
               <video
-                ref={(el) => {
-                  localVideoRef.current = el;
-                  if (el && localStream && el.srcObject !== localStream) {
-                    el.srcObject = localStream;
-                    el.play().catch(console.warn);
-                  }
-                }}
+                ref={localVideoRef}
                 autoPlay
                 playsInline
                 muted
@@ -1839,13 +1782,7 @@ const PublicMeeting = () => {
             {/* Local video full screen when alone */}
             <div className="flex-1 relative">
               <video
-                ref={(el) => {
-                  localVideoRef.current = el;
-                  if (el && localStream && el.srcObject !== localStream) {
-                    el.srcObject = localStream;
-                    el.play().catch(console.warn);
-                  }
-                }}
+                ref={localVideoRef}
                 autoPlay
                 playsInline
                 muted
