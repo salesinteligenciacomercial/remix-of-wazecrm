@@ -1167,7 +1167,7 @@ export default function Analytics() {
       </Card>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className={`grid w-full h-auto p-1 ${(isMasterAccount || isSegmentoFinanceiro(companySegmento)) ? 'grid-cols-8' : 'grid-cols-7'}`}>
+        <TabsList className={`grid w-full h-auto p-1 ${(isMasterAccount || isSegmentoFinanceiro(companySegmento)) ? 'grid-cols-6' : 'grid-cols-5'}`}>
           <TabsTrigger value="overview" className="gap-2 py-3">
             <Eye className="h-4 w-4" />
             <span className="hidden sm:inline">Visão Geral</span>
@@ -1186,17 +1186,9 @@ export default function Analytics() {
             <Megaphone className="h-4 w-4" />
             <span className="hidden sm:inline">Campanhas</span>
           </TabsTrigger>
-          <TabsTrigger value="communication" className="gap-2 py-3">
-            <MessageSquare className="h-4 w-4" />
-            <span className="hidden sm:inline">Comunicação</span>
-          </TabsTrigger>
-          <TabsTrigger value="productivity" className="gap-2 py-3">
-            <CheckCircle className="h-4 w-4" />
-            <span className="hidden sm:inline">Produtividade</span>
-          </TabsTrigger>
-          <TabsTrigger value="reports" className="gap-2 py-3">
-            <BarChart3 className="h-4 w-4" />
-            <span className="hidden sm:inline">Relatórios</span>
+          <TabsTrigger value="operations" className="gap-2 py-3">
+            <Activity className="h-4 w-4" />
+            <span className="hidden sm:inline">Equipe & Operações</span>
           </TabsTrigger>
           <TabsTrigger value="customize" className="gap-2 py-3">
             <Cake className="h-4 w-4" />
@@ -1674,1207 +1666,842 @@ export default function Analytics() {
           <CampaignAnalytics userCompanyId={userCompanyId} globalFilters={globalFilters} />
         </TabsContent>
 
-        <TabsContent value="communication" className="space-y-6">
-          {/* KPIs de Comunicação */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <Card className="border-0 shadow-card group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-blue-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
-                  Total de Conversas
-                </CardTitle>
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
-                  <MessageSquare className="h-5 w-5 text-blue-600" />
-                </div>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-bold text-blue-600">{communicationStats.totalConversas}</div>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-xs text-muted-foreground">Ativas no período</p>
-                  <Badge variant="secondary" className="text-blue-600 text-xs">
-                    <ArrowUpRight className="h-3 w-3 mr-1" />
-                    18%
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
+        {/* Equipe & Operações - Unificado */}
+        <TabsContent value="operations" className="space-y-6">
+          <Tabs defaultValue="communication" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-4">
+              <TabsTrigger value="communication" className="gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Comunicação
+              </TabsTrigger>
+              <TabsTrigger value="productivity" className="gap-2">
+                <CheckCircle className="h-4 w-4" />
+                Produtividade
+              </TabsTrigger>
+              <TabsTrigger value="reports" className="gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Relatórios
+              </TabsTrigger>
+            </TabsList>
 
-            <Card className="border-0 shadow-card group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 to-green-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
-                  Taxa de Resposta
-                </CardTitle>
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
-                </div>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-bold text-green-600">{communicationStats.taxaResposta}%</div>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-xs text-muted-foreground">Mensagens respondidas</p>
-                  <Badge variant="secondary" className="text-green-600 text-xs">
-                    <ArrowUpRight className="h-3 w-3 mr-1" />
-                    5%
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-purple-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
-                  Tempo Médio de Resposta
-                </CardTitle>
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
-                  <Clock className="h-5 w-5 text-purple-600" />
-                </div>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-bold text-purple-600">{communicationStats.tempoMedioResposta}h</div>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-xs text-muted-foreground">Para primeira resposta</p>
-                  <Badge variant="secondary" className="text-red-600 text-xs">
-                    <ArrowDownRight className="h-3 w-3 mr-1" />
-                    -12%
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-orange-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
-                  Satisfação Estimada
-                </CardTitle>
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
-                  <UserCheck className="h-5 w-5 text-orange-600" />
-                </div>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-bold text-orange-600">{communicationStats.satisfacao}%</div>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-xs text-muted-foreground">Baseado em padrões</p>
-                  <Badge variant="secondary" className="text-orange-600 text-xs">
-                    <ArrowUpRight className="h-3 w-3 mr-1" />
-                    3%
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Conversas por Canal */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  Distribuição por Canal
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Volume de conversas em cada canal de comunicação
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {communicationStats.conversasPorCanal.map((canal, index) => <div key={canal.canal} className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full ${canal.canal === 'WhatsApp' ? 'bg-green-500' : canal.canal === 'Instagram' ? 'bg-pink-500' : 'bg-blue-500'}`} />
-                          <span className="font-medium">{canal.canal}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {canal.quantidade} conversas
-                          </Badge>
-                        </div>
-                        <div className="text-sm font-semibold">
-                          {(canal.quantidade / communicationStats.totalConversas * 100).toFixed(1)}%
-                        </div>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-3">
-                        <div className={`h-3 rounded-full transition-all duration-1000 ease-out ${canal.canal === 'WhatsApp' ? 'bg-green-500' : canal.canal === 'Instagram' ? 'bg-pink-500' : 'bg-blue-500'}`} style={{
-                      width: `${canal.quantidade / communicationStats.totalConversas * 100}%`,
-                      animationDelay: `${index * 200}ms`
-                    }} />
-                      </div>
-                    </div>)}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <PieChart className="h-5 w-5 text-primary" />
-                  Volume por Canal
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Quantidade de conversas em cada canal
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="h-64">
-                  <Bar data={{
-                  labels: communicationStats.conversasPorCanal.length > 0 ? communicationStats.conversasPorCanal.map(c => c.canal) : ['WhatsApp'],
-                  datasets: [{
-                    label: 'Conversas',
-                    data: communicationStats.conversasPorCanal.length > 0 ? communicationStats.conversasPorCanal.map(c => c.quantidade) : [communicationStats.totalConversas],
-                    backgroundColor: communicationStats.conversasPorCanal.map(c => c.canal.toLowerCase() === 'whatsapp' ? '#22c55e' : c.canal.toLowerCase() === 'instagram' ? '#ec4899' : '#3b82f6'),
-                    borderRadius: 4
-                  }]
-                }} options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      display: false
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: function (context) {
-                          return `${context.parsed.y} conversas`;
-                        }
-                      }
-                    }
-                  },
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      ticks: {
-                        stepSize: 1
-                      }
-                    }
-                  }
-                }} />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Análise de Engajamento por Horário */}
-          <Card className="border-0 shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-primary" />
-                Engajamento por Horário
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Momentos de maior atividade e resposta da equipe
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <Line data={{
-                labels: ['06h', '08h', '10h', '12h', '14h', '16h', '18h', '20h'],
-                datasets: [{
-                  label: 'Mensagens Recebidas',
-                  data: [12, 45, 78, 95, 87, 76, 54, 23],
-                  borderColor: '#3b82f6',
-                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                  tension: 0.4,
-                  fill: true
-                }, {
-                  label: 'Respostas da Equipe',
-                  data: [8, 38, 65, 82, 71, 58, 42, 15],
-                  borderColor: '#22c55e',
-                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                  tension: 0.4,
-                  fill: true
-                }]
-              }} options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'top' as const
-                  },
-                  tooltip: {
-                    mode: 'index',
-                    intersect: false
-                  }
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    grid: {
-                      display: true,
-                      color: 'rgba(0, 0, 0, 0.1)'
-                    }
-                  },
-                  x: {
-                    grid: {
-                      display: false
-                    }
-                  }
-                },
-                interaction: {
-                  mode: 'nearest',
-                  axis: 'x',
-                  intersect: false
-                }
-              }} />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Análise de Sentimento e Qualidade */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-primary" />
-                  Análise de Sentimento
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Classificação automática dos sentimentos nas conversas
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-green-50 border border-green-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full bg-green-500" />
-                      <span className="font-medium text-green-800">Positivo</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-green-800">68%</div>
-                      <div className="text-sm text-green-600">245 conversas</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-yellow-50 border border-yellow-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full bg-yellow-500" />
-                      <span className="font-medium text-yellow-800">Neutro</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-yellow-800">24%</div>
-                      <div className="text-sm text-yellow-600">87 conversas</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-red-50 border border-red-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full bg-red-500" />
-                      <span className="font-medium text-red-800">Negativo</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-red-800">8%</div>
-                      <div className="text-sm text-red-600">29 conversas</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserCheck className="h-5 w-5 text-primary" />
-                  Performance da Equipe
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Ranking de atendimento por responsável
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {companyUsers.length === 0 ? <div className="text-center py-6 text-muted-foreground">
-                      <UserCheck className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">Nenhum usuário encontrado na empresa</p>
-                      </div> : companyUsers.slice(0, 5).map((user, index) => <div key={user.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="text-sm font-semibold text-primary">{index + 1}</span>
-                      </div>
-                      <div>
-                            <p className="font-medium">{user.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {index === 0 ? '95%' : index === 1 ? '89%' : index === 2 ? '82%' : index === 3 ? '78%' : '75%'} satisfação
-                            </p>
-                      </div>
-                    </div>
-                        <Badge variant={index === 0 ? "default" : index < 3 ? "secondary" : "outline"} className={index === 0 ? "bg-green-100 text-green-800" : ""}>
-                          {index === 0 ? 'Excelente' : index < 3 ? 'Muito Bom' : 'Bom'}
-                        </Badge>
-                  </div>)}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Insights e Recomendações */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-500" />
-                  Alertas de Comunicação
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
-                    <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-amber-800">Tempo de resposta alto no Instagram</p>
-                      <p className="text-sm text-amber-700">3.2h médio - considere aumentar equipe</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 border border-red-200">
-                    <XCircle className="h-5 w-5 text-red-500 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-red-800">Taxa de resposta baixa aos finais de semana</p>
-                      <p className="text-sm text-red-700">Apenas 45% - configure escalas específicas</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-green-500" />
-                  Oportunidades de Otimização
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
-                    <TrendingUp className="h-5 w-5 text-green-500 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-green-800">Implemente chatbots no Facebook</p>
-                      <p className="text-sm text-green-700">Pode reduzir tempo de resposta em 60%</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
-                    <Target className="h-5 w-5 text-blue-500 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-blue-800">Crie respostas rápidas padronizadas</p>
-                      <p className="text-sm text-blue-700">Para perguntas frequentes sobre preços</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* Produtividade */}
-        <TabsContent value="productivity" className="space-y-6">
-          {/* KPIs de Produtividade */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <Card className="border-0 shadow-card group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 to-green-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
-                  Tarefas Concluídas
-                </CardTitle>
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                </div>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-bold text-green-600">{productivityStats.tarefasConcluidas}</div>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-xs text-muted-foreground">De {productivityStats.tarefasCriadas} criadas</p>
-                  <Badge variant="secondary" className="text-green-600 text-xs">
-                    <ArrowUpRight className="h-3 w-3 mr-1" />
-                    15%
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-blue-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
-                  Taxa de Conclusão
-                </CardTitle>
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
-                  <TrendingUp className="h-5 w-5 text-blue-600" />
-                </div>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-bold text-blue-600">{productivityStats.taxaConclusao}%</div>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-xs text-muted-foreground">Média da equipe</p>
-                  <Badge variant="secondary" className="text-blue-600 text-xs">
-                    <ArrowUpRight className="h-3 w-3 mr-1" />
-                    8%
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-purple-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
-                  Agendamentos Realizados
-                </CardTitle>
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
-                  <CalendarDays className="h-5 w-5 text-purple-600" />
-                </div>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-bold text-purple-600">{productivityStats.compromissosRealizados}</div>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-xs text-muted-foreground">De {productivityStats.compromissosAgendados} marcados</p>
-                  <Badge variant="secondary" className="text-purple-600 text-xs">
-                    <ArrowUpRight className="h-3 w-3 mr-1" />
-                    12%
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-orange-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
-                  Tempo Médio por Tarefa
-                </CardTitle>
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
-                  <Clock className="h-5 w-5 text-orange-600" />
-                </div>
-              </CardHeader>
-              <CardContent className="relative">
-                <div className="text-3xl font-bold text-orange-600">{productivityStats.tempoMedioTarefa}h</div>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-xs text-muted-foreground">Por tarefa concluída</p>
-                  <Badge variant="secondary" className="text-red-600 text-xs">
-                    <ArrowDownRight className="h-3 w-3 mr-1" />
-                    -5%
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Status das Tarefas */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  Distribuição de Tarefas
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Status atual de todas as tarefas do sistema
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="h-64">
-                  <Doughnut data={{
-                  labels: ['Concluídas', 'Em Andamento', 'Pendentes', 'Atrasadas'],
-                  datasets: [{
-                    data: [productivityStats.tarefasConcluidas, productivityStats.tarefasEmAndamento, productivityStats.tarefasPendentes, productivityStats.tarefasAtrasadas],
-                    backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444'],
-                    borderWidth: 2,
-                    borderColor: '#ffffff'
-                  }]
-                }} options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'bottom' as const,
-                      labels: {
-                        padding: 20,
-                        usePointStyle: true
-                      }
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: function (context) {
-                          const value = context.parsed;
-                          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-                          const percentage = total > 0 ? (value / total * 100).toFixed(1) : '0';
-                          return `${context.label}: ${value} (${percentage}%)`;
-                        }
-                      }
-                    }
-                  }
-                }} />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CalendarDays className="h-5 w-5 text-primary" />
-                  Taxa de Comparecimento
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Eficiência nos agendamentos e compromissos
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Comparecimento</span>
-                    <span className="text-2xl font-bold text-green-600">{productivityStats.taxaComparecimento}%</span>
-                  </div>
-                  <Progress value={productivityStats.taxaComparecimento} className="h-3" />
-
-                  <div className="grid grid-cols-2 gap-4 mt-6">
-                    <div className="text-center p-3 rounded-lg bg-green-50">
-                      <div className="text-2xl font-bold text-green-600">{productivityStats.compromissosRealizados}</div>
-                      <div className="text-sm text-green-700">Realizados</div>
-                    </div>
-                    <div className="text-center p-3 rounded-lg bg-red-50">
-                      <div className="text-2xl font-bold text-red-600">
-                        {productivityStats.compromissosAgendados - productivityStats.compromissosRealizados}
-                      </div>
-                      <div className="text-sm text-red-700">Faltaram</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Produtividade por Dia da Semana */}
-          <Card className="border-0 shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                Produtividade por Dia da Semana
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Análise de performance da equipe ao longo da semana
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <Bar data={{
-                labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
-                datasets: [{
-                  label: 'Tarefas Concluídas',
-                  data: [12, 15, 18, 14, 16, 8, 5],
-                  backgroundColor: '#3b82f6',
-                  borderRadius: 4
-                }, {
-                  label: 'Compromissos Realizados',
-                  data: [8, 10, 12, 9, 11, 4, 2],
-                  backgroundColor: '#22c55e',
-                  borderRadius: 4
-                }]
-              }} options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'top' as const
-                  },
-                  tooltip: {
-                    mode: 'index',
-                    intersect: false
-                  }
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    grid: {
-                      display: true,
-                      color: 'rgba(0, 0, 0, 0.1)'
-                    }
-                  },
-                  x: {
-                    grid: {
-                      display: false
-                    }
-                  }
-                },
-                interaction: {
-                  mode: 'nearest',
-                  axis: 'x',
-                  intersect: false
-                }
-              }} />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Ranking de Produtividade da Equipe */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserCheck className="h-5 w-5 text-primary" />
-                  Ranking de Produtividade
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Performance individual da equipe
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {companyUsers.length === 0 ? <div className="text-center py-6 text-muted-foreground">
-                      <Trophy className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">Nenhum usuário encontrado na empresa</p>
-                    </div> : companyUsers.slice(0, 5).map((user, index) => <div key={user.id} className={`flex items-center justify-between p-3 rounded-lg ${index === 0 ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200' : 'bg-muted/30'}`}>
-                    <div className="flex items-center gap-3">
-                          <div className={`${index === 0 ? 'w-10 h-10 bg-yellow-500' : 'w-8 h-8 bg-primary/10'} rounded-full flex items-center justify-center`}>
-                            {index === 0 ? <Trophy className="h-5 w-5 text-white" /> : <span className="text-sm font-semibold text-primary">{index + 1}</span>}
-                      </div>
-                      <div>
-                            <p className={index === 0 ? "font-bold" : "font-medium"}>{user.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {Math.max(28 - index * 4, 10)} tarefas • {Math.max(95 - index * 7, 70)}% conclusão
-                            </p>
-                      </div>
-                    </div>
-                        <Badge variant={index === 0 ? "default" : index < 3 ? "secondary" : "outline"} className={index === 0 ? "bg-yellow-100 text-yellow-800" : ""}>
-                          {index === 0 ? '🏆 #1' : index < 3 ? 'Muito Bom' : 'Bom'}
-                        </Badge>
-                  </div>)}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-primary" />
-                  Tempo Gasto por Tipo
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Distribuição do tempo por categoria de tarefa
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full bg-blue-500" />
-                      <span className="font-medium text-blue-800">Atendimento</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-blue-800">45%</div>
-                      <div className="text-sm text-blue-600">18h/semana</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-green-50 border border-green-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full bg-green-500" />
-                      <span className="font-medium text-green-800">Vendas</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-green-800">30%</div>
-                      <div className="text-sm text-green-600">12h/semana</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-purple-50 border border-purple-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full bg-purple-500" />
-                      <span className="font-medium text-purple-800">Administrativo</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-purple-800">15%</div>
-                      <div className="text-sm text-purple-600">6h/semana</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-orange-50 border border-orange-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full bg-orange-500" />
-                      <span className="font-medium text-orange-800">Outros</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-orange-800">10%</div>
-                      <div className="text-sm text-orange-600">4h/semana</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Insights e Recomendações */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-500" />
-                  Alertas de Produtividade
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
-                    <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-amber-800">Taxa de conclusão baixa aos finais de semana</p>
-                      <p className="text-sm text-amber-700">Apenas 35% - considere redistribuir tarefas</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 border border-red-200">
-                    <XCircle className="h-5 w-5 text-red-500 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-red-800">Faltas em agendamentos frequentes</p>
-                      <p className="text-sm text-red-700">15% de ausência - revisar processo de confirmação</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-green-500" />
-                  Oportunidades de Melhoria
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
-                    <TrendingUp className="h-5 w-5 text-green-500 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-green-800">Implemente lembretes automáticos</p>
-                      <p className="text-sm text-green-700">Pode aumentar comparecimento em 25%</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
-                    <Target className="h-5 w-5 text-blue-500 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-blue-800">Otimize distribuição de tarefas</p>
-                      <p className="text-sm text-blue-700">Equilibre carga entre membros da equipe</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* Relatórios */}
-        <TabsContent value="reports" className="space-y-6">
-          {/* Filtros Avançados */}
-          <Card className="border-0 shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
-                Filtros Avançados de Relatório
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Configure os parâmetros para gerar relatórios personalizados
-              </p>
-            </CardHeader>
-            <CardContent>
+            {/* Sub-tab: Comunicação */}
+            <TabsContent value="communication" className="space-y-6">
+              {/* KPIs de Comunicação */}
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Período</label>
-                  <Select value={globalFilters.period} onValueChange={value => setGlobalFilters(prev => ({
-                  ...prev,
-                  period: value
-                }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todo o período</SelectItem>
-                      <SelectItem value="today">Hoje</SelectItem>
-                      <SelectItem value="week">Última semana</SelectItem>
-                      <SelectItem value="month">Último mês</SelectItem>
-                      <SelectItem value="quarter">Último trimestre</SelectItem>
-                      <SelectItem value="year">Último ano</SelectItem>
-                      <SelectItem value="custom">Período customizado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Responsável</label>
-                  <Select value={globalFilters.responsible || "all"} onValueChange={value => setGlobalFilters(prev => ({
-                  ...prev,
-                  responsible: value === 'all' ? undefined : value
-                }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Todos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      {companyUsers.map(user => <SelectItem key={user.id} value={user.id}>
-                          {user.name}
-                        </SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Equipe</label>
-                  <Select value={globalFilters.team || "all"} onValueChange={value => setGlobalFilters(prev => ({
-                  ...prev,
-                  team: value === 'all' ? undefined : value
-                }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Todas" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="vendas">Vendas</SelectItem>
-                      <SelectItem value="atendimento">Atendimento</SelectItem>
-                      <SelectItem value="marketing">Marketing</SelectItem>
-                      <SelectItem value="gerencia">Gerência</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Canal</label>
-                  <Select value={globalFilters.channel || "all"} onValueChange={value => setGlobalFilters(prev => ({
-                  ...prev,
-                  channel: value === 'all' ? undefined : value
-                }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Todos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                      <SelectItem value="instagram">Instagram</SelectItem>
-                      <SelectItem value="facebook">Facebook</SelectItem>
-                      <SelectItem value="telefone">Telefone</SelectItem>
-                      <SelectItem value="email">E-mail</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <Button onClick={fetchAllStats} variant="outline" size="sm">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Aplicar Filtros
-                </Button>
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  Limpar Filtros
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Templates de Relatório */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <Card className="border-0 shadow-card hover:shadow-xl transition-all duration-300 cursor-pointer group">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-green-600">
-                  <Trophy className="h-5 w-5" />
-                  Performance de Vendas
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Análise completa de leads, conversões e pipeline
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span>Leads convertidos</span>
-                    <Badge variant="secondary">{reportStats.totalGanhos}</Badge>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Taxa de conversão</span>
-                    <Badge variant="secondary">{reportStats.taxaConversao}%</Badge>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Valor total</span>
-                    <Badge variant="secondary">R$ {reportStats.valorTotalGanhos.toLocaleString()}</Badge>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <Button size="sm" className="flex-1">
-                    <Download className="h-4 w-4 mr-2" />
-                    PDF
-                  </Button>
-                  <Button size="sm" variant="outline" className="flex-1">
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Excel
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card hover:shadow-xl transition-all duration-300 cursor-pointer group">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-blue-600">
-                  <MessageSquare className="h-5 w-5" />
-                  Relatório de Comunicação
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Métricas de conversas e engajamento por canal
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span>Total de conversas</span>
-                    <Badge variant="secondary">{communicationStats.totalConversas}</Badge>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Taxa de resposta</span>
-                    <Badge variant="secondary">{communicationStats.taxaResposta}%</Badge>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Satisfação</span>
-                    <Badge variant="secondary">{communicationStats.satisfacao}%</Badge>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <Button size="sm" className="flex-1">
-                    <Download className="h-4 w-4 mr-2" />
-                    PDF
-                  </Button>
-                  <Button size="sm" variant="outline" className="flex-1">
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Excel
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-card hover:shadow-xl transition-all duration-300 cursor-pointer group">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-purple-600">
-                  <CheckCircle className="h-5 w-5" />
-                  Produtividade da Equipe
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Análise de tarefas, agenda e eficiência
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span>Tarefas concluídas</span>
-                    <Badge variant="secondary">{productivityStats.tarefasConcluidas}</Badge>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Taxa de conclusão</span>
-                    <Badge variant="secondary">{productivityStats.taxaConclusao}%</Badge>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Comparecimento</span>
-                    <Badge variant="secondary">{productivityStats.taxaComparecimento}%</Badge>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <Button size="sm" className="flex-1">
-                    <Download className="h-4 w-4 mr-2" />
-                    PDF
-                  </Button>
-                  <Button size="sm" variant="outline" className="flex-1">
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Excel
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Relatórios Customizáveis */}
-          <Card className="border-0 shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5 text-primary" />
-                Relatório Customizado
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Crie relatórios personalizados com métricas específicas
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-3">
-                    <h4 className="font-medium">Métricas de Vendas</h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <input type="checkbox" id="metric1" className="rounded" defaultChecked />
-                        <label htmlFor="metric1" className="text-sm">Total de Leads</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input type="checkbox" id="metric2" className="rounded" defaultChecked />
-                        <label htmlFor="metric2" className="text-sm">Taxa de Conversão</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input type="checkbox" id="metric3" className="rounded" defaultChecked />
-                        <label htmlFor="metric3" className="text-sm">Valor em Pipeline</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input type="checkbox" id="metric4" className="rounded" />
-                        <label htmlFor="metric4" className="text-sm">Ticket Médio</label>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h4 className="font-medium">Métricas de Comunicação</h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <input type="checkbox" id="comm1" className="rounded" />
-                        <label htmlFor="comm1" className="text-sm">Total de Conversas</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input type="checkbox" id="comm2" className="rounded" />
-                        <label htmlFor="comm2" className="text-sm">Taxa de Resposta</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input type="checkbox" id="comm3" className="rounded" />
-                        <label htmlFor="comm3" className="text-sm">Tempo Médio de Resposta</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input type="checkbox" id="comm4" className="rounded" />
-                        <label htmlFor="comm4" className="text-sm">Satisfação por Canal</label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-4 border-t">
-                  <Button>
-                    <Download className="h-4 w-4 mr-2" />
-                    Gerar Relatório
-                  </Button>
-                  <Button variant="outline">
-                    <CalendarDays className="h-4 w-4 mr-2" />
-                    Agendar Relatório
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Relatórios Agendados */}
-          <Card className="border-0 shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarDays className="h-5 w-5 text-primary" />
-                Relatórios Agendados
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Configure relatórios automáticos por e-mail
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                      <Trophy className="h-5 w-5 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Relatório Semanal de Vendas</p>
-                      <p className="text-sm text-muted-foreground">Enviado toda segunda-feira às 09:00</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-green-100 text-green-800">Ativo</Badge>
-                    <Button variant="ghost" size="sm">
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <Card className="border-0 shadow-card group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-blue-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                      Total de Conversas
+                    </CardTitle>
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
                       <MessageSquare className="h-5 w-5 text-blue-600" />
                     </div>
-                    <div>
-                      <p className="font-medium">Relatório de Comunicação</p>
-                      <p className="text-sm text-muted-foreground">Enviado todo dia 1º às 08:00</p>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-bold text-blue-600">{communicationStats.totalConversas}</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-muted-foreground">Ativas no período</p>
+                      <Badge variant="secondary" className="text-blue-600 text-xs">
+                        <ArrowUpRight className="h-3 w-3 mr-1" />
+                        18%
+                      </Badge>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-green-100 text-green-800">Ativo</Badge>
-                    <Button variant="ghost" size="sm">
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
 
-                <div className="text-center py-6 text-muted-foreground">
-                  <CalendarDays className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">Configure novos relatórios agendados</p>
-                  <Button variant="outline" size="sm" className="mt-2">
-                    <CalendarDays className="h-4 w-4 mr-2" />
-                    Novo Relatório Agendado
-                  </Button>
-                </div>
+                <Card className="border-0 shadow-card group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 to-green-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                      Taxa de Resposta
+                    </CardTitle>
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
+                      <TrendingUp className="h-5 w-5 text-green-600" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-bold text-green-600">{communicationStats.taxaResposta}%</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-muted-foreground">Mensagens respondidas</p>
+                      <Badge variant="secondary" className="text-green-600 text-xs">
+                        <ArrowUpRight className="h-3 w-3 mr-1" />
+                        5%
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-card group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-purple-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                      Tempo Médio de Resposta
+                    </CardTitle>
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
+                      <Clock className="h-5 w-5 text-purple-600" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-bold text-purple-600">{communicationStats.tempoMedioResposta}h</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-muted-foreground">Para primeira resposta</p>
+                      <Badge variant="secondary" className="text-red-600 text-xs">
+                        <ArrowDownRight className="h-3 w-3 mr-1" />
+                        -12%
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-card group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-orange-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                      Satisfação Estimada
+                    </CardTitle>
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
+                      <UserCheck className="h-5 w-5 text-orange-600" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-bold text-orange-600">{communicationStats.satisfacao}%</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-muted-foreground">Baseado em padrões</p>
+                      <Badge variant="secondary" className="text-orange-600 text-xs">
+                        <ArrowUpRight className="h-3 w-3 mr-1" />
+                        3%
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Histórico de Exportações */}
-          <Card className="border-0 shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Download className="h-5 w-5 text-primary" />
-                Histórico de Exportações
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Últimos relatórios exportados e compartilhados
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                      <Download className="h-4 w-4 text-green-600" />
+              {/* Conversas por Canal */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card className="border-0 shadow-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-primary" />
+                      Distribuição por Canal
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Volume de conversas em cada canal de comunicação
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {communicationStats.conversasPorCanal.map((canal, index) => <div key={canal.canal} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-3 h-3 rounded-full ${canal.canal === 'WhatsApp' ? 'bg-green-500' : canal.canal === 'Instagram' ? 'bg-pink-500' : 'bg-blue-500'}`} />
+                              <span className="font-medium">{canal.canal}</span>
+                              <Badge variant="outline" className="text-xs">
+                                {canal.quantidade} conversas
+                              </Badge>
+                            </div>
+                            <div className="text-sm font-semibold">
+                              {(canal.quantidade / communicationStats.totalConversas * 100).toFixed(1)}%
+                            </div>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div className={`h-3 rounded-full transition-all duration-1000 ease-out ${canal.canal === 'WhatsApp' ? 'bg-green-500' : canal.canal === 'Instagram' ? 'bg-pink-500' : 'bg-blue-500'}`} style={{
+                          width: `${canal.quantidade / communicationStats.totalConversas * 100}%`,
+                          animationDelay: `${index * 200}ms`
+                        }} />
+                          </div>
+                        </div>)}
                     </div>
-                    <div>
-                      <p className="font-medium">Relatório de Vendas - Outubro 2025</p>
-                      <p className="text-sm text-muted-foreground">PDF • 2.3 MB • Há 2 horas</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm">
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      <Share2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
 
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                      <Download className="h-4 w-4 text-blue-600" />
+                <Card className="border-0 shadow-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <PieChart className="h-5 w-5 text-primary" />
+                      Volume por Canal
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Quantidade de conversas em cada canal
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-64">
+                      <Bar data={{
+                      labels: communicationStats.conversasPorCanal.length > 0 ? communicationStats.conversasPorCanal.map(c => c.canal) : ['WhatsApp'],
+                      datasets: [{
+                        label: 'Conversas',
+                        data: communicationStats.conversasPorCanal.length > 0 ? communicationStats.conversasPorCanal.map(c => c.quantidade) : [communicationStats.totalConversas],
+                        backgroundColor: communicationStats.conversasPorCanal.map(c => c.canal.toLowerCase() === 'whatsapp' ? '#22c55e' : c.canal.toLowerCase() === 'instagram' ? '#ec4899' : '#3b82f6'),
+                        borderRadius: 4
+                      }]
+                    }} options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          display: false
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: function (context) {
+                              return `${context.parsed.y} conversas`;
+                            }
+                          }
+                        }
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          ticks: {
+                            stepSize: 1
+                          }
+                        }
+                      }
+                    }} />
                     </div>
-                    <div>
-                      <p className="font-medium">Análise de Produtividade - Outubro 2025</p>
-                      <p className="text-sm text-muted-foreground">Excel • 1.8 MB • Há 1 dia</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm">
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      <Share2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="text-center py-4 text-muted-foreground">
-                  <Download className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">Nenhum arquivo mais antigo encontrado</p>
-                </div>
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
+
+              {/* Engajamento por Horário */}
+              <Card className="border-0 shadow-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-primary" />
+                    Engajamento por Horário
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Momentos de maior atividade e resposta da equipe
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <Line data={{
+                    labels: ['06h', '08h', '10h', '12h', '14h', '16h', '18h', '20h'],
+                    datasets: [{
+                      label: 'Mensagens Recebidas',
+                      data: [12, 45, 78, 95, 87, 76, 54, 23],
+                      borderColor: '#3b82f6',
+                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                      tension: 0.4,
+                      fill: true
+                    }, {
+                      label: 'Respostas da Equipe',
+                      data: [8, 38, 65, 82, 71, 58, 42, 15],
+                      borderColor: '#22c55e',
+                      backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                      tension: 0.4,
+                      fill: true
+                    }]
+                  }} options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: 'top' as const
+                      },
+                      tooltip: {
+                        mode: 'index',
+                        intersect: false
+                      }
+                    },
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        grid: {
+                          display: true,
+                          color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                      },
+                      x: {
+                        grid: {
+                          display: false
+                        }
+                      }
+                    },
+                    interaction: {
+                      mode: 'nearest',
+                      axis: 'x',
+                      intersect: false
+                    }
+                  }} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Sentimento e Performance */}
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card className="border-0 shadow-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-primary" />
+                      Análise de Sentimento
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-green-50 border border-green-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full bg-green-500" />
+                          <span className="font-medium text-green-800">Positivo</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-green-800">68%</div>
+                          <div className="text-sm text-green-600">245 conversas</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full bg-yellow-500" />
+                          <span className="font-medium text-yellow-800">Neutro</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-yellow-800">24%</div>
+                          <div className="text-sm text-yellow-600">87 conversas</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-red-50 border border-red-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full bg-red-500" />
+                          <span className="font-medium text-red-800">Negativo</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-red-800">8%</div>
+                          <div className="text-sm text-red-600">29 conversas</div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <UserCheck className="h-5 w-5 text-primary" />
+                      Performance da Equipe
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {companyUsers.length === 0 ? <div className="text-center py-6 text-muted-foreground">
+                          <UserCheck className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">Nenhum usuário encontrado na empresa</p>
+                          </div> : companyUsers.slice(0, 5).map((user, index) => <div key={user.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <span className="text-sm font-semibold text-primary">{index + 1}</span>
+                          </div>
+                          <div>
+                                <p className="font-medium">{user.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {index === 0 ? '95%' : index === 1 ? '89%' : index === 2 ? '82%' : index === 3 ? '78%' : '75%'} satisfação
+                                </p>
+                          </div>
+                        </div>
+                            <Badge variant={index === 0 ? "default" : index < 3 ? "secondary" : "outline"} className={index === 0 ? "bg-green-100 text-green-800" : ""}>
+                              {index === 0 ? 'Excelente' : index < 3 ? 'Muito Bom' : 'Bom'}
+                            </Badge>
+                      </div>)}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* Sub-tab: Produtividade */}
+            <TabsContent value="productivity" className="space-y-6">
+              {/* KPIs de Produtividade */}
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <Card className="border-0 shadow-card group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 to-green-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                      Tarefas Concluídas
+                    </CardTitle>
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
+                      <CheckCircle className="h-5 w-5 text-green-600" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-bold text-green-600">{productivityStats.tarefasConcluidas}</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-muted-foreground">De {productivityStats.tarefasCriadas} criadas</p>
+                      <Badge variant="secondary" className="text-green-600 text-xs">
+                        <ArrowUpRight className="h-3 w-3 mr-1" />
+                        15%
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-card group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-blue-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                      Taxa de Conclusão
+                    </CardTitle>
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
+                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-bold text-blue-600">{productivityStats.taxaConclusao}%</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-muted-foreground">Média da equipe</p>
+                      <Badge variant="secondary" className="text-blue-600 text-xs">
+                        <ArrowUpRight className="h-3 w-3 mr-1" />
+                        8%
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-card group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-purple-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                      Agendamentos Realizados
+                    </CardTitle>
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
+                      <CalendarDays className="h-5 w-5 text-purple-600" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-bold text-purple-600">{productivityStats.compromissosRealizados}</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-muted-foreground">De {productivityStats.compromissosAgendados} marcados</p>
+                      <Badge variant="secondary" className="text-purple-600 text-xs">
+                        <ArrowUpRight className="h-3 w-3 mr-1" />
+                        12%
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-card group relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-orange-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
+                      Tempo Médio por Tarefa
+                    </CardTitle>
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-background to-muted group-hover:scale-110 transition-transform duration-300">
+                      <Clock className="h-5 w-5 text-orange-600" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="relative">
+                    <div className="text-3xl font-bold text-orange-600">{productivityStats.tempoMedioTarefa}h</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-muted-foreground">Por tarefa concluída</p>
+                      <Badge variant="secondary" className="text-red-600 text-xs">
+                        <ArrowDownRight className="h-3 w-3 mr-1" />
+                        -5%
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Status das Tarefas e Comparecimento */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card className="border-0 shadow-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-primary" />
+                      Distribuição de Tarefas
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-64">
+                      <Doughnut data={{
+                      labels: ['Concluídas', 'Em Andamento', 'Pendentes', 'Atrasadas'],
+                      datasets: [{
+                        data: [productivityStats.tarefasConcluidas, productivityStats.tarefasEmAndamento, productivityStats.tarefasPendentes, productivityStats.tarefasAtrasadas],
+                        backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                      }]
+                    }} options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: 'bottom' as const,
+                          labels: {
+                            padding: 20,
+                            usePointStyle: true
+                          }
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: function (context) {
+                              const value = context.parsed;
+                              const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                              const percentage = total > 0 ? (value / total * 100).toFixed(1) : '0';
+                              return `${context.label}: ${value} (${percentage}%)`;
+                            }
+                          }
+                        }
+                      }
+                    }} />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CalendarDays className="h-5 w-5 text-primary" />
+                      Taxa de Comparecimento
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Comparecimento</span>
+                        <span className="text-2xl font-bold text-green-600">{productivityStats.taxaComparecimento}%</span>
+                      </div>
+                      <Progress value={productivityStats.taxaComparecimento} className="h-3" />
+                      <div className="grid grid-cols-2 gap-4 mt-6">
+                        <div className="text-center p-3 rounded-lg bg-green-50">
+                          <div className="text-2xl font-bold text-green-600">{productivityStats.compromissosRealizados}</div>
+                          <div className="text-sm text-green-700">Realizados</div>
+                        </div>
+                        <div className="text-center p-3 rounded-lg bg-red-50">
+                          <div className="text-2xl font-bold text-red-600">
+                            {productivityStats.compromissosAgendados - productivityStats.compromissosRealizados}
+                          </div>
+                          <div className="text-sm text-red-700">Faltaram</div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Produtividade por Dia e Ranking */}
+              <Card className="border-0 shadow-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                    Produtividade por Dia da Semana
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <Bar data={{
+                    labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+                    datasets: [{
+                      label: 'Tarefas Concluídas',
+                      data: [12, 15, 18, 14, 16, 8, 5],
+                      backgroundColor: '#3b82f6',
+                      borderRadius: 4
+                    }, {
+                      label: 'Compromissos Realizados',
+                      data: [8, 10, 12, 9, 11, 4, 2],
+                      backgroundColor: '#22c55e',
+                      borderRadius: 4
+                    }]
+                  }} options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: 'top' as const
+                      }
+                    },
+                    scales: {
+                      y: {
+                        beginAtZero: true
+                      }
+                    }
+                  }} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Ranking */}
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card className="border-0 shadow-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <UserCheck className="h-5 w-5 text-primary" />
+                      Ranking de Produtividade
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {companyUsers.length === 0 ? <div className="text-center py-6 text-muted-foreground">
+                          <Trophy className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">Nenhum usuário encontrado na empresa</p>
+                        </div> : companyUsers.slice(0, 5).map((user, index) => <div key={user.id} className={`flex items-center justify-between p-3 rounded-lg ${index === 0 ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200' : 'bg-muted/30'}`}>
+                        <div className="flex items-center gap-3">
+                              <div className={`${index === 0 ? 'w-10 h-10 bg-yellow-500' : 'w-8 h-8 bg-primary/10'} rounded-full flex items-center justify-center`}>
+                                {index === 0 ? <Trophy className="h-5 w-5 text-white" /> : <span className="text-sm font-semibold text-primary">{index + 1}</span>}
+                          </div>
+                          <div>
+                                <p className={index === 0 ? "font-bold" : "font-medium"}>{user.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {Math.max(28 - index * 4, 10)} tarefas • {Math.max(95 - index * 7, 70)}% conclusão
+                                </p>
+                          </div>
+                        </div>
+                            <Badge variant={index === 0 ? "default" : index < 3 ? "secondary" : "outline"} className={index === 0 ? "bg-yellow-100 text-yellow-800" : ""}>
+                              {index === 0 ? '🏆 #1' : index < 3 ? 'Muito Bom' : 'Bom'}
+                            </Badge>
+                      </div>)}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock className="h-5 w-5 text-primary" />
+                      Tempo Gasto por Tipo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full bg-blue-500" />
+                          <span className="font-medium text-blue-800">Atendimento</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-blue-800">45%</div>
+                          <div className="text-sm text-blue-600">18h/semana</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-green-50 border border-green-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full bg-green-500" />
+                          <span className="font-medium text-green-800">Vendas</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-green-800">30%</div>
+                          <div className="text-sm text-green-600">12h/semana</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-purple-50 border border-purple-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full bg-purple-500" />
+                          <span className="font-medium text-purple-800">Administrativo</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-purple-800">15%</div>
+                          <div className="text-sm text-purple-600">6h/semana</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-orange-50 border border-orange-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full bg-orange-500" />
+                          <span className="font-medium text-orange-800">Outros</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-orange-800">10%</div>
+                          <div className="text-sm text-orange-600">4h/semana</div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* Sub-tab: Relatórios */}
+            <TabsContent value="reports" className="space-y-6">
+              {/* Templates de Relatório */}
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <Card className="border-0 shadow-card hover:shadow-xl transition-all duration-300 cursor-pointer group">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-green-600">
+                      <Trophy className="h-5 w-5" />
+                      Performance de Vendas
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Análise completa de leads, conversões e pipeline
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span>Leads convertidos</span>
+                        <Badge variant="secondary">{reportStats.totalGanhos}</Badge>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Taxa de conversão</span>
+                        <Badge variant="secondary">{reportStats.taxaConversao}%</Badge>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Valor total</span>
+                        <Badge variant="secondary">R$ {reportStats.valorTotalGanhos.toLocaleString()}</Badge>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <Button size="sm" className="flex-1">
+                        <Download className="h-4 w-4 mr-2" />
+                        PDF
+                      </Button>
+                      <Button size="sm" variant="outline" className="flex-1">
+                        <Share2 className="h-4 w-4 mr-2" />
+                        Excel
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-card hover:shadow-xl transition-all duration-300 cursor-pointer group">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-blue-600">
+                      <MessageSquare className="h-5 w-5" />
+                      Relatório de Comunicação
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Métricas de conversas e engajamento por canal
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span>Total de conversas</span>
+                        <Badge variant="secondary">{communicationStats.totalConversas}</Badge>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Taxa de resposta</span>
+                        <Badge variant="secondary">{communicationStats.taxaResposta}%</Badge>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Satisfação</span>
+                        <Badge variant="secondary">{communicationStats.satisfacao}%</Badge>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <Button size="sm" className="flex-1">
+                        <Download className="h-4 w-4 mr-2" />
+                        PDF
+                      </Button>
+                      <Button size="sm" variant="outline" className="flex-1">
+                        <Share2 className="h-4 w-4 mr-2" />
+                        Excel
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-card hover:shadow-xl transition-all duration-300 cursor-pointer group">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-purple-600">
+                      <CheckCircle className="h-5 w-5" />
+                      Produtividade da Equipe
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Análise de tarefas, agenda e eficiência
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span>Tarefas concluídas</span>
+                        <Badge variant="secondary">{productivityStats.tarefasConcluidas}</Badge>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Taxa de conclusão</span>
+                        <Badge variant="secondary">{productivityStats.taxaConclusao}%</Badge>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Comparecimento</span>
+                        <Badge variant="secondary">{productivityStats.taxaComparecimento}%</Badge>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <Button size="sm" className="flex-1">
+                        <Download className="h-4 w-4 mr-2" />
+                        PDF
+                      </Button>
+                      <Button size="sm" variant="outline" className="flex-1">
+                        <Share2 className="h-4 w-4 mr-2" />
+                        Excel
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Relatório Customizado */}
+              <Card className="border-0 shadow-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5 text-primary" />
+                    Relatório Customizado
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Crie relatórios personalizados com métricas específicas
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-3">
+                        <h4 className="font-medium">Métricas de Vendas</h4>
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <input type="checkbox" id="metric1" className="rounded" defaultChecked />
+                            <label htmlFor="metric1" className="text-sm">Total de Leads</label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input type="checkbox" id="metric2" className="rounded" defaultChecked />
+                            <label htmlFor="metric2" className="text-sm">Taxa de Conversão</label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input type="checkbox" id="metric3" className="rounded" defaultChecked />
+                            <label htmlFor="metric3" className="text-sm">Valor em Pipeline</label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input type="checkbox" id="metric4" className="rounded" />
+                            <label htmlFor="metric4" className="text-sm">Ticket Médio</label>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h4 className="font-medium">Métricas de Comunicação</h4>
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <input type="checkbox" id="comm1" className="rounded" />
+                            <label htmlFor="comm1" className="text-sm">Total de Conversas</label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input type="checkbox" id="comm2" className="rounded" />
+                            <label htmlFor="comm2" className="text-sm">Taxa de Resposta</label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input type="checkbox" id="comm3" className="rounded" />
+                            <label htmlFor="comm3" className="text-sm">Tempo Médio de Resposta</label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input type="checkbox" id="comm4" className="rounded" />
+                            <label htmlFor="comm4" className="text-sm">Satisfação por Canal</label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-4 border-t">
+                      <Button>
+                        <Download className="h-4 w-4 mr-2" />
+                        Gerar Relatório
+                      </Button>
+                      <Button variant="outline">
+                        <CalendarDays className="h-4 w-4 mr-2" />
+                        Agendar Relatório
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         {/* Aniversariantes */}
