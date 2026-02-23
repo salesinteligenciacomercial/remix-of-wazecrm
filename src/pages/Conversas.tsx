@@ -1295,19 +1295,55 @@ function Conversas() {
           });
 
           // Mesclar novas conversas preservando avatares E assignedUser
+          // ⚡ CORREÇÃO CRÍTICA: Preservar mensagens existentes das conversas
+          // O sync de 30s trazia apenas 1 mensagem por conversa, apagando mensagens em tempo real
+          const existingMessagesMap = new Map<string, Message[]>();
+          prev.forEach(c => {
+            const phoneKey = c.phoneNumber || c.id;
+            if (c.messages && c.messages.length > 1) {
+              existingMessagesMap.set(phoneKey, c.messages);
+            }
+          });
+
           const merged = (allConversations as Conversation[]).map(conv => {
             const phoneKey = conv.phoneNumber || conv.id;
             const existingAvatar = avatarMap.get(phoneKey);
             const existingAssignedUser = assignedUserMap.get(phoneKey);
             const existingResponsavel = responsavelMap.get(phoneKey);
+            const existingMessages = existingMessagesMap.get(phoneKey);
+            
+            // Se a conversa existente já tem mais mensagens (carregadas ou recebidas em tempo real),
+            // mesclar: manter as existentes e adicionar apenas novas do banco
+            let finalMessages = conv.messages;
+            if (existingMessages && existingMessages.length > conv.messages.length) {
+              // Verificar se a mensagem mais recente do banco já existe nas existentes
+              const newBankMsg = conv.messages[0]; // loadAllUniqueConversations retorna 1 msg
+              const alreadyExists = existingMessages.some(m => m.id === newBankMsg?.id);
+              if (alreadyExists) {
+                finalMessages = existingMessages; // Manter mensagens existentes intactas
+              } else if (newBankMsg) {
+                // Mensagem nova do banco que não existe localmente - adicionar
+                finalMessages = [...existingMessages, newBankMsg].sort((a, b) => {
+                  const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+                  const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+                  return timeA - timeB;
+                });
+              }
+            }
+            
+            // Atualizar lastMessage e status com base na mensagem mais recente do banco
+            const latestMsg = finalMessages[finalMessages.length - 1];
+            
             return {
               ...conv,
+              messages: finalMessages,
+              lastMessage: latestMsg?.content || conv.lastMessage,
               avatarUrl: existingAvatar || conv.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(conv.contactName)}&background=0ea5e9&color=fff`,
               assignedUser: conv.assignedUser || existingAssignedUser,
               responsavel: conv.responsavel || existingResponsavel
             };
           });
-          console.log(`✅ [LOAD-ALL] ${avatarMap.size} avatares, ${assignedUserMap.size} assignedUsers preservados`);
+          console.log(`✅ [LOAD-ALL] ${avatarMap.size} avatares, ${assignedUserMap.size} assignedUsers, ${existingMessagesMap.size} conversas com mensagens preservadas`);
           return merged;
         });
 
@@ -3995,22 +4031,45 @@ function Conversas() {
         // ⚡ CORREÇÃO: Remover duplicatas finais por ID e timestamp (caso ainda existam)
         const mensagensFinais = messagensCompletas.filter((m, index, self) => index === self.findIndex(msg => msg.id === m.id || msg.content === m.content && Math.abs(msg.timestamp.getTime() - m.timestamp.getTime()) < 1000));
 
-        // Atualizar a conversa selecionada
+        // ⚡ CORREÇÃO CRÍTICA: Mesclar mensagens do histórico com mensagens em tempo real
+        // Em vez de substituir, combinar ambas e deduplicar por ID
         setSelectedConv(prev => {
           if (prev && prev.phoneNumber === phoneNumber) {
+            // Combinar mensagens do histórico com as existentes (que incluem as de tempo real)
+            const existingIds = new Set(mensagensFinais.map(m => m.id));
+            const realtimeOnly = prev.messages.filter(m => !existingIds.has(m.id));
+            const merged = [...mensagensFinais, ...realtimeOnly].sort((a, b) => {
+              const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+              const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+              return timeA - timeB;
+            });
+            // Deduplicar por ID (última ocorrência ganha)
+            const seenIds = new Set<string>();
+            const deduped = merged.filter(m => { if (seenIds.has(m.id)) return false; seenIds.add(m.id); return true; });
             return {
               ...prev,
-              messages: mensagensFinais
+              messages: deduped
             };
           }
           return prev;
         });
 
-        // Atualizar conversa na lista
-        setConversations(prev => prev.map(conv => conv.phoneNumber === phoneNumber ? {
-          ...conv,
-          messages: mensagensFinais
-        } : conv));
+        // Atualizar conversa na lista (mesclar também)
+        setConversations(prev => prev.map(conv => {
+          if (conv.phoneNumber === phoneNumber) {
+            const existingIds = new Set(mensagensFinais.map(m => m.id));
+            const realtimeOnly = conv.messages.filter(m => !existingIds.has(m.id));
+            const merged = [...mensagensFinais, ...realtimeOnly].sort((a, b) => {
+              const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+              const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+              return timeA - timeB;
+            });
+            const seenIds2 = new Set<string>();
+            const deduped = merged.filter(m => { if (seenIds2.has(m.id)) return false; seenIds2.add(m.id); return true; });
+            return { ...conv, messages: deduped };
+          }
+          return conv;
+        }));
 
         // Estatísticas
         setHistoryStats(prev => ({
