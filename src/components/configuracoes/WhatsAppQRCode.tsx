@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ export function WhatsAppQRCode() {
   const [instanceName, setInstanceName] = useState("");
   const [showNewInstance, setShowNewInstance] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const [apiUrl, setApiUrl] = useState("https://evolution-evolution-api.kxuvcf.easypanel.host");
+  const [apiUrl, setApiUrl] = useState("https://evolution-evolution-api.0ntuaf.easypanel.host");
   const [creationMode, setCreationMode] = useState<"qrcode" | "manual">("qrcode");
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
@@ -28,11 +28,12 @@ export function WhatsAppQRCode() {
   const [editApiKeyMap, setEditApiKeyMap] = useState<Record<string, string>>({});
   const [editApiUrlMap, setEditApiUrlMap] = useState<Record<string, string>>({});
   const [savingMap, setSavingMap] = useState<Record<string, boolean>>({});
+  const [pollingActive, setPollingActive] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     loadConnections();
 
-    // Assinar atualizações em tempo real da tabela
     let unsubscribe: (() => void) | null = null;
     (async () => {
       try {
@@ -52,7 +53,6 @@ export function WhatsAppQRCode() {
           table: 'whatsapp_connections',
           filter: `company_id=eq.${userRole.company_id}`
         }, (payload) => {
-          // Recarregar na mudança
           loadConnections();
           if (payload.eventType === 'UPDATE') {
             const updated: any = payload.new as any;
@@ -63,7 +63,10 @@ export function WhatsAppQRCode() {
               if (updated.status === 'disconnected') {
                 toast.error(`Instância ${updated.instance_name} desconectou`);
               } else if (updated.status === 'connected') {
-                toast.success(`Instância ${updated.instance_name} conectada`);
+                toast.success(`Instância ${updated.instance_name} conectada!`);
+                // Stop polling when connected
+                stopPolling();
+                setQrCode("");
               }
             }
           }
@@ -77,103 +80,71 @@ export function WhatsAppQRCode() {
 
     return () => {
       if (unsubscribe) unsubscribe();
+      stopPolling();
     };
   }, []);
 
-  // Ocultar criador assim que existir qualquer conexão
   useEffect(() => {
     if (connections.length > 0 && showNewInstance) {
       setShowNewInstance(false);
     }
   }, [connections.length]);
 
-  const performHealthChecks = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    setPollingActive(false);
+  }, []);
 
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', user.id)
-        .single();
+  const startPolling = useCallback((instName: string, compId: string) => {
+    stopPolling();
+    setPollingActive(true);
+    
+    const poll = async () => {
+      try {
+        console.log('🔍 [POLLING] Verificando status da instância:', instName);
+        const { data, error } = await supabase.functions.invoke('evolution-create-instance', {
+          body: { action: 'check_status', instanceName: instName, companyId: compId }
+        });
 
-      if (!userRole?.company_id) return;
-
-      const { data: connections } = await supabase
-        .from('whatsapp_connections')
-        .select('*')
-        .eq('company_id', userRole.company_id)
-        .eq('status', 'connected');
-
-      if (!connections) return;
-
-      // 🔒 CORREÇÃO: Health check apenas para ATUALIZAR para connected
-      // NÃO desconectar automaticamente - apenas desconexão manual
-      const healthCheckPromises = connections.map(async (conn) => {
-        try {
-          const isHealthy = await testConnectionHealth(conn);
-
-          // Apenas atualizar SE está healthy (não desconectar automaticamente)
-          if (isHealthy) {
-            await supabase
-              .from('whatsapp_connections')
-              .update({
-                last_health_check: new Date().toISOString(),
-                last_connected_at: new Date().toISOString()
-              })
-              .eq('id', conn.id);
-
-            console.log(`✅ Health check OK para ${conn.instance_name}`);
-          } else {
-            // Apenas logar, NÃO desconectar automaticamente
-            console.log(`⚠️ Health check falhou para ${conn.instance_name} - mantendo status (desconexão manual apenas)`);
-          }
-        } catch (error) {
-          console.error(`❌ Erro no health check de ${conn.instance_name}:`, error);
+        if (error) {
+          console.error('❌ [POLLING] Erro:', error);
+          return;
         }
-      });
 
-      await Promise.all(healthCheckPromises);
-    } catch (error) {
-      console.error('❌ Erro geral nos health checks:', error);
-    }
-  };
+        console.log('📡 [POLLING] Estado:', data?.state, 'Conectado:', data?.isConnected);
 
-  const testConnectionHealth = async (connection: any): Promise<boolean> => {
-    if (!connection.evolution_api_url) return false;
+        if (data?.isConnected) {
+          toast.success('✅ WhatsApp conectado com sucesso!');
+          stopPolling();
+          setQrCode("");
+          loadConnections();
+        }
+      } catch (err) {
+        console.error('❌ [POLLING] Erro geral:', err);
+      }
+    };
 
-    try {
-      const testUrl = `${connection.evolution_api_url}/instance/connectionState/${connection.instance_name}`;
+    // First check immediately
+    poll();
+    // Then every 15 seconds
+    pollingRef.current = setInterval(poll, 15000);
+  }, [stopPolling]);
 
-      const response = await fetch(testUrl, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': connection.evolution_api_key || 'test-key'
-        },
-        signal: AbortSignal.timeout(5000) // Timeout de 5 segundos
-      });
-
-      if (!response.ok) return false;
-
-      const result = await response.json();
-      return result.instance?.state === 'open' || result.state === 'connected';
-    } catch (error) {
-      console.error(`❌ Health check falhou para ${connection.instance_name}:`, error);
-      return false;
-    }
+  const appendLog = (connectionId: string, message: string) => {
+    setLogsByConnection((prev) => {
+      const arr = prev[connectionId] ? [...prev[connectionId]] : [];
+      arr.unshift({ ts: new Date().toISOString(), message });
+      return { ...prev, [connectionId]: arr.slice(0, 50) };
+    });
   };
 
   const loadConnections = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.log('👤 Usuário não autenticado');
-        return;
-      }
-
-      console.log('👤 Usuário autenticado:', user.id);
+      if (!user) return;
 
       const { data: userRole, error: roleError } = await supabase
         .from('user_roles')
@@ -181,17 +152,7 @@ export function WhatsAppQRCode() {
         .eq('user_id', user.id)
         .single();
 
-      if (roleError) {
-        console.error('❌ Erro ao buscar user_role:', roleError);
-        return;
-      }
-
-      if (!userRole?.company_id) {
-        console.log('⚠️ Company ID não encontrado para o usuário');
-        return;
-      }
-
-      console.log('✅ Company ID encontrado:', userRole.company_id, 'Role:', userRole.role);
+      if (roleError || !userRole?.company_id) return;
 
       const { data, error: connError } = await supabase
         .from('whatsapp_connections')
@@ -199,78 +160,28 @@ export function WhatsAppQRCode() {
         .eq('company_id', userRole.company_id)
         .order('created_at', { ascending: false });
 
-      if (connError) {
-        console.error('❌ Erro ao carregar conexões:', connError);
-        console.error('❌ Detalhes do erro:', {
-          message: connError.message,
-          details: connError.details,
-          hint: connError.hint,
-          code: connError.code
-        });
-        return;
-      }
+      if (connError || !data) return;
 
-      if (data) {
-        console.log('📱 Conexões carregadas:', data.length);
-        setConnections(data);
-        // Atualiza mapa de status e detecta transições
-        setStatusMap((prev) => {
-          const next: Record<string, string> = { ...prev };
-          for (const c of data) {
-            const old = prev[c.id];
-            if (old && old !== c.status) {
-              appendLog(c.id, `Status mudou de ${old} para ${c.status}`);
-            }
-            next[c.id] = c.status;
+      setConnections(data);
+      setStatusMap((prev) => {
+        const next: Record<string, string> = { ...prev };
+        for (const c of data) {
+          const old = prev[c.id];
+          if (old && old !== c.status) {
+            appendLog(c.id, `Status mudou de ${old} para ${c.status}`);
           }
-          return next;
-        });
-        // Sincroniza selectedConnection pela id
-        if (selectedConnection) {
-          const match = data.find((c) => c.id === selectedConnection.id);
-          if (match) setSelectedConnection(match);
-        } else if (data.length > 0) {
-          setSelectedConnection(data[0]);
+          next[c.id] = c.status;
         }
-      }
-    } catch (error) {
-      console.error('❌ Erro geral ao carregar conexões:', error);
-    }
-  };
-
-  const configureWebhook = async (instanceName: string, apiUrl: string, apiKey: string) => {
-    try {
-      console.log('🔗 Configurando webhook automaticamente...');
-
-      const webhookUrl = `${window.location.origin}/functions/v1/webhook-conversas?instance=${instanceName}`;
-
-      // Configurar webhook na Evolution API
-      const webhookResponse = await fetch(`${apiUrl}/webhook/set/${instanceName}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': apiKey
-        },
-        body: JSON.stringify({
-          url: webhookUrl,
-          events: ['messages.upsert', 'messages.update', 'contacts.upsert', 'chats.upsert'],
-          enabled: true
-        })
+        return next;
       });
-
-      if (!webhookResponse.ok) {
-        console.warn('⚠️ Não foi possível configurar webhook automaticamente');
-        console.warn('URL do webhook:', webhookUrl);
-        console.warn('Status:', webhookResponse.status);
-        return false;
+      if (selectedConnection) {
+        const match = data.find((c) => c.id === selectedConnection.id);
+        if (match) setSelectedConnection(match);
+      } else if (data.length > 0) {
+        setSelectedConnection(data[0]);
       }
-
-      const webhookResult = await webhookResponse.json();
-      console.log('✅ Webhook configurado:', webhookResult);
-      return true;
     } catch (error) {
-      console.error('❌ Erro ao configurar webhook:', error);
-      return false;
+      console.error('❌ Erro ao carregar conexões:', error);
     }
   };
 
@@ -290,41 +201,18 @@ export function WhatsAppQRCode() {
     setLoading(true);
 
     try {
-      console.log('🚀 Iniciando criação de instância:', instanceName);
-
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.error('❌ Usuário não autenticado');
-        throw new Error("Usuário não autenticado");
-      }
+      if (!user) throw new Error("Usuário não autenticado");
 
-      console.log('👤 Usuário autenticado:', user.id);
-
-      const { data: userRole, error: roleError } = await supabase
+      const { data: userRole } = await supabase
         .from('user_roles')
         .select('company_id, role')
         .eq('user_id', user.id)
         .single();
 
-      if (roleError) {
-        console.error('❌ Erro ao buscar role:', roleError);
-        console.error('❌ Detalhes do erro:', {
-          message: roleError.message,
-          details: roleError.details,
-          hint: roleError.hint,
-          code: roleError.code
-        });
-        throw new Error("Erro ao buscar informações da empresa. Verifique se você está associado a uma empresa.");
-      }
+      if (!userRole?.company_id) throw new Error("Empresa não encontrada");
 
-      if (!userRole?.company_id) {
-        console.error('❌ Company ID não encontrado');
-        throw new Error("Você não está associado a nenhuma empresa. Entre em contato com o administrador.");
-      }
-
-      console.log('🏢 Company ID encontrado:', userRole.company_id, 'Role:', userRole.role);
-
-      // Regra: permitir apenas 1 instância (qualquer status) por company
+      // Check existing
       const { data: existingRows } = await supabase
         .from('whatsapp_connections')
         .select('id')
@@ -336,82 +224,70 @@ export function WhatsAppQRCode() {
         return;
       }
 
-      // Verificar se já existe instância com este nome nesta empresa
-      const { data: existingConn } = await supabase
-        .from('whatsapp_connections')
-        .select('id')
-        .eq('company_id', userRole.company_id)
-        .eq('instance_name', instanceName.toUpperCase())
-        .single();
-
-      if (existingConn) {
-        toast.error("Já existe uma instância com este nome nesta empresa");
-        setLoading(false);
-        return;
-      }
-
-      const connectionData = {
-        company_id: userRole.company_id,
-        instance_name: instanceName.toUpperCase(),
-        evolution_api_url: creationMode === "manual" ? apiUrl : "https://evolution-evolution-api.kxuvcf.easypanel.host",
-        evolution_api_key: creationMode === "manual" ? apiKey : null,
-        status: 'connecting',
-        qr_code_expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
-      };
-
-      console.log('📱 Criando conexão WhatsApp:', connectionData);
-
-      const { data: conn, error: connError } = await supabase
-        .from('whatsapp_connections')
-        .insert(connectionData)
-        .select()
-        .single();
-
-      if (connError) {
-        console.error('❌ Erro ao criar conexão:', connError);
-        console.error('❌ Detalhes do erro:', {
-          message: connError.message,
-          details: connError.details,
-          hint: connError.hint,
-          code: connError.code
-        });
-        throw connError;
-      }
-
-      console.log('✅ Conexão WhatsApp criada:', conn);
-
-      setSelectedConnection(conn);
-
-      // Tentar configurar webhook automaticamente
-      const effectiveApiUrl = creationMode === "manual" ? apiUrl : "https://evolution-evolution-api.kxuvcf.easypanel.host";
-      const effectiveApiKey = creationMode === "manual" ? apiKey : null;
-
-      if (effectiveApiKey) {
-        const webhookConfigured = await configureWebhook(instanceName.toUpperCase(), effectiveApiUrl, effectiveApiKey);
-        if (webhookConfigured) {
-          console.log('✅ Webhook configurado automaticamente');
-        } else {
-          console.warn('⚠️ Webhook não foi configurado automaticamente - será necessário configurar manualmente');
-        }
-      }
-
-      // Se modo manual, marcar como conectado imediatamente
       if (creationMode === "manual") {
-        await supabase
-          .from('whatsapp_connections')
-          .update({ status: 'connected', last_connected_at: new Date().toISOString() })
-          .eq('id', conn.id);
+        // Manual mode - same as before
+        const connectionData = {
+          company_id: userRole.company_id,
+          instance_name: instanceName.toUpperCase(),
+          evolution_api_url: apiUrl,
+          evolution_api_key: apiKey,
+          status: 'connected',
+          last_connected_at: new Date().toISOString(),
+        };
 
-        toast.success("Instância configurada manualmente com sucesso!");
+        const { error: connError } = await supabase
+          .from('whatsapp_connections')
+          .insert(connectionData);
+
+        if (connError) throw connError;
+
+        toast.success("Instância configurada manualmente!");
         setShowNewInstance(false);
         resetForm();
         loadConnections();
       } else {
-        // Gerar QR Code mock (em produção, integrar com Evolution API real)
-        const mockQR = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`whatsapp-${instanceName}-${Date.now()}`)}`;
-        setQrCode(mockQR);
+        // QR Code mode - call edge function
+        console.log('🚀 Criando instância via Evolution API:', instanceName.toUpperCase());
+
+        const { data, error } = await supabase.functions.invoke('evolution-create-instance', {
+          body: {
+            action: 'create',
+            instanceName: instanceName.toUpperCase(),
+            companyId: userRole.company_id,
+          }
+        });
+
+        if (error) {
+          console.error('❌ Erro na edge function:', error);
+          throw new Error(error.message || 'Erro ao criar instância');
+        }
+
+        if (!data?.success) {
+          throw new Error(data?.error || 'Erro ao criar instância na Evolution API');
+        }
+
+        console.log('✅ Instância criada:', data);
+
+        // Show QR code
+        if (data.qrcode) {
+          // qrcode can be base64 with or without data URI prefix
+          const qrSrc = data.qrcode.startsWith('data:') 
+            ? data.qrcode 
+            : `data:image/png;base64,${data.qrcode}`;
+          setQrCode(qrSrc);
+        } else {
+          toast.warning("QR Code não retornado. Tente atualizar.");
+        }
+
+        if (data.connection) {
+          setSelectedConnection(data.connection);
+        }
+
         setShowNewInstance(false);
         toast.success("QR Code gerado! Escaneie com seu WhatsApp");
+
+        // Start polling for connection status
+        startPolling(instanceName.toUpperCase(), userRole.company_id);
         loadConnections();
       }
     } catch (error: any) {
@@ -422,29 +298,69 @@ export function WhatsAppQRCode() {
     }
   };
 
-  // Auto-refresh de QRCode enquanto status = connecting
-  useEffect(() => {
-    if (!selectedConnection || selectedConnection.status !== 'connecting') return;
-    const interval = setInterval(() => {
-      const mockQR = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`whatsapp-${selectedConnection.instance_name}-${Date.now()}`)}`;
-      setQrCode(mockQR);
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [selectedConnection]);
+  const refreshQRCode = async (conn: any) => {
+    try {
+      setLoading(true);
+      console.log('🔄 Atualizando QR Code para:', conn.instance_name);
 
-  const appendLog = (connectionId: string, message: string) => {
-    setLogsByConnection((prev) => {
-      const arr = prev[connectionId] ? [...prev[connectionId]] : [];
-      arr.unshift({ ts: new Date().toISOString(), message });
-      return { ...prev, [connectionId]: arr.slice(0, 50) };
-    });
+      const { data, error } = await supabase.functions.invoke('evolution-create-instance', {
+        body: {
+          action: 'refresh_qr',
+          instanceName: conn.instance_name,
+        }
+      });
+
+      if (error) throw new Error(error.message);
+
+      if (data?.qrcode) {
+        const qrSrc = data.qrcode.startsWith('data:') 
+          ? data.qrcode 
+          : `data:image/png;base64,${data.qrcode}`;
+        setQrCode(qrSrc);
+        toast.success("QR Code atualizado!");
+
+        // Restart polling
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: userRole } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single();
+          if (userRole?.company_id) {
+            startPolling(conn.instance_name, userRole.company_id);
+          }
+        }
+      } else {
+        toast.warning("QR Code não retornado");
+      }
+    } catch (err: any) {
+      console.error('❌ Erro ao atualizar QR:', err);
+      toast.error(err.message || "Erro ao atualizar QR Code");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
     setInstanceName("");
     setApiKey("");
-    setApiUrl("https://evolution-evolution-api.kxuvcf.easypanel.host");
+    setApiUrl("https://evolution-evolution-api.0ntuaf.easypanel.host");
     setCreationMode("qrcode");
+  };
+
+  const configureWebhook = async (instName: string, url: string, key: string) => {
+    try {
+      const webhookUrl = `https://dteppsfseusqixuppglh.supabase.co/functions/v1/webhook-conversas?instance=${instName}`;
+      const webhookResponse = await fetch(`${url}/webhook/set/${instName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': key },
+        body: JSON.stringify({
+          url: webhookUrl,
+          events: ['messages.upsert', 'messages.update', 'connection.update', 'contacts.upsert'],
+          enabled: true
+        })
+      });
+      return webhookResponse.ok;
+    } catch {
+      return false;
+    }
   };
 
   const testConnection = async (connection: any) => {
@@ -452,42 +368,23 @@ export function WhatsAppQRCode() {
       toast.error("URL da Evolution API não configurada");
       return;
     }
-
     setTestingConnection(connection.id);
-
     try {
-      console.log('🔍 Testando conexão Evolution API:', connection.instance_name);
-
-      // Tentar fazer uma requisição de status para a Evolution API
-      const testUrl = `${connection.evolution_api_url}/instance/connectionState/${connection.instance_name}`;
-
-      const response = await fetch(testUrl, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': connection.evolution_api_key || 'test-key'
-        }
+      const { data, error } = await supabase.functions.invoke('evolution-create-instance', {
+        body: { action: 'check_status', instanceName: connection.instance_name, companyId: connection.company_id }
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Conexão Evolution API testada:', result);
+      if (error) throw error;
 
-        if (result.instance?.state === 'open' || result.state === 'connected') {
-          toast.success(`✅ Conexão ${connection.instance_name} funcionando!`);
-          appendLog(connection.id, 'Teste de conectividade: OK');
-        } else {
-          toast.warning(`⚠️ Instância ${connection.instance_name} não conectada ao WhatsApp`);
-          appendLog(connection.id, 'Teste de conectividade: não conectada');
-        }
+      if (data?.isConnected) {
+        toast.success(`✅ ${connection.instance_name} conectada!`);
+        appendLog(connection.id, 'Teste: conectada');
       } else {
-        console.error('❌ Erro na resposta da Evolution API:', response.status);
-        toast.error(`❌ Falha na conexão: ${response.status}`);
-        appendLog(connection.id, `Falha HTTP no teste: ${response.status}`);
+        toast.warning(`⚠️ ${connection.instance_name} não conectada (${data?.state})`);
+        appendLog(connection.id, `Teste: ${data?.state}`);
       }
     } catch (error: any) {
-      console.error('❌ Erro ao testar conexão:', error);
-      toast.error(`❌ Erro de conexão: ${error.message}`);
+      toast.error(`❌ Erro: ${error.message}`);
       appendLog(connection.id, `Erro no teste: ${error.message}`);
     } finally {
       setTestingConnection(null);
@@ -500,22 +397,15 @@ export function WhatsAppQRCode() {
         .from('whatsapp_connections')
         .delete()
         .eq('id', connectionId);
-
       if (error) throw error;
-
       toast.success("Instância removida");
       if (selectedConnection?.id === connectionId) {
         setSelectedConnection(null);
         setQrCode("");
       }
-      setLogsByConnection((prev) => {
-        const copy = { ...prev };
-        delete copy[connectionId];
-        return copy;
-      });
+      stopPolling();
       loadConnections();
     } catch (error: any) {
-      console.error('Erro ao deletar:', error);
       toast.error("Erro ao remover instância");
     }
   };
@@ -541,12 +431,10 @@ export function WhatsAppQRCode() {
       if (error) throw error;
       toast.success('API Key salva e conexão marcada como conectada');
       appendLog(conn.id, 'API Key/URL atualizadas');
-      // Tentar configurar webhook
       const ok = await configureWebhook(conn.instance_name, newUrl, newKey);
       if (ok) toast.success('Webhook configurado com sucesso');
       loadConnections();
     } catch (e: any) {
-      console.error('❌ Erro ao salvar API Key/URL:', e);
       toast.error(e.message || 'Erro ao salvar API Key');
     } finally {
       setSavingMap(prev => ({ ...prev, [conn.id]: false }));
@@ -593,7 +481,7 @@ export function WhatsAppQRCode() {
               Instâncias WhatsApp
             </CardTitle>
             <CardDescription>
-              Gerencie múltiplas conexões WhatsApp via Evolution API
+              Conecte seu WhatsApp escaneando o QR Code automaticamente
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -643,7 +531,7 @@ export function WhatsAppQRCode() {
                     maxLength={20}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Apenas letras, números e underscore. Será único para esta empresa.
+                    A instância será criada automaticamente na Evolution API. Basta escanear o QR Code!
                   </p>
                 </div>
               </TabsContent>
@@ -715,6 +603,15 @@ export function WhatsAppQRCode() {
                     {getStatusBadge(conn.status, conn.last_health_check)}
                     <Button
                       variant="ghost"
+                      size="icon"
+                      onClick={() => testConnection(conn)}
+                      disabled={testingConnection === conn.id}
+                      title="Testar conexão"
+                    >
+                      {testingConnection === conn.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                      variant="ghost"
                       size="sm"
                       onClick={() => deleteConnection(conn.id)}
                     >
@@ -723,50 +620,73 @@ export function WhatsAppQRCode() {
                   </div>
                 </div>
 
-                {/* Configuração de API URL e KEY */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-                  <div>
-                    <Label className="text-xs">Evolution API URL</Label>
-                    <Input
-                      placeholder="https://sua-api"
-                      value={editApiUrlMap[conn.id] ?? conn.evolution_api_url ?? ''}
-                      onChange={(e) => setEditApiUrlMap(prev => ({ ...prev, [conn.id]: e.target.value }))}
-                    />
+                {/* QR Code display for connecting status */}
+                {conn.status === 'connecting' && (
+                  <div className="mt-3 p-4 bg-background rounded-lg border border-dashed">
+                    {qrCode ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <img src={qrCode} alt="QR Code WhatsApp" className="w-64 h-64 mx-auto rounded-lg" />
+                        <p className="text-sm text-center text-muted-foreground">
+                          Abra o WhatsApp → Menu ⋯ → Aparelhos conectados → Conectar → Escaneie o QR Code
+                        </p>
+                        {pollingActive && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Aguardando conexão...
+                          </div>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => refreshQRCode(conn)} disabled={loading}>
+                          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><RefreshCw className="h-4 w-4 mr-1" /> Atualizar QR Code</>}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3">
+                        <p className="text-sm text-muted-foreground">QR Code expirado ou não disponível</p>
+                        <Button variant="outline" size="sm" onClick={() => refreshQRCode(conn)} disabled={loading}>
+                          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><RefreshCw className="h-4 w-4 mr-1" /> Gerar novo QR Code</>}
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <Label className="text-xs">Evolution API Key</Label>
-                    <Input
-                      type="password"
-                      placeholder="••••••••••"
-                      value={editApiKeyMap[conn.id] ?? conn.evolution_api_key ?? ''}
-                      onChange={(e) => setEditApiKeyMap(prev => ({ ...prev, [conn.id]: e.target.value }))}
-                    />
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <Button onClick={() => handleSaveApi(conn)} disabled={!!savingMap[conn.id]} className="flex-1">
-                      {savingMap[conn.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar API key'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={async () => {
-                        const key = (((editApiKeyMap[conn.id] ?? conn.evolution_api_key)) || '').trim();
-                        const url = (((editApiUrlMap[conn.id] ?? conn.evolution_api_url)) || '').trim();
-                        if (!key || !url) { toast.error('Preencha URL e API Key'); return; }
-                        const ok = await configureWebhook(conn.instance_name, url, key);
-                        if (ok) toast.success('Webhook configurado'); else toast.error('Falha ao configurar webhook');
-                      }}
-                    >
-                      Configurar Webhook
-                    </Button>
-                  </div>
-                </div>
-                
-                {conn.status === 'connecting' && selectedConnection?.id === conn.id && qrCode && (
-                  <div className="mt-3 p-3 bg-background rounded-lg">
-                    <img src={qrCode} alt="QR Code" className="w-48 h-48 mx-auto border" />
-                    <p className="text-xs text-center mt-2 text-muted-foreground">
-                      Escaneie com WhatsApp em até 2 minutos
-                    </p>
+                )}
+
+                {/* API config for connected/manual */}
+                {conn.status !== 'connecting' && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                    <div>
+                      <Label className="text-xs">Evolution API URL</Label>
+                      <Input
+                        placeholder="https://sua-api"
+                        value={editApiUrlMap[conn.id] ?? conn.evolution_api_url ?? ''}
+                        onChange={(e) => setEditApiUrlMap(prev => ({ ...prev, [conn.id]: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Evolution API Key</Label>
+                      <Input
+                        type="password"
+                        placeholder="••••••••••"
+                        value={editApiKeyMap[conn.id] ?? conn.evolution_api_key ?? ''}
+                        onChange={(e) => setEditApiKeyMap(prev => ({ ...prev, [conn.id]: e.target.value }))}
+                      />
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <Button onClick={() => handleSaveApi(conn)} disabled={!!savingMap[conn.id]} className="flex-1">
+                        {savingMap[conn.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          const key = (((editApiKeyMap[conn.id] ?? conn.evolution_api_key)) || '').trim();
+                          const url = (((editApiUrlMap[conn.id] ?? conn.evolution_api_url)) || '').trim();
+                          if (!key || !url) { toast.error('Preencha URL e API Key'); return; }
+                          const ok = await configureWebhook(conn.instance_name, url, key);
+                          if (ok) toast.success('Webhook configurado'); else toast.error('Falha ao configurar webhook');
+                        }}
+                      >
+                        Webhook
+                      </Button>
+                    </div>
                   </div>
                 )}
                 
@@ -775,13 +695,8 @@ export function WhatsAppQRCode() {
                     Última conexão: {new Date(conn.last_connected_at).toLocaleString('pt-BR')}
                   </p>
                 )}
-                {conn.last_health_check && (
-                  <p className="text-xs text-muted-foreground">
-                    Último check: {new Date(conn.last_health_check).toLocaleString('pt-BR')}
-                  </p>
-                )}
 
-                {/* Logs da conexão */}
+                {/* Logs */}
                 <div className="pt-2">
                   <Button variant="outline" size="sm" onClick={() => setExpandedLogs((prev) => ({ ...prev, [conn.id]: !prev[conn.id] }))}>
                     {expandedLogs[conn.id] ? 'Ocultar Logs' : 'Ver Logs'}
@@ -819,43 +734,11 @@ export function WhatsAppQRCode() {
           <Alert className="bg-success/10 border-success">
             <AlertDescription className="text-xs space-y-2">
               <p>
-                <strong>✅ Regra de licença:</strong> Apenas <strong>1</strong> instância WhatsApp ativa por CRM. Para trocar, desconecte/remova a atual e conecte outra.
+                <strong>✅ Automático:</strong> Ao clicar em "Gerar QR Code", a instância é criada automaticamente na Evolution API. Basta escanear!
               </p>
               <p>
-                <strong>🔍 Teste de Conexão:</strong> Use o botão de verificação (✓) ao lado de cada instância para testar se a Evolution API está respondendo corretamente.
+                <strong>🔍 Teste:</strong> Use o botão ↻ para verificar se a conexão está ativa.
               </p>
-            </AlertDescription>
-          </Alert>
-
-          <Alert>
-            <AlertDescription className="text-xs space-y-2">
-              <p>
-                <strong>📱 Configuração do Webhook Evolution API:</strong>
-              </p>
-              <p>Cole esta URL no webhook da sua instância Evolution API:</p>
-              <code className="block bg-muted px-2 py-1 rounded break-all mt-1">
-                https://dteppsfseusqixuppglh.supabase.co/functions/v1/webhook-conversas?instance=NOME_DA_INSTANCIA
-              </code>
-              <p className="mt-2">
-                <strong>Importante:</strong> Substitua NOME_DA_INSTANCIA pelo nome exato da instância que você criou acima.
-              </p>
-              <p className="mt-2">
-                <strong>Eventos suportados:</strong> messages.upsert (novas mensagens), messages.update (status de mensagens).
-              </p>
-            </AlertDescription>
-          </Alert>
-
-          <Alert className="bg-blue/10 border-blue">
-            <AlertDescription className="text-xs space-y-2">
-              <p>
-                <strong>🔧 Documentação Técnica:</strong>
-              </p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>Webhooks são automaticamente roteados para a empresa correta baseada na instância</li>
-                <li>Dados são criptografados em trânsito e armazenados com isolamento RLS</li>
-                <li>Teste de conexão valida disponibilidade da Evolution API</li>
-                <li>Instâncias podem ser criadas via QR Code ou configuração manual</li>
-              </ul>
             </AlertDescription>
           </Alert>
         </div>

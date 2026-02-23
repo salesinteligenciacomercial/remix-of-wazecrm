@@ -77,3 +77,6 @@ verify_jwt = true
 
 [functions.batch-profile-pictures]
 verify_jwt = true
+
+[functions.evolution-create-instance]
+verify_jwt = false
