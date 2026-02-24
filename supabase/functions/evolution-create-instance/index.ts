@@ -135,17 +135,17 @@ serve(async (req) => {
         }
       }
 
-      // 4. Save connection in database
+      // 4. Save connection in database (upsert to handle existing instances)
       const { data: conn, error: dbError } = await supabase
         .from('whatsapp_connections')
-        .insert({
+        .upsert({
           company_id: companyId,
           instance_name: instanceName,
           evolution_api_url: baseUrl,
           evolution_api_key: EVOLUTION_API_KEY,
           status: 'connecting',
           qr_code_expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
-        })
+        }, { onConflict: 'instance_name' })
         .select()
         .single();
 
