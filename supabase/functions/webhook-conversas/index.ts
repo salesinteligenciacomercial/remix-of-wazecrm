@@ -554,15 +554,21 @@ serve(async (req) => {
               // Aguardar um momento antes de reconectar (pode ser apenas transitório)
               await new Promise(resolve => setTimeout(resolve, 2000));
               
-              // Tentar restart
-              const restartRes = await fetch(`${evoBaseUrl}/instance/restart/${instanceName}`, {
-                method: "PUT",
-                headers: { "apikey": evoApiKey, "Content-Type": "application/json" },
-              });
+              // Tentar restart - Evolution v2 usa POST, v1 usa PUT
+              let restartOk = false;
+              for (const method of ['POST', 'PUT']) {
+                const restartRes = await fetch(`${evoBaseUrl}/instance/restart/${instanceName}`, {
+                  method,
+                  headers: { "apikey": evoApiKey, "Content-Type": "application/json" },
+                });
+                if (restartRes.ok) {
+                  console.log(`✅ [WEBHOOK] Auto-restart (${method}) solicitado para ${instanceName}`);
+                  restartOk = true;
+                  break;
+                }
+              }
               
-              if (restartRes.ok) {
-                console.log(`✅ [WEBHOOK] Auto-restart solicitado para ${instanceName}`);
-              } else {
+              if (!restartOk) {
                 // Tentar connect como fallback
                 const connectRes = await fetch(`${evoBaseUrl}/instance/connect/${instanceName}`, {
                   method: "GET",
