@@ -147,7 +147,8 @@ async function verifyWebhookSignature(
 
 // Detectar se o payload é da Evolution API
 function isEvolutionAPIPayload(body: any): boolean {
-  return body.event === 'messages.upsert' && body.data?.key?.remoteJid;
+  const event = (body.event || '').toLowerCase();
+  return event === 'messages.upsert' && body.data?.key?.remoteJid;
 }
 
 // Transformar payload da Evolution API para formato do CRM
@@ -504,7 +505,7 @@ serve(async (req) => {
     const isEvolutionAPI = isEvolutionAPIPayload(body);
     
     // ⚡ NOVO: Processar eventos de conexão/desconexão da Evolution API
-    if (body.event === 'connection.update') {
+    if ((body.event || '').toLowerCase() === 'connection.update') {
       console.log('🔌 [WEBHOOK] Evento de conexão recebido:', {
         event: body.event,
         instance: body.instance,
@@ -553,7 +554,7 @@ serve(async (req) => {
     }
     
     // ⚡ CORREÇÃO: Processar eventos de status (delivered, read) da Evolution API
-    if (body.event === 'messages.update') {
+    if ((body.event || '').toLowerCase() === 'messages.update') {
       console.log('📊 [WEBHOOK] Evento de atualização de status recebido:', {
         event: body.event,
         instance: body.instance,
