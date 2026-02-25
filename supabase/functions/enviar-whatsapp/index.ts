@@ -388,17 +388,19 @@ async function sendMetaFallback(
 
 // ============= EVOLUTION API FUNCTIONS =============
 
-// Tentar reconectar instância Evolution API
+// Tentar reconectar instância Evolution API - OTIMIZADO para falhar rápido (max ~6s)
 async function tryReconnectInstance(baseUrl: string, instanceName: string, apiKey: string): Promise<boolean> {
   try {
     console.log(`🔄 Tentando reconectar instância ${instanceName}...`);
     
-    // Helper para verificar estado
     async function checkState(): Promise<string> {
       try {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 3000);
         const res = await fetch(`${baseUrl}/instance/connectionState/${instanceName}`, {
           method: "GET",
           headers: { "apikey": apiKey },
+          signal: controller.signal,
         });
         if (res.ok) {
           const data = await res.json();
@@ -419,65 +421,49 @@ async function tryReconnectInstance(baseUrl: string, instanceName: string, apiKe
       return true;
     }
     
-    // 2. Tentar restart - Evolution API v2 usa POST, v1 usa PUT
-    // Tentar ambos métodos para compatibilidade
-    let restartSuccess = false;
+    // 2. Tentar restart (POST primeiro, depois PUT) - sem polling longo
     for (const method of ['POST', 'PUT']) {
-      console.log(`🔄 Tentando restart (${method}) da instância ${instanceName}...`);
       try {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 3000);
         const restartRes = await fetch(`${baseUrl}/instance/restart/${instanceName}`, {
           method,
           headers: { "apikey": apiKey, "Content-Type": "application/json" },
+          signal: controller.signal,
         });
         
         if (restartRes.ok) {
           console.log(`✅ Restart (${method}) solicitado para ${instanceName}`);
-          restartSuccess = true;
-          break;
-        } else {
-          console.warn(`⚠️ Restart (${method}) falhou: ${restartRes.status}`);
+          // Esperar 3 segundos e verificar UMA vez
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          const state = await checkState();
+          console.log(`📡 Estado após restart: ${state}`);
+          if (connectedStates.includes(state)) return true;
+          break; // Restart funcionou mas não conectou, não tentar outro método
         }
-      } catch (_e) {
-        console.warn(`⚠️ Restart (${method}) erro de rede`);
-      }
+      } catch (_e) { /* ignore */ }
     }
     
-    if (restartSuccess) {
-      // Aguardar reconexão com polling (até 8 segundos)
-      for (let i = 0; i < 4; i++) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const state = await checkState();
-        console.log(`📡 Estado após restart (tentativa ${i + 1}): ${state}`);
-        if (connectedStates.includes(state)) return true;
-      }
-    }
-    
-    // 3. Tentar connect como fallback
-    console.log(`🔄 Tentando connect da instância ${instanceName}...`);
+    // 3. Tentar connect como fallback rápido
     try {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 3000);
       const connectRes = await fetch(`${baseUrl}/instance/connect/${instanceName}`, {
         method: "GET",
         headers: { "apikey": apiKey },
+        signal: controller.signal,
       });
       
       if (connectRes.ok) {
-        console.log(`✅ Connect solicitado para ${instanceName}`);
-        // Aguardar reconexão com polling (até 8 segundos)
-        for (let i = 0; i < 4; i++) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const state = await checkState();
-          console.log(`📡 Estado após connect (tentativa ${i + 1}): ${state}`);
-          if (connectedStates.includes(state)) return true;
-        }
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        const state = await checkState();
+        console.log(`📡 Estado após connect: ${state}`);
+        if (connectedStates.includes(state)) return true;
       }
-    } catch (_e) {
-      console.warn(`⚠️ Connect erro de rede`);
-    }
+    } catch (_e) { /* ignore */ }
     
-    // 4. Verificação final
-    const finalState = await checkState();
-    console.log(`📡 Estado final após todas as tentativas: ${finalState}`);
-    return connectedStates.includes(finalState);
+    console.log(`❌ Reconexão falhou para ${instanceName}`);
+    return false;
   } catch (error) {
     console.error(`❌ Erro ao tentar reconectar ${instanceName}:`, error);
     return false;
