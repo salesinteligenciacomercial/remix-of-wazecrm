@@ -80,3 +80,6 @@ verify_jwt = true
 
 [functions.evolution-create-instance]
 verify_jwt = false
+
+[functions.configure-webhook]
+verify_jwt = false

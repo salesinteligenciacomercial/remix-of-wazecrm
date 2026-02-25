@@ -96,16 +96,18 @@ serve(async (req) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_API_KEY },
           body: JSON.stringify({
-            url: webhookUrl,
-            webhook_by_events: false,
-            webhook_base64: true,
-            events: [
-              'messages.upsert',
-              'messages.update',
-              'connection.update',
-              'contacts.upsert',
-            ],
-            enabled: true,
+            webhook: {
+              url: webhookUrl,
+              webhookByEvents: false,
+              webhookBase64: true,
+              events: [
+                'MESSAGES_UPSERT',
+                'MESSAGES_UPDATE',
+                'CONNECTION_UPDATE',
+                'CONTACTS_UPSERT',
+              ],
+              enabled: true,
+            }
           }),
         });
         const webhookData = await webhookRes.json();
