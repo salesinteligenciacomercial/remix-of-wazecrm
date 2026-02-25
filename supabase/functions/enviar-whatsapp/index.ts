@@ -393,65 +393,91 @@ async function tryReconnectInstance(baseUrl: string, instanceName: string, apiKe
   try {
     console.log(`🔄 Tentando reconectar instância ${instanceName}...`);
     
-    // 1. Verificar estado real da instância
-    const stateRes = await fetch(`${baseUrl}/instance/connectionState/${instanceName}`, {
-      method: "GET",
-      headers: { "apikey": apiKey },
-    });
+    // Helper para verificar estado
+    async function checkState(): Promise<string> {
+      try {
+        const res = await fetch(`${baseUrl}/instance/connectionState/${instanceName}`, {
+          method: "GET",
+          headers: { "apikey": apiKey },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          return (data?.instance?.state || data?.state || '').toLowerCase();
+        }
+      } catch (_e) { /* ignore */ }
+      return '';
+    }
     
-    if (stateRes.ok) {
-      const stateData = await stateRes.json();
-      const state = stateData?.instance?.state || stateData?.state || '';
-      console.log(`📡 Estado atual da instância ${instanceName}: ${state}`);
-      
-      if (state === 'open' || state === 'connected') {
-        console.log(`✅ Instância ${instanceName} já está conectada!`);
-        return true;
+    const connectedStates = ['open', 'connected'];
+    
+    // 1. Verificar estado atual
+    const currentState = await checkState();
+    console.log(`📡 Estado atual da instância ${instanceName}: ${currentState}`);
+    
+    if (connectedStates.includes(currentState)) {
+      console.log(`✅ Instância ${instanceName} já está conectada!`);
+      return true;
+    }
+    
+    // 2. Tentar restart - Evolution API v2 usa POST, v1 usa PUT
+    // Tentar ambos métodos para compatibilidade
+    let restartSuccess = false;
+    for (const method of ['POST', 'PUT']) {
+      console.log(`🔄 Tentando restart (${method}) da instância ${instanceName}...`);
+      try {
+        const restartRes = await fetch(`${baseUrl}/instance/restart/${instanceName}`, {
+          method,
+          headers: { "apikey": apiKey, "Content-Type": "application/json" },
+        });
+        
+        if (restartRes.ok) {
+          console.log(`✅ Restart (${method}) solicitado para ${instanceName}`);
+          restartSuccess = true;
+          break;
+        } else {
+          console.warn(`⚠️ Restart (${method}) falhou: ${restartRes.status}`);
+        }
+      } catch (_e) {
+        console.warn(`⚠️ Restart (${method}) erro de rede`);
       }
     }
     
-    // 2. Tentar restart da instância
-    console.log(`🔄 Fazendo restart da instância ${instanceName}...`);
-    const restartRes = await fetch(`${baseUrl}/instance/restart/${instanceName}`, {
-      method: "PUT",
-      headers: { "apikey": apiKey, "Content-Type": "application/json" },
-    });
-    
-    if (restartRes.ok) {
-      console.log(`✅ Restart solicitado para ${instanceName}`);
-      // Aguardar 3 segundos para a reconexão
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Verificar estado novamente
-      const checkRes = await fetch(`${baseUrl}/instance/connectionState/${instanceName}`, {
-        method: "GET",
-        headers: { "apikey": apiKey },
-      });
-      
-      if (checkRes.ok) {
-        const checkData = await checkRes.json();
-        const newState = checkData?.instance?.state || checkData?.state || '';
-        console.log(`📡 Estado após restart: ${newState}`);
-        return newState === 'open' || newState === 'connected';
+    if (restartSuccess) {
+      // Aguardar reconexão com polling (até 8 segundos)
+      for (let i = 0; i < 4; i++) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const state = await checkState();
+        console.log(`📡 Estado após restart (tentativa ${i + 1}): ${state}`);
+        if (connectedStates.includes(state)) return true;
       }
-    } else {
-      console.warn(`⚠️ Restart falhou para ${instanceName}: ${restartRes.status}`);
     }
     
     // 3. Tentar connect como fallback
     console.log(`🔄 Tentando connect da instância ${instanceName}...`);
-    const connectRes = await fetch(`${baseUrl}/instance/connect/${instanceName}`, {
-      method: "GET",
-      headers: { "apikey": apiKey },
-    });
-    
-    if (connectRes.ok) {
-      console.log(`✅ Connect solicitado para ${instanceName}`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      return true;
+    try {
+      const connectRes = await fetch(`${baseUrl}/instance/connect/${instanceName}`, {
+        method: "GET",
+        headers: { "apikey": apiKey },
+      });
+      
+      if (connectRes.ok) {
+        console.log(`✅ Connect solicitado para ${instanceName}`);
+        // Aguardar reconexão com polling (até 8 segundos)
+        for (let i = 0; i < 4; i++) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const state = await checkState();
+          console.log(`📡 Estado após connect (tentativa ${i + 1}): ${state}`);
+          if (connectedStates.includes(state)) return true;
+        }
+      }
+    } catch (_e) {
+      console.warn(`⚠️ Connect erro de rede`);
     }
     
-    return false;
+    // 4. Verificação final
+    const finalState = await checkState();
+    console.log(`📡 Estado final após todas as tentativas: ${finalState}`);
+    return connectedStates.includes(finalState);
   } catch (error) {
     console.error(`❌ Erro ao tentar reconectar ${instanceName}:`, error);
     return false;
