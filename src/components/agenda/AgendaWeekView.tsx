@@ -134,56 +134,108 @@ export function AgendaWeekView({ selectedDate, compromissos, onSelectDate, onSel
                     </div>
                   )}
 
-                  {/* Appointment blocks */}
-                  {dayCompromissos.map(comp => {
-                    const start = parseISO(comp.data_hora_inicio);
-                    const end = parseISO(comp.data_hora_fim);
-                    const startHour = start.getHours() + start.getMinutes() / 60;
-                    const endHour = end.getHours() + end.getMinutes() / 60;
-                    const top = Math.max(0, (startHour - START_HOUR) * HOUR_HEIGHT);
-                    const height = Math.max(28, (endHour - startHour) * HOUR_HEIGHT);
-                    const colors = STATUS_COLORS[comp.status] || STATUS_COLORS.agendado;
-                    const title = comp.titulo || comp.tipo_servico;
-                    const clientName = comp.lead?.name || comp.paciente || "";
+                  {/* Appointment blocks - with overlap handling */}
+                  {(() => {
+                    // Sort by start time
+                    const sorted = [...dayCompromissos].sort((a, b) => 
+                      parseISO(a.data_hora_inicio).getTime() - parseISO(b.data_hora_inicio).getTime()
+                    );
+                    
+                    // Assign columns for overlapping items
+                    const items: { comp: typeof sorted[0]; col: number; totalCols: number }[] = [];
+                    const activeColumns: { end: number }[] = [];
 
-                    return (
-                      <Tooltip key={comp.id}>
-                        <TooltipTrigger asChild>
-                          <div
-                            className={`absolute left-0.5 right-0.5 rounded-md border-l-[3px] px-2 py-1 cursor-pointer 
-                              hover:shadow-lg hover:brightness-95 transition-all overflow-hidden z-10 ${colors.bg} ${colors.border} ${colors.text}`}
-                            style={{ top, height: Math.min(height, (END_HOUR - START_HOUR) * HOUR_HEIGHT - top) }}
-                            onClick={() => onSelectCompromisso?.(comp)}
-                          >
-                            <div className="text-xs font-bold truncate leading-tight">{title}</div>
-                            {height > 35 && (
-                              <div className="text-[11px] font-medium opacity-90 truncate leading-tight mt-0.5">
+                    sorted.forEach(comp => {
+                      const startTime = parseISO(comp.data_hora_inicio).getTime();
+                      const endTime = parseISO(comp.data_hora_fim).getTime();
+                      
+                      // Free up columns that have ended
+                      let col = -1;
+                      for (let i = 0; i < activeColumns.length; i++) {
+                        if (activeColumns[i].end <= startTime) {
+                          activeColumns[i].end = endTime;
+                          col = i;
+                          break;
+                        }
+                      }
+                      if (col === -1) {
+                        col = activeColumns.length;
+                        activeColumns.push({ end: endTime });
+                      } else {
+                        activeColumns[col].end = endTime;
+                      }
+                      items.push({ comp, col, totalCols: 0 });
+                    });
+
+                    // Calculate max concurrent for each item
+                    items.forEach(item => {
+                      const s = parseISO(item.comp.data_hora_inicio).getTime();
+                      const e = parseISO(item.comp.data_hora_fim).getTime();
+                      let concurrent = 0;
+                      items.forEach(other => {
+                        const os = parseISO(other.comp.data_hora_inicio).getTime();
+                        const oe = parseISO(other.comp.data_hora_fim).getTime();
+                        if (os < e && oe > s) concurrent++;
+                      });
+                      item.totalCols = concurrent;
+                    });
+
+                    return items.map(({ comp, col, totalCols }) => {
+                      const start = parseISO(comp.data_hora_inicio);
+                      const end = parseISO(comp.data_hora_fim);
+                      const startHour = start.getHours() + start.getMinutes() / 60;
+                      const endHour = end.getHours() + end.getMinutes() / 60;
+                      const top = Math.max(0, (startHour - START_HOUR) * HOUR_HEIGHT);
+                      const height = Math.max(28, (endHour - startHour) * HOUR_HEIGHT);
+                      const colors = STATUS_COLORS[comp.status] || STATUS_COLORS.agendado;
+                      const title = comp.titulo || comp.tipo_servico;
+                      const clientName = comp.lead?.name || comp.paciente || "";
+                      
+                      const colWidth = 100 / totalCols;
+                      const leftPct = col * colWidth;
+
+                      return (
+                        <Tooltip key={comp.id}>
+                          <TooltipTrigger asChild>
+                            <div
+                              className={`absolute rounded-md border-l-[3px] px-1.5 py-1 cursor-pointer 
+                                hover:shadow-lg hover:brightness-95 hover:z-30 transition-all overflow-hidden z-10 ${colors.bg} ${colors.border} ${colors.text}`}
+                              style={{ 
+                                top, 
+                                height: Math.min(height, (END_HOUR - START_HOUR) * HOUR_HEIGHT - top),
+                                left: `calc(${leftPct}% + 1px)`,
+                                width: `calc(${colWidth}% - 2px)`,
+                              }}
+                              onClick={() => onSelectCompromisso?.(comp)}
+                            >
+                              <div className="text-[11px] font-bold truncate leading-tight">{title}</div>
+                              <div className="text-[10px] font-medium opacity-90 truncate leading-tight">
+                                {format(start, "HH:mm")}-{format(end, "HH:mm")}
+                              </div>
+                              {height > 55 && clientName && (
+                                <div className="text-[10px] opacity-80 truncate leading-tight">👤 {clientName}</div>
+                              )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <div className="space-y-1">
+                              <div className="font-semibold">{title}</div>
+                              <div className="text-xs">
                                 {format(start, "HH:mm")} - {format(end, "HH:mm")}
                               </div>
-                            )}
-                            {height > 55 && clientName && (
-                              <div className="text-[11px] opacity-80 truncate leading-tight mt-0.5">👤 {clientName}</div>
-                            )}
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" className="max-w-xs">
-                          <div className="space-y-1">
-                            <div className="font-semibold">{title}</div>
-                            <div className="text-xs">
-                              {format(start, "HH:mm")} - {format(end, "HH:mm")}
+                              {clientName && <div className="text-xs">Cliente: {clientName}</div>}
+                              {comp.observacoes && (
+                                <div className="text-xs text-muted-foreground">{comp.observacoes}</div>
+                              )}
+                              {comp.profissional && (
+                                <div className="text-xs">Profissional: {comp.profissional.nome}</div>
+                              )}
                             </div>
-                            {clientName && <div className="text-xs">Cliente: {clientName}</div>}
-                            {comp.observacoes && (
-                              <div className="text-xs text-muted-foreground">{comp.observacoes}</div>
-                            )}
-                            {comp.profissional && (
-                              <div className="text-xs">Profissional: {comp.profissional.nome}</div>
-                            )}
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    );
-                  })}
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    });
+                  })()}
                 </div>
               );
             })}
