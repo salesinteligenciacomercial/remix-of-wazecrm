@@ -186,11 +186,36 @@ async function executeFromNode(nodeId: string, nodes: any[], edges: any[], conte
       break;
   }
 
-  // Seguir todas as edges de saída deste node (exceto conditions que já foram tratadas)
+  // Seguir edges de saída deste node (exceto conditions que já foram tratadas)
   if (node.type !== 'condition' && !context.waitingForInput) {
     const outgoingEdges = edges.filter((e: any) => e.source === node.id);
-    for (const edge of outgoingEdges) {
-      await executeFromNode(edge.target, nodes, edges, context, supabase, flowId);
+    
+    // Para menu interativo com botão selecionado, seguir apenas a edge do botão
+    if (node.type === 'interactive_menu' && context.selectedButton) {
+      const selectedIndex = (node.data?.buttons || []).findIndex((btn: any) => 
+        btn.id === context.selectedButton.id || btn.label === context.selectedButton.label
+      );
+      const btnHandle = `btn_${selectedIndex}`;
+      
+      // Buscar edge específica do botão selecionado
+      const specificEdge = outgoingEdges.find((e: any) => e.sourceHandle === btnHandle);
+      if (specificEdge) {
+        console.log(`🔀 Seguindo edge do botão ${selectedIndex}: ${context.selectedButton.label}`);
+        await executeFromNode(specificEdge.target, nodes, edges, context, supabase, flowId);
+      } else {
+        // Fallback: edge "default" ou qualquer edge sem handle específico
+        const defaultEdge = outgoingEdges.find((e: any) => e.sourceHandle === 'default' || !e.sourceHandle);
+        if (defaultEdge) {
+          console.log("🔀 Seguindo edge padrão do menu");
+          await executeFromNode(defaultEdge.target, nodes, edges, context, supabase, flowId);
+        }
+      }
+      // Limpar seleção
+      delete context.selectedButton;
+    } else {
+      for (const edge of outgoingEdges) {
+        await executeFromNode(edge.target, nodes, edges, context, supabase, flowId);
+      }
     }
   }
 }

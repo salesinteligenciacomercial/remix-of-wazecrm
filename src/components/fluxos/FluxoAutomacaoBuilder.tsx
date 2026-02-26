@@ -110,6 +110,89 @@ export function FluxoAutomacaoBuilder() {
     }
   };
 
+  const criarTemplateURA = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Não autenticado');
+
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!userRoles?.company_id) throw new Error('Empresa não encontrada');
+
+      const newFlowId = crypto.randomUUID();
+      const triggerId = crypto.randomUUID();
+      const menuId = crypto.randomUUID();
+      const routeVendasId = crypto.randomUUID();
+      const routeSuporteId = crypto.randomUUID();
+      const routeFinanceiroId = crypto.randomUUID();
+
+      const nodes = [
+        {
+          id: triggerId, type: 'trigger', position: { x: 50, y: 200 },
+          data: { label: 'Nova Mensagem', triggerType: 'nova_mensagem', description: 'Quando uma nova mensagem chegar' },
+        },
+        {
+          id: menuId, type: 'interactive_menu', position: { x: 350, y: 150 },
+          data: {
+            label: 'Menu URA',
+            welcomeMessage: 'Olá! 👋 Bem-vindo ao nosso atendimento.\n\nEscolha o setor desejado:',
+            menuStyle: 'text',
+            aiUnderstandsFreeText: true,
+            buttons: [
+              { id: crypto.randomUUID(), label: 'Vendas' },
+              { id: crypto.randomUUID(), label: 'Suporte' },
+              { id: crypto.randomUUID(), label: 'Financeiro' },
+            ],
+          },
+        },
+        {
+          id: routeVendasId, type: 'route_department', position: { x: 700, y: 50 },
+          data: { label: 'Vendas', department: 'Vendas', transferMessage: '✅ Transferindo para o setor de Vendas. Aguarde um momento...' },
+        },
+        {
+          id: routeSuporteId, type: 'route_department', position: { x: 700, y: 200 },
+          data: { label: 'Suporte', department: 'Suporte', transferMessage: '✅ Transferindo para o Suporte Técnico. Aguarde um momento...' },
+        },
+        {
+          id: routeFinanceiroId, type: 'route_department', position: { x: 700, y: 350 },
+          data: { label: 'Financeiro', department: 'Financeiro', transferMessage: '✅ Transferindo para o setor Financeiro. Aguarde um momento...' },
+        },
+      ];
+
+      const edges = [
+        { id: crypto.randomUUID(), source: triggerId, target: menuId, type: 'smoothstep', animated: true },
+        { id: crypto.randomUUID(), source: menuId, sourceHandle: 'btn_0', target: routeVendasId, type: 'smoothstep', animated: true },
+        { id: crypto.randomUUID(), source: menuId, sourceHandle: 'btn_1', target: routeSuporteId, type: 'smoothstep', animated: true },
+        { id: crypto.randomUUID(), source: menuId, sourceHandle: 'btn_2', target: routeFinanceiroId, type: 'smoothstep', animated: true },
+      ];
+
+      const { error } = await supabase
+        .from('automation_flows')
+        .insert({
+          id: newFlowId,
+          name: 'URA de Atendimento',
+          active: false,
+          nodes: nodes as any,
+          edges: edges as any,
+          company_id: userRoles.company_id,
+          owner_id: user.id,
+        });
+
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ['automation_flows'] });
+      setSelectedFluxoId(newFlowId);
+      setEditMode(true);
+      toast.success("Template URA criado! Configure os responsáveis de cada departamento.");
+    } catch (error: any) {
+      toast.error(error?.message || "Erro ao criar template URA");
+    }
+  };
+
   const excluirFluxo = async (fluxoId: string) => {
     try {
       const { error } = await supabase
@@ -151,10 +234,16 @@ export function FluxoAutomacaoBuilder() {
             Crie fluxos visuais para automatizar atendimento e processos
           </p>
         </div>
-        <Button onClick={criarNovoFluxo}>
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Fluxo
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={criarNovoFluxo}>
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Fluxo
+          </Button>
+          <Button variant="outline" onClick={criarTemplateURA}>
+            <Zap className="h-4 w-4 mr-2" />
+            Template URA
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (

@@ -5,7 +5,7 @@ export function InteractiveMenuNode({ data }: any) {
   const buttons = data.buttons || [];
 
   return (
-    <div className="px-6 py-4 shadow-lg rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 border-2 border-teal-400 min-w-[240px] max-w-[260px] break-words">
+    <div className="px-6 py-4 shadow-lg rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 border-2 border-teal-400 min-w-[240px] max-w-[280px] break-words">
       <Handle
         type="target"
         position={Position.Left}
@@ -27,24 +27,35 @@ export function InteractiveMenuNode({ data }: any) {
       </div>
       
       {buttons.length > 0 && (
-        <div className="mt-3 space-y-1">
-          {buttons.slice(0, 3).map((btn: any, i: number) => (
-            <div key={i} className="text-[10px] bg-white/15 rounded px-2 py-1 text-white/90">
-              🔘 {btn.label || `Botão ${i + 1}`}
+        <div className="mt-3 space-y-1.5">
+          {buttons.map((btn: any, i: number) => (
+            <div key={btn.id || i} className="relative flex items-center">
+              <div className="text-[10px] bg-white/15 rounded px-2 py-1 text-white/90 flex-1">
+                {i + 1}️⃣ {btn.label || `Botão ${i + 1}`}
+              </div>
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={`btn_${i}`}
+                className="!w-2.5 !h-2.5 !bg-white !border-2 !border-teal-300 !relative !right-[-12px] !top-auto !transform-none"
+                style={{ position: 'relative', right: -12, top: 'auto', transform: 'none' }}
+              />
             </div>
           ))}
-          {buttons.length > 3 && (
-            <div className="text-[10px] text-white/60">+{buttons.length - 3} botões...</div>
-          )}
         </div>
       )}
 
-      {/* Multiple output handles for each button */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="w-3 h-3 !bg-teal-300 !border-2 !border-white"
-      />
+      {/* Default output handle (fallback / no match) */}
+      <div className="mt-2 flex items-center justify-end">
+        <span className="text-[9px] text-white/50 mr-1">padrão</span>
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="default"
+          className="!w-2.5 !h-2.5 !bg-teal-300 !border-2 !border-white !relative !right-[-12px] !top-auto !transform-none"
+          style={{ position: 'relative', right: -12, top: 'auto', transform: 'none' }}
+        />
+      </div>
     </div>
   );
 }
