@@ -1082,7 +1082,7 @@ export default function Configuracoes() {
       )}
 
       <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className={`grid w-full ${isMasterAccount ? 'grid-cols-7' : 'grid-cols-6'}`}>
+        <TabsList className={`grid w-full ${isMasterAccount ? 'grid-cols-6' : 'grid-cols-5'}`}>
           {isMasterAccount && (
             <TabsTrigger value="subcontas">
               <Building2 className="mr-2 h-4 w-4" />
@@ -1090,7 +1090,7 @@ export default function Configuracoes() {
             </TabsTrigger>
           )}
           <TabsTrigger value="team">Equipe</TabsTrigger>
-          <TabsTrigger value="produtos">Produtos</TabsTrigger>
+          
           <TabsTrigger value="channels">Canais</TabsTrigger>
           <TabsTrigger value="ia">IA</TabsTrigger>
           <TabsTrigger value="webhooks_api">Webhooks</TabsTrigger>
@@ -1113,9 +1113,6 @@ export default function Configuracoes() {
           {(hasRole('admin') || hasRole('company_admin')) && <EquipeConfigSection />}
         </TabsContent>
 
-        <TabsContent value="produtos">
-          <ProdutosServicosManager />
-        </TabsContent>
 
         <TabsContent value="channels" className="space-y-4">
           <WhatsAppQRCode />
