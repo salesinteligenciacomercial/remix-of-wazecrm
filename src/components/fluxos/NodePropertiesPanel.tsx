@@ -5,9 +5,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Settings2, Upload, Trash2 } from 'lucide-react';
-import React, { useState } from 'react';
+import { Settings2, Upload, Trash2, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { supabase } from '@/integrations/supabase/client';
 
 interface NodePropertiesPanelProps {
   selectedNode: Node | null;
@@ -651,58 +652,7 @@ export function NodePropertiesPanel({ selectedNode, onUpdate }: NodePropertiesPa
         );
 
       case 'route_department':
-        return (
-          <>
-            <div className="space-y-2">
-              <Label className="text-slate-300 text-xs font-medium">Título</Label>
-              <Input
-                value={selectedNode.data.label || ''}
-                onChange={(e) => updateNodeData('label', e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white"
-                placeholder="Ex: Direcionar para Financeiro"
-                {...inputProps}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300 text-xs font-medium">Departamento</Label>
-              <Input
-                value={selectedNode.data.department || ''}
-                onChange={(e) => updateNodeData('department', e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white"
-                placeholder="Ex: Financeiro, Suporte, Vendas"
-                {...inputProps}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300 text-xs font-medium">ID do Usuário Responsável</Label>
-              <Input
-                value={selectedNode.data.assignedUserId || ''}
-                onChange={(e) => updateNodeData('assignedUserId', e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white"
-                placeholder="UUID do usuário responsável"
-                {...inputProps}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300 text-xs font-medium">Mensagem ao Transferir</Label>
-              <Textarea
-                value={selectedNode.data.transferMessage || ''}
-                onChange={(e) => updateNodeData('transferMessage', e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white resize-none"
-                placeholder="Estou transferindo você para o setor..."
-                rows={2}
-                {...inputProps}
-              />
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <Label className="text-slate-300 text-xs font-medium">Notificar Responsável</Label>
-              <Switch
-                checked={selectedNode.data.notifyAssigned !== false}
-                onCheckedChange={(v) => updateNodeData('notifyAssigned', v)}
-              />
-            </div>
-          </>
-        );
+        return <RouteDepartmentProperties selectedNode={selectedNode} updateNodeData={updateNodeData} inputProps={inputProps} />;
 
       default:
         return null;
@@ -767,5 +717,117 @@ export function NodePropertiesPanel({ selectedNode, onUpdate }: NodePropertiesPa
         </Button>
       </div>
     </div>
+  );
+}
+
+// Sub-component for route_department with real user dropdown
+function RouteDepartmentProperties({ selectedNode, updateNodeData, inputProps }: { selectedNode: Node; updateNodeData: (key: string, value: any) => void; inputProps: any }) {
+  const [users, setUsers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data: role } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single();
+        if (!role?.company_id) return;
+
+        const { data: companyUsers } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('company_id', role.company_id);
+
+        if (!companyUsers) return;
+
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', companyUsers.map(u => u.user_id));
+
+        setUsers((profiles || []).map(p => ({ id: p.id, name: p.full_name || p.email || 'Sem nome', email: p.email || '' })));
+      } catch (e) {
+        console.error('Erro ao carregar usuários:', e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadUsers();
+  }, []);
+
+  const departments = ['Vendas', 'Suporte', 'Financeiro', 'Comercial', 'Técnico', 'Administrativo', 'SAC'];
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label className="text-slate-300 text-xs font-medium">Título</Label>
+        <Input
+          value={selectedNode.data.label || ''}
+          onChange={(e) => updateNodeData('label', e.target.value)}
+          className="bg-slate-800 border-slate-700 text-white"
+          placeholder="Ex: Direcionar para Financeiro"
+          {...inputProps}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label className="text-slate-300 text-xs font-medium">Departamento</Label>
+        <Select
+          value={selectedNode.data.department || ''}
+          onValueChange={(v) => updateNodeData('department', v)}
+        >
+          <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+            <SelectValue placeholder="Selecione o departamento" />
+          </SelectTrigger>
+          <SelectContent className="bg-slate-800 border-slate-700 z-50">
+            {departments.map(dep => (
+              <SelectItem key={dep} value={dep}>{dep}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-slate-300 text-xs font-medium">Responsável</Label>
+        {loading ? (
+          <div className="flex items-center gap-2 text-slate-400 text-xs py-2">
+            <Loader2 className="h-3 w-3 animate-spin" /> Carregando usuários...
+          </div>
+        ) : (
+          <Select
+            value={selectedNode.data.assignedUserId || ''}
+            onValueChange={(v) => updateNodeData('assignedUserId', v)}
+          >
+            <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+              <SelectValue placeholder="Selecione o responsável" />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-800 border-slate-700 z-50">
+              <SelectItem value="auto">🔄 Automático (fila)</SelectItem>
+              {users.map(u => (
+                <SelectItem key={u.id} value={u.id}>
+                  👤 {u.name} {u.email ? `(${u.email})` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+      <div className="space-y-2">
+        <Label className="text-slate-300 text-xs font-medium">Mensagem ao Transferir</Label>
+        <Textarea
+          value={selectedNode.data.transferMessage || ''}
+          onChange={(e) => updateNodeData('transferMessage', e.target.value)}
+          className="bg-slate-800 border-slate-700 text-white resize-none"
+          placeholder="Estou transferindo você para o setor..."
+          rows={2}
+          {...inputProps}
+        />
+      </div>
+      <div className="flex items-center justify-between py-2">
+        <Label className="text-slate-300 text-xs font-medium">Notificar Responsável</Label>
+        <Switch
+          checked={selectedNode.data.notifyAssigned !== false}
+          onCheckedChange={(v) => updateNodeData('notifyAssigned', v)}
+        />
+      </div>
+    </>
   );
 }
