@@ -1906,6 +1906,32 @@ serve(async (req) => {
           if (!flowStarted && leadId) {
             console.log('🤖 [WEBHOOK-IA] Nenhum fluxo ativo, verificando IA...');
             
+            // ⚡ VERIFICAR SE HUMANO ESTÁ EM ATENDIMENTO ATIVO
+            // Se sim, pausar IA automaticamente para não interferir
+            let humanIsAttending = false;
+            if (telefoneFormatadoFinal) {
+              const { data: activeAttendance } = await supabase
+                .from('active_attendances')
+                .select('id, attending_user_name, expires_at')
+                .eq('telefone_formatado', telefoneFormatadoFinal)
+                .eq('company_id', companyId)
+                .gt('expires_at', new Date().toISOString())
+                .maybeSingle();
+              
+              if (activeAttendance) {
+                humanIsAttending = true;
+                console.log('👤 [WEBHOOK-IA] Humano em atendimento ativo - IA PAUSADA:', {
+                  attendant: activeAttendance.attending_user_name,
+                  expires: activeAttendance.expires_at,
+                  telefone: telefoneFormatadoFinal
+                });
+              }
+            }
+            
+            if (humanIsAttending) {
+              console.log('⛔ [WEBHOOK-IA] IA pausada - humano está atendendo este contato');
+            } else {
+            
             // Consultar conversation_ai_settings para modo por conversa
             let aiModeForConversation: string | null = null;
             const telefoneParaBusca = telefoneFormatadoFinal || numeroLimpo;
@@ -1948,7 +1974,6 @@ serve(async (req) => {
               }).then(async (r) => {
                 const result = await r.json();
                 if (result.response) {
-                  // Delay humanizado antes de responder
                   const delay = result.suggestedDelay || 2000;
                   await new Promise(resolve => setTimeout(resolve, delay));
                   console.log(`⏱️ [WEBHOOK-IA] Delay de ${delay}ms aplicado para humanização`);
@@ -1957,6 +1982,23 @@ serve(async (req) => {
                     headers: { 'Authorization': `Bearer ${supabaseKeyEnv}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ numero: numeroLimpo, mensagem: result.response, tipo_mensagem: 'text', company_id: companyId })
                   });
+                  // 💾 Salvar resposta da IA no CRM para ficar visível
+                  await supabase.from('conversas').insert({
+                    numero: numeroFinal,
+                    telefone_formatado: telefoneFormatadoFinal,
+                    mensagem: result.response,
+                    origem: 'WhatsApp',
+                    status: 'Enviada',
+                    tipo_mensagem: 'texto',
+                    nome_contato: nomeContatoFinal,
+                    lead_id: leadId,
+                    company_id: companyId,
+                    fromme: true,
+                    sent_by: 'IA Atendimento',
+                    delivered: true,
+                    read: false,
+                  });
+                  console.log('💾 [WEBHOOK-IA] Resposta da IA salva no CRM');
                 }
               }).catch(e => console.error('❌ [WEBHOOK-IA] Erro ia-atendimento:', e));
             }
@@ -1976,7 +2018,6 @@ serve(async (req) => {
               }).then(async (r) => {
                 const result = await r.json();
                 if (result.response) {
-                  // Delay humanizado antes de responder
                   const delay = result.suggestedDelay || 2000;
                   await new Promise(resolve => setTimeout(resolve, delay));
                   console.log(`⏱️ [WEBHOOK-IA] Delay de ${delay}ms aplicado para humanização`);
@@ -1985,6 +2026,23 @@ serve(async (req) => {
                     headers: { 'Authorization': `Bearer ${supabaseKeyEnv}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ numero: numeroLimpo, mensagem: result.response, tipo_mensagem: 'text', company_id: companyId })
                   });
+                  // 💾 Salvar resposta da IA no CRM para ficar visível
+                  await supabase.from('conversas').insert({
+                    numero: numeroFinal,
+                    telefone_formatado: telefoneFormatadoFinal,
+                    mensagem: result.response,
+                    origem: 'WhatsApp',
+                    status: 'Enviada',
+                    tipo_mensagem: 'texto',
+                    nome_contato: nomeContatoFinal,
+                    lead_id: leadId,
+                    company_id: companyId,
+                    fromme: true,
+                    sent_by: 'IA Agendamento',
+                    delivered: true,
+                    read: false,
+                  });
+                  console.log('💾 [WEBHOOK-IA] Resposta da IA Agendamento salva no CRM');
                 }
               }).catch(e => console.error('❌ [WEBHOOK-IA] Erro ia-agendamento:', e));
             }
@@ -2018,7 +2076,6 @@ serve(async (req) => {
                   const iaResult = await iaResponse.json();
                   if (!iaResult.active || iaResult.shouldTransfer) return;
                   if (iaResult.response) {
-                    // Delay humanizado antes de responder
                     const delay = iaResult.suggestedDelay || 2000;
                     await new Promise(resolve => setTimeout(resolve, delay));
                     console.log(`⏱️ [WEBHOOK-IA] Delay de ${delay}ms aplicado para humanização`);
@@ -2028,12 +2085,30 @@ serve(async (req) => {
                       headers: { 'Authorization': `Bearer ${supabaseKeyEnv}`, 'Content-Type': 'application/json' },
                       body: JSON.stringify({ numero: numeroLimpo, mensagem: iaResult.response, tipo_mensagem: 'text', company_id: companyId })
                     });
+                    // 💾 Salvar resposta da IA no CRM para ficar visível
+                    await supabase.from('conversas').insert({
+                      numero: numeroLimpo,
+                      telefone_formatado: telefoneFormatadoFinal,
+                      mensagem: iaResult.response,
+                      origem: 'WhatsApp',
+                      status: 'Enviada',
+                      tipo_mensagem: 'texto',
+                      nome_contato: nomeContatoFinal,
+                      lead_id: leadId,
+                      company_id: companyId,
+                      fromme: true,
+                      sent_by: 'IA Orquestrador',
+                      delivered: true,
+                      read: false,
+                    });
+                    console.log('💾 [WEBHOOK-IA] Resposta do Orquestrador salva no CRM');
                   }
                 }).catch((iaError) => { console.error('❌ [WEBHOOK-IA] Erro:', iaError); });
               } else {
                 console.log('⚠️ [WEBHOOK] IA desativada para empresa:', companyId);
               }
             }
+            } // fim do else humanIsAttending
           }
         }
       } catch (flowError) {
