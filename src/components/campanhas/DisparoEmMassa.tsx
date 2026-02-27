@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { uploadMediaToStorage } from "@/utils/uploadMediaToStorage";
 import { robustFormatPhoneNumber } from "@/utils/phoneFormatter";
 import { TemplateSelector, Template } from "./TemplateSelector";
 import { buildTemplateComponents as buildTemplateComponentsHelper, buildTemplateTextContent as buildTemplateTextContentHelper } from "@/utils/templateHelpers";
@@ -329,12 +330,15 @@ export function DisparoEmMassa() {
     let successCount = 0;
     let errorCount = 0;
     let mediaData: { base64: string; mimeType: string; fileName: string } | null = null;
+    let mediaStorageUrl: string | null = null;
     const campanhaId = `campanha_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // Converter mídia para base64 se necessário
+    // Converter mídia para base64 (para envio WhatsApp) e upload para Storage (para salvar no banco)
     if (mediaFile) {
       try {
         mediaData = await convertFileToBase64(mediaFile);
+        // Upload para Storage para salvar URL no banco (não Base64)
+        mediaStorageUrl = await uploadMediaToStorage(mediaFile, companyId);
       } catch (error) {
         toast.error("Erro ao processar arquivo de mídia");
         setSending(false);
@@ -447,12 +451,10 @@ export function DisparoEmMassa() {
             is_group: false, // Garantir que não é grupo
           };
 
-          // Adicionar URL da mídia se houver
-          if (mediaData && messageType !== "text") {
-            conversaData.media_url = `data:${mediaData.mimeType};base64,${mediaData.base64}`;
-            conversaData.midia_url = `data:${mediaData.mimeType};base64,${mediaData.base64}`; // Também salvar em midia_url (campo usado pelo sistema)
-            conversaData.arquivo_url = `data:${mediaData.mimeType};base64,${mediaData.base64}`;
-            conversaData.arquivo_nome = mediaData.fileName;
+          // ⚡ CORREÇÃO: Usar URL do Storage em vez de Base64
+          if (mediaStorageUrl && messageType !== "text") {
+            conversaData.midia_url = mediaStorageUrl;
+            conversaData.arquivo_nome = mediaData?.fileName;
           }
 
           const { error: insertError, data: insertedData } = await supabase.from("conversas").insert([conversaData]).select();

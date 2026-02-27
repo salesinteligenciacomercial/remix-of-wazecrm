@@ -11,6 +11,7 @@ import {
   Bot, Bell, Calendar, CheckCircle, ArrowRightLeft, FileText, Paperclip
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadMediaToStorage } from "@/utils/uploadMediaToStorage";
 import { toast } from "sonner";
 import { safeFormatPhoneNumber } from "@/utils/phoneFormatter";
 import { AudioRecorder } from "@/components/conversas/AudioRecorder";
@@ -945,14 +946,15 @@ export function ConversaPopup({
 
       const companyId = await getCompanyId();
       
-      // ⚡ CORREÇÃO: Criar data URL para salvar no banco e exibição
-      const dataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          resolve(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      });
+      // ⚡ CORREÇÃO: Upload para Storage em vez de salvar Base64 no banco
+      let storageUrl: string | null = null;
+      try {
+        if (companyId) {
+          storageUrl = await uploadMediaToStorage(file, companyId, { fileName: file.name });
+        }
+      } catch (uploadErr) {
+        console.warn('⚠️ [CONVERSA-POPUP] Falha no upload para Storage, continuando sem URL:', uploadErr);
+      }
 
       const { data: inserted, error: dbError } = await supabase.from("conversas").insert({
         numero: telefoneNormalizado,
@@ -963,11 +965,10 @@ export function ConversaPopup({
         tipo_mensagem: type,
         nome_contato: leadName,
         arquivo_nome: file.name,
-        midia_url: dataUrl, // ⚡ Salvar URL da mídia
-        media_url: dataUrl, // ⚡ Campo alternativo para mídia
+        midia_url: storageUrl, // ⚡ URL do Storage (não Base64)
         company_id: companyId,
-        fromme: true, // Marcar como mensagem enviada pelo usuário
-        sent_by: currentUserName || "Equipe", // ✅ Nome do usuário que enviou
+        fromme: true,
+        sent_by: currentUserName || "Equipe",
       }).select('id').single();
 
       // ⚡ Log detalhado para debugging
@@ -975,8 +976,7 @@ export function ConversaPopup({
         telefoneNormalizado,
         type,
         fileName: file.name,
-        hasDataUrl: !!dataUrl,
-        dataUrlLength: dataUrl?.length || 0,
+        hasStorageUrl: !!storageUrl,
         companyId,
         leadName
       });
@@ -1003,7 +1003,7 @@ export function ConversaPopup({
         sender: "user",
         timestamp: new Date(),
         delivered: true,
-        mediaUrl: dataUrl, // ⚡ Usar data URL permanente
+        mediaUrl: storageUrl || URL.createObjectURL(file), // ⚡ Usar URL do Storage ou blob local
         sentBy: currentUserName || "Equipe", // ✅ Nome do usuário
         fileName: file.name,
         mimeType: file.type,
@@ -1058,6 +1058,19 @@ export function ConversaPopup({
 
       const companyId = await getCompanyId();
       
+      // ⚡ Upload áudio para Storage
+      let audioStorageUrl: string | null = null;
+      try {
+        if (companyId) {
+          audioStorageUrl = await uploadMediaToStorage(audioBlob, companyId, {
+            fileName: 'audio.ogg',
+            contentType: 'audio/ogg; codecs=opus',
+          });
+        }
+      } catch (uploadErr) {
+        console.warn('⚠️ Falha no upload de áudio para Storage:', uploadErr);
+      }
+      
       // Buscar dados do usuário para assinatura
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -1070,10 +1083,11 @@ export function ConversaPopup({
           status: "Enviada",
           tipo_mensagem: 'audio',
           nome_contato: leadName,
+          midia_url: audioStorageUrl, // ⚡ URL do Storage (não Base64)
           company_id: companyId,
           owner_id: user?.id,
-          sent_by: currentUserName || "Equipe", // ✅ Assinatura do usuário
-          fromme: true, // ✅ Marcar como enviada pelo usuário
+          sent_by: currentUserName || "Equipe",
+          fromme: true,
         },
       ]);
 
