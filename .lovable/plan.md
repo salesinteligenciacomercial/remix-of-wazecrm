@@ -1,35 +1,36 @@
 
 
-## Plan: Visual Kanban/Google Calendar View for Agenda
+## Problem: Storage Bloat from Base64 in Database
 
-### What changes
-Replace the right-side "Compromissos do dia" card in the "Visão Geral" tab with a Google Calendar-style weekly timeline view showing appointments as colored blocks with title, time, and description.
+The root cause of rapid storage consumption is clear: **when users send media files (images, videos, audio, documents) from the CRM frontend, the full Base64 data URL is saved directly into the `conversas` table** (`midia_url` and `media_url` columns).
 
-### Implementation Steps
+A single 5MB image becomes ~6.7MB of Base64 text stored in the database. Videos can be 40-60MB of Base64 per message. This is why 19 GB of your 22 GB usage is in the `conversas` table.
 
-1. **Create `AgendaWeekView` component** (`src/components/agenda/AgendaWeekView.tsx`)
-   - Weekly timeline grid (7 columns for days, rows for hours 7AM-8PM)
-   - Appointments rendered as colored blocks positioned by start time and sized by duration
-   - Color coding by status: blue = agendado, green = concluído, red = cancelado
-   - Each block shows: title, time range, patient/lead name
-   - Click on block opens existing edit dialog
-   - Current time indicator (red line like Google Calendar)
+The webhook (`webhook-conversas`) already correctly uploads media to Storage and saves only the URL. But the **frontend send flow** (`ConversaPopup.tsx` lines 957-971) bypasses this entirely.
 
-2. **Create `AgendaDayView` component** (`src/components/agenda/AgendaDayView.tsx`)
-   - Single day expanded timeline view (taller slots, more detail per block)
-   - Reuses same color scheme and block rendering
-   - Shows more detail: observações, profissional, etc.
+### Implementation Plan
 
-3. **Update `src/pages/Agenda.tsx` "Visão Geral" tab**
-   - Replace the right-side Card (compromissos do dia list) with a toggle: Day View / Week View
-   - Keep the calendar on the left as-is (it's the date picker)
-   - Import and render the new components, passing `compromissosDoMes`, `selectedDate`, and action handlers (edit, delete, status change)
-   - Keep all existing functionality (status badges, duplicate, retorno, edit, delete buttons) accessible via click/popover on each block
+**Step 1: Upload media to Storage before saving to `conversas` (ConversaPopup.tsx)**
+- In `handleSendMedia`: After sending via WhatsApp, upload the file to Storage bucket `whatsapp-media` and save only the Storage URL (not the data URL) in `midia_url`/`media_url`
+- In `handleSendAudio`: Same fix — upload audio blob to Storage, save URL only
+- Create a shared helper function `uploadMediaToStorage(file, messageId)` that uploads to `whatsapp-media/{company_id}/{messageId}.{ext}` and returns the public URL
+
+**Step 2: Create Storage bucket if needed (migration)**
+- Ensure `whatsapp-media` bucket exists with appropriate policies (the webhook already uses it, so it likely exists)
+
+**Step 3: Clean existing Base64 data from `conversas` (migration)**
+- Create a SQL migration that:
+  1. Identifies rows where `midia_url` starts with `data:` (Base64 content)
+  2. Sets those to `NULL` (the media was already sent via WhatsApp, the recipient has it)
+  3. Runs in batches to avoid locking
+- This will immediately reclaim most of the 19 GB
+
+**Step 4: Also fix `DisparoEmMassa.tsx`**
+- Check if mass dispatch also saves Base64 to conversas and fix similarly
 
 ### Technical Details
-- No database changes needed
-- No new dependencies — pure CSS grid positioning for the timeline
-- Block position: `top = (startHour - 7) * hourHeight`, `height = durationMinutes / 60 * hourHeight`
-- Status colors map: `{ agendado: 'bg-blue-500', concluido: 'bg-green-500', cancelado: 'bg-red-500', confirmado: 'bg-emerald-500' }`
-- Week view columns derived from `eachDayOfInterval` around `selectedDate`
+- Storage path: `whatsapp-media/{company_id}/{timestamp}-{filename}`
+- Use `supabase.storage.from('whatsapp-media').upload(path, file)` then `getPublicUrl()`
+- The cleanup migration: `UPDATE conversas SET midia_url = NULL, media_url = NULL WHERE midia_url LIKE 'data:%'`
+- After VACUUM, expect to recover 15-18 GB of storage
 
