@@ -6595,7 +6595,7 @@ function Conversas() {
             status_envio: 'pendente',
             data_envio: dataEnvio.toISOString(),
             destinatario: 'lead',
-            telefone_responsavel: profile?.full_name || user.email,
+            telefone_responsavel: leadVinculado?.phone || leadVinculado?.telefone || null,
             company_id: companyId
           };
           console.log('📝 [LEMBRETE] Dados do lembrete:', {

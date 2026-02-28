@@ -65,21 +65,23 @@ export function EditarUsuarioDialog({
   useEffect(() => {
     const loadUserData = async () => {
       if (colaborador) {
-        // Buscar avatar_url do profile
+        // Buscar avatar_url e phone do profile
         let avatarUrl = "";
+        let phoneValue = "";
         if (colaborador.userId) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("avatar_url")
+            .select("avatar_url, phone")
             .eq("id", colaborador.userId)
             .maybeSingle();
           avatarUrl = profile?.avatar_url || "";
+          phoneValue = (profile as any)?.phone || "";
         }
         
         setFormData({
           nome: colaborador.nome || "",
           email: colaborador.email || "",
-          telefone: "",
+          telefone: phoneValue,
           funcao: colaborador.funcao || "vendedor",
           password: "",
           avatar_url: avatarUrl,
@@ -279,6 +281,14 @@ export function EditarUsuarioDialog({
         requestBody.password = formData.password;
       }
 
+      // Salvar telefone diretamente no profile
+      if (formData.telefone && colaborador.userId) {
+        await supabase
+          .from("profiles")
+          .update({ phone: formData.telefone } as any)
+          .eq("id", colaborador.userId);
+      }
+
       const { data, error } = await supabase.functions.invoke('editar-usuario', {
         body: requestBody,
       });
@@ -397,6 +407,20 @@ export function EditarUsuarioDialog({
               value={formData.email}
               onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
             />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="edit-telefone">Telefone (WhatsApp)</Label>
+            <Input
+              id="edit-telefone"
+              type="tel"
+              placeholder="5587999999999"
+              value={formData.telefone}
+              onChange={(e) => setFormData(prev => ({ ...prev, telefone: e.target.value }))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Usado para receber lembretes de compromissos e tarefas
+            </p>
           </div>
 
           <div className="grid gap-2">
