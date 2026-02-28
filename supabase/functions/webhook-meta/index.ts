@@ -794,54 +794,66 @@ serve(async (req) => {
             // Usar o sender ID como número (Instagram não tem telefone)
             const instagramUserId = msg.from || 'instagram_user';
 
-            // 📸 CORREÇÃO: Buscar username real do Instagram via Graph API
-            let instagramUsername = msg.contact_name || instagramUserId;
+            // 📸 CORREÇÃO: Buscar username real do Instagram
+            // IGSID (Instagram Scoped ID) NÃO funciona com /{id}?fields=username,name
+            // Solução: usar /{ig-page-id}/conversations?user_id={igsid}&platform=instagram
+            let instagramUsername = instagramUserId; // Default: ID numérico
             const igAccessToken = connection.instagram_access_token || connection.meta_access_token;
+            const igAccountId = msg.instagram_account_id;
             
-            if (igAccessToken && instagramUserId !== 'instagram_user') {
+            if (igAccessToken && instagramUserId !== 'instagram_user' && igAccountId) {
               try {
-                console.log('📸 [INSTAGRAM] Buscando username para ID:', instagramUserId);
+                console.log('📸 [INSTAGRAM] Buscando nome para IGSID:', instagramUserId);
                 
-                // Tentar buscar perfil do usuário via Instagram Graph API
-                // Para Instagram Messaging, o sender ID é um IGSID (Instagram Scoped ID)
-                // Endpoint correto: /{user-id}?fields=username,name
-                const userInfoUrl = `https://graph.facebook.com/v18.0/${instagramUserId}?fields=username,name&access_token=${igAccessToken}`;
-                const userInfoRes = await fetch(userInfoUrl);
+                // Método 1: Buscar via conversations API do Instagram
+                const convUrl = `https://graph.facebook.com/v18.0/${igAccountId}/conversations?user_id=${instagramUserId}&platform=instagram&fields=participants,name&access_token=${igAccessToken}`;
+                console.log('📸 [INSTAGRAM] Conversations URL:', convUrl.replace(igAccessToken, '***'));
+                const convRes = await fetch(convUrl);
                 
-                if (userInfoRes.ok) {
-                  const userInfo = await userInfoRes.json();
-                  console.log('📸 [INSTAGRAM] User info obtido:', JSON.stringify(userInfo));
+                if (convRes.ok) {
+                  const convData = await convRes.json();
+                  console.log('📸 [INSTAGRAM] Conversations data:', JSON.stringify(convData));
                   
-                  // Preferir name > username > ID
-                  if (userInfo.name) {
-                    instagramUsername = userInfo.name;
-                  } else if (userInfo.username) {
-                    instagramUsername = userInfo.username;
+                  // Extrair nome do participante que não é a página
+                  if (convData.data && convData.data.length > 0) {
+                    const conversation = convData.data[0];
+                    const participants = conversation.participants?.data || [];
+                    const otherParticipant = participants.find((p: any) => p.id !== igAccountId);
+                    if (otherParticipant) {
+                      instagramUsername = otherParticipant.username || otherParticipant.name || instagramUserId;
+                      console.log('📸 [INSTAGRAM] Nome encontrado via conversations:', instagramUsername);
+                    }
+                    // Também pode vir como "name" da conversa
+                    if (instagramUsername === instagramUserId && conversation.name) {
+                      instagramUsername = conversation.name;
+                    }
                   }
                 } else {
-                  const errText = await userInfoRes.text();
-                  console.warn('⚠️ [INSTAGRAM] Falha ao buscar username (tentativa 1):', errText);
-                  
-                  // Fallback: tentar endpoint alternativo com instagram_business_basic
+                  const errText = await convRes.text();
+                  console.warn('⚠️ [INSTAGRAM] Conversations API falhou:', errText);
+                }
+                
+                // Método 2 (fallback): Tentar buscar username via user_id direto com Page token
+                if (instagramUsername === instagramUserId) {
                   try {
-                    const altUrl = `https://graph.instagram.com/v18.0/${instagramUserId}?fields=username,name&access_token=${igAccessToken}`;
-                    const altRes = await fetch(altUrl);
-                    if (altRes.ok) {
-                      const altInfo = await altRes.json();
-                      console.log('📸 [INSTAGRAM] User info (alt):', JSON.stringify(altInfo));
-                      if (altInfo.name) instagramUsername = altInfo.name;
-                      else if (altInfo.username) instagramUsername = altInfo.username;
-                    } else {
-                      console.warn('⚠️ [INSTAGRAM] Fallback também falhou:', await altRes.text());
+                    const userUrl = `https://graph.facebook.com/v18.0/${instagramUserId}?fields=name,username,profile_pic&access_token=${igAccessToken}`;
+                    const userRes = await fetch(userUrl);
+                    if (userRes.ok) {
+                      const userData = await userRes.json();
+                      console.log('📸 [INSTAGRAM] User data (fallback):', JSON.stringify(userData));
+                      if (userData.name) instagramUsername = userData.name;
+                      else if (userData.username) instagramUsername = userData.username;
                     }
-                  } catch (altErr) {
-                    console.warn('⚠️ [INSTAGRAM] Erro no fallback:', altErr);
+                  } catch (e) {
+                    console.warn('⚠️ [INSTAGRAM] User fallback falhou');
                   }
                 }
               } catch (userErr) {
                 console.warn('⚠️ [INSTAGRAM] Erro ao buscar username:', userErr);
               }
             }
+            
+            console.log('📸 [INSTAGRAM] Nome final do contato:', instagramUsername);
 
             // Buscar lead existente pelo Instagram ID ou criar identificador
             const { data: existingLead } = await supabase
