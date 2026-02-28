@@ -5330,7 +5330,11 @@ function Conversas() {
     // ⚡ CORREÇÃO CRÍTICA: Salvar mensagem no banco PRIMEIRO (antes de enviar)
     // Isso garante que a mensagem apareça no CRM mesmo se o envio falhar
     console.log('💾 [ENVIO] Salvando mensagem no banco PRIMEIRO...');
-    const numeroNormalizado = normalizePhoneForWA(selectedConv.phoneNumber || selectedConv.id);
+    const isInstagramConv = selectedConv.channel === 'instagram';
+    // ⚡ CORREÇÃO: Para Instagram, usar ID numérico puro (sem ig_ e sem 55 prefix)
+    const rawPhoneOrId = selectedConv.phoneNumber || selectedConv.id;
+    const instagramId = rawPhoneOrId.replace(/^ig_/, '').replace(/[^0-9]/g, '');
+    const numeroNormalizado = isInstagramConv ? instagramId : normalizePhoneForWA(rawPhoneOrId);
     let mensagemSalva = false;
     let insertedMsgId: string | null = null;
     try {
@@ -5351,8 +5355,8 @@ function Conversas() {
         } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single();
         if (userRole?.company_id) {
           const repliedMessage = replyingTo ? selectedConv.messages.find(m => m.id === replyingTo)?.content : null;
-          // ✅ CORREÇÃO: Usar número ORIGINAL do lead (não normalizado) para manter consistência com webhook
-          const numeroOriginal = selectedConv.phoneNumber || selectedConv.id;
+          // ✅ CORREÇÃO: Para Instagram, usar ID numérico (consistente com webhook)
+          const numeroOriginal = isInstagramConv ? instagramId : (selectedConv.phoneNumber || selectedConv.id);
           const {
             data: insertedMsg,
             error: dbError
@@ -5404,7 +5408,7 @@ function Conversas() {
       if (isInstagramChannel) {
         // 📸 INSTAGRAM: Enviar via edge function dedicada
         console.log('📸 [ENVIO-INSTAGRAM] Enviando via Instagram API...');
-        const recipientId = (selectedConv.phoneNumber || selectedConv.id).replace(/[^0-9]/g, '');
+        const recipientId = instagramId;
         const companyId = await getCompanyId();
         
         const res = await supabase.functions.invoke('enviar-instagram', {
@@ -5450,11 +5454,12 @@ function Conversas() {
       }
 
       if (error) {
-        console.error('❌ [ENVIO] Erro ao enviar mensagem via WhatsApp:', error);
+        const canalNome = selectedConv.channel === 'instagram' ? 'Instagram' : 'WhatsApp';
+        console.error(`❌ [ENVIO] Erro ao enviar mensagem via ${canalNome}:`, error);
 
         // Se a mensagem foi salva, apenas avisar sobre o envio
         if (mensagemSalva) {
-          toast.warning('Mensagem salva, mas pode não ter sido enviada. Verifique a conexão WhatsApp.');
+          toast.warning(`Mensagem salva, mas pode não ter sido enviada. Verifique a conexão ${canalNome}.`);
         } else {
           toast.error(`Erro ao enviar mensagem: ${error.message || 'Erro desconhecido'}`);
         }
@@ -5495,8 +5500,8 @@ function Conversas() {
             } = await supabase.from('user_roles').select('company_id').eq('user_id', user.id).single();
             if (userRole?.company_id) {
               const repliedMessage = replyingTo ? selectedConv.messages.find(m => m.id === replyingTo)?.content : null;
-              // ✅ CORREÇÃO: Usar número ORIGINAL do lead (não normalizado) para manter consistência com webhook
-              const numeroOriginal = selectedConv.phoneNumber || selectedConv.id;
+              // ✅ CORREÇÃO: Para Instagram, usar ID numérico (consistente com webhook)
+              const numeroOriginal = isInstagramConv ? instagramId : (selectedConv.phoneNumber || selectedConv.id);
               const {
                 error: dbError
               } = await supabase.from('conversas').insert([{
