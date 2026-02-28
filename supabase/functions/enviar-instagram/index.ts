@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const META_API_VERSION = 'v18.0';
@@ -39,12 +39,12 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Buscar configuração Instagram da empresa
+    // Buscar configuração Instagram da empresa (aceitar com ou sem instagram_access_token)
     const { data: connection, error: connError } = await supabase
       .from('whatsapp_connections')
-      .select('instagram_access_token, instagram_account_id, instagram_username')
+      .select('instagram_access_token, instagram_account_id, instagram_username, meta_access_token')
       .eq('company_id', company_id)
-      .not('instagram_access_token', 'is', null)
+      .not('instagram_account_id', 'is', null)
       .limit(1)
       .single();
 
@@ -56,100 +56,71 @@ serve(async (req) => {
       );
     }
 
-    const { instagram_access_token } = connection;
+    // Usar instagram_access_token OU meta_access_token como fallback
+    const accessToken = connection.instagram_access_token || connection.meta_access_token;
+    const accountId = connection.instagram_account_id;
 
-    if (!instagram_access_token) {
+    if (!accessToken) {
       return new Response(
         JSON.stringify({ error: 'Token de acesso do Instagram não configurado' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Enviar mensagem via Instagram Messaging API (Graph API)
-    // Instagram uses the same Messages endpoint as Facebook Page messaging
-    const url = `${META_API_BASE_URL}/${META_API_VERSION}/me/messages`;
+    console.log('📸 [INSTAGRAM-SEND] Enviando para:', recipient_id, 'account_id:', accountId);
 
-    console.log('📸 [INSTAGRAM-SEND] Enviando para:', recipient_id);
+    // Instagram Messaging API: tentar endpoints em ordem
+    // 1. {account_id}/messages (endpoint correto para Instagram Business)
+    // 2. /me/messages (fallback)
+    const endpoints = [
+      accountId ? `${META_API_BASE_URL}/${META_API_VERSION}/${accountId}/messages` : null,
+      `${META_API_BASE_URL}/${META_API_VERSION}/me/messages`,
+    ].filter(Boolean) as string[];
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${instagram_access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        recipient: { id: recipient_id },
-        message: { text: mensagem },
-      }),
-    });
+    let lastError: any = null;
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('❌ Instagram API Error:', data);
+    for (const url of endpoints) {
+      console.log('📸 [INSTAGRAM-SEND] Tentando endpoint:', url);
       
-      // If the /me/messages endpoint fails, try the Instagram-specific endpoint
-      // Instagram Business API uses page_id/messages
-      if (connection.instagram_account_id) {
-        console.log('🔄 [INSTAGRAM-SEND] Tentando endpoint alternativo com account_id...');
-        const altUrl = `${META_API_BASE_URL}/${META_API_VERSION}/${connection.instagram_account_id}/messages`;
-        
-        const altResponse = await fetch(altUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${instagram_access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            recipient: { id: recipient_id },
-            message: { text: mensagem },
-          }),
-        });
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          recipient: { id: recipient_id },
+          message: { text: mensagem },
+        }),
+      });
 
-        const altData = await altResponse.json();
+      const data = await response.json();
 
-        if (!altResponse.ok) {
-          console.error('❌ Instagram API Alt Error:', altData);
-          return new Response(
-            JSON.stringify({ 
-              error: altData.error?.message || 'Erro ao enviar mensagem via Instagram',
-              details: altData 
-            }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        console.log('✅ [INSTAGRAM-SEND] Mensagem enviada via endpoint alternativo:', altData);
+      if (response.ok) {
+        console.log('✅ [INSTAGRAM-SEND] Mensagem enviada com sucesso:', data);
         return new Response(
           JSON.stringify({ 
             success: true, 
-            message_id: altData.message_id,
+            message_id: data.message_id,
             provider: 'instagram',
-            data: altData 
+            data 
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      return new Response(
-        JSON.stringify({ 
-          error: data.error?.message || 'Erro ao enviar mensagem via Instagram',
-          details: data 
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.warn('⚠️ [INSTAGRAM-SEND] Falha no endpoint:', url, JSON.stringify(data));
+      lastError = data;
     }
 
-    console.log('✅ [INSTAGRAM-SEND] Mensagem enviada com sucesso:', data);
-
+    // Todos os endpoints falharam
+    console.error('❌ [INSTAGRAM-SEND] Todos os endpoints falharam. Último erro:', JSON.stringify(lastError));
     return new Response(
       JSON.stringify({ 
-        success: true, 
-        message_id: data.message_id,
-        provider: 'instagram',
-        data 
+        error: lastError?.error?.message || 'Erro ao enviar mensagem via Instagram. Verifique as permissões do app Meta.',
+        details: lastError 
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error: unknown) {

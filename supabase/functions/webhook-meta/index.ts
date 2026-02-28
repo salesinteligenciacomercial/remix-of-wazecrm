@@ -794,6 +794,28 @@ serve(async (req) => {
             // Usar o sender ID como número (Instagram não tem telefone)
             const instagramUserId = msg.from || 'instagram_user';
 
+            // 📸 CORREÇÃO: Buscar username real do Instagram via Graph API
+            let instagramUsername = msg.contact_name || instagramUserId;
+            if (connection.instagram_access_token && instagramUserId !== 'instagram_user') {
+              try {
+                console.log('📸 [INSTAGRAM] Buscando username para ID:', instagramUserId);
+                const userInfoUrl = `https://graph.facebook.com/v18.0/${instagramUserId}?fields=username,name&access_token=${connection.instagram_access_token}`;
+                const userInfoRes = await fetch(userInfoUrl);
+                if (userInfoRes.ok) {
+                  const userInfo = await userInfoRes.json();
+                  console.log('📸 [INSTAGRAM] User info:', JSON.stringify(userInfo));
+                  instagramUsername = userInfo.name || userInfo.username || instagramUserId;
+                  if (userInfo.username) {
+                    instagramUsername = userInfo.username; // Preferir username (@handle)
+                  }
+                } else {
+                  console.warn('⚠️ [INSTAGRAM] Falha ao buscar username:', await userInfoRes.text());
+                }
+              } catch (userErr) {
+                console.warn('⚠️ [INSTAGRAM] Erro ao buscar username:', userErr);
+              }
+            }
+
             // Buscar lead existente pelo Instagram ID ou criar identificador
             const { data: existingLead } = await supabase
               .from('leads')
@@ -813,10 +835,10 @@ serve(async (req) => {
               fromme: false,
               company_id: company_id,
               lead_id: existingLead?.id || null,
-              nome_contato: existingLead?.name || msg.contact_name || `Instagram ${instagramUserId}`,
+              nome_contato: existingLead?.name || instagramUsername,
               midia_url: msg.media_id || null,
               is_group: false,
-              origem_api: 'meta', // 🔥 IDENTIFICAÇÃO: Marcar como Meta API (oficial)
+              origem_api: 'meta',
             };
 
             console.log('💾 Inserindo conversa Instagram:', JSON.stringify(conversaData, null, 2));
