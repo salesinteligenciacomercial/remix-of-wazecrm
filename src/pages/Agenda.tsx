@@ -1426,7 +1426,7 @@ export default function Agenda() {
               status_envio: 'pendente',
               data_envio: dataEnvio.toISOString(),
               destinatario: formData.destinatario_lembrete || 'lead',
-              telefone_responsavel: null,
+              telefone_responsavel: leadSelecionado?.phone || leadSelecionado?.telefone || null,
               company_id: userRole.company_id
             };
             console.log('📝 [LEMBRETE] Dados do lembrete:', {
