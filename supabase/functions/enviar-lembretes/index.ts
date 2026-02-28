@@ -307,18 +307,46 @@ serve(async (req) => {
             if (lembrete.canal === 'whatsapp') {
               const destinatario = lembrete.destinatario || 'lead';
               let telefoneEnvio: string | null = null;
+              
+              // Função auxiliar para validar se é um telefone real (só dígitos, mínimo 10)
+              const isValidPhone = (phone: string | null | undefined): boolean => {
+                if (!phone) return false;
+                const digits = phone.replace(/\D/g, '');
+                return digits.length >= 10;
+              };
 
-              // CORREÇÃO: Usar apenas UM telefone por lembrete para evitar duplicatas
-              // O telefone correto já está em telefone_responsavel (definido no frontend)
-              if (lembrete.telefone_responsavel) {
+              // 1. Tentar usar telefone_responsavel se for um número válido
+              if (lembrete.telefone_responsavel && isValidPhone(lembrete.telefone_responsavel)) {
                 telefoneEnvio = lembrete.telefone_responsavel;
                 console.log(`📱 Usando telefone do lembrete: ${telefoneEnvio} (destinatario: ${destinatario})`);
-              } else if (destinatario === 'lead') {
-                // Fallback: buscar telefone do lead
-                telefoneEnvio = lembrete.compromisso.lead.phone || lembrete.compromisso.lead.telefone || null;
-                console.log(`📱 Fallback - Telefone do lead: ${telefoneEnvio || 'não encontrado'}`);
+              }
+              
+              // 2. Se não tem telefone válido, resolver baseado no destinatário
+              if (!telefoneEnvio) {
+                if (destinatario === 'lead' || destinatario === 'ambos') {
+                  // Buscar telefone do lead
+                  telefoneEnvio = lembrete.compromisso.lead.phone || lembrete.compromisso.lead.telefone || null;
+                  console.log(`📱 Fallback - Telefone do lead: ${telefoneEnvio || 'não encontrado'}`);
+                }
                 
-                // Última tentativa: buscar nas conversas
+                // Se destinatário é responsável ou ambos (e ainda sem telefone), buscar do perfil
+                if (!telefoneEnvio && (destinatario === 'responsavel' || destinatario === 'ambos')) {
+                  const responsavelId = lembrete.compromisso.usuario_responsavel_id;
+                  if (responsavelId) {
+                    const { data: profileResp } = await supabase
+                      .from('profiles')
+                      .select('phone')
+                      .eq('id', responsavelId)
+                      .single();
+                    
+                    if (profileResp?.phone && isValidPhone(profileResp.phone)) {
+                      telefoneEnvio = profileResp.phone;
+                      console.log(`📱 Telefone do responsável (profile): ${telefoneEnvio}`);
+                    }
+                  }
+                }
+                
+                // Última tentativa: buscar nas conversas do lead
                 if (!telefoneEnvio && lembrete.compromisso.lead_id) {
                   const { data: conversa } = await supabase
                     .from('conversas')
