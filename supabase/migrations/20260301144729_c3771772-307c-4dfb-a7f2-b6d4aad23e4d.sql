@@ -1,0 +1,1 @@
+DELETE FROM conversas WHERE origem = 'Instagram' AND telefone_formatado IN (SELECT instagram_account_id FROM whatsapp_connections WHERE instagram_account_id IS NOT NULL);
