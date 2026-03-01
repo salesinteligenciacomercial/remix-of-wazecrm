@@ -775,7 +775,7 @@ serve(async (req) => {
             if (msg.instagram_account_id) {
               const { data: conn } = await supabase
                 .from('whatsapp_connections')
-                .select('company_id, instagram_access_token, instagram_username, meta_access_token')
+                .select('company_id, instagram_access_token, instagram_username, meta_access_token, instagram_account_id')
                 .eq('instagram_account_id', msg.instagram_account_id)
                 .single();
               
@@ -786,7 +786,7 @@ serve(async (req) => {
             if (!connection) {
               const { data: conn } = await supabase
                 .from('whatsapp_connections')
-                .select('company_id, instagram_access_token, instagram_username, meta_access_token')
+                .select('company_id, instagram_access_token, instagram_username, meta_access_token, instagram_account_id')
                 .not('instagram_account_id', 'is', null)
                 .limit(1)
                 .single();
@@ -807,7 +807,7 @@ serve(async (req) => {
             // ⚡ CORREÇÃO: Segunda verificação de eco usando instagram_account_id do banco
             // A primeira verificação é feita no transformInstagramPayload, mas pode falhar
             // se entry.id não corresponder exatamente ao sender.id
-            const storedIgAccountId = msg.instagram_account_id;
+            const storedIgAccountId = connection.instagram_account_id || msg.instagram_account_id;
             if (instagramUserId === storedIgAccountId) {
               console.log('📸 [INSTAGRAM] Ignorando eco (sender === stored instagram_account_id):', instagramUserId);
               continue;
@@ -923,7 +923,23 @@ serve(async (req) => {
               midia_url: msg.media_id || null,
               is_group: false,
               origem_api: 'meta',
+              whatsapp_message_id: msg.message_id || null,
             };
+
+            // ⚡ CORREÇÃO: Verificar duplicata por message_id antes de inserir
+            if (msg.message_id) {
+              const { data: existingMsg } = await supabase
+                .from('conversas')
+                .select('id')
+                .eq('whatsapp_message_id', msg.message_id)
+                .limit(1)
+                .maybeSingle();
+              
+              if (existingMsg) {
+                console.log('📸 [INSTAGRAM] Mensagem duplicada ignorada (mid já existe):', msg.message_id);
+                continue;
+              }
+            }
 
             console.log('💾 Inserindo conversa Instagram:', JSON.stringify(conversaData, null, 2));
 
