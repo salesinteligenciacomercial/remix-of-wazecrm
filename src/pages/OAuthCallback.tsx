@@ -18,6 +18,10 @@ export default function OAuthCallback() {
       const error = searchParams.get('error');
       const errorDescription = searchParams.get('error_description');
 
+      console.log('[OAuthCallback] Starting processing...');
+      console.log('[OAuthCallback] Code present:', !!code);
+      console.log('[OAuthCallback] Error:', error);
+
       if (error) {
         setStatus('error');
         setMessage(errorDescription || 'Autenticação cancelada pelo usuário');
@@ -31,24 +35,33 @@ export default function OAuthCallback() {
       }
 
       try {
-        // Try to get companyId from localStorage first (saved before redirect)
+        // === STEP 1: Get companyId ===
+        // Try localStorage first (saved before redirect)
         let companyId = localStorage.getItem('instagram_oauth_company_id');
-        
+        console.log('[OAuthCallback] CompanyId from localStorage:', companyId);
+
         if (!companyId) {
-          // Fallback: try to get from authenticated user
-          console.log('No companyId in localStorage, trying auth session...');
-          const { data: { session } } = await supabase.auth.getSession();
+          console.log('[OAuthCallback] No companyId in localStorage, trying auth...');
           
-          if (!session?.user) {
-            // Wait a bit for session restoration
+          // Try getting session (may take time to restore after redirect)
+          let user = null;
+          
+          // Attempt 1: getSession
+          const { data: { session } } = await supabase.auth.getSession();
+          console.log('[OAuthCallback] Session found:', !!session);
+          
+          if (session?.user) {
+            user = session.user;
+          } else {
+            // Attempt 2: wait and retry
+            console.log('[OAuthCallback] Waiting 2s for session restore...');
             await new Promise(resolve => setTimeout(resolve, 2000));
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-              setStatus('error');
-              setMessage('Usuário não autenticado. Faça login e tente novamente.');
-              return;
-            }
-            
+            const { data: { user: retryUser } } = await supabase.auth.getUser();
+            console.log('[OAuthCallback] Retry user found:', !!retryUser);
+            user = retryUser;
+          }
+
+          if (user) {
             const { data: userRole } = await supabase
               .from('user_roles')
               .select('company_id')
@@ -56,29 +69,24 @@ export default function OAuthCallback() {
               .limit(1)
               .single();
             companyId = userRole?.company_id || null;
-          } else {
-            const { data: userRole } = await supabase
-              .from('user_roles')
-              .select('company_id')
-              .eq('user_id', session.user.id)
-              .limit(1)
-              .single();
-            companyId = userRole?.company_id || null;
+            console.log('[OAuthCallback] CompanyId from user_roles:', companyId);
           }
         }
 
         if (!companyId) {
+          console.error('[OAuthCallback] No companyId found anywhere');
           setStatus('error');
-          setMessage('Empresa do usuário não encontrada. Faça login e tente novamente.');
+          setMessage('Empresa não encontrada. Volte às configurações e tente conectar novamente.');
           return;
         }
 
-        // Clean up localStorage
+        // Clean up
         localStorage.removeItem('instagram_oauth_company_id');
 
-        console.log('Calling instagram-oauth-callback with companyId:', companyId);
+        // === STEP 2: Call edge function ===
+        console.log('[OAuthCallback] Calling edge function with companyId:', companyId);
+        setMessage('Trocando código por token...');
 
-        // Call edge function to exchange code for token
         const { data, error: fnError } = await supabase.functions.invoke('instagram-oauth-callback', {
           body: {
             code,
@@ -87,13 +95,14 @@ export default function OAuthCallback() {
           }
         });
 
+        console.log('[OAuthCallback] Edge function response:', data);
+        console.log('[OAuthCallback] Edge function error:', fnError);
+
         if (fnError) {
-          console.error('Edge function error:', fnError);
           let errorMsg = 'Erro na função de autenticação';
           if (typeof fnError.message === 'string') {
             errorMsg = fnError.message;
           }
-          // Try to extract error from response body
           try {
             const body = JSON.parse((fnError as any)?.context?.body || '{}');
             if (body.error) errorMsg = body.error;
@@ -116,7 +125,7 @@ export default function OAuthCallback() {
           throw new Error(data?.error || 'Erro ao processar autenticação');
         }
       } catch (err: any) {
-        console.error('OAuth callback error:', err);
+        console.error('[OAuthCallback] Error:', err);
         setStatus('error');
         setMessage(err.message || 'Erro ao processar autenticação');
       }
