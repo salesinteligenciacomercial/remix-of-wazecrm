@@ -63,7 +63,10 @@ export default function OAuthCallback() {
           }
         });
 
-        if (fnError) throw fnError;
+        if (fnError) {
+          console.error('Edge function error:', fnError);
+          throw new Error(fnError.message || 'Edge Function returned a non-2xx status code');
+        }
 
         if (data?.success) {
           setStatus('success');
