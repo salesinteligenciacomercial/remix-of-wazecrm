@@ -1664,8 +1664,11 @@ function Conversas() {
           const telSelected = isInstagramMessage 
             ? (prevSelected.id || '')
             : (prevSelected.phoneNumber || prevSelected.id || '').replace(/[^0-9]/g, '');
+          const igUserId = telefone.replace(/^ig_/, '');
           const isMatch = isInstagramMessage 
-            ? (telSelected === telefone)
+            ? (telSelected === telefone || 
+               (prevSelected.phoneNumber || '') === igUserId ||
+               (prevSelected.channel === 'instagram' && (prevSelected.id || '').replace(/^ig_/, '') === igUserId))
             : telSelected === telefone;
           if (isMatch) {
             // ⚡ DEDUPLICAÇÃO: Verificar se mensagem já existe por ID
@@ -1704,8 +1707,12 @@ function Conversas() {
           const telefoneKey = telefone;
           const conversaExistente = prev.find(c => {
             if (isInstagramMessage) {
-              // Instagram: match by exact ig_ key
-              return c.id === telefoneKey;
+              // Instagram: match by id OR phoneNumber containing the IG user ID
+              const igUserId = telefoneKey.replace(/^ig_/, '');
+              return c.id === telefoneKey || 
+                     c.phoneNumber === igUserId || 
+                     c.phoneNumber === telefoneKey ||
+                     (c.channel === 'instagram' && (c.id || '').replace(/^ig_/, '') === igUserId);
             }
             const tel = (c.phoneNumber || c.id || '').replace(/[^0-9]/g, '');
             return tel === telefoneKey;
@@ -1761,7 +1768,7 @@ function Conversas() {
             // Criar nova conversa para TODOS os usuários
             console.log('✅ [REALTIME-MULTIUSER] Criando nova conversa para TODOS:', telefoneKey);
             const novaConversa: Conversation = {
-              id: novaMensagem.lead_id || `conv-${telefoneKey}`,
+              id: isInstagramMessage ? telefoneKey : (novaMensagem.lead_id || `conv-${telefoneKey}`),
               contactName: novaMensagem.nome_contato || telefoneKey,
               channel: isInstagramMessage ? 'instagram' : 'whatsapp' as const,
               status: novaMensagemObj.sender === 'user' ? 'answered' : 'waiting',
