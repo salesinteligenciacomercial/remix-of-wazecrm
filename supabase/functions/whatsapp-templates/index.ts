@@ -208,17 +208,38 @@ serve(async (req) => {
       const metaUrl = `${META_API_BASE_URL}/${META_API_VERSION}/${meta_business_account_id}/message_templates?name=${templateName}`;
       console.log('Deletando template:', templateName);
 
-      const metaResponse = await fetch(metaUrl, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${meta_access_token}` }
-      });
+      let metaDeleteSuccess = false;
+      let metaError = null;
 
-      const metaData = await metaResponse.json();
+      try {
+        const metaResponse = await fetch(metaUrl, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${meta_access_token}` }
+        });
 
-      if (!metaResponse.ok) {
-        console.error('Erro ao deletar template:', metaData);
+        const metaData = await metaResponse.json();
+
+        if (metaResponse.ok) {
+          metaDeleteSuccess = true;
+        } else {
+          console.error('Erro ao deletar template na Meta:', metaData);
+          metaError = metaData.error?.error_user_msg || metaData.error?.message || 'Erro na Meta API';
+          // Se o template não existe na Meta (subcode 2593002), considerar como sucesso
+          if (metaData.error?.error_subcode === 2593002) {
+            metaDeleteSuccess = true;
+            console.log('Template não existe na Meta, removendo apenas localmente');
+          }
+        }
+      } catch (fetchErr) {
+        console.error('Erro de rede ao deletar da Meta:', fetchErr);
+        // Em caso de erro de rede, ainda permitir deletar localmente
+        metaDeleteSuccess = true;
+        metaError = 'Erro de rede ao comunicar com a Meta';
+      }
+
+      if (!metaDeleteSuccess) {
         return new Response(
-          JSON.stringify({ error: metaData.error?.message || 'Erro ao deletar template' }),
+          JSON.stringify({ error: metaError || 'Erro ao deletar template' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
