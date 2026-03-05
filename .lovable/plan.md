@@ -1,77 +1,91 @@
 
 
-## Plano: Página de Captura de Leads com IA Conversacional
+## Diagnóstico do Banco de Dados - Relatório Completo
 
-### Visão Geral
-Criar uma página pública de captura de leads com agente IA conversacional, customizável por empresa (logo, cores, serviços), que insere automaticamente contatos no CRM com tags de rastreamento.
-
-### Arquitetura
+### Situação Atual Crítica
 
 ```text
-┌──────────────────────────────────────────────┐
-│  /captura/:companyId   (Rota Pública)        │
-│  ┌──────────────────────────────────────────┐ │
-│  │  Header: Logo + Nome da Empresa         │ │
-│  │  Hero: Título + Descrição customizáveis │ │
-│  │  Seção: Serviços/Produtos (portfólio)   │ │
-│  │  Chat IA: Formulário conversacional     │ │
-│  │  Footer: Contato da empresa             │ │
-│  └──────────────────────────────────────────┘ │
-│         ↓ API: api-public-ia + api-public-leads│
-│         ↓ Tag: "pagina-captura"                │
-│         → Lead criado no CRM (menu Leads)      │
-└──────────────────────────────────────────────┘
+╔══════════════════════════════════════════════════════════╗
+║  BANCO DE DADOS: 22 GB TOTAL                            ║
+║                                                          ║
+║  Tabela 'conversas':                                     ║
+║    - Dados reais:     26 MB  (34.657 registros)          ║
+║    - Índices:         32 MB                              ║
+║    - TOAST (bloat):   19 GB  ← PROBLEMA AQUI            ║
+║                                                          ║
+║  Outras tabelas:      ~30 MB (leads, tasks, etc.)        ║
+║  Espaço real usado:   ~90 MB                             ║
+║  Espaço desperdiçado: ~21.9 GB (99.6% é LIXO)           ║
+╠══════════════════════════════════════════════════════════╣
+║  Cloud Lovable: $25/$25 + $51.43 recargas = PAUSADO     ║
+╚══════════════════════════════════════════════════════════╝
 ```
 
-### Implementação
+### Causa do Problema
 
-**1. Migração: Adicionar campos de personalização na tabela `companies`**
-- `capture_page_config JSONB` — armazena: título, descrição, cor primária, URL do logo, serviços/produtos, campos do formulário IA, mensagem de boas-vindas, redes sociais, telefone/WhatsApp de contato
+Os 19 GB de "bloat" na tabela `conversas` são de registros Base64 antigos que foram deletados anteriormente, mas o PostgreSQL **não liberou o espaço em disco** automaticamente. O `DELETE` marca linhas como mortas, mas o espaço TOAST permanece alocado. Seria necessário um `VACUUM FULL conversas` para recuperar, mas o Lovable Cloud não oferece acesso direto ao terminal do banco.
 
-**2. Nova Página Pública: `src/pages/CapturaPublica.tsx`**
-- Rota: `/captura/:companyId`
-- Carrega config da empresa via query pública (sem auth)
-- Renderiza landing page customizada com:
-  - Header com logo e nome
-  - Seção hero com título e CTA
-  - Grid de serviços/produtos (portfólio visual)
-  - Chat IA conversacional que faz perguntas definidas pela empresa
-  - Ao coletar dados, chama `api-public-leads` com tag `pagina-captura`
-- Totalmente responsiva e sem necessidade de login
+### O Que NÃO É Possível Fazer
 
-**3. Configurador no módulo IA/Automação: `src/components/ia/CapturePageConfig.tsx`**
-- Nova aba "Página de Captura" no módulo IA
-- Formulário para configurar:
-  - Logo e cores da marca
-  - Título e descrição da página
-  - Serviços/produtos para exibir
-  - Perguntas que o agente IA deve fazer (ex: nome, telefone, interesse)
-  - Tag automática para leads captados
-  - Preview do link público + botão copiar
-- Salva no campo `capture_page_config` da tabela `companies`
+Desconectar do Lovable Cloud **não é possível** uma vez habilitado. O que podemos fazer é **migrar completamente** para seu Supabase self-hosted na VPS.
 
-**4. Atualizar Edge Function `api-public-leads`**
-- Adicionar suporte à origem `pagina-captura` com tag automática
-- Incluir campo `capture_page_id` ou `source=pagina-captura-{companyId}` para rastreamento
+---
 
-**5. Atualizar `api-public-ia` para modo formulário**
-- Novo parâmetro `mode=capture` que instrui a IA a seguir o roteiro de perguntas definido na config
-- A IA pergunta sequencialmente as informações configuradas
-- Ao coletar todos os dados, cria o lead automaticamente
+### Plano de Migração: Lovable Cloud → Supabase Self-Hosted (VPS)
 
-**6. Rastreamento**
-- Todos os leads da página de captura recebem:
-  - `source: 'pagina-captura'`
-  - `tags: ['pagina-captura', nome-da-empresa]`
-  - `utm_source: 'capture-page'`
-- No menu Leads e Analytics, filtrável por essa tag/source
+#### Fase 1 — Exportar Schema e Dados (~90 MB reais)
 
-**7. Registrar rota em `App.tsx`**
-- Adicionar `/captura/:companyId` como rota pública (fora do MainLayout)
+1. **Exportar estrutura** (tabelas, funções, triggers, RLS policies) do banco atual usando `pg_dump --schema-only`
+2. **Exportar dados** de todas as tabelas (apenas ~90 MB de dados reais)
+3. **Exportar Storage** (buckets: conversation-media, lead-attachments, user-avatars, internal-chat-media)
 
-### Resultado
-- Cada empresa terá sua página de captura personalizada com URL compartilhável
-- O agente IA conversa com o visitante coletando dados definidos pela empresa
-- Leads são criados automaticamente no CRM com rastreamento completo
-- Gestores configuram tudo pelo módulo IA/Automação
+#### Fase 2 — Importar no Supabase Self-Hosted
+
+1. Aplicar schema no Supabase da VPS
+2. Importar dados via `pg_restore` ou SQL
+3. Recriar buckets de Storage e migrar arquivos
+4. Copiar Edge Functions para o Supabase self-hosted
+5. Configurar secrets (META_WEBHOOK_VERIFY_TOKEN, EVOLUTION_API_KEY, etc.)
+
+#### Fase 3 — Atualizar Frontend
+
+1. Alterar `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` no `.env` para apontar ao Supabase da VPS
+2. Fazer build do frontend (`npm run build`)
+3. Deploy do frontend na VPS (Nginx/Apache servindo os arquivos estáticos)
+
+#### Fase 4 — Atualizar Webhooks
+
+1. Reconfigurar webhooks do Meta (WhatsApp/Instagram) para apontar ao novo endpoint na VPS
+2. Reconfigurar Evolution API para o novo URL
+
+---
+
+### Por Que o Supabase Self-Hosted é Melhor Para Você
+
+| Aspecto | Lovable Cloud | Supabase Self-Hosted |
+|---|---|---|
+| Espaço em disco | $25/mês (limitado) | Ilimitado (disco da VPS) |
+| Controle do banco | Sem terminal SQL | Acesso total (psql, pg_dump) |
+| VACUUM FULL | Não disponível | Pode executar livremente |
+| Custo mensal | $25+ com recargas | Já incluso na VPS |
+| Edge Functions | Deploy automático | Deploy manual (deno) |
+| Storage | Limitado ao plano | Disco da VPS |
+| Backups | Limitado | Controle total |
+
+---
+
+### Ação Imediata (Antes da Migração)
+
+Posso tentar recuperar espaço agora mesmo executando uma limpeza dentro do Cloud:
+- Recriar a tabela `conversas` com os dados limpos (cria nova tabela, copia dados, troca nomes) — isso eliminaria os 19 GB de bloat
+- Isso reduziria o banco de 22 GB para ~90 MB, possivelmente reativando o Cloud temporariamente
+
+### Próximos Passos
+
+Para a migração completa, preciso que você me forneça:
+1. **URL do Supabase self-hosted** (ex: `https://supabase.seudominio.com`)
+2. **Anon key** do Supabase self-hosted
+3. **Service role key** para importação dos dados
+
+Posso começar pela ação imediata de limpeza do bloat agora?
 
