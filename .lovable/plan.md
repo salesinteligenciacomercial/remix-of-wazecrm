@@ -1,91 +1,102 @@
+## Plano de Integração: Nvoip VoIP no Call Center do CRM
+
+### Resumo
+
+Integrar a API da Nvoip ([https://api.nvoip.com.br/v2](https://api.nvoip.com.br/v2)) ao módulo de Call Center existente para substituir as chamadas simuladas por ligações telefônicas reais. O CRM já possui toda a UI e lógica de estado — precisamos conectar ao backend da Nvoip.
+
+---
+
+### O que a API da Nvoip oferece
 
 
-## Diagnóstico do Banco de Dados - Relatório Completo
+| Funcionalidade   | Endpoint                   | Uso no CRM                      |
+| ---------------- | -------------------------- | ------------------------------- |
+| Realizar chamada | `POST /v2/calls/`          | Discar para leads               |
+| Consultar status | `GET /v2/calls?callId=X`   | Polling do estado em tempo real |
+| Encerrar chamada | `GET /v2/endcall?callId=X` | Desligar ligação                |
+| Histórico        | `GET /v2/calls/history`    | Sincronizar dados               |
+| Autenticação     | `POST /v2/oauth/token`     | Token OAuth (24h validade)      |
 
-### Situação Atual Crítica
+
+**Estados retornados pela Nvoip:** `calling_origin`, `calling_destination`, `established`, `noanswer`, `busy`, `finished`, `failed`
+
+---
+
+### O que você precisa fornecer
+
+Antes de implementar, preciso de **3 credenciais** do seu painel Nvoip:
+
+1. **NumberSIP** (ramal/usuário SIP) — usado como `caller` nas chamadas 
+2. **User Token** — para gerar o OAuth access_token
+3. **Napikey** — chave de API alternativa
+
+Essas credenciais serão armazenadas de forma segura como secrets do backend.
+
+&nbsp;
+
+credencias:   
+  
+Napikey: SkRBQU1VWllERFJrbTJGSW1YTUNpWWNiTGpBRmlSMU8=   
+  
+User Token: 84682144-1804-11f1-a3b7-027e3c96bf59  
+  
+usuario sip: 137715001
+
+---
+
+### Arquitetura da Integração
 
 ```text
-╔══════════════════════════════════════════════════════════╗
-║  BANCO DE DADOS: 22 GB TOTAL                            ║
-║                                                          ║
-║  Tabela 'conversas':                                     ║
-║    - Dados reais:     26 MB  (34.657 registros)          ║
-║    - Índices:         32 MB                              ║
-║    - TOAST (bloat):   19 GB  ← PROBLEMA AQUI            ║
-║                                                          ║
-║  Outras tabelas:      ~30 MB (leads, tasks, etc.)        ║
-║  Espaço real usado:   ~90 MB                             ║
-║  Espaço desperdiçado: ~21.9 GB (99.6% é LIXO)           ║
-╠══════════════════════════════════════════════════════════╣
-║  Cloud Lovable: $25/$25 + $51.43 recargas = PAUSADO     ║
-╚══════════════════════════════════════════════════════════╝
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Frontend   │────▶│  Edge Function   │────▶│  API Nvoip      │
+│  (CRM UI)   │     │  nvoip-call      │     │  api.nvoip.com  │
+│             │◀────│                  │◀────│                 │
+└─────────────┘     └──────────────────┘     └─────────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │  Tabela     │
+                    │  nvoip_config│
+                    │  call_history│
+                    └─────────────┘
 ```
 
-### Causa do Problema
+---
 
-Os 19 GB de "bloat" na tabela `conversas` são de registros Base64 antigos que foram deletados anteriormente, mas o PostgreSQL **não liberou o espaço em disco** automaticamente. O `DELETE` marca linhas como mortas, mas o espaço TOAST permanece alocado. Seria necessário um `VACUUM FULL conversas` para recuperar, mas o Lovable Cloud não oferece acesso direto ao terminal do banco.
+### Implementação (4 etapas)
 
-### O Que NÃO É Possível Fazer
+#### 1. Secrets e Configuração
 
-Desconectar do Lovable Cloud **não é possível** uma vez habilitado. O que podemos fazer é **migrar completamente** para seu Supabase self-hosted na VPS.
+- Armazenar `NVOIP_NAPIKEY` e `NVOIP_USER_TOKEN` como secrets
+- Criar tabela `nvoip_config` para armazenar NumberSIP por empresa (multi-tenant)
+
+#### 2. Edge Function `nvoip-call`
+
+Uma única edge function com 4 ações:
+
+- `**make-call**`: Autentica via OAuth → `POST /v2/calls/` com caller/called → retorna `callId`
+- `**check-call**`: `GET /v2/calls?callId=X` → retorna estado atual e duração
+- `**end-call**`: `GET /v2/endcall?callId=X` → encerra chamada
+- `**get-token**`: Gerencia cache do access_token (24h validade)
+
+#### 3. Atualizar `useCallCenter.ts`
+
+- Substituir `simulateCallProgression()` por polling real via edge function
+- A cada 2 segundos, consultar status da chamada na Nvoip
+- Mapear estados Nvoip → estados do CRM:
+  - `calling_origin` → `iniciando`
+  - `calling_destination` → `chamando`/`tocando`
+  - `established` → `conectado`
+  - `noanswer`/`busy`/`failed` → `falha`
+  - `finished` → `finalizado`
+- Salvar `linkAudio` (gravação) no `call_history`
+
+#### 4. Tabela `call_history` — adicionar coluna
+
+- `nvoip_call_id` (text) — ID da chamada na Nvoip
+- `recording_url` (text) — link da gravação de áudio
 
 ---
 
-### Plano de Migração: Lovable Cloud → Supabase Self-Hosted (VPS)
+### Próximo passo
 
-#### Fase 1 — Exportar Schema e Dados (~90 MB reais)
-
-1. **Exportar estrutura** (tabelas, funções, triggers, RLS policies) do banco atual usando `pg_dump --schema-only`
-2. **Exportar dados** de todas as tabelas (apenas ~90 MB de dados reais)
-3. **Exportar Storage** (buckets: conversation-media, lead-attachments, user-avatars, internal-chat-media)
-
-#### Fase 2 — Importar no Supabase Self-Hosted
-
-1. Aplicar schema no Supabase da VPS
-2. Importar dados via `pg_restore` ou SQL
-3. Recriar buckets de Storage e migrar arquivos
-4. Copiar Edge Functions para o Supabase self-hosted
-5. Configurar secrets (META_WEBHOOK_VERIFY_TOKEN, EVOLUTION_API_KEY, etc.)
-
-#### Fase 3 — Atualizar Frontend
-
-1. Alterar `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` no `.env` para apontar ao Supabase da VPS
-2. Fazer build do frontend (`npm run build`)
-3. Deploy do frontend na VPS (Nginx/Apache servindo os arquivos estáticos)
-
-#### Fase 4 — Atualizar Webhooks
-
-1. Reconfigurar webhooks do Meta (WhatsApp/Instagram) para apontar ao novo endpoint na VPS
-2. Reconfigurar Evolution API para o novo URL
-
----
-
-### Por Que o Supabase Self-Hosted é Melhor Para Você
-
-| Aspecto | Lovable Cloud | Supabase Self-Hosted |
-|---|---|---|
-| Espaço em disco | $25/mês (limitado) | Ilimitado (disco da VPS) |
-| Controle do banco | Sem terminal SQL | Acesso total (psql, pg_dump) |
-| VACUUM FULL | Não disponível | Pode executar livremente |
-| Custo mensal | $25+ com recargas | Já incluso na VPS |
-| Edge Functions | Deploy automático | Deploy manual (deno) |
-| Storage | Limitado ao plano | Disco da VPS |
-| Backups | Limitado | Controle total |
-
----
-
-### Ação Imediata (Antes da Migração)
-
-Posso tentar recuperar espaço agora mesmo executando uma limpeza dentro do Cloud:
-- Recriar a tabela `conversas` com os dados limpos (cria nova tabela, copia dados, troca nomes) — isso eliminaria os 19 GB de bloat
-- Isso reduziria o banco de 22 GB para ~90 MB, possivelmente reativando o Cloud temporariamente
-
-### Próximos Passos
-
-Para a migração completa, preciso que você me forneça:
-1. **URL do Supabase self-hosted** (ex: `https://supabase.seudominio.com`)
-2. **Anon key** do Supabase self-hosted
-3. **Service role key** para importação dos dados
-
-Posso começar pela ação imediata de limpeza do bloat agora?
-
+Preciso que você me forneça as credenciais da Nvoip (NumberSIP, User Token, Napikey) para que eu possa armazená-las como secrets e iniciar a implementação.
