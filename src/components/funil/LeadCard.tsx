@@ -394,8 +394,10 @@ export const LeadCard = memo(function LeadCard({ lead, onDelete, onLeadMoved, is
       if (!error && count !== null) {
         setAttachmentsCount(count);
       }
-    } catch (error) {
-      console.error("Erro ao carregar anexos:", error);
+    } catch (error: any) {
+      if (error?.name !== 'AbortError' && !error?.message?.includes('Lock broken')) {
+        console.error("Erro ao carregar anexos:", error);
+      }
     }
   }, [lead.id]);
 
