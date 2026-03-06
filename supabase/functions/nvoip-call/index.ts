@@ -20,13 +20,26 @@ async function getAccessToken(): Promise<string> {
   const userToken = Deno.env.get("NVOIP_USER_TOKEN");
   if (!userToken) throw new Error("NVOIP_USER_TOKEN not configured");
 
+  // Nvoip requires x-www-form-urlencoded with Basic auth
+  // username = NumberSIP, password = user_token, grant_type = password
+  // Basic auth header is fixed: NvoipApiV2:TnZvaXBBcGlWMjIwMjE=
+  const NVOIP_BASIC_AUTH = "Basic TnZvaXBBcGlWMjpUblp2YVhCQmNHbFdNakl3TWpFPQ==";
+
+  // We need the NumberSIP from nvoip_config - but at this layer we receive it from the caller
+  // For OAuth, use a default or pass it. Let's get it from env or use a stored value.
+  const numberSip = Deno.env.get("NVOIP_NUMBER_SIP") || "137715001";
+
+  const body = `username=${numberSip}&password=${encodeURIComponent(userToken)}&grant_type=password`;
+
+  console.log("Requesting Nvoip OAuth token...");
+
   const res = await fetch(`${NVOIP_BASE}/oauth/token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "client_credentials",
-      user_token: userToken,
-    }),
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": NVOIP_BASIC_AUTH,
+    },
+    body,
   });
 
   if (!res.ok) {
@@ -38,6 +51,7 @@ async function getAccessToken(): Promise<string> {
   cachedToken = data.access_token;
   // Expire 1h before actual expiry to be safe
   tokenExpiresAt = Date.now() + (data.expires_in - 3600) * 1000;
+  console.log("Nvoip OAuth token obtained successfully");
   return cachedToken!;
 }
 
