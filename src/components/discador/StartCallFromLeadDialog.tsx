@@ -153,6 +153,12 @@ export const StartCallFromLeadDialog: React.FC<StartCallFromLeadDialogProps> = (
     }
   };
 
+  const handleSendMessage = (phone: string) => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    onClose();
+    navigate(`/conversas?numero=${cleanPhone}`);
+  };
+
   const handleManualCall = async () => {
     const cleanNumber = manualNumber.replace(/\D/g, '');
     if (cleanNumber.length < 10) return;
