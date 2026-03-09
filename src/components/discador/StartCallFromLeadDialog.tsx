@@ -154,10 +154,10 @@ export const StartCallFromLeadDialog: React.FC<StartCallFromLeadDialogProps> = (
     }
   };
 
-  const handleSendMessage = (phone: string) => {
+  const handleSendMessage = (leadId: string, leadName: string, phone: string) => {
     const cleanPhone = phone.replace(/\D/g, '');
-    onClose();
-    navigate(`/conversas?numero=${cleanPhone}`);
+    setSelectedLeadForChat({ id: leadId, name: leadName, phone: cleanPhone });
+    setConversaPopupOpen(true);
   };
 
   const handleManualCall = async () => {
