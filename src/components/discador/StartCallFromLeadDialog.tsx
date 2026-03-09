@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Phone, Search, User, Hash, Loader2, UserPlus, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { ConversaPopup } from '@/components/leads/ConversaPopup';
 
 interface Lead {
   id: string;
