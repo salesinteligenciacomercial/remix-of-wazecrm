@@ -17,9 +17,15 @@ serve(async (req) => {
 
   try {
     const payload = await req.json();
-    console.log('📸 [INSTAGRAM-SEND] Payload recebido:', JSON.stringify(payload, null, 2));
+    console.log('📸 [INSTAGRAM-SEND] Payload recebido:', JSON.stringify({
+      recipient_id: payload.recipient_id,
+      company_id: payload.company_id,
+      tipo: payload.tipo_mensagem || 'text',
+      has_media_url: !!payload.media_url,
+      has_mensagem: !!payload.mensagem,
+    }));
 
-    const { recipient_id, mensagem, company_id } = payload;
+    const { recipient_id, mensagem, company_id, tipo_mensagem, media_url } = payload;
 
     if (!recipient_id || !company_id) {
       return new Response(
@@ -28,9 +34,12 @@ serve(async (req) => {
       );
     }
 
-    if (!mensagem) {
+    // For text messages, mensagem is required. For media, media_url is required.
+    const isMediaMessage = tipo_mensagem && tipo_mensagem !== 'text' && media_url;
+    
+    if (!mensagem && !isMediaMessage) {
       return new Response(
-        JSON.stringify({ error: 'mensagem é obrigatória' }),
+        JSON.stringify({ error: 'mensagem ou media_url é obrigatória' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -68,7 +77,54 @@ serve(async (req) => {
       );
     }
 
-    console.log('📸 [INSTAGRAM-SEND] Enviando para:', recipient_id, 'account_id:', accountId);
+    console.log('📸 [INSTAGRAM-SEND] Enviando para:', recipient_id, 'account_id:', accountId, 'tipo:', tipo_mensagem || 'text');
+
+    // Build message payload based on type
+    let messagePayload: any;
+
+    if (isMediaMessage) {
+      // Instagram Messaging API supports: image, video, audio, file attachments
+      // https://developers.facebook.com/docs/instagram-messaging/send-messages#send-attachments
+      let attachmentType: string;
+      
+      switch (tipo_mensagem) {
+        case 'image':
+          attachmentType = 'image';
+          break;
+        case 'video':
+          attachmentType = 'video';
+          break;
+        case 'audio':
+          attachmentType = 'audio';
+          break;
+        case 'pdf':
+        case 'document':
+        default:
+          attachmentType = 'file';
+          break;
+      }
+
+      messagePayload = {
+        recipient: { id: recipient_id },
+        message: {
+          attachment: {
+            type: attachmentType,
+            payload: {
+              url: media_url,
+              is_reusable: true,
+            }
+          }
+        }
+      };
+
+      console.log('📎 [INSTAGRAM-SEND] Enviando mídia:', { attachmentType, media_url: media_url.substring(0, 80) });
+    } else {
+      // Text message
+      messagePayload = {
+        recipient: { id: recipient_id },
+        message: { text: mensagem },
+      };
+    }
 
     const endpoints: Array<{ url: string; token: string }> = [];
     
@@ -102,10 +158,7 @@ serve(async (req) => {
           'Authorization': `Bearer ${ep.token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          recipient: { id: recipient_id },
-          message: { text: mensagem },
-        }),
+        body: JSON.stringify(messagePayload),
       });
 
       const data = await response.json();
@@ -114,17 +167,16 @@ serve(async (req) => {
         console.log('✅ [INSTAGRAM-SEND] Mensagem enviada com sucesso via:', ep.url, data);
         
         // ⚡ CORREÇÃO ANTI-DUPLICAÇÃO: Salvar o message_id (mid) do Meta na mensagem do banco
-        // Isso permite que o webhook-meta detecte a duplicata quando receber o echo
         const messageId = data.message_id;
+        const messageContent = mensagem || (tipo_mensagem === 'audio' ? '[Áudio]' : tipo_mensagem === 'image' ? '[Imagem]' : tipo_mensagem === 'video' ? '[Vídeo]' : '[Mídia]');
+        
         if (messageId) {
           try {
-            // Buscar a mensagem mais recente enviada pelo CRM para este destinatário
             const { data: recentMsg, error: findErr } = await supabase
               .from('conversas')
               .select('id')
               .eq('company_id', company_id)
               .eq('fromme', true)
-              .eq('mensagem', mensagem)
               .or(`numero.eq.${recipient_id},telefone_formatado.eq.${recipient_id}`)
               .is('whatsapp_message_id', null)
               .order('created_at', { ascending: false })
