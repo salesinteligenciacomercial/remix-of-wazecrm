@@ -306,6 +306,10 @@ export const StartCallFromLeadDialog: React.FC<StartCallFromLeadDialogProps> = (
                             <Phone className="w-4 h-4" />
                           </Button>
                         </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </ScrollArea>
           </TabsContent>
