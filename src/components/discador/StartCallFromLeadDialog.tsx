@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,8 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Phone, Search, User, Hash } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Phone, Search, User, Hash, Loader2, UserPlus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface Lead {
   id: string;
@@ -27,6 +29,24 @@ interface StartCallFromLeadDialogProps {
   onStartCall: (leadId: string, leadName: string, phoneNumber: string) => void;
 }
 
+// Cache company_id to avoid repeated auth calls
+let cachedCompanyId: string | null = null;
+
+const getCompanyId = async (): Promise<string | null> => {
+  if (cachedCompanyId) return cachedCompanyId;
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return null;
+  const { data: userRole } = await supabase
+    .from('user_roles')
+    .select('company_id')
+    .eq('user_id', userData.user.id)
+    .maybeSingle();
+  if (userRole?.company_id) {
+    cachedCompanyId = userRole.company_id;
+  }
+  return cachedCompanyId;
+};
+
 export const StartCallFromLeadDialog: React.FC<StartCallFromLeadDialogProps> = ({
   open,
   onClose,
@@ -37,48 +57,83 @@ export const StartCallFromLeadDialog: React.FC<StartCallFromLeadDialogProps> = (
   const [isLoading, setIsLoading] = useState(false);
   const [manualNumber, setManualNumber] = useState('');
   const [manualName, setManualName] = useState('');
+  const [saveAsLead, setSaveAsLead] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('leads');
+  const channelRef = useRef<any>(null);
 
-  useEffect(() => {
-    if (open) {
-      loadLeads();
-      setManualNumber('');
-      setManualName('');
-      setActiveTab('leads');
-    }
-  }, [open]);
-
-  const loadLeads = async () => {
+  // Load all leads (no limit) with real-time sync
+  const loadLeads = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
-
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('company_id')
-        .eq('user_id', userData.user.id)
-        .maybeSingle();
-
-      if (!userRole?.company_id) return;
+      const companyId = await getCompanyId();
+      if (!companyId) return;
 
       const { data, error } = await supabase
         .from('leads')
         .select('id, name, phone, telefone, email')
-        .eq('company_id', userRole.company_id)
-        .or('phone.neq.,telefone.neq.')
-        .limit(100);
+        .eq('company_id', companyId)
+        .order('name', { ascending: true });
 
       if (error) throw error;
-      setLeads(data || []);
+      setLeads((data || []).filter(l => l.phone || l.telefone));
     } catch (error) {
       console.error('Erro ao carregar leads:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // Subscribe to real-time lead changes
+  useEffect(() => {
+    if (!open) return;
+
+    loadLeads();
+
+    const setupRealtime = async () => {
+      const companyId = await getCompanyId();
+      if (!companyId) return;
+
+      channelRef.current = supabase
+        .channel('discador-leads-sync')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'leads',
+            filter: `company_id=eq.${companyId}`
+          },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              const newLead = payload.new as Lead;
+              if (newLead.phone || newLead.telefone) {
+                setLeads(prev => [...prev, newLead].sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+              }
+            } else if (payload.eventType === 'UPDATE') {
+              const updated = payload.new as Lead;
+              setLeads(prev => prev.map(l => l.id === updated.id ? updated : l).filter(l => l.phone || l.telefone));
+            } else if (payload.eventType === 'DELETE') {
+              const deleted = payload.old as { id: string };
+              setLeads(prev => prev.filter(l => l.id !== deleted.id));
+            }
+          }
+        )
+        .subscribe();
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [open, loadLeads]);
 
   const filteredLeads = leads.filter(lead => {
+    if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
       lead.name?.toLowerCase().includes(term) ||
@@ -96,10 +151,60 @@ export const StartCallFromLeadDialog: React.FC<StartCallFromLeadDialogProps> = (
     }
   };
 
-  const handleManualCall = () => {
+  const handleManualCall = async () => {
     const cleanNumber = manualNumber.replace(/\D/g, '');
     if (cleanNumber.length < 10) return;
-    onStartCall('', manualName || cleanNumber, manualNumber);
+
+    let leadId = '';
+    const contactName = manualName || cleanNumber;
+
+    // Save as lead if checked
+    if (saveAsLead) {
+      setIsSaving(true);
+      try {
+        const companyId = await getCompanyId();
+        if (!companyId) throw new Error('Empresa não encontrada');
+
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) throw new Error('Usuário não autenticado');
+
+        // Check if lead with this phone already exists
+        const { data: existing } = await supabase
+          .from('leads')
+          .select('id, name')
+          .eq('company_id', companyId)
+          .or(`telefone.eq.${cleanNumber},phone.eq.${cleanNumber}`)
+          .maybeSingle();
+
+        if (existing) {
+          leadId = existing.id;
+          toast.info(`Contato "${existing.name}" já existe no CRM`);
+        } else {
+          const { data: newLead, error } = await supabase
+            .from('leads')
+            .insert({
+              name: contactName,
+              telefone: cleanNumber,
+              company_id: companyId,
+              owner_id: userData.user.id,
+              origem: 'Discador'
+            })
+            .select('id')
+            .single();
+
+          if (error) throw error;
+          leadId = newLead.id;
+          toast.success(`Contato "${contactName}" salvo no CRM`);
+        }
+      } catch (error: any) {
+        console.error('Erro ao salvar contato:', error);
+        toast.error('Erro ao salvar contato, mas a ligação continuará');
+      } finally {
+        setIsSaving(false);
+      }
+    }
+
+    onStartCall(leadId, contactName, manualNumber);
     onClose();
   };
 
@@ -128,7 +233,7 @@ export const StartCallFromLeadDialog: React.FC<StartCallFromLeadDialogProps> = (
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="leads" className="flex items-center gap-2">
               <User className="w-4 h-4" />
-              Contatos
+              Contatos ({leads.length})
             </TabsTrigger>
             <TabsTrigger value="manual" className="flex items-center gap-2">
               <Hash className="w-4 h-4" />
@@ -151,12 +256,13 @@ export const StartCallFromLeadDialog: React.FC<StartCallFromLeadDialogProps> = (
             <ScrollArea className="h-[300px]">
               <div className="space-y-2 pr-4">
                 {isLoading ? (
-                  <div className="text-center text-muted-foreground py-8">
-                    Carregando leads...
+                  <div className="flex items-center justify-center gap-2 text-muted-foreground py-8">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Carregando contatos...
                   </div>
                 ) : filteredLeads.length === 0 ? (
                   <div className="text-center text-muted-foreground py-8">
-                    {searchTerm ? 'Nenhum lead encontrado' : 'Nenhum lead com telefone cadastrado'}
+                    {searchTerm ? 'Nenhum contato encontrado' : 'Nenhum contato com telefone cadastrado'}
                   </div>
                 ) : (
                   filteredLeads.map((lead) => {
@@ -212,13 +318,29 @@ export const StartCallFromLeadDialog: React.FC<StartCallFromLeadDialogProps> = (
                 </p>
               </div>
 
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="save-lead"
+                  checked={saveAsLead}
+                  onCheckedChange={(checked) => setSaveAsLead(checked === true)}
+                />
+                <label htmlFor="save-lead" className="text-sm text-foreground flex items-center gap-1.5 cursor-pointer">
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Salvar contato no CRM
+                </label>
+              </div>
+
               <Button
                 className="w-full"
                 size="lg"
                 onClick={handleManualCall}
-                disabled={manualNumber.replace(/\D/g, '').length < 10}
+                disabled={manualNumber.replace(/\D/g, '').length < 10 || isSaving}
               >
-                <Phone className="w-4 h-4 mr-2" />
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Phone className="w-4 h-4 mr-2" />
+                )}
                 Ligar para {manualName || manualNumber || 'número'}
               </Button>
             </div>
