@@ -1014,10 +1014,19 @@ serve(async (req) => {
               }
             }
 
-            // ⚡ Garantir que nome_contato NUNCA seja o ID numérico quando temos um nome real
+            // ⚡ Garantir que nome_contato NUNCA seja o ID numérico ou fallback quando temos um nome real
             const finalContactName = (() => {
-              if (existingLead?.name) return existingLead.name;
-              if (instagramUsername && instagramUsername !== instagramUserId) return instagramUsername;
+              // Verificar se o nome do lead é real (não numérico, não fallback)
+              if (existingLead?.name && !/^\d{10,}$/.test(existingLead.name) && !/^Instagram\s+\d+$/i.test(existingLead.name)) {
+                return existingLead.name;
+              }
+              // Usar leadName atualizado (pode ter sido corrigido acima)
+              if (leadName && leadName !== instagramUserId && !/^\d{10,}$/.test(leadName) && !/^Instagram\s+\d+$/i.test(leadName)) {
+                return leadName;
+              }
+              if (instagramUsername && instagramUsername !== instagramUserId && !/^Instagram\s+\d+$/i.test(instagramUsername)) {
+                return instagramUsername;
+              }
               return instagramUserId;
             })();
 
