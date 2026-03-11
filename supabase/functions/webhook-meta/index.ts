@@ -844,6 +844,7 @@ serve(async (req) => {
             const igAccountId = connection.instagram_account_id || msg.instagram_account_id;
             
             // Método 0 (CACHE): Buscar nome de conversa anterior no banco
+            // ⚡ CORREÇÃO: Rejeitar nomes fallback "Instagram XXXXXX" do cache
             try {
               const { data: prevConv } = await supabase
                 .from('conversas')
@@ -856,8 +857,13 @@ serve(async (req) => {
                 .single();
               
               if (prevConv?.nome_contato) {
-                instagramUsername = prevConv.nome_contato;
-                console.log('📸 [INSTAGRAM] Nome encontrado no cache (conversa anterior):', instagramUsername);
+                const isFallbackName = /^Instagram\s+\d+$/i.test(prevConv.nome_contato);
+                if (!isFallbackName) {
+                  instagramUsername = prevConv.nome_contato;
+                  console.log('📸 [INSTAGRAM] Nome encontrado no cache (conversa anterior):', instagramUsername);
+                } else {
+                  console.log('📸 [INSTAGRAM] Cache rejeitado (nome é fallback):', prevConv.nome_contato);
+                }
               }
             } catch (e) {
               // Sem cache, continuar para API
@@ -940,27 +946,26 @@ serve(async (req) => {
             let leadId = existingLead?.id || null;
             let leadName = existingLead?.name || instagramUsername;
 
-            // ⚡ CORREÇÃO SUBCONTAS: Se o lead existe mas o nome é o ID numérico, atualizar com nome real
+            // ⚡ CORREÇÃO SUBCONTAS: Se o lead existe mas o nome é ruim (ID numérico OU fallback "Instagram XXXX"), atualizar
             if (leadId && existingLead?.name && instagramUsername !== instagramUserId) {
               const existingName = existingLead.name.trim();
-              // Verificar se o nome atual é um ID numérico (só dígitos, 10+ chars)
               const isNumericName = /^\d{10,}$/.test(existingName);
-              if (isNumericName && existingName !== instagramUsername) {
+              const isFallbackName = /^Instagram\s+\d+$/i.test(existingName);
+              if ((isNumericName || isFallbackName) && existingName !== instagramUsername) {
                 try {
                   await supabase
                     .from('leads')
                     .update({ name: instagramUsername })
                     .eq('id', leadId);
                   leadName = instagramUsername;
-                  console.log('📸 [INSTAGRAM] Nome do lead atualizado de ID numérico para:', instagramUsername);
+                  console.log('📸 [INSTAGRAM] Nome do lead atualizado para:', instagramUsername);
                   
-                  // Também atualizar conversas anteriores que ficaram com ID numérico
+                  // Também atualizar TODAS conversas anteriores com nomes ruins
                   await supabase
                     .from('conversas')
                     .update({ nome_contato: instagramUsername })
                     .eq('company_id', company_id)
-                    .eq('telefone_formatado', instagramUserId)
-                    .eq('nome_contato', existingName);
+                    .eq('telefone_formatado', instagramUserId);
                   console.log('📸 [INSTAGRAM] Conversas anteriores atualizadas com nome correto');
                 } catch (e) {
                   console.warn('⚠️ [INSTAGRAM] Erro ao atualizar nome do lead:', e);
@@ -1009,10 +1014,19 @@ serve(async (req) => {
               }
             }
 
-            // ⚡ Garantir que nome_contato NUNCA seja o ID numérico quando temos um nome real
+            // ⚡ Garantir que nome_contato NUNCA seja o ID numérico ou fallback quando temos um nome real
             const finalContactName = (() => {
-              if (existingLead?.name) return existingLead.name;
-              if (instagramUsername && instagramUsername !== instagramUserId) return instagramUsername;
+              // Verificar se o nome do lead é real (não numérico, não fallback)
+              if (existingLead?.name && !/^\d{10,}$/.test(existingLead.name) && !/^Instagram\s+\d+$/i.test(existingLead.name)) {
+                return existingLead.name;
+              }
+              // Usar leadName atualizado (pode ter sido corrigido acima)
+              if (leadName && leadName !== instagramUserId && !/^\d{10,}$/.test(leadName) && !/^Instagram\s+\d+$/i.test(leadName)) {
+                return leadName;
+              }
+              if (instagramUsername && instagramUsername !== instagramUserId && !/^Instagram\s+\d+$/i.test(instagramUsername)) {
+                return instagramUsername;
+              }
               return instagramUserId;
             })();
 

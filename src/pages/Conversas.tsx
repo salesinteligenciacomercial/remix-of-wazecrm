@@ -1773,10 +1773,11 @@ function Conversas() {
             const novaConversa: Conversation = {
               id: isInstagramMessage ? telefoneKey : (novaMensagem.lead_id || `conv-${telefoneKey}`),
               contactName: (() => {
-                // Para nova conversa, usar nome_contato apenas se NÃO for um número puro
+                // Para nova conversa, usar nome_contato apenas se NÃO for um número puro e NÃO for fallback
                 const nome = novaMensagem.nome_contato || '';
                 const nomeDigits = nome.replace(/[^0-9]/g, '');
-                if (nome && !(nomeDigits.length > 8 && nomeDigits === nome)) {
+                const isFallback = /^Instagram\s+\d+$/i.test(nome);
+                if (nome && !isFallback && !(nomeDigits.length > 8 && nomeDigits === nome)) {
                   return nome;
                 }
                 // ⚡ CORREÇÃO: Para Instagram, usar fallback amigável ao invés de ID numérico
@@ -2503,7 +2504,7 @@ function Conversas() {
               contactName: (() => {
                 const rawName = leadData.name || msg.nome_contato || 'Desconhecido';
                 const isIg = msg.origem?.toLowerCase() === 'instagram';
-                if (isIg && /^\d{10,}$/.test(rawName)) return `Instagram ${rawName.slice(-6)}`;
+                if (isIg && (/^\d{10,}$/.test(rawName) || /^Instagram\s+\d+$/i.test(rawName))) return `Instagram ${(msg.telefone_formatado || msg.numero || '').slice(-6)}`;
                 return rawName;
               })(),
               // PRIORIZAR NOME DO LEAD
@@ -3494,7 +3495,10 @@ function Conversas() {
           }
         } else {
           // PRIORIDADE 1: Nome do Lead (se existir) - APENAS para contatos individuais
-          contactName = leadInfo?.name || '';
+          // ⚡ CORREÇÃO: Rejeitar nomes fallback "Instagram XXXXXX" do lead
+          const leadNameRaw = leadInfo?.name || '';
+          const isLeadNameFallback = /^Instagram\s+\d+$/i.test(leadNameRaw);
+          contactName = (leadNameRaw && !isLeadNameFallback) ? leadNameRaw : '';
 
           // PRIORIDADE 2: Nome da mensagem (priorizar mensagens mais recentes com nome real)
           const telefoneDigits = telefone.replace(/[^0-9]/g, '');
@@ -3505,8 +3509,8 @@ function Conversas() {
                 const nome = m.nome_contato?.trim();
                 if (!nome) return false;
                 const nomeDigits = nome.replace(/[^0-9]/g, '');
-                // Rejeitar nomes que são apenas números (telefone/ID do Instagram)
-                return nome !== telefone && nome !== telefoneDigits && !(nomeDigits.length > 8 && nomeDigits === nome);
+                // Rejeitar nomes que são apenas números (telefone/ID do Instagram) ou fallbacks "Instagram XXXX"
+                return nome !== telefone && nome !== telefoneDigits && !(nomeDigits.length > 8 && nomeDigits === nome) && !/^Instagram\s+\d+$/i.test(nome);
               })
               .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
             if (mensagensComNome.length > 0) {
