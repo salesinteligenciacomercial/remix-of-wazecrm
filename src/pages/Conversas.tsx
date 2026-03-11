@@ -3364,8 +3364,12 @@ function Conversas() {
           };
           // Armazenar com chave original
           leadsMap.set(phoneKey, leadEntry);
+          // Armazenar também com prefixo ig_ para matching com conversas Instagram
+          if (phoneKey.length >= 14) {
+            leadsMap.set(`ig_${phoneKey}`, leadEntry);
+          }
           // Armazenar também com prefixo 55 para matching com conversas normalizadas
-          if (!phoneKey.startsWith('55') && phoneKey.length >= 10) {
+          if (!phoneKey.startsWith('55') && phoneKey.length >= 10 && phoneKey.length <= 13) {
             leadsMap.set(`55${phoneKey}`, leadEntry);
           }
           // E sem o prefixo 55 caso a conversa não tenha
@@ -3457,7 +3461,12 @@ function Conversas() {
             primeiroNumero: mensagens[0]?.numero
           });
         }
-        const leadInfo = leadsMap.get(telefone);
+        // ⚡ CORREÇÃO: Para Instagram, tentar lookup sem prefixo ig_ e também com o ID puro
+        let leadInfo = leadsMap.get(telefone);
+        if (!leadInfo && telefone.startsWith('ig_')) {
+          const igId = telefone.replace(/^ig_/, '').replace(/[^0-9]/g, '');
+          leadInfo = leadsMap.get(igId);
+        }
 
         // ⚡ CORREÇÃO: Para GRUPOS, buscar nome real do grupo via API
         let contactName = '';
