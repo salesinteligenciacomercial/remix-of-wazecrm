@@ -2504,7 +2504,7 @@ function Conversas() {
               contactName: (() => {
                 const rawName = leadData.name || msg.nome_contato || 'Desconhecido';
                 const isIg = msg.origem?.toLowerCase() === 'instagram';
-                if (isIg && /^\d{10,}$/.test(rawName)) return `Instagram ${rawName.slice(-6)}`;
+                if (isIg && (/^\d{10,}$/.test(rawName) || /^Instagram\s+\d+$/i.test(rawName))) return `Instagram ${(msg.telefone_formatado || msg.numero || '').slice(-6)}`;
                 return rawName;
               })(),
               // PRIORIZAR NOME DO LEAD
