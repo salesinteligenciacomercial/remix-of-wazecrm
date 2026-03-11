@@ -3497,9 +3497,22 @@ function Conversas() {
 
           // ⚡ CORREÇÃO CRÍTICA: FALLBACK para contatos individuais
           // Contatos individuais SEMPRE usam telefone como fallback, NUNCA "Grupo"
-          // ⚡ CORREÇÃO: Para Instagram, remover prefixo ig_ do nome exibido
+          // ⚡ CORREÇÃO: Para Instagram, usar nome amigável ao invés de ID numérico longo
           if (!contactName || contactName.trim() === '' || contactName === telefone) {
-            contactName = telefone.replace(/^ig_/, '');
+            const cleanTel = telefone.replace(/^ig_/, '');
+            const isInstagramNumericId = isInstagramConv && /^\d{10,}$/.test(cleanTel);
+            if (isInstagramNumericId) {
+              // Para Instagram, mostrar "Instagram" + últimos 6 dígitos ao invés do ID completo
+              contactName = `Instagram ${cleanTel.slice(-6)}`;
+            } else {
+              contactName = cleanTel;
+            }
+          } else {
+            // ⚡ CORREÇÃO SUBCONTAS: Se o nome é um ID numérico longo do Instagram, substituir
+            const nomeDigitsOnly = contactName.replace(/[^0-9]/g, '');
+            if (isInstagramConv && /^\d{10,}$/.test(contactName)) {
+              contactName = `Instagram ${contactName.slice(-6)}`;
+            }
           }
         }
 
