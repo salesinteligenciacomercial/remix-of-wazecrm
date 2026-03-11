@@ -2500,7 +2500,12 @@ function Conversas() {
             const isRealGroup = Boolean((msg as any)?.is_group) || numeroLimpo.length >= 17 && /@g\.us$/.test(String(msg.numero || ''));
             conversationsMap.set(convId, {
               id: convId,
-              contactName: leadData.name || msg.nome_contato || 'Desconhecido',
+              contactName: (() => {
+                const rawName = leadData.name || msg.nome_contato || 'Desconhecido';
+                const isIg = msg.origem?.toLowerCase() === 'instagram';
+                if (isIg && /^\d{10,}$/.test(rawName)) return `Instagram ${rawName.slice(-6)}`;
+                return rawName;
+              })(),
               // PRIORIZAR NOME DO LEAD
               channel: msg.origem?.toLowerCase() === 'whatsapp' ? 'whatsapp' : msg.origem?.toLowerCase() === 'instagram' ? 'instagram' : 'facebook',
               status: msg.status === 'Enviada' ? 'answered' : 'waiting',
