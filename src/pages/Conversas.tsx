@@ -3457,7 +3457,12 @@ function Conversas() {
             primeiroNumero: mensagens[0]?.numero
           });
         }
-        const leadInfo = leadsMap.get(telefone);
+        // ⚡ CORREÇÃO: Para Instagram, tentar lookup sem prefixo ig_ e também com o ID puro
+        let leadInfo = leadsMap.get(telefone);
+        if (!leadInfo && telefone.startsWith('ig_')) {
+          const igId = telefone.replace(/^ig_/, '').replace(/[^0-9]/g, '');
+          leadInfo = leadsMap.get(igId);
+        }
 
         // ⚡ CORREÇÃO: Para GRUPOS, buscar nome real do grupo via API
         let contactName = '';
