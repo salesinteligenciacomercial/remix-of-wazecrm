@@ -1779,7 +1779,12 @@ function Conversas() {
                 if (nome && !(nomeDigits.length > 8 && nomeDigits === nome)) {
                   return nome;
                 }
-                return telefoneKey.replace(/^ig_/, '');
+                // ⚡ CORREÇÃO: Para Instagram, usar fallback amigável ao invés de ID numérico
+                const cleanKey = telefoneKey.replace(/^ig_/, '');
+                if (isInstagramMessage && /^\d{10,}$/.test(cleanKey)) {
+                  return `Instagram ${cleanKey.slice(-6)}`;
+                }
+                return cleanKey;
               })(),
               channel: isInstagramMessage ? 'instagram' : 'whatsapp' as const,
               status: novaMensagemObj.sender === 'user' ? 'answered' : 'waiting',
