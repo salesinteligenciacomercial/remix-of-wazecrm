@@ -383,7 +383,7 @@ async function sendMetaFallback(
       return await sendMetaMediaMessage(
         connection.meta_phone_number_id,
         connection.meta_access_token,
-        to,
+        formattedNumber,
         uploadResult.media_id,
         mediaType as 'image' | 'video' | 'audio' | 'document',
         mediaType === 'audio' ? undefined : (validatedData.mensagem || validatedData.caption),
