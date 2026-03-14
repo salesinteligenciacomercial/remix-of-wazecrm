@@ -63,6 +63,24 @@ const enviarWhatsAppSchema = z.object({
   message: 'Mensagem, mídia URL, mídia Base64 ou template é obrigatório'
 });
 
+function normalizeMimeType(mimeType?: string): string {
+  return (mimeType || '').split(';')[0].trim().toLowerCase();
+}
+
+function isMetaSupportedAudioMime(mimeType: string): boolean {
+  return ['audio/aac', 'audio/amr', 'audio/mpeg', 'audio/mp4', 'audio/ogg'].includes(mimeType);
+}
+
+function isLikelyOggAudioBase64(base64Data: string): boolean {
+  try {
+    const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, '');
+    const header = atob(cleanBase64.slice(0, 24));
+    return header.startsWith('OggS');
+  } catch {
+    return false;
+  }
+}
+
 // Send template message via Meta API
 async function sendMetaTemplateMessage(
   phoneNumberId: string,
