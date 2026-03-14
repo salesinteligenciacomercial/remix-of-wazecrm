@@ -41,8 +41,6 @@ export default function ChatInterno() {
   const [activeTab, setActiveTab] = useState('conversas');
   const [showStartCallDialog, setShowStartCallDialog] = useState(false);
   const [showCreatePublicMeeting, setShowCreatePublicMeeting] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
 
   // Call states
   const [activeCall, setActiveCall] = useState<{
