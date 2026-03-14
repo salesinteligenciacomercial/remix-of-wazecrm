@@ -5178,7 +5178,7 @@ function Conversas() {
         status: 'Enviada',
         tipo_mensagem: 'audio',
         nome_contato: selectedConv.contactName?.replace(/^ig_/, '') || selectedConv.contactName,
-        arquivo_nome: 'audio.ogg',
+        arquivo_nome: `audio.${audioExtension}`,
         midia_url: storageUrl,
         company_id: userRole?.company_id,
         owner_id: user?.id,
