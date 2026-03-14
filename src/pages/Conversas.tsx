@@ -5037,13 +5037,17 @@ function Conversas() {
     try {
       console.log('🎤 Enviando áudio via edge function...');
 
-      // 1️⃣ Upload do áudio para o Storage PRIMEIRO
-      const fileName = `outgoing/${Date.now()}-audio.ogg`;
+      // 1️⃣ Detectar formato real do áudio e fazer upload para o Storage
+      const audioMimeType = (audioBlob.type || 'audio/webm').split(';')[0].trim().toLowerCase();
+      const audioExtension = audioMimeType.includes('ogg') ? 'ogg' :
+        audioMimeType.includes('mp4') ? 'm4a' :
+        audioMimeType.includes('mpeg') ? 'mp3' : 'webm';
+      const fileName = `outgoing/${Date.now()}-audio.${audioExtension}`;
       const {
         data: uploadData,
         error: uploadError
       } = await supabase.storage.from('conversation-media').upload(fileName, audioBlob, {
-        contentType: 'audio/ogg; codecs=opus',
+        contentType: audioBlob.type || audioMimeType,
         upsert: false
       });
       if (uploadError) {
