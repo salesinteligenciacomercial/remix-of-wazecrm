@@ -5137,8 +5137,8 @@ function Conversas() {
           mensagem: '',
           tipo_mensagem: 'audio',
           mediaBase64: base64,
-          fileName: 'audio.ogg',
-          mimeType: 'audio/ogg; codecs=opus',
+          fileName: `audio.${audioExtension}`,
+          mimeType: audioBlob.type || audioMimeType,
           caption: '',
           company_id: userRole?.company_id,
           ...quotedPayload
