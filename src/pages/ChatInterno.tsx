@@ -20,6 +20,7 @@ import { MessageItem } from '@/components/internal-chat/MessageItem';
 import { VideoCallModalV2 } from '@/components/meetings/VideoCallModalV2';
 import { StartCallDialog } from '@/components/meetings/StartCallDialog';
 import { CreatePublicMeetingDialog } from '@/components/meetings/CreatePublicMeetingDialog';
+import { GroupCallModal } from '@/components/meetings/GroupCallModal';
 import { MeetingHistory } from '@/components/meetings/MeetingHistory';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
