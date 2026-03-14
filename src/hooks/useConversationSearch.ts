@@ -137,11 +137,11 @@ export const useConversationSearch = (companyId: string | null) => {
       // ========== 5. CONVERTER PARA FORMATO CONVERSATION ==========
       const results: Conversation[] = Array.from(conversasMap.entries()).map(([telefone, mensagens]) => {
         const isGroup = mensagens[0]?.is_group || /@g\.us$/.test(telefone);
-        
+
         // Ordenar mensagens por data
         const mensagensOrdenadas = mensagens
           .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        
+
         const messagensFormatadas: Message[] = mensagensOrdenadas.slice(-50).map(m => {
           const isFromMe = m.fromme === true || String(m.fromme) === 'true';
           return {
@@ -159,7 +159,7 @@ export const useConversationSearch = (companyId: string | null) => {
 
         const contactName = mensagens.find(m => m.nome_contato)?.nome_contato || telefone;
         const ultimaMensagem = messagensFormatadas[messagensFormatadas.length - 1];
-        
+
         let statusConversa: "waiting" | "answered" | "resolved" = "waiting";
         const temResolvida = mensagens.some(m => m.status === 'Resolvida' || m.status === 'Finalizada');
         if (temResolvida) {
@@ -171,11 +171,15 @@ export const useConversationSearch = (companyId: string | null) => {
         const origemApi = mensagens.find(m => m.origem_api)?.origem_api || 'evolution';
         const leadId = mensagens.find(m => m.lead_id)?.lead_id;
         const isLeadOnly = mensagens.some(m => m.is_lead_only);
+        const isInstagramConversation = telefone.startsWith('ig_') || mensagens.some(m => {
+          const digits = String(m.telefone_formatado || m.numero || '').replace(/[^0-9]/g, '');
+          return m.origem === 'Instagram' || (m.origem_api === 'meta' && digits.length >= 15);
+        });
 
         return {
-          id: `conv-${telefone}`,
+          id: telefone,
           contactName,
-          channel: "whatsapp" as const,
+          channel: isInstagramConversation ? "instagram" as const : "whatsapp" as const,
           status: statusConversa,
           lastMessage: ultimaMensagem?.content || '',
           unread: 0,
