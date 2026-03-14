@@ -119,7 +119,7 @@ export function AudioRecorder({ onSendAudio }: AudioRecorderProps) {
     return (
       <div className="flex items-center gap-2 bg-muted p-2 rounded-lg">
         <audio controls className="flex-1 h-8">
-          <source src={URL.createObjectURL(audioBlob)} type="audio/ogg" />
+          <source src={URL.createObjectURL(audioBlob)} type={audioBlob.type || 'audio/webm'} />
         </audio>
         <Button size="icon" variant="ghost" onClick={cancelRecording} disabled={isSending}>
           <X className="h-4 w-4" />
