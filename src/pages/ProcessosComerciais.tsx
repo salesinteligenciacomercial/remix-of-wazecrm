@@ -97,9 +97,6 @@ export default function ProcessosComerciais() {
           <NotionWorkspace companyId={companyId} />
         </TabsContent>
 
-        <TabsContent value="insights">
-          <UnifiedInsightsPanel companyId={companyId} />
-        </TabsContent>
       </Tabs>
     </div>
   );
