@@ -168,6 +168,9 @@ async function uploadMetaMedia(
     // Remove data URL prefix if present
     const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, '');
     
+    // Sanitize mimeType: Meta API rejects parameters like "; codecs=opus"
+    const cleanMimeType = mimeType.split(';')[0].trim();
+    
     // Convert base64 to binary
     const binaryString = atob(cleanBase64);
     const bytes = new Uint8Array(binaryString.length);
@@ -177,10 +180,10 @@ async function uploadMetaMedia(
     
     // Create form data for upload
     const formData = new FormData();
-    const blob = new Blob([bytes], { type: mimeType });
+    const blob = new Blob([bytes], { type: cleanMimeType });
     formData.append('file', blob, fileName);
     formData.append('messaging_product', 'whatsapp');
-    formData.append('type', mimeType);
+    formData.append('type', cleanMimeType);
     
     const url = `${META_API_BASE_URL}/${META_API_VERSION}/${phoneNumberId}/media`;
     
