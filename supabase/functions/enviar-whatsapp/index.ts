@@ -205,7 +205,7 @@ async function uploadMetaMedia(
     
     const url = `${META_API_BASE_URL}/${META_API_VERSION}/${phoneNumberId}/media`;
     
-    console.log("📤 Meta API - Uploading media:", fileName, mimeType);
+    console.log("📤 Meta API - Uploading media:", fileName, cleanMimeType);
     
     const response = await fetch(url, {
       method: 'POST',
