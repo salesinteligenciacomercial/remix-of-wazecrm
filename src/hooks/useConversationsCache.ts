@@ -394,14 +394,20 @@ export const useConversationsCache = (companyId: string | null) => {
         }
 
         const isGroup = mensagens[0]?.is_group || /@g\.us$/.test(telefone);
+        const isInstagramConversation = telefone.startsWith('ig_') || mensagens.some(m => {
+          const digits = String(m.telefone_formatado || m.numero || '').replace(/[^0-9]/g, '');
+          return m.origem === 'Instagram' || (m.origem_api === 'meta' && digits.length >= 15);
+        });
 
         // ⚡ Avatar placeholder - será carregado assincronamente
-        const avatarUrl = isGroup 
+        const avatarUrl = isGroup
           ? `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName)}&background=10b981&color=fff`
-          : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName)}&background=0ea5e9&color=fff`;
+          : isInstagramConversation
+            ? `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName)}&background=E1306C&color=fff`
+            : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName)}&background=0ea5e9&color=fff`;
 
         // 🆕 Buscar dados do lead vinculado
-        const normalizedPhone = telefone.replace(/[^0-9]/g, '');
+        const normalizedPhone = telefone.replace(/^ig_/, '').replace(/[^0-9]/g, '');
         const lead = leadsMap.get(normalizedPhone) || leadsMap.get(telefone);
         const responsaveis = responsaveisMap.get(normalizedPhone) || responsaveisMap.get(telefone) || [];
         
@@ -417,7 +423,7 @@ export const useConversationsCache = (companyId: string | null) => {
         return {
           id: telefone,
           contactName,
-          channel: "whatsapp" as const,
+          channel: isInstagramConversation ? "instagram" as const : "whatsapp" as const,
           status: statusConversa,
           lastMessage: ultimaMensagem?.content || '',
           unread: 0,
