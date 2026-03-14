@@ -123,6 +123,22 @@ export default function ChatInterno() {
     }
   };
 
+  // Start call from dialog (any team member)
+  const handleStartCallFromDialog = async (userId: string, userName: string, callType: 'audio' | 'video') => {
+    const meeting = await createMeeting(callType, userId, userName);
+    if (meeting) {
+      setActiveCall({
+        meetingId: meeting.id,
+        remoteUserId: userId,
+        remoteUserName: userName,
+        callType,
+        isCaller: true
+      });
+      setShowStartCallDialog(false);
+      toast.info(`Chamando ${userName}...`);
+    }
+  };
+
   // Note: handleAcceptCall removed - incoming calls handled by GlobalCallListenerV2
 
   // Handle call ended
