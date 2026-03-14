@@ -243,7 +243,7 @@ export const loadAllUniqueConversations = async (companyId: string): Promise<Con
     // Isso garante que pegamos a mensagem mais recente de cada conversa
     const { data: conversasResult, error } = await supabase
       .from('conversas')
-      .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, company_id, sent_by, midia_url, origem_api')
+      .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, company_id, sent_by, midia_url, origem, origem_api')
       .eq('company_id', companyId)
       .order('created_at', { ascending: false })
       .limit(5000); // Limite alto para pegar todas as conversas
@@ -260,13 +260,18 @@ export const loadAllUniqueConversations = async (companyId: string): Promise<Con
     const validConversas = conversasData.filter(conv => {
       if (!conv.numero || conv.numero.includes('{{')) return false;
       if (!conv.mensagem || conv.mensagem.includes('{{')) return false;
-      
-      // Validar tamanho do telefone (11-13 dígitos)
-      const telefoneNorm = conv.telefone_formatado?.replace(/[^0-9]/g, '') || conv.numero?.replace(/[^0-9]/g, '') || '';
-      if (telefoneNorm.length > 0 && (telefoneNorm.length < 11 || telefoneNorm.length > 15)) {
-        return false;
+
+      const telefoneNorm = String(conv.telefone_formatado || conv.numero || '').replace(/[^0-9]/g, '');
+      const isGroup = conv.is_group || /@g\.us$/.test(conv.numero || '');
+      const isInstagram = conv.origem === 'Instagram' || (conv.origem_api === 'meta' && telefoneNorm.length >= 15);
+
+      // Validar tamanho apenas para WhatsApp (Instagram usa IDs longos)
+      if (telefoneNorm.length > 0 && !isGroup && !isInstagram) {
+        if (telefoneNorm.length < 11 || telefoneNorm.length > 15) {
+          return false;
+        }
       }
-      
+
       return true;
     });
 
@@ -274,12 +279,17 @@ export const loadAllUniqueConversations = async (companyId: string): Promise<Con
     const conversasMap = new Map<string, any>();
     validConversas.forEach(conv => {
       const isGroup = conv.is_group || /@g\.us$/.test(conv.numero || '');
-      const key = isGroup 
-        ? conv.numero 
-        : (conv.telefone_formatado?.replace(/[^0-9]/g, '') || conv.numero?.replace(/[^0-9]/g, '') || '');
-      
+      const normalizedDigits = String(conv.telefone_formatado || conv.numero || '').replace(/[^0-9]/g, '');
+      const isInstagram = conv.origem === 'Instagram' || (conv.origem_api === 'meta' && normalizedDigits.length >= 15);
+
+      const key = isGroup
+        ? String(conv.numero || '')
+        : isInstagram
+          ? `ig_${normalizedDigits}`
+          : (normalizedDigits || '');
+
       if (!key) return;
-      
+
       // Só adicionar se ainda não existe (primeiro = mais recente porque ordenamos DESC)
       if (!conversasMap.has(key)) {
         conversasMap.set(key, conv);
