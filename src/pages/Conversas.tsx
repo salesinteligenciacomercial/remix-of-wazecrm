@@ -850,7 +850,13 @@ function Conversas() {
     const opts = description ? {
       description
     } as any : undefined;
-    if (httpStatus === 401 || httpStatus === 403) {
+
+    const detailsText = typeof details === 'string' ? details : JSON.stringify(details || {});
+    const isDisconnected = code === 'INSTANCE_DISCONNECTED' || /Instância desconectada|Reconecte via QR Code/i.test(detailsText);
+
+    if (isDisconnected) {
+      toast.error(`${prefix}Instância desconectada. Reconecte via QR Code nas Configurações.`, opts);
+    } else if (httpStatus === 401 || httpStatus === 403) {
       toast.error(`${prefix}Sem autorização. Faça login novamente ou verifique permissões.`, opts);
     } else if (httpStatus === 404 || code === 'NO_WHATSAPP_CONNECTION') {
       toast.error(`${prefix}Conexão/instância não encontrada. Verifique suas conexões WhatsApp.`, opts);
