@@ -5183,8 +5183,8 @@ function Conversas() {
       // ⚡ OTIMIZAÇÃO: Executar storage upload, base64, e company_id em PARALELO
       const [storageResult, base64, authResult] = await Promise.all([
         // Upload para Storage
-        supabase.storage.from('conversation-media').upload(storageFileName, audioBlob, {
-          contentType: audioBlob.type || audioMimeType,
+        supabase.storage.from('conversation-media').upload(storageFileName, finalAudioBlob, {
+          contentType: finalAudioBlob.type || audioMimeType,
           upsert: false
         }),
         // Converter para base64
