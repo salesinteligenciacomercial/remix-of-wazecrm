@@ -9,7 +9,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { NotionWorkspace } from "@/components/processos/notion/NotionWorkspace";
 import { CommercialIntelligenceDashboard } from "@/components/ia/CommercialIntelligenceDashboard";
-import { UnifiedInsightsPanel } from "@/components/processos/UnifiedInsightsPanel";
+
 
 interface Stats {
   alerts: number;
