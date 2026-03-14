@@ -1815,7 +1815,7 @@ function Conversas() {
                 // ⚡ CORREÇÃO: Para Instagram, usar fallback amigável ao invés de ID numérico
                 const cleanKey = telefoneKey.replace(/^ig_/, '');
                 if (isInstagramMessage && /^\d{10,}$/.test(cleanKey)) {
-                  return `Instagram ${cleanKey.slice(-6)}`;
+                  return `Contato Instagram`;
                 }
                 return cleanKey;
               })(),
