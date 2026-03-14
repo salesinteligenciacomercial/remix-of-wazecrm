@@ -748,27 +748,53 @@ function Conversas() {
         if (err) {
           let code: string | undefined;
           let httpStatus: number | undefined = (err as any)?.status || (err as any)?.context?.status;
-          // Tentar extrair code do message (JSON) ou string
-          const raw = err?.message || '';
+          const raw = String(err?.message || '');
+
+          let parsedPayload: any = null;
           try {
-            const parsed = JSON.parse(raw);
-            code = parsed?.code || parsed?.error?.code || parsed?.error;
+            parsedPayload = JSON.parse(raw);
           } catch {
-            if (/NO_API_KEY/.test(raw)) code = 'NO_API_KEY';else if (/NO_WHATSAPP_CONNECTION/.test(raw)) code = 'NO_WHATSAPP_CONNECTION';else if (/EXTERNAL_API_ERROR/.test(raw)) code = 'EXTERNAL_API_ERROR';else if (/CONFIG_ERROR/.test(raw)) code = 'CONFIG_ERROR';
+            const jsonStart = raw.indexOf('{');
+            if (jsonStart >= 0) {
+              try {
+                parsedPayload = JSON.parse(raw.slice(jsonStart));
+              } catch {
+                parsedPayload = null;
+              }
+            }
           }
-          showWhatsAppErrorToast(code, httpStatus, raw);
+
+          if (parsedPayload) {
+            code = parsedPayload?.code || parsedPayload?.error?.code || parsedPayload?.error_code;
+            httpStatus = httpStatus ?? parsedPayload?.status;
+          }
+
+          if (!code) {
+            if (/INSTANCE_DISCONNECTED|Reconecte via QR Code|Instância desconectada/i.test(raw)) code = 'INSTANCE_DISCONNECTED';
+            else if (/NO_API_KEY/.test(raw)) code = 'NO_API_KEY';
+            else if (/NO_WHATSAPP_CONNECTION/.test(raw)) code = 'NO_WHATSAPP_CONNECTION';
+            else if (/EXTERNAL_API_ERROR/.test(raw)) code = 'EXTERNAL_API_ERROR';
+            else if (/CONFIG_ERROR/.test(raw)) code = 'CONFIG_ERROR';
+            else if (/SEND_FAILED/.test(raw)) code = 'SEND_FAILED';
+          }
+
+          const messageFromPayload = parsedPayload?.error || parsedPayload?.message;
+          const finalMessage = String(messageFromPayload || raw).slice(0, 240);
+          const details = parsedPayload || raw;
+
+          showWhatsAppErrorToast(code, httpStatus, details);
           console.debug('❌ [WHATSAPP] Erro detalhado:', {
             attempt,
             httpStatus,
             code,
-            raw: (err?.message || '').slice(0, 200)
+            raw: finalMessage
           });
           return {
             success: false,
             errorCode: code,
             httpStatus,
-            message: String(raw).slice(0, 200),
-            details: raw
+            message: finalMessage,
+            details
           };
         }
         if (data?.success) {
