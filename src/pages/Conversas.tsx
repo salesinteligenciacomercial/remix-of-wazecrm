@@ -5288,8 +5288,8 @@ function Conversas() {
       const telefoneFormatado = selectedConv.phoneNumber?.replace(/[^0-9]/g, '') || selectedConv.id.replace(/[^0-9]/g, '');
       supabase.from('conversas').update({ status: 'Enviada' })
         .eq('telefone_formatado', telefoneFormatado).eq('company_id', userCompanyId)
-        .then(() => console.log('✅ Status atualizado'))
-        .catch(e => console.error('❌ Status:', e));
+        .then(() => console.log('✅ Status atualizado'),
+              e => console.error('❌ Status:', e));
 
       setTimeout(() => setSyncStatus('idle'), 1000);
       console.log('✅ Áudio enviado com sucesso');
