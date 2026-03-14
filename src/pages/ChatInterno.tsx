@@ -821,7 +821,27 @@ export default function ChatInterno() {
         open={showCreatePublicMeeting}
         onClose={() => setShowCreatePublicMeeting(false)}
         onMeetingCreated={(id) => console.log('Meeting created:', id)}
+        onJoinMeeting={(id) => {
+          setShowCreatePublicMeeting(false);
+          setActiveGroupCall({ meetingId: id });
+        }}
       />
+
+      {activeGroupCall && currentUserId && (
+        <GroupCallModal
+          open={true}
+          onClose={() => {
+            setActiveGroupCall(null);
+            // Refresh meeting history
+            if (typeof endMeeting === 'function') {
+              // just refresh
+            }
+          }}
+          meetingId={activeGroupCall.meetingId}
+          hostUserId={currentUserId}
+          hostUserName={members.find(m => m.id === currentUserId)?.full_name || 'Anfitrião'}
+        />
+      )}
 
       {activeCall && currentUserId && <VideoCallModalV2 open={true} onClose={() => setActiveCall(null)} meetingId={activeCall.meetingId} localUserId={currentUserId} remoteUserId={activeCall.remoteUserId} remoteUserName={activeCall.remoteUserName} callType={activeCall.callType} isCaller={activeCall.isCaller} onCallEnded={handleCallEnded} />}
     </>;
