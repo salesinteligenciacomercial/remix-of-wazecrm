@@ -34,7 +34,7 @@ export const useConversationSearch = (companyId: string | null) => {
       // ========== 1. BUSCAR EM CONVERSAS ==========
       let conversasQuery = supabase
         .from('conversas')
-        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, company_id, sent_by, owner_id, midia_url, origem_api')
+        .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, company_id, sent_by, owner_id, midia_url, origem, origem_api')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false });
 
@@ -85,14 +85,19 @@ export const useConversationSearch = (companyId: string | null) => {
 
       conversasData.forEach(conv => {
         const isGroup = conv.is_group || /@g\.us$/.test(conv.numero || '');
-        const key = isGroup 
-          ? conv.numero 
-          : (conv.telefone_formatado?.replace(/[^0-9]/g, '') || conv.numero?.replace(/[^0-9]/g, '') || '');
-        
+        const normalizedDigits = String(conv.telefone_formatado || conv.numero || '').replace(/[^0-9]/g, '');
+        const isInstagram = conv.origem === 'Instagram' || (conv.origem_api === 'meta' && normalizedDigits.length >= 15);
+
+        const key = isGroup
+          ? String(conv.numero || '')
+          : isInstagram
+            ? `ig_${normalizedDigits}`
+            : (normalizedDigits || '');
+
         if (!key) return;
-        
-        processedPhones.add(key);
-        
+
+        processedPhones.add(normalizedDigits || key);
+
         if (!conversasMap.has(key)) {
           conversasMap.set(key, []);
         }
@@ -132,11 +137,11 @@ export const useConversationSearch = (companyId: string | null) => {
       // ========== 5. CONVERTER PARA FORMATO CONVERSATION ==========
       const results: Conversation[] = Array.from(conversasMap.entries()).map(([telefone, mensagens]) => {
         const isGroup = mensagens[0]?.is_group || /@g\.us$/.test(telefone);
-        
+
         // Ordenar mensagens por data
         const mensagensOrdenadas = mensagens
           .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        
+
         const messagensFormatadas: Message[] = mensagensOrdenadas.slice(-50).map(m => {
           const isFromMe = m.fromme === true || String(m.fromme) === 'true';
           return {
@@ -154,7 +159,7 @@ export const useConversationSearch = (companyId: string | null) => {
 
         const contactName = mensagens.find(m => m.nome_contato)?.nome_contato || telefone;
         const ultimaMensagem = messagensFormatadas[messagensFormatadas.length - 1];
-        
+
         let statusConversa: "waiting" | "answered" | "resolved" = "waiting";
         const temResolvida = mensagens.some(m => m.status === 'Resolvida' || m.status === 'Finalizada');
         if (temResolvida) {
@@ -166,11 +171,15 @@ export const useConversationSearch = (companyId: string | null) => {
         const origemApi = mensagens.find(m => m.origem_api)?.origem_api || 'evolution';
         const leadId = mensagens.find(m => m.lead_id)?.lead_id;
         const isLeadOnly = mensagens.some(m => m.is_lead_only);
+        const isInstagramConversation = telefone.startsWith('ig_') || mensagens.some(m => {
+          const digits = String(m.telefone_formatado || m.numero || '').replace(/[^0-9]/g, '');
+          return m.origem === 'Instagram' || (m.origem_api === 'meta' && digits.length >= 15);
+        });
 
         return {
-          id: `conv-${telefone}`,
+          id: telefone,
           contactName,
-          channel: "whatsapp" as const,
+          channel: isInstagramConversation ? "instagram" as const : "whatsapp" as const,
           status: statusConversa,
           lastMessage: ultimaMensagem?.content || '',
           unread: 0,
@@ -234,7 +243,7 @@ export const loadAllUniqueConversations = async (companyId: string): Promise<Con
     // Isso garante que pegamos a mensagem mais recente de cada conversa
     const { data: conversasResult, error } = await supabase
       .from('conversas')
-      .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, company_id, sent_by, midia_url, origem_api')
+      .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, company_id, sent_by, midia_url, origem, origem_api')
       .eq('company_id', companyId)
       .order('created_at', { ascending: false })
       .limit(5000); // Limite alto para pegar todas as conversas
@@ -251,13 +260,18 @@ export const loadAllUniqueConversations = async (companyId: string): Promise<Con
     const validConversas = conversasData.filter(conv => {
       if (!conv.numero || conv.numero.includes('{{')) return false;
       if (!conv.mensagem || conv.mensagem.includes('{{')) return false;
-      
-      // Validar tamanho do telefone (11-13 dígitos)
-      const telefoneNorm = conv.telefone_formatado?.replace(/[^0-9]/g, '') || conv.numero?.replace(/[^0-9]/g, '') || '';
-      if (telefoneNorm.length > 0 && (telefoneNorm.length < 11 || telefoneNorm.length > 15)) {
-        return false;
+
+      const telefoneNorm = String(conv.telefone_formatado || conv.numero || '').replace(/[^0-9]/g, '');
+      const isGroup = conv.is_group || /@g\.us$/.test(conv.numero || '');
+      const isInstagram = conv.origem === 'Instagram' || (conv.origem_api === 'meta' && telefoneNorm.length >= 15);
+
+      // Validar tamanho apenas para WhatsApp (Instagram usa IDs longos)
+      if (telefoneNorm.length > 0 && !isGroup && !isInstagram) {
+        if (telefoneNorm.length < 11 || telefoneNorm.length > 15) {
+          return false;
+        }
       }
-      
+
       return true;
     });
 
@@ -265,12 +279,17 @@ export const loadAllUniqueConversations = async (companyId: string): Promise<Con
     const conversasMap = new Map<string, any>();
     validConversas.forEach(conv => {
       const isGroup = conv.is_group || /@g\.us$/.test(conv.numero || '');
-      const key = isGroup 
-        ? conv.numero 
-        : (conv.telefone_formatado?.replace(/[^0-9]/g, '') || conv.numero?.replace(/[^0-9]/g, '') || '');
-      
+      const normalizedDigits = String(conv.telefone_formatado || conv.numero || '').replace(/[^0-9]/g, '');
+      const isInstagram = conv.origem === 'Instagram' || (conv.origem_api === 'meta' && normalizedDigits.length >= 15);
+
+      const key = isGroup
+        ? String(conv.numero || '')
+        : isInstagram
+          ? `ig_${normalizedDigits}`
+          : (normalizedDigits || '');
+
       if (!key) return;
-      
+
       // Só adicionar se ainda não existe (primeiro = mais recente porque ordenamos DESC)
       if (!conversasMap.has(key)) {
         conversasMap.set(key, conv);
@@ -332,7 +351,9 @@ export const loadAllUniqueConversations = async (companyId: string): Promise<Con
     const conversations: Conversation[] = Array.from(conversasMap.entries()).map(([telefone, conv]) => {
       const isGroup = conv.is_group || /@g\.us$/.test(telefone);
       const isFromMe = conv.fromme === true || String(conv.fromme) === 'true';
-      
+      const normalizedDigits = String(conv.telefone_formatado || conv.numero || '').replace(/[^0-9]/g, '');
+      const isInstagramConversation = telefone.startsWith('ig_') || conv.origem === 'Instagram' || (conv.origem_api === 'meta' && normalizedDigits.length >= 15);
+
       const message: Message = {
         id: conv.id || `msg-${Date.now()}-${Math.random()}`,
         content: conv.mensagem || '',
@@ -346,7 +367,7 @@ export const loadAllUniqueConversations = async (companyId: string): Promise<Con
       };
 
       const contactName = conv.nome_contato || telefone;
-      
+
       let statusConversa: "waiting" | "answered" | "resolved" = "waiting";
       if (conv.status === 'Resolvida' || conv.status === 'Finalizada') {
         statusConversa = "resolved";
@@ -355,15 +376,15 @@ export const loadAllUniqueConversations = async (companyId: string): Promise<Con
       }
 
       const origemApi = conv.origem_api || 'evolution';
-      
+
       // ⚡ CRÍTICO: Incluir assignedUser do banco para manter filtro "Transferidos"
-      const telKey = telefone.replace(/[^0-9]/g, '');
+      const telKey = String(telefone).replace(/^ig_/, '').replace(/[^0-9]/g, '');
       const assignedUserData = assignmentsMap.get(telKey);
 
       return {
-        id: `conv-${telefone}`,
+        id: telefone,
         contactName,
-        channel: "whatsapp" as const,
+        channel: isInstagramConversation ? "instagram" as const : "whatsapp" as const,
         status: statusConversa,
         lastMessage: message.content,
         unread: 0,

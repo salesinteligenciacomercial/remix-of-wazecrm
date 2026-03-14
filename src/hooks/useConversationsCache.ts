@@ -164,7 +164,7 @@ export const useConversationsCache = (companyId: string | null) => {
       while (hasMore) {
         const { data: batch, error } = await supabase
           .from('conversas')
-          .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, arquivo_nome, sent_by, owner_id, midia_url')
+          .select('id, numero, telefone_formatado, mensagem, nome_contato, tipo_mensagem, status, created_at, is_group, fromme, arquivo_nome, sent_by, owner_id, midia_url, origem, origem_api')
           .eq('company_id', companyId)
           .order('created_at', { ascending: false })
           .range(offset, offset + batchSize - 1);
@@ -220,12 +220,19 @@ export const useConversationsCache = (companyId: string | null) => {
         console.log(`👥 [DATABASE] ${ownerNamesMap.size} nomes de usuários carregados`);
       }
 
-      // ⚡ FASE 2.3: Agrupar APENAS por telefone (ignorar nome)
+      // ⚡ FASE 2.3: Agrupar APENAS por identificador da conversa (telefone, grupo ou Instagram)
       const conversasMap = new Map<string, any[]>();
       validConversas.forEach(conv => {
         const isGroup = conv.is_group || /@g\.us$/.test(conv.numero || '');
-        const key = isGroup ? conv.numero : (conv.telefone_formatado || conv.numero.replace(/[^0-9]/g, ''));
-        
+        const normalizedDigits = String(conv.telefone_formatado || conv.numero || '').replace(/[^0-9]/g, '');
+        const isInstagram = conv.origem === 'Instagram' || (conv.origem_api === 'meta' && normalizedDigits.length >= 15);
+
+        const key = isGroup
+          ? String(conv.numero || '')
+          : isInstagram
+            ? `ig_${normalizedDigits}`
+            : (normalizedDigits || String(conv.numero || '').replace(/[^0-9]/g, ''));
+
         if (!conversasMap.has(key)) {
           conversasMap.set(key, []);
         }
@@ -387,14 +394,20 @@ export const useConversationsCache = (companyId: string | null) => {
         }
 
         const isGroup = mensagens[0]?.is_group || /@g\.us$/.test(telefone);
+        const isInstagramConversation = telefone.startsWith('ig_') || mensagens.some(m => {
+          const digits = String(m.telefone_formatado || m.numero || '').replace(/[^0-9]/g, '');
+          return m.origem === 'Instagram' || (m.origem_api === 'meta' && digits.length >= 15);
+        });
 
         // ⚡ Avatar placeholder - será carregado assincronamente
-        const avatarUrl = isGroup 
+        const avatarUrl = isGroup
           ? `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName)}&background=10b981&color=fff`
-          : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName)}&background=0ea5e9&color=fff`;
+          : isInstagramConversation
+            ? `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName)}&background=E1306C&color=fff`
+            : `https://ui-avatars.com/api/?name=${encodeURIComponent(contactName)}&background=0ea5e9&color=fff`;
 
         // 🆕 Buscar dados do lead vinculado
-        const normalizedPhone = telefone.replace(/[^0-9]/g, '');
+        const normalizedPhone = telefone.replace(/^ig_/, '').replace(/[^0-9]/g, '');
         const lead = leadsMap.get(normalizedPhone) || leadsMap.get(telefone);
         const responsaveis = responsaveisMap.get(normalizedPhone) || responsaveisMap.get(telefone) || [];
         
@@ -410,7 +423,7 @@ export const useConversationsCache = (companyId: string | null) => {
         return {
           id: telefone,
           contactName,
-          channel: "whatsapp" as const,
+          channel: isInstagramConversation ? "instagram" as const : "whatsapp" as const,
           status: statusConversa,
           lastMessage: ultimaMensagem?.content || '',
           unread: 0,
