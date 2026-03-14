@@ -3,14 +3,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { 
   Target,
-  Brain,
   FileText,
   Zap
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { NotionWorkspace } from "@/components/processos/notion/NotionWorkspace";
 import { CommercialIntelligenceDashboard } from "@/components/ia/CommercialIntelligenceDashboard";
-import { UnifiedInsightsPanel } from "@/components/processos/UnifiedInsightsPanel";
+
 
 interface Stats {
   alerts: number;
@@ -59,8 +58,6 @@ export default function ProcessosComerciais() {
     });
   };
 
-  const totalPending = stats.alerts + stats.suggestions;
-
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -90,15 +87,6 @@ export default function ProcessosComerciais() {
             <FileText className="h-4 w-4" />
             <span className="hidden md:inline">Workspace</span>
           </TabsTrigger>
-          <TabsTrigger value="insights" className="flex items-center gap-2 py-2 relative">
-            <Brain className="h-4 w-4" />
-            <span className="hidden md:inline">Insights & Sugestões</span>
-            {totalPending > 0 && (
-              <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
-                {totalPending}
-              </Badge>
-            )}
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="intelligence">
@@ -109,9 +97,6 @@ export default function ProcessosComerciais() {
           <NotionWorkspace companyId={companyId} />
         </TabsContent>
 
-        <TabsContent value="insights">
-          <UnifiedInsightsPanel companyId={companyId} />
-        </TabsContent>
       </Tabs>
     </div>
   );
