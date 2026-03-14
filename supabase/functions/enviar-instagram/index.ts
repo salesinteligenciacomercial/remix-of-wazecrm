@@ -50,16 +50,67 @@ serve(async (req) => {
     );
 
     // Buscar configuração Instagram da empresa
-    const { data: connection, error: connError } = await supabase
+    let { data: connection, error: connError } = await supabase
       .from('whatsapp_connections')
       .select('instagram_access_token, instagram_account_id, instagram_username, meta_access_token')
       .eq('company_id', company_id)
       .not('instagram_account_id', 'is', null)
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (connError || !connection) {
-      console.error('❌ Conexão Instagram não encontrada:', connError);
+    // Se não encontrou na empresa direta, buscar nas subcontas (empresa mãe usando token de subconta)
+    if (!connection) {
+      console.log('🔍 [INSTAGRAM-SEND] Conexão não encontrada na empresa direta, buscando nas subcontas...');
+      const { data: subcontas } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('parent_company_id', company_id);
+
+      if (subcontas && subcontas.length > 0) {
+        const subIds = subcontas.map(s => s.id);
+        const { data: subConnection } = await supabase
+          .from('whatsapp_connections')
+          .select('instagram_access_token, instagram_account_id, instagram_username, meta_access_token')
+          .in('company_id', subIds)
+          .not('instagram_account_id', 'is', null)
+          .not('instagram_access_token', 'is', null)
+          .limit(1)
+          .maybeSingle();
+
+        if (subConnection) {
+          console.log('✅ [INSTAGRAM-SEND] Conexão Instagram encontrada via subconta');
+          connection = subConnection;
+        }
+      }
+
+      // Também tentar a empresa pai (subconta usando token da mãe)
+      if (!connection) {
+        const { data: parentCompany } = await supabase
+          .from('companies')
+          .select('parent_company_id')
+          .eq('id', company_id)
+          .maybeSingle();
+
+        if (parentCompany?.parent_company_id) {
+          const { data: parentConnection } = await supabase
+            .from('whatsapp_connections')
+            .select('instagram_access_token, instagram_account_id, instagram_username, meta_access_token')
+            .eq('company_id', parentCompany.parent_company_id)
+            .not('instagram_account_id', 'is', null)
+            .not('instagram_access_token', 'is', null)
+            .limit(1)
+            .maybeSingle();
+
+          if (parentConnection) {
+            console.log('✅ [INSTAGRAM-SEND] Conexão Instagram encontrada via empresa pai');
+            connection = parentConnection;
+          }
+        }
+      }
+    }
+
+    if (!connection) {
+      console.error('❌ Conexão Instagram não encontrada em nenhuma empresa relacionada');
       return new Response(
         JSON.stringify({ error: 'Conexão Instagram não configurada para esta empresa' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
