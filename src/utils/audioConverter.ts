@@ -38,7 +38,7 @@ export async function convertWebmToMp3(webmBlob: Blob): Promise<Blob> {
       const chunk = int16Samples.subarray(i, i + sampleBlockSize);
       const mp3buf = mp3Encoder.encodeBuffer(chunk);
       if (mp3buf.length > 0) {
-        mp3Data.push(new Int8Array(mp3buf));
+        mp3Data.push(new Uint8Array(mp3buf));
       }
     }
 
