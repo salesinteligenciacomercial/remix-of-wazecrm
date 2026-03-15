@@ -68,7 +68,7 @@ function normalizeMimeType(mimeType?: string): string {
 }
 
 function isMetaSupportedAudioMime(mimeType: string): boolean {
-  return ['audio/aac', 'audio/amr', 'audio/mpeg', 'audio/mp4', 'audio/ogg'].includes(mimeType);
+  return ['audio/aac', 'audio/amr', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/opus'].includes(mimeType);
 }
 
 function isLikelyOggAudioBase64(base64Data: string): boolean {
