@@ -1058,8 +1058,13 @@ serve(async (req) => {
             );
           } else {
             console.log("⚠️ Upload Meta falhou:", uploadResult.error);
-            // Fallback para Evolution se disponível
-            if (hasEvolutionConfig) {
+
+            // Para áudio na API oficial, não fazer fallback para Evolution (evita comportamento inconsistente)
+            if (mediaType === 'audio') {
+              result = { success: false, provider: 'meta', error: uploadResult.error || 'Falha no upload de áudio na API oficial' };
+            }
+            // Para os demais tipos, manter fallback para Evolution se disponível
+            else if (hasEvolutionConfig) {
               console.log("🔄 Tentando Evolution como fallback...");
               const baseUrl = resolvedEvolutionUrl;
               const apiKey = resolvedEvolutionKey;
