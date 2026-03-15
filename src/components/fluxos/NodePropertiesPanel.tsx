@@ -316,18 +316,48 @@ export function NodePropertiesPanel({ selectedNode, onUpdate }: NodePropertiesPa
                 {...inputProps}
               />
             </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300 text-xs font-medium">Valor a Verificar</Label>
-              <Input
-                value={selectedNode.data.checkValue || ''}
-                onChange={(e) => updateNodeData('checkValue', e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white"
-                placeholder="Ex: VIP, orçamento, 09:00-18:00"
-                {...inputProps}
-              />
-            </div>
+            {selectedNode.data.conditionType === 'tag' ? (
+              <div className="space-y-2">
+                <Label className="text-slate-300 text-xs font-medium">Tag a Verificar</Label>
+                <Select
+                  value={selectedNode.data.checkValue || ''}
+                  onValueChange={(v) => updateNodeData('checkValue', v)}
+                >
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectValue placeholder="Selecione uma tag" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 max-h-60">
+                    {availableTags.map((tag) => (
+                      <SelectItem key={tag} value={tag}>
+                        🏷️ {tag}
+                      </SelectItem>
+                    ))}
+                    {availableTags.length === 0 && (
+                      <div className="px-3 py-2 text-xs text-slate-500">Nenhuma tag encontrada</div>
+                    )}
+                  </SelectContent>
+                </Select>
+                {selectedNode.data.checkValue && (
+                  <Badge variant="secondary" className="bg-violet-500/20 text-violet-300 border-violet-500/30 gap-1">
+                    🏷️ {selectedNode.data.checkValue}
+                    <X className="h-3 w-3 cursor-pointer" onClick={() => updateNodeData('checkValue', '')} />
+                  </Badge>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label className="text-slate-300 text-xs font-medium">Valor a Verificar</Label>
+                <Input
+                  value={selectedNode.data.checkValue || ''}
+                  onChange={(e) => updateNodeData('checkValue', e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="Ex: VIP, orçamento, 09:00-18:00"
+                  {...inputProps}
+                />
+              </div>
+            )}
             <p className="text-[10px] text-slate-500">
-              Saída verde = Sim / Saída vermelha = Não
+              Se o lead tiver a tag → Saída verde (SIM) = fluxo para / Saída vermelha (NÃO) = fluxo continua
             </p>
           </>
         );
