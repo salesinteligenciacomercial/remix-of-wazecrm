@@ -9,6 +9,8 @@ import { Settings2, Upload, Trash2, Loader2 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
+import { Badge } from '@/components/ui/badge';
+import { X } from 'lucide-react';
 
 interface NodePropertiesPanelProps {
   selectedNode: Node | null;
@@ -16,6 +18,41 @@ interface NodePropertiesPanelProps {
 }
 
 export function NodePropertiesPanel({ selectedNode, onUpdate }: NodePropertiesPanelProps) {
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchTags = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: userRole } = await supabase
+        .from('user_roles' as any)
+        .select('company_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      const companyId = (userRole as any)?.company_id;
+      if (!companyId) return;
+
+      const { data: leads } = await supabase
+        .from('leads')
+        .select('tags')
+        .eq('company_id', companyId)
+        .not('tags', 'is', null);
+
+      if (leads) {
+        const allTags = new Set<string>();
+        leads.forEach((lead: any) => {
+          if (Array.isArray(lead.tags)) {
+            lead.tags.forEach((t: string) => allTags.add(t));
+          }
+        });
+        setAvailableTags(Array.from(allTags).sort());
+      }
+    };
+    fetchTags();
+  }, []);
+
   if (!selectedNode) {
     return (
       <div className="w-80 bg-slate-900 border-l border-slate-700 flex flex-col">
@@ -55,6 +92,7 @@ export function NodePropertiesPanel({ selectedNode, onUpdate }: NodePropertiesPa
     onKeyUp: stopPropagation,
     onKeyPress: stopPropagation,
   };
+
 
   const renderProperties = () => {
     switch (selectedNode.type) {
@@ -278,18 +316,48 @@ export function NodePropertiesPanel({ selectedNode, onUpdate }: NodePropertiesPa
                 {...inputProps}
               />
             </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300 text-xs font-medium">Valor a Verificar</Label>
-              <Input
-                value={selectedNode.data.checkValue || ''}
-                onChange={(e) => updateNodeData('checkValue', e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white"
-                placeholder="Ex: VIP, orçamento, 09:00-18:00"
-                {...inputProps}
-              />
-            </div>
+            {selectedNode.data.conditionType === 'tag' ? (
+              <div className="space-y-2">
+                <Label className="text-slate-300 text-xs font-medium">Tag a Verificar</Label>
+                <Select
+                  value={selectedNode.data.checkValue || ''}
+                  onValueChange={(v) => updateNodeData('checkValue', v)}
+                >
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectValue placeholder="Selecione uma tag" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 max-h-60">
+                    {availableTags.map((tag) => (
+                      <SelectItem key={tag} value={tag}>
+                        🏷️ {tag}
+                      </SelectItem>
+                    ))}
+                    {availableTags.length === 0 && (
+                      <div className="px-3 py-2 text-xs text-slate-500">Nenhuma tag encontrada</div>
+                    )}
+                  </SelectContent>
+                </Select>
+                {selectedNode.data.checkValue && (
+                  <Badge variant="secondary" className="bg-violet-500/20 text-violet-300 border-violet-500/30 gap-1">
+                    🏷️ {selectedNode.data.checkValue}
+                    <X className="h-3 w-3 cursor-pointer" onClick={() => updateNodeData('checkValue', '')} />
+                  </Badge>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label className="text-slate-300 text-xs font-medium">Valor a Verificar</Label>
+                <Input
+                  value={selectedNode.data.checkValue || ''}
+                  onChange={(e) => updateNodeData('checkValue', e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  placeholder="Ex: VIP, orçamento, 09:00-18:00"
+                  {...inputProps}
+                />
+              </div>
+            )}
             <p className="text-[10px] text-slate-500">
-              Saída verde = Sim / Saída vermelha = Não
+              Se o lead tiver a tag → Saída verde (SIM) = fluxo para / Saída vermelha (NÃO) = fluxo continua
             </p>
           </>
         );
