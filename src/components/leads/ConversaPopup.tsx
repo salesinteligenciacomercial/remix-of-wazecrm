@@ -1118,7 +1118,7 @@ export function ConversaPopup({
         sender: "user",
         timestamp: new Date(),
         delivered: true,
-        mediaUrl: URL.createObjectURL(audioBlob),
+        mediaUrl: URL.createObjectURL(finalAudioBlob),
         sentBy: currentUserName || "Equipe", // ✅ Assinatura na mensagem local
       };
 
