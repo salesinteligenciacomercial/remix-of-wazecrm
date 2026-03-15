@@ -1057,7 +1057,7 @@ export function ConversaPopup({
           resolve(base64String.split(',')[1]);
         };
         reader.onerror = () => reject(new Error('Erro ao ler áudio'));
-        reader.readAsDataURL(audioBlob);
+        reader.readAsDataURL(finalAudioBlob);
       });
 
       const telefoneNormalizado = normalizePhoneBR(leadPhone)!;
