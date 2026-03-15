@@ -9,6 +9,8 @@ import { Settings2, Upload, Trash2, Loader2 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
+import { Badge } from '@/components/ui/badge';
+import { X } from 'lucide-react';
 
 interface NodePropertiesPanelProps {
   selectedNode: Node | null;
