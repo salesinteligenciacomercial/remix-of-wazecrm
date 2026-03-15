@@ -1082,9 +1082,9 @@ export function ConversaPopup({
       let audioStorageUrl: string | null = null;
       try {
         if (companyId) {
-          audioStorageUrl = await uploadMediaToStorage(audioBlob, companyId, {
+          audioStorageUrl = await uploadMediaToStorage(finalAudioBlob, companyId, {
             fileName: `audio.${audioExtension}`,
-            contentType: audioBlob.type || audioMimeType,
+            contentType: finalAudioBlob.type || audioMimeType,
           });
         }
       } catch (uploadErr) {
