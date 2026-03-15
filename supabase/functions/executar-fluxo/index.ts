@@ -474,18 +474,16 @@ async function executeInteractiveMenu(node: any, context: any, supabase: any, fl
   
   const effectiveMenuStyle = menuStyle || node.data?.menuType || 'text';
   if (effectiveMenuStyle === 'buttons' && (buttons || []).length <= 3) {
-    // Enviar como botões interativos do WhatsApp
-    await sendInteractiveButtons(supabase, context.conversationNumber, messageText, buttons || [], context.companyId);
+    await sendInteractiveButtons(supabase, context.conversationNumber, messageText, buttons || [], context.companyId, context.leadId);
   } else if (effectiveMenuStyle === 'list') {
-    // Enviar como lista interativa
-    await sendInteractiveList(supabase, context.conversationNumber, messageText, buttons || [], context.companyId);
+    await sendInteractiveList(supabase, context.conversationNumber, messageText, buttons || [], context.companyId, context.leadId);
   } else {
     // Fallback: enviar como texto numerado
     let textMenu = messageText + "\n\n";
     (buttons || []).forEach((btn: any, i: number) => {
       textMenu += `${i + 1}️⃣ ${btn.label}\n`;
     });
-    await sendWhatsAppMessage(supabase, context.conversationNumber, textMenu, context.companyId);
+    await sendWhatsAppMessage(supabase, context.conversationNumber, textMenu, context.companyId, context.leadId);
   }
 
   // Salvar estado e aguardar resposta
