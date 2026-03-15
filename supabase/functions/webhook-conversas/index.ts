@@ -2134,6 +2134,7 @@ serve(async (req) => {
             }
             } // fim do else humanIsAttending
           }
+          } // fim do else hasActiveAssignment
         }
       } catch (flowError) {
         console.error('❌ [WEBHOOK-FLOW] Erro ao processar fluxo/IA:', flowError);
