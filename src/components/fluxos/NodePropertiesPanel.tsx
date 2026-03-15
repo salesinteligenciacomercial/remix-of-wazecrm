@@ -22,18 +22,22 @@ export function NodePropertiesPanel({ selectedNode, onUpdate }: NodePropertiesPa
 
   useEffect(() => {
     const fetchTags = async () => {
-      const { data: profile } = await supabase
-        .from('profiles')
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: userRole } = await supabase
+        .from('user_roles' as any)
         .select('company_id')
-        .eq('id', (await supabase.auth.getUser()).data.user?.id || '')
-        .single();
+        .eq('user_id', user.id)
+        .maybeSingle();
       
-      if (!profile?.company_id) return;
+      const companyId = (userRole as any)?.company_id;
+      if (!companyId) return;
 
       const { data: leads } = await supabase
         .from('leads')
         .select('tags')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', companyId)
         .not('tags', 'is', null);
 
       if (leads) {
