@@ -4801,6 +4801,13 @@ function Conversas() {
   };
   const handleSendMedia = async (file: File, caption: string, type: string) => {
     if (!selectedConv) return;
+
+    // Áudio anexado deve seguir o pipeline robusto (normalização + confirmação do provedor)
+    if (type === 'audio') {
+      await handleSendAudio(file);
+      return;
+    }
+
     setSyncStatus('syncing');
     
     // ⚡ CORREÇÃO: Sanitizar nome do arquivo imediatamente para evitar erro InvalidKey

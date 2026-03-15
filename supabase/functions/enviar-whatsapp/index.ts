@@ -374,9 +374,13 @@ async function sendMetaFallback(
         uploadMime = 'audio/ogg';
         uploadFileName = 'audio.ogg';
       } else {
-        console.warn('⚠️ [MetaFallback] Áudio incompatível com Meta como áudio. Enviando como documento para garantir entrega.');
-        mediaType = 'document';
-        uploadMime = cleanMime || 'application/octet-stream';
+        const reason = `MIME não suportado pela Meta (${cleanMime || 'desconhecido'})`;
+        console.warn(`⚠️ [MetaFallback] Áudio incompatível com Meta API (${reason})`);
+        return {
+          success: false,
+          provider: 'meta',
+          error: `Áudio incompatível com API oficial (${reason}). Grave novamente e envie em MP3/OGG válido.`
+        };
       }
     }
 
