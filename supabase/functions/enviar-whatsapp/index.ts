@@ -356,29 +356,38 @@ async function sendMetaFallback(
     let mediaType = validatedData.tipo_mensagem || 'document';
     if (mediaType === 'texto') mediaType = 'text';
     if (mediaType === 'pdf') mediaType = 'document';
-    
-    // ⚡ Para áudio: normalizar MIME e detectar OGG real
+
+    let uploadMime = normalizeMimeType(mimeType) || 'application/octet-stream';
+    let uploadFileName = fileName;
+
+    // ⚡ Para áudio: só enviar como áudio se MIME + payload forem realmente compatíveis
     if (mediaType === 'audio') {
       const cleanMime = normalizeMimeType(mimeType);
-      if (!isMetaSupportedAudioMime(cleanMime) || cleanMime === 'audio/webm') {
-        // Verificar se é realmente OGG (Chrome grava webm com container OGG)
-        if (isLikelyOggAudioBase64(validatedData.mediaBase64)) {
-          mimeType = 'audio/ogg';
-        } else {
-          mimeType = 'audio/ogg'; // Forçar OGG como melhor chance
-        }
+      const isOggPayload = isLikelyOggAudioBase64(validatedData.mediaBase64);
+
+      if (cleanMime === 'audio/ogg' && isOggPayload) {
+        uploadMime = 'audio/ogg';
+        uploadFileName = 'audio.ogg';
+      } else if (isMetaSupportedAudioMime(cleanMime)) {
+        uploadMime = cleanMime;
+      } else if (isOggPayload) {
+        uploadMime = 'audio/ogg';
+        uploadFileName = 'audio.ogg';
       } else {
-        mimeType = cleanMime;
+        console.warn('⚠️ [MetaFallback] Áudio incompatível com Meta como áudio. Enviando como documento para garantir entrega.');
+        mediaType = 'document';
+        uploadMime = cleanMime || 'application/octet-stream';
       }
     }
-    
+
     const uploadResult = await uploadMetaMedia(
       connection.meta_phone_number_id,
       connection.meta_access_token,
       validatedData.mediaBase64,
-      mediaType === 'audio' ? mimeType : normalizeMimeType(mimeType) || 'application/octet-stream',
-      mediaType === 'audio' ? 'audio.ogg' : fileName
+      uploadMime,
+      uploadFileName
     );
+
     if (uploadResult.success && uploadResult.media_id) {
       return await sendMetaMediaMessage(
         connection.meta_phone_number_id,
@@ -989,11 +998,9 @@ serve(async (req) => {
             : 'conteúdo não corresponde a áudio OGG válido';
           console.warn(`⚠️ Áudio incompatível com Meta API (${reason})`);
 
-          // ⚡ Tentar detectar se o conteúdo é realmente OGG/Opus (comum em webm do Chrome)
+          // 1) Se o payload for OGG real, corrigir apenas o MIME e enviar como áudio
           const isActuallyOgg = isLikelyOggAudioBase64(validatedData.mediaBase64);
-          
           if (isActuallyOgg) {
-            // O conteúdo é OGG válido, apenas o MIME está errado - enviar diretamente pela Meta como audio/ogg
             console.log('🔄 Conteúdo é OGG válido, reenviando com MIME correto (audio/ogg)...');
             const uploadOgg = await uploadMetaMedia(
               connection.meta_phone_number_id,
@@ -1002,6 +1009,7 @@ serve(async (req) => {
               'audio/ogg',
               'audio.ogg'
             );
+
             if (uploadOgg.success && uploadOgg.media_id) {
               result = await sendMetaMediaMessage(
                 connection.meta_phone_number_id,
@@ -1015,7 +1023,7 @@ serve(async (req) => {
             }
           }
 
-          // Se OGG direto não funcionou, tentar Evolution como fallback
+          // 2) Tentar Evolution quando disponível
           if (!result?.success && hasEvolutionConfig) {
             console.log('🔄 Usando Evolution para áudio incompatível com Meta...');
             const baseUrl = resolvedEvolutionUrl;
@@ -1031,32 +1039,35 @@ serve(async (req) => {
             );
           }
 
-          // 3) Se Evolution também falhar, enviar pela Meta como áudio OGG (não como documento)
+          // 3) Fallback final seguro: enviar como documento (evita falso "enviado" com áudio inválido)
           if (!result?.success) {
-            console.log('🔊 Fallback: enviando áudio como audio/ogg via Meta (não como documento)...');
-            const uploadAsAudio = await uploadMetaMedia(
+            console.log('📎 Fallback final: enviando arquivo de áudio como documento para garantir entrega...');
+            const fallbackMime = cleanMimeType || 'application/octet-stream';
+            const fallbackFileName = fileName || 'audio.webm';
+
+            const uploadAsDocument = await uploadMetaMedia(
               connection.meta_phone_number_id,
               connection.meta_access_token,
               validatedData.mediaBase64,
-              'audio/ogg',
-              'audio.ogg'
+              fallbackMime,
+              fallbackFileName
             );
 
-            if (uploadAsAudio.success && uploadAsAudio.media_id) {
+            if (uploadAsDocument.success && uploadAsDocument.media_id) {
               result = await sendMetaMediaMessage(
                 connection.meta_phone_number_id,
                 connection.meta_access_token,
                 formattedNumber,
-                uploadAsAudio.media_id,
-                'audio',
-                undefined, // Meta não suporta caption em áudio
+                uploadAsDocument.media_id,
+                'document',
+                validatedData.caption || validatedData.mensagem,
                 true
               );
             } else {
               result = {
                 success: false,
                 provider: 'meta',
-                error: `Áudio incompatível com API oficial (${reason}) e todos os fallbacks falharam: ${uploadAsAudio.error || 'erro desconhecido'}`
+                error: `Áudio incompatível com API oficial (${reason}) e fallback como documento falhou: ${uploadAsDocument.error || 'erro desconhecido'}`
               };
             }
           }
