@@ -5276,7 +5276,7 @@ function Conversas() {
 
       if (tempId && selectedConv) {
         const cleanedMessages = selectedConv.messages.filter(m => m.id !== tempId);
-        const updatedConvs = conversations.map(conv => conv.id === selectedConv.id ? { ...conv, messages: cleanedMessages, lastMessage: cleanedMessages.at(-1)?.content || '' } : conv);
+        const updatedConvs = conversations.map(conv => conv.id === selectedConv.id ? { ...conv, messages: cleanedMessages, lastMessage: (cleanedMessages.length > 0 ? cleanedMessages[cleanedMessages.length - 1]?.content : '') || '' } : conv);
         saveConversations(updatedConvs);
         setSelectedConv(prev => prev?.id === selectedConv.id ? { ...prev, messages: cleanedMessages } : prev);
       }
