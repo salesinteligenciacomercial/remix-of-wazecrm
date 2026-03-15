@@ -1068,7 +1068,7 @@ export function ConversaPopup({
         tipo_mensagem: 'audio',
         mediaBase64: base64,
         fileName: `audio.${audioExtension}`,
-        mimeType: audioBlob.type || audioMimeType,
+        mimeType: finalAudioBlob.type || audioMimeType,
         caption: '',
       });
 
