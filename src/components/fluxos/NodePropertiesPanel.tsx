@@ -18,6 +18,37 @@ interface NodePropertiesPanelProps {
 }
 
 export function NodePropertiesPanel({ selectedNode, onUpdate }: NodePropertiesPanelProps) {
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchTags = async () => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', (await supabase.auth.getUser()).data.user?.id || '')
+        .single();
+      
+      if (!profile?.company_id) return;
+
+      const { data: leads } = await supabase
+        .from('leads')
+        .select('tags')
+        .eq('company_id', profile.company_id)
+        .not('tags', 'is', null);
+
+      if (leads) {
+        const allTags = new Set<string>();
+        leads.forEach((lead: any) => {
+          if (Array.isArray(lead.tags)) {
+            lead.tags.forEach((t: string) => allTags.add(t));
+          }
+        });
+        setAvailableTags(Array.from(allTags).sort());
+      }
+    };
+    fetchTags();
+  }, []);
+
   if (!selectedNode) {
     return (
       <div className="w-80 bg-slate-900 border-l border-slate-700 flex flex-col">
@@ -57,6 +88,7 @@ export function NodePropertiesPanel({ selectedNode, onUpdate }: NodePropertiesPa
     onKeyUp: stopPropagation,
     onKeyPress: stopPropagation,
   };
+
 
   const renderProperties = () => {
     switch (selectedNode.type) {
