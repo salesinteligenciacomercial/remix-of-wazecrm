@@ -1221,6 +1221,10 @@ serve(async (req) => {
             validatedData.template_language || 'pt_BR',
             validatedData.template_components
           );
+        } else if (hasMetaCredentials && validatedData.mediaBase64) {
+          // Importante: quando provider é 'both' e Evolution está desconectada,
+          // ainda precisamos tratar base64 (especialmente áudio) via Meta.
+          result = await sendMetaFallback(connection, formattedNumber, validatedData);
         } else if (hasMetaCredentials && validatedData.mensagem) {
           result = await sendMetaTextMessage(
             connection.meta_phone_number_id,

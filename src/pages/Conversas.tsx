@@ -5273,9 +5273,8 @@ function Conversas() {
 
       if (localBlobUrl) URL.revokeObjectURL(localBlobUrl);
 
-      if (inserted?.id && storageUrl) {
-        transcreverAudio(inserted.id, storageUrl).catch(e => console.error('❌ Transcrição:', e));
-      }
+      // Não iniciar transcrição automática para áudio enviado pelo usuário
+      // (evita erro de transcrição ser confundido com erro de envio).
 
       setTimeout(() => setSyncStatus('idle'), 1000);
     } catch (error) {
