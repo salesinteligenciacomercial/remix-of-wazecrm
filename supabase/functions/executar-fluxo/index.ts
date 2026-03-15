@@ -611,11 +611,13 @@ async function persistFlowMessage(supabase: any, numero: string, mensagem: strin
 
 // ============= WHATSAPP HELPERS =============
 
-async function sendWhatsAppMessage(supabase: any, numero: string, mensagem: string, companyId: string) {
+async function sendWhatsAppMessage(supabase: any, numero: string, mensagem: string, companyId: string, leadId?: string) {
   try {
     await supabase.functions.invoke("enviar-whatsapp", {
       body: { numero, mensagem, tipo_mensagem: "text", company_id: companyId },
     });
+    // Persistir mensagem no CRM
+    await persistFlowMessage(supabase, numero, mensagem, companyId, leadId);
   } catch (e) {
     console.error("❌ Erro ao enviar WhatsApp:", e);
   }
