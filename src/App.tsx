@@ -92,6 +92,7 @@ const App = () => (
               <Route path="reunioes" element={<Navigate to="/chat-equipe" replace />} />
               <Route path="discador" element={<Discador />} />
               <Route path="processos" element={<ProcessosComerciais />} />
+              <Route path="prospeccao" element={<Prospeccao />} />
               <Route path="financeiro" element={<Financeiro />} />
               <Route path="treinamento" element={<Treinamento />} />
             </Route>

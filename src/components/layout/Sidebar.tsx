@@ -70,6 +70,11 @@ const navigation = [{
   menuKey: "processos",
   showAIBadge: true
 }, {
+  name: "Prospecção",
+  href: "/prospeccao",
+  icon: Target,
+  menuKey: "prospeccao"
+}, {
   name: "Financeiro",
   href: "/financeiro",
   icon: DollarSign,
