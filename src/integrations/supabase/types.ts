@@ -4429,6 +4429,68 @@ export type Database = {
           },
         ]
       }
+      prospecting_daily_logs: {
+        Row: {
+          ad_spend: number | null
+          channel_type: string
+          company_id: string
+          created_at: string | null
+          gross_value: number | null
+          id: string
+          leads_prospected: number | null
+          log_date: string
+          meetings_scheduled: number | null
+          notes: string | null
+          opportunities: number | null
+          sales_closed: number | null
+          source: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          ad_spend?: number | null
+          channel_type?: string
+          company_id: string
+          created_at?: string | null
+          gross_value?: number | null
+          id?: string
+          leads_prospected?: number | null
+          log_date: string
+          meetings_scheduled?: number | null
+          notes?: string | null
+          opportunities?: number | null
+          sales_closed?: number | null
+          source?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          ad_spend?: number | null
+          channel_type?: string
+          company_id?: string
+          created_at?: string | null
+          gross_value?: number | null
+          id?: string
+          leads_prospected?: number | null
+          log_date?: string
+          meetings_scheduled?: number | null
+          notes?: string | null
+          opportunities?: number | null
+          sales_closed?: number | null
+          source?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospecting_daily_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quick_message_categories: {
         Row: {
           company_id: string

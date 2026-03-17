@@ -23,6 +23,7 @@ import Discador from "./pages/Discador";
 import ProcessosComerciais from "./pages/ProcessosComerciais";
 import Treinamento from "./pages/Treinamento";
 import Financeiro from "./pages/Financeiro";
+import Prospeccao from "./pages/Prospeccao";
 import OAuthCallback from "./pages/OAuthCallback";
 import GmailCallback from "./pages/GmailCallback";
 import { MainLayout } from "./components/layout/MainLayout";
@@ -91,6 +92,7 @@ const App = () => (
               <Route path="reunioes" element={<Navigate to="/chat-equipe" replace />} />
               <Route path="discador" element={<Discador />} />
               <Route path="processos" element={<ProcessosComerciais />} />
+              <Route path="prospeccao" element={<Prospeccao />} />
               <Route path="financeiro" element={<Financeiro />} />
               <Route path="treinamento" element={<Treinamento />} />
             </Route>
