@@ -1,102 +1,90 @@
-## Plano de Integração: Nvoip VoIP no Call Center do CRM
-
-### Resumo
-
-Integrar a API da Nvoip ([https://api.nvoip.com.br/v2](https://api.nvoip.com.br/v2)) ao módulo de Call Center existente para substituir as chamadas simuladas por ligações telefônicas reais. O CRM já possui toda a UI e lógica de estado — precisamos conectar ao backend da Nvoip.
-
----
-
-### O que a API da Nvoip oferece
 
 
-| Funcionalidade   | Endpoint                   | Uso no CRM                      |
-| ---------------- | -------------------------- | ------------------------------- |
-| Realizar chamada | `POST /v2/calls/`          | Discar para leads               |
-| Consultar status | `GET /v2/calls?callId=X`   | Polling do estado em tempo real |
-| Encerrar chamada | `GET /v2/endcall?callId=X` | Desligar ligação                |
-| Histórico        | `GET /v2/calls/history`    | Sincronizar dados               |
-| Autenticação     | `POST /v2/oauth/token`     | Token OAuth (24h validade)      |
+## Analise da Planilha de Acompanhamento
 
+A planilha tem **2 abas**:
 
-**Estados retornados pela Nvoip:** `calling_origin`, `calling_destination`, `established`, `noanswer`, `busy`, `finished`, `failed`
+### Aba 1 - Prospecção Orgânica (SDR / Disparo em Massa)
+| Data | LEADS | % Conversão | OPORTUNIDADE | CPO | % Fechamento | VENDAS | CPV | TICKET | BRUTO |
+Rastreia: leads prospectados por dia, taxa de conversão em oportunidade, vendas, ticket medio, valor bruto.
 
----
+### Aba 2 - Tráfego Pago
+| Data | GASTO | LEADS | CPL | % | OPORTUNIDADE | CPO | % | VENDAS | CPV | TICKET | BRUTO | ROI |
+Adiciona: gasto em ads, CPL (custo por lead), CPO (custo por oportunidade), CPV (custo por venda), ROI.
 
-### O que você precisa fornecer
-
-Antes de implementar, preciso de **3 credenciais** do seu painel Nvoip:
-
-1. **NumberSIP** (ramal/usuário SIP) — usado como `caller` nas chamadas 
-2. **User Token** — para gerar o OAuth access_token
-3. **Napikey** — chave de API alternativa
-
-Essas credenciais serão armazenadas de forma segura como secrets do backend.
-
-&nbsp;
-
-credencias:   
-  
-Napikey: SkRBQU1VWllERFJrbTJGSW1YTUNpWWNiTGpBRmlSMU8=   
-  
-User Token: 84682144-1804-11f1-a3b7-027e3c96bf59  
-  
-usuario sip: 137715001
+### Problemas da planilha atual
+- Maioria dos dias vazios com erros `#DIV/0!` e `#REF!`
+- Sem identificação de SDR/responsável
+- Sem separação por canal/campanha
+- Sem acompanhamento de reuniões (mencionado por voce, mas ausente na planilha)
+- Sem historico cumulativo/mensal
+- Dados manuais, desconectados do CRM
 
 ---
 
-### Arquitetura da Integração
+## Recomendação: Criar Modulo "Acompanhamento de Prospecção"
 
-```text
-┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Frontend   │────▶│  Edge Function   │────▶│  API Nvoip      │
-│  (CRM UI)   │     │  nvoip-call      │     │  api.nvoip.com  │
-│             │◀────│                  │◀────│                 │
-└─────────────┘     └──────────────────┘     └─────────────────┘
-                           │
-                    ┌──────▼──────┐
-                    │  Tabela     │
-                    │  nvoip_config│
-                    │  call_history│
-                    └─────────────┘
+Sim, devemos criar um novo modulo. O CRM ja tem os dados de leads, oportunidades e vendas — so falta a **camada de registro diario de atividade de prospecção** e os **dashboards de funil de prospecção**.
+
+### O que o modulo vai ter
+
+**1. Registro Diario de Prospecção (tabela `prospecting_daily_logs`)**
+- Data, responsavel (SDR), canal (orgânico/tráfego), tipo de ação (disparo massa, ligação, social selling)
+- Leads prospectados, oportunidades geradas, reuniões agendadas, vendas fechadas
+- Valor bruto das vendas, ticket medio (calculado)
+- Para tráfego: gasto em ads, CPL, CPO, CPV, ROI (todos calculados automaticamente)
+
+**2. Dashboard de Prospecção**
+- Visão diaria/semanal/mensal com tabela estilo planilha (familiar ao usuario)
+- KPIs em cards: Total Leads, Taxa Oportunidade %, Reuniões, Vendas, Ticket Medio, Valor Bruto
+- Graficos de evolução: leads vs oportunidades vs vendas ao longo do tempo
+- Comparação entre SDRs (ranking)
+- Separação por abas: Orgânico vs Tráfego Pago
+
+**3. Calculos automaticos**
+- % Conversão Lead→Oportunidade = oportunidades / leads
+- % Conversão Oportunidade→Venda = vendas / oportunidades  
+- CPL = gasto / leads
+- CPO = gasto / oportunidades
+- CPV = gasto / vendas
+- ROI = (bruto - gasto) / gasto
+- Ticket Medio = bruto / vendas
+
+### Implementação Tecnica
+
+**Database:**
+```sql
+CREATE TABLE prospecting_daily_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID REFERENCES companies(id) NOT NULL,
+  user_id UUID NOT NULL, -- SDR responsavel
+  log_date DATE NOT NULL,
+  channel_type TEXT NOT NULL DEFAULT 'organic', -- 'organic' | 'paid'
+  source TEXT, -- 'disparo_massa', 'ligacao', 'social_selling', 'facebook_ads', 'google_ads'
+  leads_prospected INT DEFAULT 0,
+  opportunities INT DEFAULT 0,
+  meetings_scheduled INT DEFAULT 0,
+  sales_closed INT DEFAULT 0,
+  gross_value NUMERIC DEFAULT 0,
+  ad_spend NUMERIC DEFAULT 0, -- só para tráfego pago
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(company_id, user_id, log_date, channel_type, source)
+);
 ```
 
----
+**Frontend:**
+- Nova pagina `src/pages/Prospeccao.tsx`
+- Novo item no sidebar: "Prospecção" com icone Target
+- Componentes: `ProspeccaoTable.tsx` (tabela editavel inline), `ProspeccaoKPIs.tsx`, `ProspeccaoCharts.tsx`
+- Filtros: periodo, responsavel, canal, fonte
 
-### Implementação (4 etapas)
+**Melhorias sobre a planilha:**
+- Calculos automaticos sem erros `#DIV/0!`
+- Multiplos SDRs com comparação
+- Campo de reuniões agendadas (ausente na planilha)
+- Historico completo com filtros
+- Graficos de tendência
+- Export para CSV/Excel
 
-#### 1. Secrets e Configuração
-
-- Armazenar `NVOIP_NAPIKEY` e `NVOIP_USER_TOKEN` como secrets
-- Criar tabela `nvoip_config` para armazenar NumberSIP por empresa (multi-tenant)
-
-#### 2. Edge Function `nvoip-call`
-
-Uma única edge function com 4 ações:
-
-- `**make-call**`: Autentica via OAuth → `POST /v2/calls/` com caller/called → retorna `callId`
-- `**check-call**`: `GET /v2/calls?callId=X` → retorna estado atual e duração
-- `**end-call**`: `GET /v2/endcall?callId=X` → encerra chamada
-- `**get-token**`: Gerencia cache do access_token (24h validade)
-
-#### 3. Atualizar `useCallCenter.ts`
-
-- Substituir `simulateCallProgression()` por polling real via edge function
-- A cada 2 segundos, consultar status da chamada na Nvoip
-- Mapear estados Nvoip → estados do CRM:
-  - `calling_origin` → `iniciando`
-  - `calling_destination` → `chamando`/`tocando`
-  - `established` → `conectado`
-  - `noanswer`/`busy`/`failed` → `falha`
-  - `finished` → `finalizado`
-- Salvar `linkAudio` (gravação) no `call_history`
-
-#### 4. Tabela `call_history` — adicionar coluna
-
-- `nvoip_call_id` (text) — ID da chamada na Nvoip
-- `recording_url` (text) — link da gravação de áudio
-
----
-
-### Próximo passo
-
-Preciso que você me forneça as credenciais da Nvoip (NumberSIP, User Token, Napikey) para que eu possa armazená-las como secrets e iniciar a implementação.
