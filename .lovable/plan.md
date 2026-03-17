@@ -1,68 +1,102 @@
+## Plano de Integração: Nvoip VoIP no Call Center do CRM
+
+### Resumo
+
+Integrar a API da Nvoip ([https://api.nvoip.com.br/v2](https://api.nvoip.com.br/v2)) ao módulo de Call Center existente para substituir as chamadas simuladas por ligações telefônicas reais. O CRM já possui toda a UI e lógica de estado — precisamos conectar ao backend da Nvoip.
+
+---
+
+### O que a API da Nvoip oferece
 
 
-## Plano: Adicionar Acompanhamento de Follow-Up ao Módulo de Prospecção
+| Funcionalidade   | Endpoint                   | Uso no CRM                      |
+| ---------------- | -------------------------- | ------------------------------- |
+| Realizar chamada | `POST /v2/calls/`          | Discar para leads               |
+| Consultar status | `GET /v2/calls?callId=X`   | Polling do estado em tempo real |
+| Encerrar chamada | `GET /v2/endcall?callId=X` | Desligar ligação                |
+| Histórico        | `GET /v2/calls/history`    | Sincronizar dados               |
+| Autenticação     | `POST /v2/oauth/token`     | Token OAuth (24h validade)      |
 
-### O que a planilha mostra
 
-A planilha original tem **duas seções lado a lado**:
+**Estados retornados pela Nvoip:** `calling_origin`, `calling_destination`, `established`, `noanswer`, `busy`, `finished`, `failed`
 
-1. **Prospecção** (já implementada): Leads → % → Resposta → % → Oportunidades → % → Reunião → % → Vendas → Ticket → Bruto
-2. **Follow-Up** (falta implementar): Follow-up → % → Resposta → % → Reunião — rastreando o retorno de leads que não responderam na primeira abordagem
-3. **Painel de Influência/Benchmarks** (bônus): Métricas de referência como taxa de conexão com decisor (7%), agendamento (40%), comparecimento (80%), fechamento (10-33%)
+---
 
-### Implementação
+### O que você precisa fornecer
 
-**1. Banco de dados — nova tabela `followup_daily_logs`**
+Antes de implementar, preciso de **3 credenciais** do seu painel Nvoip:
 
-```sql
-CREATE TABLE public.followup_daily_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id UUID REFERENCES public.companies(id) NOT NULL,
-  user_id UUID NOT NULL,
-  log_date DATE NOT NULL,
-  source TEXT, -- 'whatsapp', 'ligacao', 'email'
-  followups_sent INT DEFAULT 0,
-  responses INT DEFAULT 0,
-  meetings_scheduled INT DEFAULT 0,
-  sales_closed INT DEFAULT 0,
-  gross_value NUMERIC DEFAULT 0,
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(company_id, user_id, log_date, source)
-);
+1. **NumberSIP** (ramal/usuário SIP) — usado como `caller` nas chamadas 
+2. **User Token** — para gerar o OAuth access_token
+3. **Napikey** — chave de API alternativa
+
+Essas credenciais serão armazenadas de forma segura como secrets do backend.
+
+&nbsp;
+
+credencias:   
+  
+Napikey: SkRBQU1VWllERFJrbTJGSW1YTUNpWWNiTGpBRmlSMU8=   
+  
+User Token: 84682144-1804-11f1-a3b7-027e3c96bf59  
+  
+usuario sip: 137715001
+
+---
+
+### Arquitetura da Integração
+
+```text
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Frontend   │────▶│  Edge Function   │────▶│  API Nvoip      │
+│  (CRM UI)   │     │  nvoip-call      │     │  api.nvoip.com  │
+│             │◀────│                  │◀────│                 │
+└─────────────┘     └──────────────────┘     └─────────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │  Tabela     │
+                    │  nvoip_config│
+                    │  call_history│
+                    └─────────────┘
 ```
-Com RLS por `company_id` (mesmo padrão da tabela de prospecção).
 
-**2. Nova aba "Follow-Up" na página de Prospecção**
+---
 
-Adicionar uma terceira aba na página existente (`/prospeccao`):
-- **Orgânico** | **Tráfego Pago** | **Follow-Up**
+### Implementação (4 etapas)
 
-A aba Follow-Up terá:
-- **Tabela**: Data | Follow-ups Enviados | % Resposta | Respostas | % Reunião | Reuniões | Vendas | Ticket | Bruto
-- **KPIs em cards**: Total Follow-ups, Taxa de Resposta, Taxa de Reunião, Vendas via Follow-up, Ticket Médio
-- **Gráfico de funil**: Follow-ups → Respostas → Reuniões → Vendas
+#### 1. Secrets e Configuração
 
-**3. Painel de Benchmarks (lateral)**
+- Armazenar `NVOIP_NAPIKEY` e `NVOIP_USER_TOKEN` como secrets
+- Criar tabela `nvoip_config` para armazenar NumberSIP por empresa (multi-tenant)
 
-Adicionar um card "Indicadores de Referência" visível em todas as abas:
-- Taxa de conexão com decisor: 7%
-- Agendamento: 40%
-- Comparecimento: 80%
-- Fechamento: 10-33%
-- Com notas explicativas (qualidade da lista, script, alinhamento)
+#### 2. Edge Function `nvoip-call`
 
-**4. Componentes a criar/editar**
+Uma única edge function com 4 ações:
 
-- `src/components/prospeccao/FollowUpTable.tsx` — tabela com colunas e % entre colunas
-- `src/components/prospeccao/FollowUpKPIs.tsx` — cards de métricas
-- `src/components/prospeccao/FollowUpFormDialog.tsx` — formulário de registro
-- `src/components/prospeccao/BenchmarkPanel.tsx` — painel de referência lateral
-- `src/hooks/useFollowUpData.ts` — hook de dados
-- Editar `src/pages/Prospeccao.tsx` — adicionar aba Follow-Up e painel de benchmarks
+- `**make-call**`: Autentica via OAuth → `POST /v2/calls/` com caller/called → retorna `callId`
+- `**check-call**`: `GET /v2/calls?callId=X` → retorna estado atual e duração
+- `**end-call**`: `GET /v2/endcall?callId=X` → encerra chamada
+- `**get-token**`: Gerencia cache do access_token (24h validade)
 
-**5. Formulário de registro**
+#### 3. Atualizar `useCallCenter.ts`
 
-Campos: Data, Responsável, Canal (WhatsApp/Ligação/Email), Follow-ups enviados, Respostas recebidas, Reuniões agendadas, Vendas, Valor bruto, Observações.
+- Substituir `simulateCallProgression()` por polling real via edge function
+- A cada 2 segundos, consultar status da chamada na Nvoip
+- Mapear estados Nvoip → estados do CRM:
+  - `calling_origin` → `iniciando`
+  - `calling_destination` → `chamando`/`tocando`
+  - `established` → `conectado`
+  - `noanswer`/`busy`/`failed` → `falha`
+  - `finished` → `finalizado`
+- Salvar `linkAudio` (gravação) no `call_history`
 
+#### 4. Tabela `call_history` — adicionar coluna
+
+- `nvoip_call_id` (text) — ID da chamada na Nvoip
+- `recording_url` (text) — link da gravação de áudio
+
+---
+
+### Próximo passo
+
+Preciso que você me forneça as credenciais da Nvoip (NumberSIP, User Token, Napikey) para que eu possa armazená-las como secrets e iniciar a implementação.

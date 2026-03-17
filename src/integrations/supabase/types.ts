@@ -1923,6 +1923,62 @@ export type Database = {
         }
         Relationships: []
       }
+      followup_daily_logs: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          followups_sent: number | null
+          gross_value: number | null
+          id: string
+          log_date: string
+          meetings_scheduled: number | null
+          notes: string | null
+          responses: number | null
+          sales_closed: number | null
+          source: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          followups_sent?: number | null
+          gross_value?: number | null
+          id?: string
+          log_date: string
+          meetings_scheduled?: number | null
+          notes?: string | null
+          responses?: number | null
+          sales_closed?: number | null
+          source?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          followups_sent?: number | null
+          gross_value?: number | null
+          id?: string
+          log_date?: string
+          meetings_scheduled?: number | null
+          notes?: string | null
+          responses?: number | null
+          sales_closed?: number | null
+          source?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "followup_daily_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funis: {
         Row: {
           atualizado_em: string | null
