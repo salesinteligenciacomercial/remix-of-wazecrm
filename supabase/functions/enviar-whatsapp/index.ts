@@ -81,6 +81,47 @@ function isLikelyOggAudioBase64(base64Data: string): boolean {
   }
 }
 
+// Sanitize template components - remove invalid entries that would cause Meta API errors
+function sanitizeTemplateComponents(components?: any[]): any[] | undefined {
+  if (!components || components.length === 0) return undefined;
+  
+  const validTypes = ['header', 'body', 'button'];
+  const validButtonSubTypes = ['quick_reply', 'url', 'copy_code'];
+  
+  const sanitized = components.filter((comp: any) => {
+    if (!comp || !comp.type) return false;
+    const compType = comp.type.toLowerCase();
+    
+    if (!validTypes.includes(compType)) {
+      console.warn("⚠️ Removendo componente com tipo inválido:", comp.type);
+      return false;
+    }
+    
+    // Button components MUST have sub_type
+    if (compType === 'button') {
+      if (!comp.sub_type || !validButtonSubTypes.includes(comp.sub_type)) {
+        console.warn("⚠️ Removendo componente button com sub_type inválido:", comp.sub_type);
+        return false;
+      }
+      // Button must have index
+      if (comp.index === undefined || comp.index === null) {
+        console.warn("⚠️ Removendo componente button sem index");
+        return false;
+      }
+    }
+    
+    // Header and body must have parameters
+    if ((compType === 'header' || compType === 'body') && (!comp.parameters || comp.parameters.length === 0)) {
+      console.warn("⚠️ Removendo componente sem parameters:", compType);
+      return false;
+    }
+    
+    return true;
+  });
+  
+  return sanitized.length > 0 ? sanitized : undefined;
+}
+
 // Send template message via Meta API
 async function sendMetaTemplateMessage(
   phoneNumberId: string,
@@ -93,16 +134,28 @@ async function sendMetaTemplateMessage(
   try {
     const url = `${META_API_BASE_URL}/${META_API_VERSION}/${phoneNumberId}/messages`;
     
+    // Sanitize components to prevent Meta API errors
+    const sanitizedComponents = sanitizeTemplateComponents(components);
+    
     const templatePayload: any = {
       name: templateName,
       language: { code: language },
     };
     
-    if (components && components.length > 0) {
-      templatePayload.components = components;
+    if (sanitizedComponents) {
+      templatePayload.components = sanitizedComponents;
     }
 
+    const fullPayload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: to,
+      type: 'template',
+      template: templatePayload
+    };
+
     console.log("📤 Meta API - Enviando template:", templateName);
+    console.log("📦 Template payload:", JSON.stringify(fullPayload, null, 2));
     
     const response = await fetch(url, {
       method: 'POST',
@@ -110,13 +163,7 @@ async function sendMetaTemplateMessage(
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: to,
-        type: 'template',
-        template: templatePayload
-      }),
+      body: JSON.stringify(fullPayload),
     });
 
     const data = await response.json();
