@@ -68,6 +68,31 @@ export function buildTemplateComponents(
     }
   }
 
+  // BUTTONS - Meta API requires button components with sub_type for quick_reply buttons
+  const buttonsComponent = template.components.find((c: any) => c.type === "BUTTONS");
+  if (buttonsComponent?.buttons && buttonsComponent.buttons.length > 0) {
+    buttonsComponent.buttons.forEach((btn: any, index: number) => {
+      if (btn.type === "QUICK_REPLY") {
+        components.push({
+          type: "button",
+          sub_type: "quick_reply",
+          index: String(index),
+          parameters: [{ type: "payload", payload: btn.text || `btn_${index}` }],
+        });
+      } else if (btn.type === "URL" && btn.url?.includes("{{")) {
+        // URL buttons with dynamic suffix
+        const urlSuffix = templateVariables[`btn_url_${index}`] || "";
+        components.push({
+          type: "button",
+          sub_type: "url",
+          index: String(index),
+          parameters: [{ type: "text", text: urlSuffix }],
+        });
+      }
+      // PHONE_NUMBER and static URL buttons don't need components
+    });
+  }
+
   return components;
 }
 
