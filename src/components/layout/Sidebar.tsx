@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Users, MessageSquare, Calendar, Bot, Settings, LogOut, MessagesSquare, Video, PhoneCall, Target, Lock, X, Brain, DollarSign, GraduationCap } from "lucide-react";
+import { LayoutDashboard, Users, MessageSquare, Calendar, Bot, Settings, LogOut, MessagesSquare, Video, PhoneCall, Target, Lock, X, Brain, DollarSign, GraduationCap, DatabaseBackup } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,7 +84,13 @@ const navigation = [{
   name: "Treinamento",
   href: "/treinamento",
   icon: GraduationCap,
-  menuKey: "treinamento" // Central de vídeos do YouTube
+  menuKey: "treinamento"
+}, {
+  name: "Exportar Dados",
+  href: "/exportar-dados",
+  icon: DatabaseBackup,
+  menuKey: "exportar-dados",
+  masterOnly: true
 }, {
   name: "Configurações",
   href: "/configuracoes",

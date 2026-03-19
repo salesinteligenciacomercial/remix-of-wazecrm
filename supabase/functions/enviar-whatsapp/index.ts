@@ -1069,7 +1069,7 @@ serve(async (req) => {
     }
 
     // ============= ROTEAMENTO DE MENSAGENS =============
-    let result: { success: boolean; provider: string; data?: any; error?: string };
+    let result: { success: boolean; provider: string; data?: any; error?: string } = { success: false, provider: 'none', error: 'Nenhum provedor processou a mensagem' };
 
     // Meta API não suporta grupos - usar Evolution automaticamente
     if (isGroup) {

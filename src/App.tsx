@@ -23,6 +23,7 @@ import Discador from "./pages/Discador";
 import ProcessosComerciais from "./pages/ProcessosComerciais";
 import Treinamento from "./pages/Treinamento";
 import Financeiro from "./pages/Financeiro";
+import ExportarDados from "./pages/ExportarDados";
 import Prospeccao from "./pages/Prospeccao";
 import OAuthCallback from "./pages/OAuthCallback";
 import GmailCallback from "./pages/GmailCallback";
@@ -95,6 +96,7 @@ const App = () => (
               <Route path="prospeccao" element={<Prospeccao />} />
               <Route path="financeiro" element={<Financeiro />} />
               <Route path="treinamento" element={<Treinamento />} />
+              <Route path="exportar-dados" element={<ExportarDados />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
