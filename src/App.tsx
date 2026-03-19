@@ -23,6 +23,7 @@ import Discador from "./pages/Discador";
 import ProcessosComerciais from "./pages/ProcessosComerciais";
 import Treinamento from "./pages/Treinamento";
 import Financeiro from "./pages/Financeiro";
+import ExportarDados from "./pages/ExportarDados";
 import Prospeccao from "./pages/Prospeccao";
 import OAuthCallback from "./pages/OAuthCallback";
 import GmailCallback from "./pages/GmailCallback";
