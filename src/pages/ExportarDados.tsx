@@ -146,7 +146,7 @@ export default function ExportarDados() {
 
         if (error) throw error;
         if (data && data.length > 0) {
-          allData = [...allData, ...(data as Record<string, unknown>[])];
+          allData = [...allData, ...(data as unknown as Record<string, unknown>[])];
           from += pageSize;
           hasMore = data.length === pageSize;
         } else {
