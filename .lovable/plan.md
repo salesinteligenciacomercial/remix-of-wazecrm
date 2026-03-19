@@ -1,102 +1,48 @@
-## Plano de Integração: Nvoip VoIP no Call Center do CRM
-
-### Resumo
-
-Integrar a API da Nvoip ([https://api.nvoip.com.br/v2](https://api.nvoip.com.br/v2)) ao módulo de Call Center existente para substituir as chamadas simuladas por ligações telefônicas reais. O CRM já possui toda a UI e lógica de estado — precisamos conectar ao backend da Nvoip.
-
----
-
-### O que a API da Nvoip oferece
 
 
-| Funcionalidade   | Endpoint                   | Uso no CRM                      |
-| ---------------- | -------------------------- | ------------------------------- |
-| Realizar chamada | `POST /v2/calls/`          | Discar para leads               |
-| Consultar status | `GET /v2/calls?callId=X`   | Polling do estado em tempo real |
-| Encerrar chamada | `GET /v2/endcall?callId=X` | Desligar ligação                |
-| Histórico        | `GET /v2/calls/history`    | Sincronizar dados               |
-| Autenticação     | `POST /v2/oauth/token`     | Token OAuth (24h validade)      |
+# Correção: Disparo em Massa Congela Após 1 Mensagem
 
+## Problema Identificado
 
-**Estados retornados pela Nvoip:** `calling_origin`, `calling_destination`, `established`, `noanswer`, `busy`, `finished`, `failed`
+Dois problemas críticos:
 
----
+1. **Edge Function não está registrada** no `config.toml` — nunca foi deployada, então a chamada falha silenciosamente
+2. **Timeout da Edge Function** — Supabase Edge Functions têm limite de ~60-150s de execução. Com 50 leads e delay de 7s entre mensagens, seriam ~350s — a função morre antes de terminar
 
-### O que você precisa fornecer
+Por isso: envia 1 mensagem, a função é terminada pelo timeout, e o progresso congela em "1 de 50".
 
-Antes de implementar, preciso de **3 credenciais** do seu painel Nvoip:
+## Solução: Processamento em Lotes com Auto-Reinvocação
 
-1. **NumberSIP** (ramal/usuário SIP) — usado como `caller` nas chamadas 
-2. **User Token** — para gerar o OAuth access_token
-3. **Napikey** — chave de API alternativa
-
-Essas credenciais serão armazenadas de forma segura como secrets do backend.
-
-&nbsp;
-
-credencias:   
-  
-Napikey: SkRBQU1VWllERFJrbTJGSW1YTUNpWWNiTGpBRmlSMU8=   
-  
-User Token: 84682144-1804-11f1-a3b7-027e3c96bf59  
-  
-usuario sip: 137715001
-
----
-
-### Arquitetura da Integração
+A Edge Function será reescrita para processar **um lote pequeno** de leads (ex: 5 por vez) e depois **se reinvocar automaticamente** para o próximo lote, evitando o timeout.
 
 ```text
-┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Frontend   │────▶│  Edge Function   │────▶│  API Nvoip      │
-│  (CRM UI)   │     │  nvoip-call      │     │  api.nvoip.com  │
-│             │◀────│                  │◀────│                 │
-└─────────────┘     └──────────────────┘     └─────────────────┘
-                           │
-                    ┌──────▼──────┐
-                    │  Tabela     │
-                    │  nvoip_config│
-                    │  call_history│
-                    └─────────────┘
+Chamada 1 → processa leads 0-4 → salva progresso → chama a si mesma
+Chamada 2 → processa leads 5-9 → salva progresso → chama a si mesma
+...
+Chamada N → processa últimos leads → marca como completed
 ```
 
----
+## Alterações
 
-### Implementação (4 etapas)
+### 1. Registrar no `config.toml`
+Adicionar entrada `[functions.disparo-em-massa]` com `verify_jwt = false` (pois precisa se auto-invocar sem JWT do usuário, e a autenticação é feita via campaign_id)
 
-#### 1. Secrets e Configuração
+### 2. Reescrever `supabase/functions/disparo-em-massa/index.ts`
+- Processar no máximo **5 leads por invocação** (bem dentro do timeout)
+- Após processar o lote, atualizar `sent_count` no banco
+- Se ainda houver leads restantes, fazer `fetch()` para si mesma com o mesmo `campaign_id`
+- A função lê `sent_count` do banco para saber de onde continuar (já existe no código atual via `startIndex = sentCount`)
+- Retornar resposta imediatamente ao cliente na primeira chamada
 
-- Armazenar `NVOIP_NAPIKEY` e `NVOIP_USER_TOKEN` como secrets
-- Criar tabela `nvoip_config` para armazenar NumberSIP por empresa (multi-tenant)
+### 3. Ajustar `DisparoEmMassa.tsx`
+- Nenhuma mudança significativa necessária — o Realtime subscription já monitora o progresso
+- Apenas garantir que o `invoke` não espere a resposta completa (já usa fire-and-forget)
 
-#### 2. Edge Function `nvoip-call`
+## Detalhes Técnicos
 
-Uma única edge function com 4 ações:
+**Lote por invocação**: 5 leads (com delay de 7s = ~35s por lote, bem dentro do limite)
 
-- `**make-call**`: Autentica via OAuth → `POST /v2/calls/` com caller/called → retorna `callId`
-- `**check-call**`: `GET /v2/calls?callId=X` → retorna estado atual e duração
-- `**end-call**`: `GET /v2/endcall?callId=X` → encerra chamada
-- `**get-token**`: Gerencia cache do access_token (24h validade)
+**Auto-reinvocação**: Usa `fetch()` direto para a URL da própria função com `Authorization: Bearer SERVICE_ROLE_KEY`, sem aguardar resposta (fire-and-forget)
 
-#### 3. Atualizar `useCallCenter.ts`
+**Segurança**: A função valida que o `campaign_id` existe e pertence a uma campanha válida antes de processar
 
-- Substituir `simulateCallProgression()` por polling real via edge function
-- A cada 2 segundos, consultar status da chamada na Nvoip
-- Mapear estados Nvoip → estados do CRM:
-  - `calling_origin` → `iniciando`
-  - `calling_destination` → `chamando`/`tocando`
-  - `established` → `conectado`
-  - `noanswer`/`busy`/`failed` → `falha`
-  - `finished` → `finalizado`
-- Salvar `linkAudio` (gravação) no `call_history`
-
-#### 4. Tabela `call_history` — adicionar coluna
-
-- `nvoip_call_id` (text) — ID da chamada na Nvoip
-- `recording_url` (text) — link da gravação de áudio
-
----
-
-### Próximo passo
-
-Preciso que você me forneça as credenciais da Nvoip (NumberSIP, User Token, Napikey) para que eu possa armazená-las como secrets e iniciar a implementação.
