@@ -6,12 +6,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const BATCH_SIZE = 5;
+
 function formatPhoneNumber(phone: string): string {
   let cleaned = phone.replace(/[^0-9]/g, '');
   if (!cleaned.startsWith('55') && cleaned.length >= 10) {
     cleaned = `55${cleaned}`;
   }
   return cleaned;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 serve(async (req) => {
@@ -34,7 +40,7 @@ serve(async (req) => {
       });
     }
 
-    // Fetch campaign data
+    // Fetch campaign
     const { data: campaign, error: fetchErr } = await supabase
       .from('disparo_campaigns')
       .select('*')
@@ -55,32 +61,37 @@ serve(async (req) => {
       });
     }
 
-    // Mark as sending
-    await supabase.from('disparo_campaigns').update({
-      status: 'sending',
-      started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq('id', campaign_id);
-
-    console.log(`🚀 Iniciando disparo: ${campaign.campaign_name} (${campaign.total_leads} leads)`);
+    // Mark as sending if not already
+    if (campaign.status !== 'sending') {
+      await supabase.from('disparo_campaigns').update({
+        status: 'sending',
+        started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', campaign_id);
+    }
 
     const leads = campaign.leads_data as any[];
     let sentCount = campaign.sent_count || 0;
     let errorCount = campaign.error_count || 0;
     const errorDetails: any[] = campaign.error_details || [];
-    const startIndex = sentCount; // Resume from where we left off
+    const startIndex = sentCount + errorCount; // Resume from where we left off
+    const endIndex = Math.min(startIndex + BATCH_SIZE, leads.length);
 
-    for (let i = startIndex; i < leads.length; i++) {
-      // Check if campaign was cancelled
-      if (i > startIndex && i % 5 === 0) {
+    console.log(`🚀 Batch: processando leads ${startIndex}-${endIndex - 1} de ${leads.length} (campanha: ${campaign.campaign_name})`);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      // Check cancellation
+      if (i > startIndex) {
         const { data: check } = await supabase
           .from('disparo_campaigns')
           .select('status')
           .eq('id', campaign_id)
           .single();
         if (check?.status === 'cancelled') {
-          console.log('🛑 Campanha cancelada pelo usuário');
-          break;
+          console.log('🛑 Campanha cancelada');
+          return new Response(JSON.stringify({ success: true, cancelled: true }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
         }
       }
 
@@ -90,7 +101,7 @@ serve(async (req) => {
       if (!phone) {
         errorCount++;
         errorDetails.push({ lead_id: lead.id, name: lead.name, error: 'Sem telefone' });
-        await updateProgress(supabase, campaign_id, sentCount, errorCount, errorDetails, false);
+        await updateProgress(supabase, campaign_id, sentCount, errorCount, errorDetails);
         continue;
       }
 
@@ -98,12 +109,11 @@ serve(async (req) => {
       if (formattedPhone.length < 12) {
         errorCount++;
         errorDetails.push({ lead_id: lead.id, name: lead.name, error: 'Telefone inválido' });
-        await updateProgress(supabase, campaign_id, sentCount, errorCount, errorDetails, false);
+        await updateProgress(supabase, campaign_id, sentCount, errorCount, errorDetails);
         continue;
       }
 
       try {
-        // Build payload for enviar-whatsapp
         const payload: any = {
           numero: formattedPhone,
           company_id: campaign.company_id,
@@ -127,8 +137,7 @@ serve(async (req) => {
           }
         }
 
-        // Call enviar-whatsapp edge function
-        const { data: sendResult, error: sendError } = await supabase.functions.invoke('enviar-whatsapp', {
+        const { error: sendError } = await supabase.functions.invoke('enviar-whatsapp', {
           body: payload,
         });
 
@@ -177,44 +186,78 @@ serve(async (req) => {
         errorDetails.push({ lead_id: lead.id, name: lead.name, error: error.message });
       }
 
-      // Update progress every message
-      await updateProgress(supabase, campaign_id, sentCount, errorCount, errorDetails, false);
+      // Update progress
+      await updateProgress(supabase, campaign_id, sentCount, errorCount, errorDetails);
 
-      // Pause logic
-      const pauseAfter = campaign.pause_after_messages || 15;
-      const pauseDur = campaign.pause_duration || 120;
-      const processed = i - startIndex + 1;
-
-      if (pauseAfter > 0 && processed % pauseAfter === 0 && i < leads.length - 1) {
-        console.log(`⏸️ Pausa automática: ${pauseDur}s após ${processed} mensagens`);
-        await updateProgress(supabase, campaign_id, sentCount, errorCount, errorDetails, true);
-        await sleep(pauseDur * 1000);
-        await updateProgress(supabase, campaign_id, sentCount, errorCount, errorDetails, false);
-      }
-
-      // Delay between messages
-      if (i < leads.length - 1) {
+      // Delay between messages (only if not last in batch)
+      if (i < endIndex - 1) {
         await sleep((campaign.delay_between_messages || 7) * 1000);
       }
     }
 
-    // Mark as completed
-    await supabase.from('disparo_campaigns').update({
-      status: 'completed',
-      sent_count: sentCount,
-      error_count: errorCount,
-      error_details: errorDetails,
-      is_paused: false,
-      completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq('id', campaign_id);
+    const totalProcessed = sentCount + errorCount;
+    const hasMore = totalProcessed < leads.length;
 
-    console.log(`✅ Disparo concluído: ${sentCount} enviados, ${errorCount} erros`);
+    if (hasMore) {
+      // Check for pause logic
+      const pauseAfter = campaign.pause_after_messages || 15;
+      const pauseDur = campaign.pause_duration || 120;
+
+      if (pauseAfter > 0 && totalProcessed % pauseAfter === 0 && totalProcessed > 0) {
+        console.log(`⏸️ Pausa automática: ${pauseDur}s após ${totalProcessed} mensagens`);
+        await supabase.from('disparo_campaigns').update({
+          sent_count: sentCount,
+          error_count: errorCount,
+          error_details: errorDetails,
+          is_paused: true,
+          updated_at: new Date().toISOString(),
+        }).eq('id', campaign_id);
+
+        await sleep(pauseDur * 1000);
+
+        await supabase.from('disparo_campaigns').update({
+          is_paused: false,
+          updated_at: new Date().toISOString(),
+        }).eq('id', campaign_id);
+      }
+
+      // Self-invoke for next batch (fire-and-forget)
+      const selfUrl = `${supabaseUrl}/functions/v1/disparo-em-massa`;
+      console.log(`🔄 Invocando próximo lote a partir do index ${totalProcessed}...`);
+
+      fetch(selfUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({ campaign_id }),
+      }).catch(err => {
+        console.error('❌ Erro ao auto-invocar próximo lote:', err.message);
+      });
+
+    } else {
+      // All done - mark completed
+      await supabase.from('disparo_campaigns').update({
+        status: 'completed',
+        sent_count: sentCount,
+        error_count: errorCount,
+        error_details: errorDetails,
+        is_paused: false,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', campaign_id);
+
+      console.log(`✅ Disparo concluído: ${sentCount} enviados, ${errorCount} erros`);
+    }
 
     return new Response(JSON.stringify({
       success: true,
       sent: sentCount,
       errors: errorCount,
+      hasMore,
+      totalProcessed,
+      total: leads.length,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -234,18 +277,12 @@ async function updateProgress(
   sentCount: number,
   errorCount: number,
   errorDetails: any[],
-  isPaused: boolean
 ) {
   await supabase.from('disparo_campaigns').update({
     sent_count: sentCount,
     error_count: errorCount,
     error_details: errorDetails,
-    is_paused: isPaused,
     status: 'sending',
     updated_at: new Date().toISOString(),
   }).eq('id', campaignId);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
