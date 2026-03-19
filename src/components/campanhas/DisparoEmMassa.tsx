@@ -65,7 +65,7 @@ export function DisparoEmMassa() {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [availableSegmentacoes, setAvailableSegmentacoes] = useState<string[]>([]);
   const [progress, setProgress] = useState<{ sent: number; total: number; errors: number; paused?: boolean } | null>(null);
-  
+  const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
   // Configurações de mídia e timing
   const [messageType, setMessageType] = useState<"text" | "image" | "video" | "template">("text");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
