@@ -84,7 +84,13 @@ const navigation = [{
   name: "Treinamento",
   href: "/treinamento",
   icon: GraduationCap,
-  menuKey: "treinamento" // Central de vídeos do YouTube
+  menuKey: "treinamento"
+}, {
+  name: "Exportar Dados",
+  href: "/exportar-dados",
+  icon: DatabaseBackup,
+  menuKey: "exportar-dados",
+  masterOnly: true
 }, {
   name: "Configurações",
   href: "/configuracoes",
