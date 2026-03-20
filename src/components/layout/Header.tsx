@@ -106,18 +106,30 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
 
       console.log("✅ Usuário autenticado:", user.email);
 
-      // Get user profile
-      const { data: profile, error: profileError } = await supabase
+      // Get user profile - create if doesn't exist
+      let { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("full_name")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
       
       if (profileError) {
         console.error("❌ Erro ao obter profile:", profileError);
-        console.log("🚪 Forçando logout - profile não encontrado");
-        await handleLogout();
-        return;
+      }
+      
+      // Se profile não existe, criar automaticamente
+      if (!profile) {
+        console.log("📝 Criando profile para usuário:", user.email);
+        const { data: newProfile } = await supabase
+          .from("profiles")
+          .insert({
+            id: user.id,
+            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário',
+            email: user.email
+          })
+          .select("full_name")
+          .single();
+        profile = newProfile;
       }
 
       // Get company info and role using RPC to avoid RLS recursion
