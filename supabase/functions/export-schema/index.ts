@@ -16,7 +16,6 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Verify auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
@@ -32,42 +31,11 @@ serve(async (req) => {
       });
     }
 
-    // Get schema SQL using pg_dump style query
-    const { data: columns, error } = await supabase.rpc("get_schema_sql" as any);
-    
-    // Fallback: query information_schema directly
-    const { data: tableData, error: tableError } = await supabase
-      .from("information_schema.columns" as any)
-      .select("*");
-
-    // Use a direct SQL approach via the database
     const dbUrl = Deno.env.get("SUPABASE_DB_URL")!;
-    
-    // Simple approach: build CREATE TABLE from information_schema
-    const query = `
-      SELECT 
-        t.table_name,
-        json_agg(
-          json_build_object(
-            'column_name', c.column_name,
-            'data_type', c.data_type,
-            'udt_name', c.udt_name,
-            'is_nullable', c.is_nullable,
-            'column_default', c.column_default,
-            'character_maximum_length', c.character_maximum_length
-          ) ORDER BY c.ordinal_position
-        ) as columns
-      FROM information_schema.tables t
-      JOIN information_schema.columns c ON c.table_name = t.table_name AND c.table_schema = t.table_schema
-      WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
-      GROUP BY t.table_name
-      ORDER BY t.table_name
-    `;
-
-    // Connect directly to postgres
     const { default: postgres } = await import("https://deno.land/x/postgresjs@v3.4.4/mod.js");
     const sql = postgres(dbUrl);
-    
+
+    // Get all tables
     const tables = await sql`
       SELECT 
         t.table_name,
@@ -88,7 +56,7 @@ serve(async (req) => {
       ORDER BY t.table_name
     `;
 
-    // Also get enums
+    // Get enums
     const enums = await sql`
       SELECT t.typname as enum_name, 
              string_agg(e.enumlabel, ', ' ORDER BY e.enumsortorder) as enum_values
@@ -99,7 +67,7 @@ serve(async (req) => {
       GROUP BY t.typname
     `;
 
-    // Also get foreign keys
+    // Get foreign keys
     const fks = await sql`
       SELECT
         tc.table_name,
@@ -108,37 +76,29 @@ serve(async (req) => {
         ccu.column_name AS foreign_column_name,
         tc.constraint_name
       FROM information_schema.table_constraints AS tc
-      JOIN information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name
-      JOIN information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = tc.constraint_name
+      JOIN information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+      JOIN information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
       WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'
     `;
 
-    // Also get primary keys
+    // Get primary keys
     const pks = await sql`
       SELECT tc.table_name, kcu.column_name
       FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+      JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
       WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = 'public'
     `;
 
-    // Also get unique constraints
+    // Get unique constraints
     const uqs = await sql`
       SELECT tc.table_name, 
              string_agg(kcu.column_name, ', ' ORDER BY kcu.ordinal_position) as columns,
              tc.constraint_name
       FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+      JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
       WHERE tc.constraint_type = 'UNIQUE' AND tc.table_schema = 'public'
       GROUP BY tc.table_name, tc.constraint_name
     `;
-
-    // Build SQL
-    let sqlOutput = "";
-
-    // Enums first
-    for (const e of enums) {
-      sqlOutput += `CREATE TYPE public.${e.enum_name} AS ENUM (${e.enum_values.split(", ").map((v: string) => `'${v}'`).join(", ")});\n\n`;
-    }
 
     // Build FK lookup
     const fkMap: Record<string, Array<{ column: string; refTable: string; refColumn: string }>> = {};
@@ -161,13 +121,86 @@ serve(async (req) => {
       uqMap[uq.table_name].push(uq.columns);
     }
 
-    for (const table of tables) {
+    // === TOPOLOGICAL SORT: order tables by FK dependencies ===
+    const tableNames = tables.map((t: any) => t.table_name as string);
+    const tableMap = new Map(tables.map((t: any) => [t.table_name, t]));
+    
+    // Build dependency graph (table -> set of tables it depends on)
+    const deps: Record<string, Set<string>> = {};
+    for (const name of tableNames) {
+      deps[name] = new Set();
+      const tableFks = fkMap[name] || [];
+      for (const fk of tableFks) {
+        // Self-references don't count as dependencies
+        if (fk.refTable !== name && tableNames.includes(fk.refTable)) {
+          deps[name].add(fk.refTable);
+        }
+      }
+    }
+
+    // Kahn's algorithm for topological sort
+    const sorted: string[] = [];
+    const remaining = new Set(tableNames);
+    
+    while (remaining.size > 0) {
+      // Find tables with no unresolved dependencies
+      const ready: string[] = [];
+      for (const name of remaining) {
+        const unresolved = [...(deps[name] || [])].filter(d => remaining.has(d));
+        if (unresolved.length === 0) {
+          ready.push(name);
+        }
+      }
+      
+      if (ready.length === 0) {
+        // Circular dependency detected — just add remaining tables
+        // and use ALTER TABLE for FKs later
+        for (const name of remaining) {
+          sorted.push(name);
+        }
+        break;
+      }
+      
+      for (const name of ready) {
+        sorted.push(name);
+        remaining.delete(name);
+      }
+    }
+
+    // Detect which FKs need to be deferred (circular deps)
+    const sortedSet = new Set<string>();
+    const deferredFks: Array<{ table: string; column: string; refTable: string; refColumn: string }> = [];
+
+    // Build SQL output
+    let sqlOutput = "-- ============================================\n";
+    sqlOutput += "-- Schema SQL gerado automaticamente\n";
+    sqlOutput += `-- Data: ${new Date().toISOString()}\n`;
+    sqlOutput += "-- IMPORTANTE: Execute este SQL na ordem apresentada\n";
+    sqlOutput += "-- As tabelas estão ordenadas por dependência (FK)\n";
+    sqlOutput += "-- ============================================\n\n";
+
+    // Enums first
+    if (enums.length > 0) {
+      sqlOutput += "-- ======== TIPOS ENUM ========\n\n";
+      for (const e of enums) {
+        const values = e.enum_values.split(", ").map((v: string) => `'${v}'`).join(", ");
+        sqlOutput += `DO $$ BEGIN\n  CREATE TYPE public.${e.enum_name} AS ENUM (${values});\nEXCEPTION WHEN duplicate_object THEN NULL;\nEND $$;\n\n`;
+      }
+    }
+
+    sqlOutput += "-- ======== TABELAS ========\n\n";
+
+    for (const tableName of sorted) {
+      sortedSet.add(tableName);
+      const table = tableMap.get(tableName);
+      if (!table) continue;
+
       const cols = table.columns as Array<{
         column_name: string; data_type: string; udt_name: string;
         is_nullable: string; column_default: string | null; character_maximum_length: number | null;
       }>;
 
-      sqlOutput += `CREATE TABLE public.${table.table_name} (\n`;
+      sqlOutput += `CREATE TABLE IF NOT EXISTS public.${tableName} (\n`;
       const colDefs: string[] = [];
 
       for (const col of cols) {
@@ -178,16 +211,21 @@ serve(async (req) => {
         else if (col.data_type === "integer") typeName = "INTEGER";
         else if (col.data_type === "bigint") typeName = "BIGINT";
         else if (col.data_type === "numeric") typeName = "NUMERIC";
+        else if (col.data_type === "real") typeName = "REAL";
         else if (col.data_type === "double precision") typeName = "DOUBLE PRECISION";
         else if (col.data_type === "smallint") typeName = "SMALLINT";
         else if (col.data_type === "jsonb") typeName = "JSONB";
         else if (col.data_type === "json") typeName = "JSON";
+        else if (col.data_type === "bytea") typeName = "BYTEA";
         else if (col.data_type === "ARRAY") typeName = col.udt_name.replace(/^_/, "") + "[]";
         else if (col.data_type === "timestamp with time zone") typeName = "TIMESTAMPTZ";
         else if (col.data_type === "timestamp without time zone") typeName = "TIMESTAMP";
         else if (col.data_type === "date") typeName = "DATE";
         else if (col.data_type === "time without time zone") typeName = "TIME";
-        else if (col.data_type === "character varying") typeName = `VARCHAR(${col.character_maximum_length})`;
+        else if (col.data_type === "time with time zone") typeName = "TIMETZ";
+        else if (col.data_type === "interval") typeName = "INTERVAL";
+        else if (col.data_type === "character varying") typeName = col.character_maximum_length ? `VARCHAR(${col.character_maximum_length})` : "VARCHAR";
+        else if (col.data_type === "character") typeName = col.character_maximum_length ? `CHAR(${col.character_maximum_length})` : "CHAR";
         else if (col.data_type === "USER-DEFINED") typeName = `public.${col.udt_name}`;
 
         let def = `  ${col.column_name} ${typeName}`;
@@ -197,36 +235,50 @@ serve(async (req) => {
       }
 
       // Primary key
-      if (pkMap[table.table_name]) {
-        colDefs.push(`  PRIMARY KEY (${pkMap[table.table_name].join(", ")})`);
+      if (pkMap[tableName]) {
+        colDefs.push(`  PRIMARY KEY (${pkMap[tableName].join(", ")})`);
       }
 
-      // Unique
-      if (uqMap[table.table_name]) {
-        for (const cols of uqMap[table.table_name]) {
+      // Unique constraints
+      if (uqMap[tableName]) {
+        for (const cols of uqMap[tableName]) {
           colDefs.push(`  UNIQUE (${cols})`);
         }
       }
 
-      // Foreign keys
-      if (fkMap[table.table_name]) {
-        for (const fk of fkMap[table.table_name]) {
-          colDefs.push(`  FOREIGN KEY (${fk.column}) REFERENCES public.${fk.refTable}(${fk.refColumn}) ON DELETE CASCADE`);
+      // Foreign keys — only inline if referenced table already created
+      if (fkMap[tableName]) {
+        for (const fk of fkMap[tableName]) {
+          if (sortedSet.has(fk.refTable) || fk.refTable === tableName) {
+            colDefs.push(`  FOREIGN KEY (${fk.column}) REFERENCES public.${fk.refTable}(${fk.refColumn}) ON DELETE CASCADE`);
+          } else {
+            // Defer this FK to after all tables are created
+            deferredFks.push({ table: tableName, column: fk.column, refTable: fk.refTable, refColumn: fk.refColumn });
+          }
         }
       }
 
       sqlOutput += colDefs.join(",\n") + "\n);\n\n";
     }
 
+    // Deferred foreign keys (for circular dependencies)
+    if (deferredFks.length > 0) {
+      sqlOutput += "-- ======== FOREIGN KEYS (dependências circulares) ========\n\n";
+      for (const fk of deferredFks) {
+        sqlOutput += `ALTER TABLE public.${fk.table} ADD FOREIGN KEY (${fk.column}) REFERENCES public.${fk.refTable}(${fk.refColumn}) ON DELETE CASCADE;\n`;
+      }
+      sqlOutput += "\n";
+    }
+
     // RLS
-    sqlOutput += "-- Enable RLS on all tables\n";
-    for (const table of tables) {
-      sqlOutput += `ALTER TABLE public.${table.table_name} ENABLE ROW LEVEL SECURITY;\n`;
+    sqlOutput += "-- ======== ROW LEVEL SECURITY ========\n\n";
+    for (const tableName of sorted) {
+      sqlOutput += `ALTER TABLE public.${tableName} ENABLE ROW LEVEL SECURITY;\n`;
     }
 
     await sql.end();
 
-    return new Response(JSON.stringify({ sql: sqlOutput, table_count: tables.length }), {
+    return new Response(JSON.stringify({ sql: sqlOutput, table_count: sorted.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
