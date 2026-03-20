@@ -106,33 +106,42 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
 
       console.log("✅ Usuário autenticado:", user.email);
 
-      // Get user profile
-      const { data: profile, error: profileError } = await supabase
+      // Get user profile - create if doesn't exist
+      let { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("full_name")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
       
       if (profileError) {
         console.error("❌ Erro ao obter profile:", profileError);
-        console.log("🚪 Forçando logout - profile não encontrado");
-        await handleLogout();
-        return;
+      }
+      
+      // Se profile não existe, criar automaticamente
+      if (!profile) {
+        console.log("📝 Criando profile para usuário:", user.email);
+        const { data: newProfile } = await supabase
+          .from("profiles")
+          .insert({
+            id: user.id,
+            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário',
+            email: user.email
+          })
+          .select("full_name")
+          .single();
+        profile = newProfile;
       }
 
       // Get company info and role using RPC to avoid RLS recursion
       const { data: userRoleData, error: roleError } = await supabase
         .rpc('get_my_user_role')
-        .single();
+        .maybeSingle();
 
-      if (roleError || !userRoleData) {
-        console.error("❌ Erro ao obter role:", roleError);
-        console.log("🚪 Forçando logout - role não encontrada");
-        await handleLogout();
-        return;
+      if (roleError) {
+        console.warn("⚠️ Erro ao obter role:", roleError);
       }
 
-      // ✅ Só define os dados se tudo estiver OK
+      // ✅ Define os dados disponíveis
       if (profile?.full_name) {
         setUserName(profile.full_name);
       } else {
@@ -147,21 +156,25 @@ export function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
         'user': 'Usuário Padrão'
       };
       
-      setUserRole(roleMap[userRoleData.role] || 'Usuário');
-      
-      if (userRoleData.company_name) {
-        setCompanyName(userRoleData.company_name);
+      if (userRoleData) {
+        setUserRole(roleMap[userRoleData.role] || 'Usuário');
+        
+        if (userRoleData.company_name) {
+          setCompanyName(userRoleData.company_name);
+        }
+      } else {
+        setUserRole('Usuário');
+        console.warn("⚠️ Nenhuma role encontrada - usuário pode precisar ser vinculado a uma empresa");
       }
 
       console.log("✅ Dados do usuário carregados:", {
         name: profile?.full_name || user.email,
-        role: userRoleData.role,
-        company: userRoleData.company_name
+        role: userRoleData?.role || 'sem role',
+        company: userRoleData?.company_name || 'sem empresa'
       });
     } catch (error) {
-      console.error("❌ Erro fatal ao carregar dados do usuário:", error);
-      console.log("🚪 Forçando logout - erro fatal");
-      await handleLogout();
+      console.error("❌ Erro ao carregar dados do usuário:", error);
+      // Não forçar logout em caso de erro - manter o usuário logado
     } finally {
       setLoading(false);
     }
